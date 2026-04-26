@@ -13,6 +13,8 @@ const schema = Joi.object({
   JWT_ACCESS_EXPIRES: Joi.string().default('15m'),
   JWT_REFRESH_EXPIRES: Joi.string().default('7d'),
   REDIS_URL: Joi.string().allow('', null).optional(),
+  OPENAI_API_KEY: Joi.string().allow('', null).optional(),
+  OPENAI_MODEL: Joi.string().allow('', null).optional(),
 }).unknown(true)
 
 export function validateEnv() {

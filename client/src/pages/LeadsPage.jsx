@@ -1,10 +1,5 @@
-import { PlaceholderPage } from '@/pages/PlaceholderPage'
+import { LeadsListPage } from '@/features/leads/pages/LeadsListPage'
 
 export function LeadsPage() {
-  return (
-    <PlaceholderPage
-      title="Leads"
-      description="List, filters, kanban toggle, and bulk actions land here."
-    />
-  )
+  return <LeadsListPage />
 }

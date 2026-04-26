@@ -1,0 +1,506 @@
+import { useMemo, useState } from 'react'
+import toast from 'react-hot-toast'
+import { ListChecks, Pencil, Plus, Tag, Trash2, Waypoints } from 'lucide-react'
+import { PageShell } from '@/components/layout/PageShell'
+import { Modal } from '@/components/ui/Modal'
+import {
+  useCreateLeadSourceMutation,
+  useCreateLeadStatusCategoryMutation,
+  useCreateLeadStatusMutation,
+  useCreateLeadTagMutation,
+  useDeleteLeadSourceMutation,
+  useDeleteLeadStatusCategoryMutation,
+  useDeleteLeadTagMutation,
+  useGetLeadSetupQuery,
+  useUpdateLeadSourceMutation,
+  useUpdateLeadStatusCategoryMutation,
+  useUpdateLeadTagMutation,
+} from '@/features/leads/leadsApi'
+import { cn } from '@/utils/cn'
+
+const TABS = [
+  { id: 'source', label: 'Source', icon: Waypoints },
+  { id: 'tags', label: 'Tags', icon: Tag },
+  { id: 'status', label: 'Status Creation', icon: ListChecks },
+]
+
+function apiErrorMessage(err) {
+  return err?.data?.error?.message ?? err?.error ?? 'Something went wrong'
+}
+
+function formatDate(value) {
+  if (!value) return '-'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '-'
+  return date.toLocaleDateString()
+}
+
+export function LeadConfigurationPage() {
+  const { data, isLoading } = useGetLeadSetupQuery()
+  const [createSource, { isLoading: creatingSource }] = useCreateLeadSourceMutation()
+  const [updateSource, { isLoading: updatingSource }] = useUpdateLeadSourceMutation()
+  const [deleteSource] = useDeleteLeadSourceMutation()
+  const [createTag, { isLoading: creatingTag }] = useCreateLeadTagMutation()
+  const [updateTag, { isLoading: updatingTag }] = useUpdateLeadTagMutation()
+  const [deleteTag] = useDeleteLeadTagMutation()
+  const [createCategory, { isLoading: creatingCategory }] = useCreateLeadStatusCategoryMutation()
+  const [updateCategory, { isLoading: updatingCategory }] = useUpdateLeadStatusCategoryMutation()
+  const [deleteCategory] = useDeleteLeadStatusCategoryMutation()
+  const [createStatus, { isLoading: creatingStatus }] = useCreateLeadStatusMutation()
+
+  const [activeTab, setActiveTab] = useState('source')
+  const [statusName, setStatusName] = useState('')
+  const [statusCategoryId, setStatusCategoryId] = useState('')
+  const [statusModalOpen, setStatusModalOpen] = useState(false)
+  const [editor, setEditor] = useState({ open: false, mode: 'create', type: 'source', id: null, name: '' })
+  const [deleteDialog, setDeleteDialog] = useState({ open: false, type: '', id: null, name: '' })
+
+  const setup = useMemo(() => data?.data || { sources: [], tags: [], categories: [] }, [data])
+
+  function getEntityLabel(type) {
+    if (type === 'source') return 'Source'
+    if (type === 'tags') return 'Tag'
+    return 'Status Category'
+  }
+
+  function getActiveTabType() {
+    if (activeTab === 'source') return 'source'
+    if (activeTab === 'tags') return 'tags'
+    return 'status'
+  }
+
+  function openCreateModal() {
+    const type = getActiveTabType()
+    setEditor({ open: true, mode: 'create', type, id: null, name: '' })
+  }
+
+  function openEditModal(type, row) {
+    setEditor({ open: true, mode: 'edit', type, id: row.id, name: row.name || '' })
+  }
+
+  function closeModal() {
+    setEditor({ open: false, mode: 'create', type: 'source', id: null, name: '' })
+  }
+
+  async function onSaveModal() {
+    const name = editor.name.trim()
+    if (!name) return
+    try {
+      if (editor.type === 'source') {
+        if (editor.mode === 'edit') {
+          await updateSource({ id: editor.id, name }).unwrap()
+          toast.success('Source updated')
+        } else {
+          await createSource({ name }).unwrap()
+          toast.success('Source created')
+        }
+      }
+      if (editor.type === 'tags') {
+        if (editor.mode === 'edit') {
+          await updateTag({ id: editor.id, name }).unwrap()
+          toast.success('Tag updated')
+        } else {
+          await createTag({ name }).unwrap()
+          toast.success('Tag created')
+        }
+      }
+      if (editor.type === 'status') {
+        if (editor.mode === 'edit') {
+          await updateCategory({ id: editor.id, name }).unwrap()
+          toast.success('Status category updated')
+        } else {
+          await createCategory({ name }).unwrap()
+          toast.success('Status category created')
+        }
+      }
+      closeModal()
+    } catch (err) {
+      toast.error(apiErrorMessage(err))
+    }
+  }
+
+  async function onCreateStatus() {
+    const name = statusName.trim()
+    if (!name || !statusCategoryId) return
+    try {
+      await createStatus({ name, categoryId: statusCategoryId }).unwrap()
+      setStatusName('')
+      setStatusCategoryId('')
+      setStatusModalOpen(false)
+      toast.success('Status created')
+    } catch (err) {
+      toast.error(apiErrorMessage(err))
+    }
+  }
+
+  function openDeleteDialog(type, row) {
+    setDeleteDialog({ open: true, type, id: row.id, name: row.name || '' })
+  }
+
+  async function onConfirmDelete() {
+    try {
+      if (deleteDialog.type === 'source') {
+        await deleteSource(deleteDialog.id).unwrap()
+        toast.success('Source deleted')
+      }
+      if (deleteDialog.type === 'tags') {
+        await deleteTag(deleteDialog.id).unwrap()
+        toast.success('Tag deleted')
+      }
+      if (deleteDialog.type === 'status') {
+        await deleteCategory(deleteDialog.id).unwrap()
+        if (statusCategoryId === deleteDialog.id) setStatusCategoryId('')
+        toast.success('Status category deleted')
+      }
+      setDeleteDialog({ open: false, type: '', id: null, name: '' })
+    } catch (err) {
+      toast.error(apiErrorMessage(err))
+    }
+  }
+
+  const savingModal = creatingSource || updatingSource || creatingTag || updatingTag || creatingCategory || updatingCategory
+  const activeAddLabel = `Add ${getEntityLabel(getActiveTabType()).toLowerCase()}`
+
+  return (
+    <PageShell fullWidth>
+      <div className="px-4 py-4 sm:px-6 sm:py-5">
+        <section className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex min-w-max items-center gap-2 overflow-x-auto">
+              {TABS.map((tab) => {
+                const Icon = tab.icon
+                const selected = activeTab === tab.id
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveTab(tab.id)}
+                    className={cn(
+                      'inline-flex h-9 items-center gap-2 rounded-lg border px-4 text-sm',
+                      selected ? 'border-brand-200 bg-brand-50 text-brand-700' : 'border-surface-border bg-white text-ink',
+                    )}
+                  >
+                    <Icon className="h-4 w-4" aria-hidden />
+                    {tab.label}
+                  </button>
+                )
+              })}
+            </div>
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                type="button"
+                onClick={openCreateModal}
+                className="inline-flex h-9 items-center gap-2 rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                {activeAddLabel}
+              </button>
+              {activeTab === 'status' ? (
+                <button
+                  type="button"
+                  onClick={() => setStatusModalOpen(true)}
+                  className="inline-flex h-9 items-center gap-2 rounded-lg border border-surface-border bg-white px-4 text-sm font-medium text-ink"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add status
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          {isLoading ? <p className="text-sm text-ink-muted">Loading setup…</p> : null}
+
+          {activeTab === 'source' ? (
+            <div className="overflow-hidden rounded-xl border border-surface-border bg-white">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[900px] text-xs">
+                  <thead className="sticky top-0 z-10 bg-white">
+                    <tr className="border-b border-surface-border/70">
+                      <th className="px-2.5 py-2 text-left text-[11px] font-semibold text-ink-muted">Source</th>
+                      <th className="px-2.5 py-2 text-left text-[11px] font-semibold text-ink-muted">Created</th>
+                      <th className="px-2.5 py-2 text-right text-[11px] font-semibold text-ink-muted">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {setup.sources.length === 0 ? (
+                      <tr>
+                        <td colSpan={3} className="px-3 py-8 text-center text-ink-muted">
+                          No sources found.
+                        </td>
+                      </tr>
+                    ) : (
+                      setup.sources.map((item) => (
+                        <tr key={item.id} className="group border-b border-surface-border last:border-b-0 hover:bg-brand-50">
+                          <td className="px-2.5 py-2 text-sm text-ink">{item.name}</td>
+                          <td className="px-2.5 py-2 text-sm text-ink-muted">{formatDate(item.createdAt)}</td>
+                          <td className="px-2.5 py-2 text-right">
+                            <div className="inline-flex gap-1 opacity-100 transition">
+                              <button
+                                type="button"
+                                onClick={() => openEditModal('source', item)}
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-brand-200 bg-brand-50 text-brand-700"
+                                aria-label="Edit source"
+                                title="Edit source"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                  onClick={() => openDeleteDialog('source', item)}
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-danger"
+                                aria-label="Delete source"
+                                title="Delete source"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : null}
+
+            {activeTab === 'tags' ? (
+              <div className="overflow-hidden rounded-xl border border-surface-border bg-white">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[900px] text-xs">
+                    <thead className="sticky top-0 z-10 bg-white">
+                      <tr className="border-b border-surface-border/70">
+                        <th className="px-2.5 py-2 text-left text-[11px] font-semibold text-ink-muted">Tag</th>
+                        <th className="px-2.5 py-2 text-left text-[11px] font-semibold text-ink-muted">Created</th>
+                        <th className="px-2.5 py-2 text-right text-[11px] font-semibold text-ink-muted">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {setup.tags.length === 0 ? (
+                        <tr>
+                          <td colSpan={3} className="px-3 py-8 text-center text-ink-muted">
+                            No tags found.
+                          </td>
+                        </tr>
+                      ) : (
+                        setup.tags.map((item) => (
+                          <tr key={item.id} className="group border-b border-surface-border last:border-b-0 hover:bg-brand-50">
+                            <td className="px-2.5 py-2 text-sm text-ink">{item.name}</td>
+                            <td className="px-2.5 py-2 text-sm text-ink-muted">{formatDate(item.createdAt)}</td>
+                            <td className="px-2.5 py-2 text-right">
+                              <div className="inline-flex gap-1 opacity-100 transition">
+                                <button
+                                  type="button"
+                                  onClick={() => openEditModal('tags', item)}
+                                  className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-brand-200 bg-brand-50 text-brand-700"
+                                  aria-label="Edit tag"
+                                  title="Edit tag"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => openDeleteDialog('tags', item)}
+                                  className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-danger"
+                                  aria-label="Delete tag"
+                                  title="Delete tag"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : null}
+
+            {activeTab === 'status' ? (
+              <div className="space-y-4">
+                <div className="overflow-hidden rounded-xl border border-surface-border bg-white">
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[1000px] text-xs">
+                      <thead className="sticky top-0 z-10 bg-white">
+                        <tr className="border-b border-surface-border/70">
+                          <th className="px-2.5 py-2 text-left text-[11px] font-semibold text-ink-muted">Category</th>
+                          <th className="px-2.5 py-2 text-left text-[11px] font-semibold text-ink-muted">Statuses</th>
+                          <th className="px-2.5 py-2 text-left text-[11px] font-semibold text-ink-muted">Created</th>
+                          <th className="px-2.5 py-2 text-right text-[11px] font-semibold text-ink-muted">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {setup.categories.length === 0 ? (
+                          <tr>
+                            <td colSpan={4} className="px-3 py-8 text-center text-ink-muted">
+                              No status categories found.
+                            </td>
+                          </tr>
+                        ) : (
+                          setup.categories.map((category) => (
+                            <tr key={category.id} className="group border-b border-surface-border last:border-b-0 hover:bg-brand-50">
+                              <td className="px-2.5 py-2 text-sm font-medium text-ink">{category.name}</td>
+                              <td className="px-2.5 py-2 text-sm text-ink-muted">
+                                {(category.statuses || []).map((status) => status.name).join(', ') || '-'}
+                              </td>
+                              <td className="px-2.5 py-2 text-sm text-ink-muted">{formatDate(category.createdAt)}</td>
+                              <td className="px-2.5 py-2 text-right">
+                                <div className="inline-flex gap-1 opacity-100 transition">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      openEditModal('status', category)
+                                      setStatusCategoryId(category.id)
+                                    }}
+                                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-brand-200 bg-brand-50 text-brand-700"
+                                    aria-label="Edit category"
+                                    title="Edit category"
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => openDeleteDialog('status', category)}
+                                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-danger"
+                                    aria-label="Delete category"
+                                    title="Delete category"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+        </section>
+      </div>
+
+      <Modal
+        open={editor.open}
+        onClose={closeModal}
+        title={`${editor.mode === 'edit' ? 'Edit' : 'Add'} ${getEntityLabel(editor.type)}`}
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={closeModal}
+              className="h-10 rounded-xl border border-surface-border bg-white px-4 text-sm font-medium text-ink-muted"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={onSaveModal}
+              disabled={savingModal}
+              className="h-10 rounded-xl bg-brand-600 px-4 text-sm font-medium text-white disabled:opacity-60"
+            >
+              {savingModal ? 'Saving…' : editor.mode === 'edit' ? 'Save changes' : 'Add'}
+            </button>
+          </>
+        }
+      >
+        <label className="text-xs font-semibold uppercase tracking-wide text-ink-faint">
+          Name
+        </label>
+        <input
+          type="text"
+          value={editor.name}
+          onChange={(e) => setEditor((prev) => ({ ...prev, name: e.target.value }))}
+          placeholder={`Enter ${getEntityLabel(editor.type).toLowerCase()} name`}
+          className="h-10 rounded-xl border border-surface-border px-3.5 text-sm"
+          autoFocus
+        />
+      </Modal>
+
+      <Modal
+        open={statusModalOpen}
+        onClose={() => {
+          setStatusModalOpen(false)
+          setStatusName('')
+        }}
+        title="Add status"
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => {
+                setStatusModalOpen(false)
+                setStatusName('')
+              }}
+              className="h-10 rounded-xl border border-surface-border bg-white px-4 text-sm font-medium text-ink-muted"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={onCreateStatus}
+              disabled={creatingStatus || !statusCategoryId || !statusName.trim()}
+              className="h-10 rounded-xl bg-brand-600 px-4 text-sm font-medium text-white disabled:opacity-60"
+            >
+              {creatingStatus ? 'Adding…' : 'Add status'}
+            </button>
+          </>
+        }
+      >
+        <label className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Category</label>
+        <select
+          className="h-10 rounded-xl border border-surface-border px-3.5 text-sm"
+          value={statusCategoryId}
+          onChange={(e) => setStatusCategoryId(e.target.value)}
+        >
+          <option value="">Select category first</option>
+          {setup.categories.map((category) => (
+            <option key={category.id} value={category.id}>
+              {category.name}
+            </option>
+          ))}
+        </select>
+        <label className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Status</label>
+        <input
+          type="text"
+          value={statusName}
+          onChange={(e) => setStatusName(e.target.value)}
+          placeholder="Enter status name"
+          className="h-10 rounded-xl border border-surface-border px-3.5 text-sm"
+          disabled={!statusCategoryId}
+        />
+      </Modal>
+
+      <Modal
+        open={deleteDialog.open}
+        onClose={() => setDeleteDialog({ open: false, type: '', id: null, name: '' })}
+        title="Delete item"
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setDeleteDialog({ open: false, type: '', id: null, name: '' })}
+              className="h-10 rounded-xl border border-surface-border bg-white px-4 text-sm font-medium text-ink-muted"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={onConfirmDelete}
+              className="h-10 rounded-xl bg-danger px-4 text-sm font-medium text-white"
+            >
+              Delete
+            </button>
+          </>
+        }
+      >
+        <p className="text-sm text-ink-muted">
+          Delete <span className="font-medium text-ink">{deleteDialog.name || 'this item'}</span>? This action cannot be undone.
+        </p>
+      </Modal>
+    </PageShell>
+  )
+}

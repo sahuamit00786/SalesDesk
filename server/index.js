@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process'
 import { validateEnv } from './src/config/env.js'
 import app from './src/app.js'
 import { sequelize } from './src/config/db.js'
+import { runEmailAutoSyncJob } from './src/controllers/leadsController.js'
 
 validateEnv()
 
@@ -28,6 +29,12 @@ function runMigrations() {
 async function start() {
   await sequelize.authenticate()
   runMigrations()
+  const syncIntervalMs = Number(process.env.EMAIL_AUTOSYNC_INTERVAL_MS || 300000)
+  if (syncIntervalMs > 0) {
+    setInterval(() => {
+      runEmailAutoSyncJob().catch(() => {})
+    }, syncIntervalMs)
+  }
   const server = http.createServer(app)
   server.listen(port, () => {
     // eslint-disable-next-line no-console

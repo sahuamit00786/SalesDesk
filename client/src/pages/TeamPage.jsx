@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
-import { PencilLine, ShieldCheck, Trash2, UserCog, UserMinus, UserPlus, Users, X } from 'lucide-react'
+import { PencilLine, ShieldCheck, Trash2, UserMinus, UserPlus, Users, X } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
+import { Modal } from '@/components/ui/Modal'
 import { RightDrawer } from '@/components/ui/RightDrawer'
 import { useWorkspacesQuery } from '@/features/workspace/workspaceApi'
 import {
@@ -77,7 +78,6 @@ export function TeamPage() {
       return 'members'
     }
   })
-  const [editingUserId, setEditingUserId] = useState(null)
   const [inviteForm, setInviteForm] = useState({ email: '', companyRoleId: '', workspaceIds: [] })
   const [roleForm, setRoleForm] = useState({ name: '', description: '', menuPermissions: [] })
   const [editingRoleId, setEditingRoleId] = useState(null)
@@ -85,6 +85,12 @@ export function TeamPage() {
   const [memberRoleFilter, setMemberRoleFilter] = useState('all')
   const [memberStatusFilter, setMemberStatusFilter] = useState('all')
   const [deleteRoleDialog, setDeleteRoleDialog] = useState({ open: false, roleId: null, roleName: '', fallbackRoleId: '' })
+  const [accessDrawerOpen, setAccessDrawerOpen] = useState(false)
+  const [accessUserId, setAccessUserId] = useState(null)
+  const [accessRoleId, setAccessRoleId] = useState('')
+  const [accessWorkspaceIds, setAccessWorkspaceIds] = useState([])
+  const [deactivateDialog, setDeactivateDialog] = useState({ open: false, user: null })
+  const [cancelInviteDialog, setCancelInviteDialog] = useState({ open: false, invite: null })
 
   const inviteBusy = creatingInvite
   const userBusy = patchingRole || patchingWorkspaces || deactivatingUser
@@ -248,22 +254,42 @@ export function TeamPage() {
     }
   }
 
-  async function updateUserRole(userId, companyRoleId) {
-    try {
-      await patchUserRole({ id: userId, companyRoleId }).unwrap()
-      toast.success('Role updated')
-      refetchUsers()
-    } catch (err) {
-      toast.error(apiErrorMessage(err))
-    }
+  function openAccessDrawer(user) {
+    const currentWs = (user.workspaces || []).map((w) => w.id)
+    setAccessUserId(user.id)
+    setAccessRoleId(user.companyRole?.id ?? '')
+    setAccessWorkspaceIds(currentWs)
+    setAccessDrawerOpen(true)
   }
 
-  async function toggleUserWorkspace(userId, currentIds, workspaceId) {
-    const next = currentIds.includes(workspaceId) ? currentIds.filter((id) => id !== workspaceId) : [...currentIds, workspaceId]
-    if (!next.length) return toast.error('At least one workspace is required')
+  function closeAccessDrawer() {
+    setAccessDrawerOpen(false)
+    setAccessUserId(null)
+    setAccessRoleId('')
+    setAccessWorkspaceIds([])
+  }
+
+  function toggleDraftWorkspace(workspaceId) {
+    setAccessWorkspaceIds((currentIds) =>
+      currentIds.includes(workspaceId)
+        ? currentIds.filter((id) => id !== workspaceId)
+        : [...currentIds, workspaceId],
+    )
+  }
+
+  async function saveAccessChanges() {
+    if (!accessUser) return
+    if (!accessWorkspaceIds.length) {
+      toast.error('At least one workspace is required')
+      return
+    }
     try {
-      await replaceUserWorkspaces({ id: userId, workspaceIds: next }).unwrap()
-      toast.success('Workspace access updated')
+      if (!accessUser.isCompanyAdmin && accessRoleId && accessRoleId !== (accessUser.companyRole?.id ?? '')) {
+        await patchUserRole({ id: accessUser.id, companyRoleId: accessRoleId }).unwrap()
+      }
+      await replaceUserWorkspaces({ id: accessUser.id, workspaceIds: accessWorkspaceIds }).unwrap()
+      toast.success('Member access updated')
+      closeAccessDrawer()
       refetchUsers()
     } catch (err) {
       toast.error(apiErrorMessage(err))
@@ -271,15 +297,34 @@ export function TeamPage() {
   }
 
   async function doDeactivate(user) {
-    if (!window.confirm(`Deactivate ${user.name || user.email}?`)) return
+    setDeactivateDialog({ open: true, user })
+  }
+
+  async function confirmDeactivateUser() {
+    if (!deactivateDialog.user) return
     try {
-      await deactivateUser({ id: user.id, reassignOwnerUserId: null }).unwrap()
+      await deactivateUser({ id: deactivateDialog.user.id, reassignOwnerUserId: null }).unwrap()
       toast.success('User deactivated')
+      setDeactivateDialog({ open: false, user: null })
       refetchUsers()
     } catch (err) {
       toast.error(apiErrorMessage(err))
     }
   }
+
+  async function confirmCancelInvitation() {
+    if (!cancelInviteDialog.invite) return
+    try {
+      await cancelInvitation(cancelInviteDialog.invite.id).unwrap()
+      toast.success('Invitation canceled')
+      setCancelInviteDialog({ open: false, invite: null })
+      refetchInvites()
+    } catch (err) {
+      toast.error(apiErrorMessage(err))
+    }
+  }
+
+  const accessUser = users.find((u) => u.id === accessUserId) || null
 
   return (
     <PageShell fullWidth>
@@ -364,100 +409,69 @@ export function TeamPage() {
         ) : null}
 
         {activeTab === 'members' ? (
-        <section className="overflow-hidden rounded-xl border border-surface-border bg-white/90">
+        <section className="overflow-hidden rounded-xl border border-surface-border bg-white">
           <div className="border-b border-surface-border px-5 py-3">
             <h2 className="font-medium text-ink">Members</h2>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] text-sm">
-              <thead className="bg-surface-muted/70 text-ink-muted">
+            <table className="w-full min-w-[900px] text-xs">
+              <thead className="sticky top-0 z-10 bg-white text-ink-muted">
                 <tr>
-                  <th className="px-4 py-3 text-left">Name</th>
-                  <th className="px-4 py-3 text-left">Role</th>
-                  <th className="px-4 py-3 text-left">Workspaces</th>
-                  <th className="px-4 py-3 text-left">Status</th>
-                  <th className="px-4 py-3 text-right">Actions</th>
+                  <th className="px-2.5 py-2 text-left text-[11px]">Name</th>
+                  <th className="px-2.5 py-2 text-left text-[11px]">Role</th>
+                  <th className="px-2.5 py-2 text-left text-[11px]">Workspaces</th>
+                  <th className="px-2.5 py-2 text-left text-[11px]">Status</th>
+                  <th className="px-2.5 py-2 text-right text-[11px]">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {usersLoading ? (
-                  <tr><td colSpan={5} className="px-4 py-6 text-center text-ink-muted">Loading members…</td></tr>
+                  <tr><td colSpan={5} className="px-3 py-8 text-center text-ink-muted">Loading members…</td></tr>
                 ) : filteredUsers.length === 0 ? (
-                  <tr><td colSpan={5} className="px-4 py-6 text-center text-ink-muted">No members found.</td></tr>
+                  <tr><td colSpan={5} className="px-3 py-8 text-center text-ink-muted">No members found.</td></tr>
                 ) : (
                   filteredUsers.map((u) => {
                     const currentWs = (u.workspaces || []).map((w) => w.id)
                     return (
-                      <tr key={u.id} className="border-t border-surface-border">
-                        <td className="px-4 py-3">
+                      <tr key={u.id} className="group border-t border-surface-border hover:bg-brand-50">
+                        <td className="px-2.5 py-2">
                           <p className="font-medium text-ink">{u.name || 'Unnamed user'}</p>
                           <p className="text-xs text-ink-faint">{u.email}</p>
                         </td>
-                        <td className="px-4 py-3">
-                          <select
-                            value={u.companyRole?.id ?? ''}
-                            onChange={(e) => updateUserRole(u.id, e.target.value)}
-                            className="h-9 rounded-lg border border-surface-border bg-white px-2 text-xs"
-                            disabled={userBusy || !u.isActive || u.isCompanyAdmin}
-                          >
-                            {roles.map((r) => (
-                              <option key={r.id} value={r.id}>{r.name}</option>
-                            ))}
-                          </select>
-                        </td>
-                        <td className="px-4 py-3">
+                        <td className="px-2.5 py-2 text-ink-muted">{u.companyRole?.name || 'No role'}</td>
+                        <td className="px-2.5 py-2">
                           <WorkspacePills selectedIds={currentWs} all={workspaces} />
-                          <button
-                            type="button"
-                            aria-label={editingUserId === u.id ? 'Close access editor' : 'Edit access'}
-                            title={editingUserId === u.id ? 'Close access editor' : 'Edit access'}
-                            className="mt-2 inline-flex h-7 w-7 items-center justify-center rounded-lg border border-brand-200 bg-brand-50 text-brand-700 hover:bg-brand-100"
-                            onClick={() => setEditingUserId(editingUserId === u.id ? null : u.id)}
-                          >
-                            {editingUserId === u.id ? <X className="h-3.5 w-3.5" /> : <UserCog className="h-3.5 w-3.5" />}
-                          </button>
-                          {editingUserId === u.id ? (
-                            <div className="mt-2 flex flex-wrap gap-1">
-                              {workspaces.map((w) => {
-                                const active = currentWs.includes(w.id)
-                                return (
-                                  <button
-                                    key={w.id}
-                                    type="button"
-                                    disabled={userBusy}
-                                    onClick={() => toggleUserWorkspace(u.id, currentWs, w.id)}
-                                    className={cn(
-                                      'rounded-full border px-2 py-0.5 text-[11px]',
-                                      active
-                                        ? 'border-brand-300 bg-brand-50 text-brand-800'
-                                        : 'border-surface-border bg-white text-ink-muted',
-                                    )}
-                                  >
-                                    {w.name}
-                                  </button>
-                                )
-                              })}
-                            </div>
-                          ) : null}
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-2.5 py-2">
                           <span className={cn('rounded-full px-2 py-0.5 text-xs', u.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-surface-muted text-ink-muted')}>
                             {u.isActive ? 'Active' : 'Inactive'}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-right">
-                          {u.isActive ? (
+                        <td className="px-2.5 py-2 text-right">
+                          <div className="inline-flex gap-1 opacity-100 transition">
                             <button
                               type="button"
-                              disabled={userBusy}
-                              onClick={() => doDeactivate(u)}
-                              aria-label="Deactivate user"
-                              title="Deactivate user"
-                              className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-danger hover:bg-red-100"
+                              disabled={userBusy || !u.isActive}
+                              onClick={() => openAccessDrawer(u)}
+                              aria-label="Edit workspace access"
+                              title={!u.isActive ? 'Inactive users cannot be edited' : 'Edit workspace access'}
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-brand-200 bg-brand-50 text-brand-700 hover:bg-brand-100 disabled:cursor-not-allowed disabled:opacity-50"
                             >
-                              <UserMinus className="h-3.5 w-3.5" />
+                              <PencilLine className="h-3.5 w-3.5" />
                             </button>
-                          ) : null}
+                            {u.isActive ? (
+                              <button
+                                type="button"
+                                disabled={userBusy}
+                                onClick={() => doDeactivate(u)}
+                                aria-label="Deactivate user"
+                                title="Deactivate user"
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-danger hover:bg-red-100"
+                              >
+                                <UserMinus className="h-3.5 w-3.5" />
+                              </button>
+                            ) : null}
+                          </div>
                         </td>
                       </tr>
                     )
@@ -470,7 +484,7 @@ export function TeamPage() {
         ) : null}
 
         {activeTab === 'invitations' ? (
-        <section className="overflow-hidden rounded-xl border border-surface-border bg-white/90">
+        <section className="overflow-hidden rounded-xl border border-surface-border bg-white">
             <div className="border-b border-surface-border px-5 py-3">
               <h2 className="font-medium text-ink">Pending invitations</h2>
             </div>
@@ -490,15 +504,7 @@ export function TeamPage() {
                       <button
                         type="button"
                         disabled={cancellingInvite}
-                        onClick={async () => {
-                          try {
-                            await cancelInvitation(inv.id).unwrap()
-                            toast.success('Invitation canceled')
-                            refetchInvites()
-                          } catch (err) {
-                            toast.error(apiErrorMessage(err))
-                          }
-                        }}
+                        onClick={() => setCancelInviteDialog({ open: true, invite: inv })}
                         aria-label="Cancel invite"
                         title="Cancel invite"
                         className="mt-2 inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-danger hover:bg-red-100"
@@ -522,30 +528,30 @@ export function TeamPage() {
               {roles.length === 0 ? (
                 <p className="px-4 py-6 text-sm text-ink-muted">No custom roles yet.</p>
               ) : (
-                <table className="w-full min-w-[860px] text-sm">
-                  <thead className="bg-surface-muted/70 text-ink-muted">
+                <table className="w-full min-w-[860px] text-xs">
+                  <thead className="sticky top-0 z-10 bg-white text-ink-muted">
                     <tr>
-                      <th className="px-4 py-3 text-left">Role</th>
-                      <th className="px-4 py-3 text-left">Description</th>
-                      <th className="px-4 py-3 text-left">
+                      <th className="px-2.5 py-2 text-left text-[11px]">Role</th>
+                      <th className="px-2.5 py-2 text-left text-[11px]">Description</th>
+                      <th className="px-2.5 py-2 text-left text-[11px]">
                         <span className="inline-flex items-center gap-1">
                           <ShieldCheck className="h-3.5 w-3.5" />
                           Menus
                         </span>
                       </th>
-                      <th className="px-4 py-3 text-left">
+                      <th className="px-2.5 py-2 text-left text-[11px]">
                         <span className="inline-flex items-center gap-1">
                           <Users className="h-3.5 w-3.5" />
                           Users
                         </span>
                       </th>
-                      <th className="px-4 py-3 text-right">Actions</th>
+                      <th className="px-2.5 py-2 text-right text-[11px]">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {roles.map((r) => (
-                      <tr key={r.id} className="border-t border-surface-border">
-                        <td className="px-4 py-3">
+                      <tr key={r.id} className="group border-t border-surface-border hover:bg-brand-50">
+                        <td className="px-2.5 py-2">
                           <div className="flex items-center gap-2">
                             <p className="font-medium text-ink">{r.name}</p>
                             {r.isDefault ? (
@@ -555,19 +561,19 @@ export function TeamPage() {
                             ) : null}
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-ink-muted">{r.description || 'No description'}</td>
-                        <td className="px-4 py-3">
+                        <td className="px-2.5 py-2 text-ink-muted">{r.description || 'No description'}</td>
+                        <td className="px-2.5 py-2">
                           <span className="rounded-full bg-surface-subtle px-2 py-0.5 text-[11px] text-ink-muted">
                             {r.menuCount || 0}
                           </span>
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-2.5 py-2">
                           <span className="rounded-full bg-surface-subtle px-2 py-0.5 text-[11px] text-ink-muted">
                             {r.assignedUsers || 0}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="inline-flex gap-2">
+                        <td className="px-2.5 py-2 text-right">
+                          <div className="inline-flex gap-1 opacity-100 transition">
                             <button
                               type="button"
                               aria-label="Edit role"
@@ -615,6 +621,89 @@ export function TeamPage() {
         ) : null}
 
       </div>
+
+      <RightDrawer
+        open={accessDrawerOpen}
+        onClose={closeAccessDrawer}
+        title="Edit member access"
+        description={
+          accessUser
+            ? `Update role and workspace access for ${accessUser.name || accessUser.email}.`
+            : 'Update role and workspace access for this member.'
+        }
+        footer={
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={closeAccessDrawer}
+              className="h-10 rounded-xl border border-surface-border px-4 text-sm"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={patchingWorkspaces || patchingRole}
+              onClick={saveAccessChanges}
+              className="h-10 rounded-xl bg-brand-600 px-4 text-sm font-medium text-white"
+            >
+              {patchingWorkspaces || patchingRole ? 'Saving…' : 'Save access'}
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Name</label>
+            <input
+              type="text"
+              value={accessUser?.name || ''}
+              readOnly
+              className="mt-2 h-10 w-full rounded-xl border border-surface-border bg-surface-muted px-3 text-sm text-ink-muted"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Role</label>
+            <select
+              value={accessRoleId}
+              onChange={(e) => setAccessRoleId(e.target.value)}
+              disabled={patchingWorkspaces || patchingRole || accessUser?.isCompanyAdmin}
+              className="mt-2 h-10 w-full rounded-xl border border-surface-border bg-white px-3 text-sm disabled:cursor-not-allowed disabled:bg-surface-muted"
+            >
+              <option value="">Select role</option>
+              {roles.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+            {accessUser?.isCompanyAdmin ? (
+              <p className="mt-1 text-[11px] text-ink-faint">Company admin role cannot be changed.</p>
+            ) : null}
+          </div>
+          <p className="text-xs text-ink-muted">Select one or more workspaces.</p>
+          <div className="flex flex-wrap gap-2">
+            {workspaces.map((w) => {
+              const active = accessWorkspaceIds.includes(w.id)
+              return (
+                <button
+                  key={w.id}
+                  type="button"
+                  disabled={patchingWorkspaces}
+                  onClick={() => toggleDraftWorkspace(w.id)}
+                  className={cn(
+                    'rounded-full border px-3 py-1 text-xs',
+                    active
+                      ? 'border-brand-300 bg-brand-50 text-brand-800'
+                      : 'border-surface-border bg-white text-ink-muted',
+                  )}
+                >
+                  {w.name}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      </RightDrawer>
 
       <RightDrawer
         open={inviteDrawerOpen}
@@ -818,59 +907,119 @@ export function TeamPage() {
         </div>
       </RightDrawer>
 
-      {deleteRoleDialog.open ? (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-ink/45 px-4 backdrop-blur-[2px]">
-          <div className="w-full max-w-md rounded-2xl border border-surface-border bg-white p-5 shadow-2xl">
-            <h3 className="text-base font-semibold text-ink">Delete role</h3>
-            <p className="mt-1 text-sm text-ink-muted">
-              Reassign users from <span className="font-medium text-ink">{deleteRoleDialog.roleName}</span> before deleting.
-            </p>
-            <div className="mt-3">
-              <label className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Fallback role</label>
-              <select
-                value={deleteRoleDialog.fallbackRoleId}
-                onChange={(e) => setDeleteRoleDialog((d) => ({ ...d, fallbackRoleId: e.target.value }))}
-                className="mt-2 h-10 w-full rounded-xl border border-surface-border bg-white px-3 text-sm"
-              >
-                <option value="">Select fallback role</option>
-                {roles
-                  .filter((r) => r.id !== deleteRoleDialog.roleId)
-                  .map((r) => (
-                    <option key={r.id} value={r.id}>{r.name}</option>
-                  ))}
-              </select>
-            </div>
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setDeleteRoleDialog({ open: false, roleId: null, roleName: '', fallbackRoleId: '' })}
-                className="h-10 rounded-xl border border-surface-border bg-white px-4 text-sm font-medium text-ink-muted hover:bg-surface-muted"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={deletingRole || !deleteRoleDialog.fallbackRoleId}
-                onClick={async () => {
-                  try {
-                    await deleteRole({
-                      id: deleteRoleDialog.roleId,
-                      fallbackCompanyRoleId: deleteRoleDialog.fallbackRoleId,
-                    }).unwrap()
-                    toast.success('Role deleted')
-                    setDeleteRoleDialog({ open: false, roleId: null, roleName: '', fallbackRoleId: '' })
-                  } catch (err) {
-                    toast.error(apiErrorMessage(err))
-                  }
-                }}
-                className="h-10 rounded-xl bg-danger px-4 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
-              >
-                {deletingRole ? 'Deleting…' : 'Delete role'}
-              </button>
-            </div>
-          </div>
+      <Modal
+        open={deactivateDialog.open}
+        onClose={() => setDeactivateDialog({ open: false, user: null })}
+        title="Deactivate member"
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setDeactivateDialog({ open: false, user: null })}
+              className="h-10 rounded-xl border border-surface-border bg-white px-4 text-sm font-medium text-ink-muted hover:bg-surface-muted"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={confirmDeactivateUser}
+              disabled={deactivatingUser}
+              className="h-10 rounded-xl bg-danger px-4 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
+            >
+              {deactivatingUser ? 'Deactivating…' : 'Deactivate'}
+            </button>
+          </>
+        }
+      >
+        <p className="text-sm text-ink-muted">
+          Deactivate <span className="font-medium text-ink">{deactivateDialog.user?.name || deactivateDialog.user?.email}</span>?
+          They will lose access until reactivated.
+        </p>
+      </Modal>
+
+      <Modal
+        open={cancelInviteDialog.open}
+        onClose={() => setCancelInviteDialog({ open: false, invite: null })}
+        title="Cancel invitation"
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setCancelInviteDialog({ open: false, invite: null })}
+              className="h-10 rounded-xl border border-surface-border bg-white px-4 text-sm font-medium text-ink-muted hover:bg-surface-muted"
+            >
+              Keep invite
+            </button>
+            <button
+              type="button"
+              onClick={confirmCancelInvitation}
+              disabled={cancellingInvite}
+              className="h-10 rounded-xl bg-danger px-4 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
+            >
+              {cancellingInvite ? 'Canceling…' : 'Cancel invite'}
+            </button>
+          </>
+        }
+      >
+        <p className="text-sm text-ink-muted">
+          Cancel pending invitation for <span className="font-medium text-ink">{cancelInviteDialog.invite?.email}</span>?
+        </p>
+      </Modal>
+
+      <Modal
+        open={deleteRoleDialog.open}
+        onClose={() => setDeleteRoleDialog({ open: false, roleId: null, roleName: '', fallbackRoleId: '' })}
+        title="Delete role"
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setDeleteRoleDialog({ open: false, roleId: null, roleName: '', fallbackRoleId: '' })}
+              className="h-10 rounded-xl border border-surface-border bg-white px-4 text-sm font-medium text-ink-muted hover:bg-surface-muted"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={deletingRole || !deleteRoleDialog.fallbackRoleId}
+              onClick={async () => {
+                try {
+                  await deleteRole({
+                    id: deleteRoleDialog.roleId,
+                    fallbackCompanyRoleId: deleteRoleDialog.fallbackRoleId,
+                  }).unwrap()
+                  toast.success('Role deleted')
+                  setDeleteRoleDialog({ open: false, roleId: null, roleName: '', fallbackRoleId: '' })
+                } catch (err) {
+                  toast.error(apiErrorMessage(err))
+                }
+              }}
+              className="h-10 rounded-xl bg-danger px-4 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
+            >
+              {deletingRole ? 'Deleting…' : 'Delete role'}
+            </button>
+          </>
+        }
+      >
+        <p className="text-sm text-ink-muted">
+          Reassign users from <span className="font-medium text-ink">{deleteRoleDialog.roleName}</span> before deleting.
+        </p>
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Fallback role</label>
+          <select
+            value={deleteRoleDialog.fallbackRoleId}
+            onChange={(e) => setDeleteRoleDialog((d) => ({ ...d, fallbackRoleId: e.target.value }))}
+            className="mt-2 h-10 w-full rounded-xl border border-surface-border bg-white px-3 text-sm"
+          >
+            <option value="">Select fallback role</option>
+            {roles
+              .filter((r) => r.id !== deleteRoleDialog.roleId)
+              .map((r) => (
+                <option key={r.id} value={r.id}>{r.name}</option>
+              ))}
+          </select>
         </div>
-      ) : null}
+      </Modal>
 
     </PageShell>
   )

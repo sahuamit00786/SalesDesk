@@ -6,17 +6,15 @@ import {
   ClipboardList,
   Contact,
   FileStack,
-  FileText,
   Kanban,
   LayoutGrid,
   ListTodo,
   Mail,
   Megaphone,
   MessageCircle,
-  Package,
   Phone,
   Puzzle,
-  Receipt,
+  SlidersHorizontal,
   Settings2,
   TrendingUp,
   Users,
@@ -69,18 +67,6 @@ export const ROUTE_META = {
     title: 'WhatsApp / SMS',
     sub: 'Reach leads on their preferred channel — messages logged just like emails',
   },
-  '/products': {
-    title: 'Products & services',
-    sub: 'Your catalogue — products and services that get added to deals and quotes',
-  },
-  '/quotes': {
-    title: 'Quotes & proposals',
-    sub: 'Generate professional, branded proposals with e-signature — directly from a deal',
-  },
-  '/invoices': {
-    title: 'Invoices',
-    sub: 'Issue and track invoices — close the loop between deal won and payment received',
-  },
   '/documents': {
     title: 'Documents',
     sub: 'Central file store — contracts, presentations, NDAs — all linked to leads or deals',
@@ -108,6 +94,10 @@ export const ROUTE_META = {
   '/workspace': {
     title: 'Workspace settings',
     sub: 'Configure everything specific to this workspace — your brand, currency, fields, stages',
+  },
+  '/lead-configuration': {
+    title: 'Lead configuration',
+    sub: 'Manage lead sources, tags, and status categories in one place',
   },
   '/team': {
     title: 'Team & roles',
@@ -154,9 +144,6 @@ export const NAV_SECTIONS = [
   {
     label: 'Manage',
     items: [
-      { to: '/products', label: 'Products / services', icon: Package },
-      { to: '/quotes', label: 'Quotes / proposals', icon: FileText },
-      { to: '/invoices', label: 'Invoices', icon: Receipt },
       { to: '/documents', label: 'Documents', icon: FileStack },
     ],
   },
@@ -179,6 +166,7 @@ export const NAV_SECTIONS = [
     label: 'Settings',
     items: [
       { to: '/workspace', label: 'Workspace settings', icon: Settings2 },
+      { to: '/lead-configuration', label: 'Lead configuration', icon: SlidersHorizontal },
       { to: '/team', label: 'Team & roles', icon: Users },
       { to: '/integrations', label: 'Integrations & API', icon: Puzzle },
     ],

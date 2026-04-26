@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import { Archive, ArchiveRestore, Building2, CheckCircle2, Pencil, Plus, Trash2, Users } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
+import { Modal } from '@/components/ui/Modal'
 import { RightDrawer } from '@/components/ui/RightDrawer'
 import {
   useCreateWorkspaceMutation,
@@ -21,12 +22,9 @@ function WorkspaceTableRow({ row, busy, onEdit, onToggleArchive, onDelete }) {
   const archived = Boolean(row.archived)
   return (
     <tr
-      className={cn(
-        'border-b border-surface-border transition-colors last:border-b-0',
-        archived ? 'bg-surface-muted/40 text-ink-muted' : 'hover:bg-surface-muted/30',
-      )}
+      className={cn('group border-b border-surface-border transition-colors last:border-b-0 hover:bg-brand-50', archived ? 'text-ink-muted' : '')}
     >
-      <td className="max-w-[280px] px-4 py-3.5 sm:max-w-[360px] sm:px-5">
+      <td className="max-w-[280px] px-2.5 py-2 sm:max-w-[360px]">
         <div className="flex items-start gap-2">
           <span
             className={cn(
@@ -51,10 +49,10 @@ function WorkspaceTableRow({ row, busy, onEdit, onToggleArchive, onDelete }) {
           </div>
         </div>
       </td>
-      <td className={cn('px-4 py-3.5 tabular-nums sm:px-5', archived ? 'text-ink-faint' : 'text-ink-muted')}>
+      <td className={cn('px-2.5 py-2 tabular-nums', archived ? 'text-ink-faint' : 'text-ink-muted')}>
         {row.leadCount}
       </td>
-      <td className="px-4 py-3.5 sm:px-5">
+      <td className="px-2.5 py-2">
         <span
           className={cn(
             'inline-flex items-center gap-1.5 tabular-nums',
@@ -65,7 +63,7 @@ function WorkspaceTableRow({ row, busy, onEdit, onToggleArchive, onDelete }) {
           {row.memberCount}
         </span>
       </td>
-      <td className="px-4 py-3.5 sm:px-5">
+      <td className="px-2.5 py-2">
         <span
           className={cn(
             'inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium',
@@ -75,8 +73,8 @@ function WorkspaceTableRow({ row, busy, onEdit, onToggleArchive, onDelete }) {
           {archived ? 'Archived' : 'Active'}
         </span>
       </td>
-      <td className="px-4 py-3.5 sm:px-5">
-        <div className="flex flex-wrap items-center justify-end gap-1">
+      <td className="px-2.5 py-2">
+        <div className="flex items-center justify-end gap-1 opacity-100 transition">
           <button
             type="button"
             disabled={busy}
@@ -138,6 +136,7 @@ export function WorkspacePage() {
   const [formName, setFormName] = useState('')
   const [formDescription, setFormDescription] = useState('')
   const [statusFilter, setStatusFilter] = useState('active')
+  const [deleteDialog, setDeleteDialog] = useState({ open: false, row: null })
 
   const items = data?.data?.items
 
@@ -216,11 +215,15 @@ export function WorkspacePage() {
   }
 
   async function removeWorkspace(row) {
-    const ok = window.confirm(`Delete “${row.name}”? This cannot be undone.`)
-    if (!ok) return
+    setDeleteDialog({ open: true, row })
+  }
+
+  async function confirmDeleteWorkspace() {
+    if (!deleteDialog.row) return
     try {
-      await deleteWorkspace(row.id).unwrap()
+      await deleteWorkspace(deleteDialog.row.id).unwrap()
       toast.success('Workspace deleted')
+      setDeleteDialog({ open: false, row: null })
     } catch (err) {
       toast.error(apiErrorMessage(err))
     }
@@ -286,28 +289,28 @@ export function WorkspacePage() {
           </div>
         ) : null}
 
-        <div className="overflow-hidden rounded-xl border border-surface-border bg-white/90 shadow-sm">
+        <div className="overflow-hidden rounded-xl border border-surface-border bg-white">
           <div className="scrollbar-subtle overflow-x-auto">
-            <table className="w-full min-w-[640px] border-collapse text-left text-sm">
-              <thead>
-                <tr className="border-b border-surface-border bg-surface-muted/80">
-                  <th className="px-4 py-3 font-semibold text-ink sm:px-5">Workspace</th>
-                  <th className="px-4 py-3 font-semibold text-ink sm:px-5">Leads</th>
-                  <th className="px-4 py-3 font-semibold text-ink sm:px-5">Team</th>
-                  <th className="px-4 py-3 font-semibold text-ink sm:px-5">Status</th>
-                  <th className="px-4 py-3 text-right font-semibold text-ink sm:px-5">Actions</th>
+            <table className="w-full min-w-[840px] border-collapse text-left text-xs">
+              <thead className="sticky top-0 z-10 bg-white">
+                <tr className="border-b border-surface-border/70">
+                  <th className="px-2.5 py-2 text-[11px] font-semibold text-ink-muted">Workspace</th>
+                  <th className="px-2.5 py-2 text-[11px] font-semibold text-ink-muted">Leads</th>
+                  <th className="px-2.5 py-2 text-[11px] font-semibold text-ink-muted">Team</th>
+                  <th className="px-2.5 py-2 text-[11px] font-semibold text-ink-muted">Status</th>
+                  <th className="px-2.5 py-2 text-right text-[11px] font-semibold text-ink-muted">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading ? (
                   <tr>
-                    <td colSpan={5} className="px-5 py-10 text-center text-ink-muted">
+                    <td colSpan={5} className="px-3 py-8 text-center text-ink-muted">
                       Loading workspaces…
                     </td>
                   </tr>
                 ) : !Array.isArray(items) || orderedRows.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-5 py-10 text-center text-ink-muted">
+                    <td colSpan={5} className="px-3 py-8 text-center text-ink-muted">
                       {statusFilter === 'archived'
                         ? 'No archived workspaces.'
                         : 'No active workspaces yet. Create one to get started.'}
@@ -402,6 +405,35 @@ export function WorkspacePage() {
           ) : null}
         </form>
       </RightDrawer>
+
+      <Modal
+        open={deleteDialog.open}
+        onClose={() => setDeleteDialog({ open: false, row: null })}
+        title="Delete workspace"
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setDeleteDialog({ open: false, row: null })}
+              className="h-10 rounded-xl border border-surface-border bg-white px-4 text-sm font-medium text-ink-muted transition hover:bg-surface-muted"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={confirmDeleteWorkspace}
+              disabled={deleting}
+              className="h-10 rounded-xl bg-danger px-4 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
+            >
+              {deleting ? 'Deleting…' : 'Delete workspace'}
+            </button>
+          </>
+        }
+      >
+        <p className="text-sm text-ink-muted">
+          Delete <span className="font-medium text-ink">{deleteDialog.row?.name}</span>? This cannot be undone.
+        </p>
+      </Modal>
     </PageShell>
   )
 }
