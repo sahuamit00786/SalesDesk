@@ -188,6 +188,26 @@ export const leadsApi = baseApi.injectEndpoints({
       query: ({ id, taskId }) => ({ url: `/leads/${id}/tasks/${taskId}`, method: 'DELETE' }),
       invalidatesTags: (_r, _e, arg) => [{ type: 'Lead', id: `${arg.id}-tasks` }, { type: 'Lead', id: arg.id }],
     }),
+    getLeadFollowups: build.query({
+      query: (id) => `/leads/${id}/followups`,
+      providesTags: (_r, _e, id) => [{ type: 'Lead', id: `${id}-followups` }],
+    }),
+    createLeadFollowup: build.mutation({
+      query: ({ id, ...body }) => ({ url: `/leads/${id}/followups`, method: 'POST', body }),
+      invalidatesTags: (_r, _e, arg) => [
+        { type: 'Lead', id: `${arg.id}-followups` },
+        { type: 'Lead', id: `${arg.id}-activities` },
+        { type: 'Lead', id: arg.id },
+      ],
+    }),
+    patchLeadFollowup: build.mutation({
+      query: ({ id, followupId, ...body }) => ({ url: `/leads/${id}/followups/${followupId}`, method: 'PATCH', body }),
+      invalidatesTags: (_r, _e, arg) => [{ type: 'Lead', id: `${arg.id}-followups` }, { type: 'Lead', id: arg.id }],
+    }),
+    deleteLeadFollowup: build.mutation({
+      query: ({ id, followupId }) => ({ url: `/leads/${id}/followups/${followupId}`, method: 'DELETE' }),
+      invalidatesTags: (_r, _e, arg) => [{ type: 'Lead', id: `${arg.id}-followups` }, { type: 'Lead', id: arg.id }],
+    }),
     createLeadTaskComment: build.mutation({
       query: ({ id, taskId, body: text }) => ({
         url: `/leads/${id}/tasks/${taskId}/comments`,
@@ -292,6 +312,10 @@ export const {
   useCreateLeadTaskMutation,
   usePatchLeadTaskMutation,
   useDeleteLeadTaskMutation,
+  useGetLeadFollowupsQuery,
+  useCreateLeadFollowupMutation,
+  usePatchLeadFollowupMutation,
+  useDeleteLeadFollowupMutation,
   useCreateLeadTaskCommentMutation,
   useGetSavedViewsQuery,
   useCreateSavedViewMutation,

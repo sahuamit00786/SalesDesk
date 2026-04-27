@@ -47,7 +47,8 @@ export function PageShell({ children, fullWidth = false }) {
         <Topbar onMenu={() => setMobileNav(true)} />
         <main
           className={cn(
-            'scrollbar-subtle min-h-0 flex-1 overflow-y-auto overscroll-contain py-4 sm:py-6',
+            'scrollbar-subtle min-h-0 flex-1 overflow-y-auto overscroll-contain',
+            fullWidth ? 'pt-0 pb-4 sm:pb-6' : 'py-4 sm:py-6',
             fullWidth ? 'px-0' : 'px-4 sm:px-6',
           )}
         >

@@ -30,6 +30,7 @@ export function WebFormsListPage() {
   }, [data, search])
   const selectedFormDetail = formDetailData?.data
   const selectedSubmissions = selectedFormDetail?.submissions || []
+  const submissionColumns = selectedFormDetail?.form?.fields || []
 
   async function createForm() {
     const created = await createWebForm({ name: 'Untitled form', formTitle: 'Let us connect', status: 'active', fields: [] }).unwrap()
@@ -147,28 +148,28 @@ export function WebFormsListPage() {
         ) : (
           <div className="overflow-hidden rounded-xl border border-surface-border">
             <div className="max-h-[65vh] overflow-auto">
-              <table className="w-full min-w-[900px] text-xs">
+              <table className="w-full min-w-[980px] text-xs">
                 <thead className="sticky top-0 bg-white">
                   <tr className="border-b border-surface-border">
                     <th className="px-3 py-2 text-left">Submitted At</th>
-                    <th className="px-3 py-2 text-left">Lead</th>
-                    <th className="px-3 py-2 text-left">Duplicate</th>
-                    <th className="px-3 py-2 text-left">IP</th>
-                    <th className="px-3 py-2 text-left">Referrer</th>
-                    <th className="px-3 py-2 text-left">Payload</th>
+                    {submissionColumns.map((field) => (
+                      <th key={field.id} className="px-3 py-2 text-left">
+                        {field.label || field.type || 'Field'}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
                   {!selectedSubmissions.length ? (
-                    <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-ink-muted">No submissions for this form yet.</td></tr>
+                    <tr><td colSpan={Math.max(2, submissionColumns.length + 1)} className="px-4 py-8 text-center text-sm text-ink-muted">No submissions for this form yet.</td></tr>
                   ) : selectedSubmissions.map((sub) => (
                     <tr key={sub.id} className="border-b border-surface-border last:border-b-0">
-                      <td className="px-3 py-2 text-ink-muted">{new Date(sub.submittedAt || sub.createdAt).toLocaleString()}</td>
-                      <td className="px-3 py-2 text-ink-muted">{sub.leadId || '-'}</td>
-                      <td className="px-3 py-2 text-ink-muted">{sub.isDuplicate ? 'Yes' : 'No'}</td>
-                      <td className="px-3 py-2 text-ink-muted">{sub.ipAddress || '-'}</td>
-                      <td className="px-3 py-2 text-ink-muted">{sub.referrerUrl || '-'}</td>
-                      <td className="px-3 py-2"><pre className="max-w-[360px] whitespace-pre-wrap break-all text-[11px] text-ink-muted">{JSON.stringify(sub.data || {}, null, 2)}</pre></td>
+                      <td className="px-3 py-2 align-top text-ink-muted">{new Date(sub.submittedAt || sub.createdAt).toLocaleString()}</td>
+                      {submissionColumns.map((field) => (
+                        <td key={`${sub.id}-${field.id}`} className="px-3 py-2 align-top text-ink-muted">
+                          <span className="break-all">{String(sub.data?.[field.id] ?? '-')}</span>
+                        </td>
+                      ))}
                     </tr>
                   ))}
                 </tbody>

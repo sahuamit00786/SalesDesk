@@ -13,6 +13,7 @@ import { LeadsPage } from '@/pages/LeadsPage'
 import { LeadConfigurationPage } from '@/pages/LeadConfigurationPage'
 import { LeadDetailPage } from '@/features/leads/pages/LeadDetailPage'
 import { DocumentsPage } from '@/pages/DocumentsPage'
+import { ActivitiesPage } from '@/pages/ActivitiesPage'
 import { WebFormsListPage } from '@/features/webforms/pages/WebFormsListPage'
 import { FormBuilderPage } from '@/features/webforms/pages/FormBuilderPage'
 
@@ -50,11 +51,12 @@ export default function App() {
         <Route path="/onboarding" element={<OnboardingPage />} />
         <Route element={<RequireOnboarded />}>
           <Route path="/workspace" element={<WorkspacePage />} />
-          {APP_PATHS.filter((path) => path !== '/workspace' && path !== '/team' && path !== '/leads' && path !== '/lead-configuration' && path !== '/integrations' && path !== '/documents' && path !== '/forms').map((path) => (
+          {APP_PATHS.filter((path) => path !== '/workspace' && path !== '/team' && path !== '/leads' && path !== '/lead-configuration' && path !== '/integrations' && path !== '/documents' && path !== '/forms' && path !== '/activities').map((path) => (
             <Route key={path} path={path} element={<ModulePlaceholderPage />} />
           ))}
           <Route path="/leads" element={<LeadsPage />} />
           <Route path="/leads/:id" element={<LeadDetailPage />} />
+          <Route path="/activities" element={<ActivitiesPage />} />
           <Route path="/lead-configuration" element={<LeadConfigurationPage />} />
           <Route path="/team" element={<TeamPage />} />
           <Route path="/integrations" element={<IntegrationsPage />} />

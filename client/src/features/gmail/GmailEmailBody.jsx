@@ -36,7 +36,7 @@ export default function GmailEmailBody({ html }) {
       title="Email content"
       sandbox="allow-same-origin allow-popups"
       srcDoc={srcDoc}
-      className="min-h-[180px] w-full border-0"
+      className="min-h-[280px] w-full border-0"
     />
   )
 }

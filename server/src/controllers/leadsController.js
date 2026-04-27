@@ -14,6 +14,7 @@ import {
   LeadTask,
   LeadTaskSubtask,
   LeadTaskComment,
+  LeadFollowup,
   LeadSource,
   LeadStage,
   LeadStatus,
@@ -1447,6 +1448,119 @@ export async function deleteTask(req, res, next) {
       where: { id: req.params.taskId, leadId: req.params.id, companyId: req.user.companyId },
     })
     if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Task not found' } })
+    await row.destroy()
+    return res.json({ success: true, data: { ok: true }, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function listFollowups(req, res, next) {
+  try {
+    const lead = await findCompanyLead(req, req.params.id)
+    if (!lead) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Lead not found' } })
+    const rowsRaw = await LeadFollowup.findAll({
+      where: { leadId: lead.id, companyId: req.user.companyId },
+      include: [{ model: User, as: 'creator', attributes: ['id', 'name', 'email'], required: false }],
+      order: [['scheduledAt', 'ASC']],
+    })
+    const statusRank = { pending: 0, done: 1, cancelled: 2 }
+    const rows = [...rowsRaw].sort((a, b) => {
+      const d = (statusRank[a.status] ?? 9) - (statusRank[b.status] ?? 9)
+      if (d !== 0) return d
+      return new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime()
+    })
+    return res.json({ success: true, data: rows, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function createFollowup(req, res, next) {
+  try {
+    const lead = await findCompanyLead(req, req.params.id)
+    if (!lead) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Lead not found' } })
+    const scheduledRaw = req.body?.scheduledAt
+    const scheduledAt = scheduledRaw ? new Date(scheduledRaw) : null
+    if (!scheduledAt || Number.isNaN(scheduledAt.getTime())) {
+      return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'scheduledAt is required' } })
+    }
+    const now = Date.now()
+    if (scheduledAt.getTime() <= now) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VALIDATION', message: 'Follow-up time must be after the current time' },
+      })
+    }
+    const qpm = req.body?.quickPickMinutes
+    const quickPickMinutes = [5, 10, 15].includes(Number(qpm)) ? Number(qpm) : null
+    const remark = req.body?.remark != null ? String(req.body.remark).trim().slice(0, 8000) : null
+    const row = await LeadFollowup.create({
+      leadId: lead.id,
+      workspaceId: lead.workspaceId,
+      companyId: lead.companyId,
+      scheduledAt,
+      remark: remark || null,
+      quickPickMinutes,
+      status: 'pending',
+      createdBy: req.user.id,
+    })
+    const full = await LeadFollowup.findByPk(row.id, {
+      include: [{ model: User, as: 'creator', attributes: ['id', 'name', 'email'], required: false }],
+    })
+    await createSystemActivity({
+      leadId: lead.id,
+      userId: req.user.id,
+      body: `Follow-up scheduled for ${scheduledAt.toISOString()}`,
+      metadata: { action: 'followup_created', followupId: row.id, scheduledAt: scheduledAt.toISOString() },
+    })
+    return res.status(201).json({ success: true, data: full, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function patchFollowup(req, res, next) {
+  try {
+    const row = await LeadFollowup.findOne({
+      where: { id: req.params.followupId, leadId: req.params.id, companyId: req.user.companyId },
+    })
+    if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Follow-up not found' } })
+    const payload = {}
+    if ('remark' in req.body) payload.remark = req.body.remark != null ? String(req.body.remark).trim().slice(0, 8000) : null
+    if ('scheduledAt' in req.body) {
+      const nextAt = req.body.scheduledAt ? new Date(req.body.scheduledAt) : null
+      if (!nextAt || Number.isNaN(nextAt.getTime())) {
+        return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'scheduledAt is invalid' } })
+      }
+      if (nextAt.getTime() <= Date.now()) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'VALIDATION', message: 'Follow-up time must be after the current time' },
+        })
+      }
+      payload.scheduledAt = nextAt
+    }
+    if ('status' in req.body && ['pending', 'done', 'cancelled'].includes(req.body.status)) {
+      payload.status = req.body.status
+      payload.completedAt = req.body.status === 'pending' ? null : new Date()
+    }
+    await row.update(payload)
+    const full = await LeadFollowup.findByPk(row.id, {
+      include: [{ model: User, as: 'creator', attributes: ['id', 'name', 'email'], required: false }],
+    })
+    return res.json({ success: true, data: full, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function deleteFollowup(req, res, next) {
+  try {
+    const row = await LeadFollowup.findOne({
+      where: { id: req.params.followupId, leadId: req.params.id, companyId: req.user.companyId },
+    })
+    if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Follow-up not found' } })
     await row.destroy()
     return res.json({ success: true, data: { ok: true }, meta: {} })
   } catch (e) {

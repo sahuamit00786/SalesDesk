@@ -1,4 +1,4 @@
-import { WebForm, WebFormEmailTemplate, WebFormField, WebFormSubmission } from '../models/index.js'
+import { Lead, WebForm, WebFormEmailTemplate, WebFormField, WebFormSubmission } from '../models/index.js'
 import { generateUniquePublicToken, listWorkspaceForms, replaceFormFields, sanitizeFormInput } from '../services/formBuilderService.js'
 import { generateWebFormEmailTemplate } from '../services/openAiService.js'
 
@@ -32,6 +32,7 @@ export async function getOne(req, res, next) {
     if (!form) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Form not found' } })
     const submissions = await WebFormSubmission.findAll({
       where: { formId: form.id },
+      include: [{ model: Lead, as: 'lead', attributes: ['id', 'contactName', 'email', 'phone', 'company'] }],
       order: [['submittedAt', 'DESC']],
     })
     return res.json({ success: true, data: { form, submissions }, meta: {} })

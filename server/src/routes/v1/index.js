@@ -7,6 +7,7 @@ import { loadPermissions } from '../../middleware/loadPermissions.js'
 import * as authController from '../../controllers/authController.js'
 import * as analyticsController from '../../controllers/analyticsController.js'
 import * as leadsController from '../../controllers/leadsController.js'
+import * as activitiesController from '../../controllers/activitiesController.js'
 import * as companyController from '../../controllers/companyController.js'
 import * as workspaceController from '../../controllers/workspaceController.js'
 import * as teamController from '../../controllers/teamController.js'
@@ -38,6 +39,18 @@ router.patch('/workspaces/:id', requireAuth, apiLimiter, workspaceController.pat
 router.delete('/workspaces/:id', requireAuth, apiLimiter, workspaceController.deleteWorkspace)
 
 router.get('/analytics/dashboard', requireAuth, apiLimiter, analyticsController.dashboardStats)
+
+router.get('/activities/book/:token', apiLimiter, activitiesController.getBookingLinkInfo)
+router.post('/activities/book/:token', apiLimiter, activitiesController.confirmBooking)
+router.get('/activities', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'view'), activitiesController.listActivities)
+router.post('/activities', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'edit'), activitiesController.createActivity)
+router.get('/activities/types', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'view'), activitiesController.listActivityTypes)
+router.post('/activities/types', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'admin'), activitiesController.createActivityType)
+router.patch('/activities/types/:typeId', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'admin'), activitiesController.patchActivityType)
+router.delete('/activities/types/:typeId', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'admin'), activitiesController.deleteActivityType)
+router.post('/activities/booking-link', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'edit'), activitiesController.createBookingLink)
+router.get('/activities/reminders/upcoming', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'view'), activitiesController.listUpcomingReminders)
+router.post('/activities/:activityId/reminders', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'edit'), activitiesController.createReminder)
 
 router.get(
   '/leads',
@@ -110,6 +123,10 @@ router.post(
   leadsController.addTaskComment,
 )
 router.delete('/leads/:id/tasks/:taskId', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'edit'), leadsController.deleteTask)
+router.get('/leads/:id/followups', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'view'), leadsController.listFollowups)
+router.post('/leads/:id/followups', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'edit'), leadsController.createFollowup)
+router.patch('/leads/:id/followups/:followupId', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'edit'), leadsController.patchFollowup)
+router.delete('/leads/:id/followups/:followupId', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'edit'), leadsController.deleteFollowup)
 router.get('/leads/:id/files', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'view'), leadsController.listFiles)
 router.post('/leads/:id/files', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'edit'), leadsController.createFile)
 router.use(

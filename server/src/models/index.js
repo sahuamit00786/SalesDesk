@@ -17,6 +17,7 @@ import { LeadFile } from './LeadFile.js'
 import { LeadTask } from './LeadTask.js'
 import { LeadTaskSubtask } from './LeadTaskSubtask.js'
 import { LeadTaskComment } from './LeadTaskComment.js'
+import { LeadFollowup } from './LeadFollowup.js'
 import { LeadSource } from './LeadSource.js'
 import { LeadStage } from './LeadStage.js'
 import { LeadStatusCategory } from './LeadStatusCategory.js'
@@ -24,6 +25,9 @@ import { LeadStatus } from './LeadStatus.js'
 import { LeadAssignment } from './LeadAssignment.js'
 import { LeadEmail } from './LeadEmail.js'
 import { CompanyGoogleToken } from './CompanyGoogleToken.js'
+import { ActivityType } from './ActivityType.js'
+import { ActivityReminder } from './ActivityReminder.js'
+import { ActivityBookingLink } from './ActivityBookingLink.js'
 import { CountryPhoneCode } from './CountryPhoneCode.js'
 import { UserWorkspace } from './UserWorkspace.js'
 import { MenuMaster } from './MenuMaster.js'
@@ -89,6 +93,16 @@ LeadStatus.hasMany(Lead, { foreignKey: 'leadStatusId', as: 'leads' })
 Lead.hasMany(Activity, { foreignKey: 'leadId', as: 'activities' })
 Activity.belongsTo(Lead, { foreignKey: 'leadId', as: 'lead' })
 Activity.belongsTo(User, { foreignKey: 'userId', as: 'user' })
+Activity.hasMany(ActivityReminder, { foreignKey: 'activityId', as: 'reminders' })
+ActivityReminder.belongsTo(Activity, { foreignKey: 'activityId', as: 'activity' })
+ActivityReminder.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' })
+User.hasMany(ActivityReminder, { foreignKey: 'createdBy', as: 'activityReminders' })
+ActivityType.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
+Company.hasMany(ActivityType, { foreignKey: 'companyId', as: 'activityTypes' })
+ActivityBookingLink.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
+Company.hasMany(ActivityBookingLink, { foreignKey: 'companyId', as: 'activityBookingLinks' })
+ActivityBookingLink.belongsTo(User, { foreignKey: 'userId', as: 'user' })
+User.hasMany(ActivityBookingLink, { foreignKey: 'userId', as: 'activityBookingLinks' })
 Lead.belongsToMany(Tag, { through: LeadTag, foreignKey: 'leadId', otherKey: 'tagId', as: 'tags' })
 Tag.belongsToMany(Lead, { through: LeadTag, foreignKey: 'tagId', otherKey: 'leadId', as: 'leads' })
 SavedView.belongsTo(User, { foreignKey: 'userId', as: 'user' })
@@ -122,6 +136,10 @@ LeadTask.hasMany(LeadTaskComment, { foreignKey: 'leadTaskId', as: 'comments' })
 LeadTaskComment.belongsTo(LeadTask, { foreignKey: 'leadTaskId', as: 'task' })
 LeadTaskComment.belongsTo(User, { foreignKey: 'userId', as: 'author' })
 User.hasMany(LeadTaskComment, { foreignKey: 'userId', as: 'leadTaskComments' })
+Lead.hasMany(LeadFollowup, { foreignKey: 'leadId', as: 'followups' })
+LeadFollowup.belongsTo(Lead, { foreignKey: 'leadId', as: 'lead' })
+LeadFollowup.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' })
+User.hasMany(LeadFollowup, { foreignKey: 'createdBy', as: 'createdLeadFollowups' })
 AssignmentRule.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
 Workspace.hasMany(AssignmentRule, { foreignKey: 'workspaceId', as: 'assignmentRules' })
 LeadStatus.belongsTo(LeadStatusCategory, { foreignKey: 'categoryId', as: 'category' })
@@ -189,6 +207,7 @@ export {
   LeadTask,
   LeadTaskSubtask,
   LeadTaskComment,
+  LeadFollowup,
   LeadSource,
   LeadStage,
   LeadStatusCategory,
@@ -196,6 +215,9 @@ export {
   LeadAssignment,
   LeadEmail,
   CompanyGoogleToken,
+  ActivityType,
+  ActivityReminder,
+  ActivityBookingLink,
   CountryPhoneCode,
   Document,
   DocumentLink,

@@ -1,8 +1,25 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import DOMPurify from 'dompurify'
-import { Bold, Italic, Link2, Paperclip, Smile } from 'lucide-react'
+import {
+  Bold,
+  CalendarCheck2,
+  CalendarClock,
+  CheckSquare,
+  ClipboardList,
+  Italic,
+  Link2,
+  Mail,
+  MessageSquare,
+  NotebookPen,
+  Paperclip,
+  PhoneCall,
+  Smile,
+  Sparkles,
+  UserCircle2,
+} from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
+import { LeadFollowupsTab } from '@/features/leads/components/LeadFollowupsTab'
 import { LeadRichNotesEditor } from '@/features/leads/components/LeadRichNotesEditor'
 import { LeadTaskDrawer, taskTypeLabel } from '@/features/leads/components/LeadTaskDrawer'
 import { LeadStatusBadge } from '@/features/leads/components/LeadStatusBadge'
@@ -62,8 +79,114 @@ function noteBodyToInitialHtml(body) {
     .join('')
 }
 
-function notePreviewText(html) {
-  return notePlainText(html).replace(/\s+/g, ' ')
+function activityPlainBody(value) {
+  if (!value) return ''
+  const text = notePlainText(String(value))
+  return text || String(value).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+function isSystemNoteActivity(activity) {
+  const action = activity?.metadata?.action
+  return action === 'note_added' || action === 'note_updated' || action === 'note_deleted'
+}
+
+const ACTIVITY_STYLE = {
+  note: {
+    label: 'Note',
+    Icon: NotebookPen,
+    iconWrap: 'bg-amber-100 text-amber-700',
+    chip: 'border-amber-200 bg-amber-50 text-amber-800',
+    card: 'border-amber-200/80 bg-gradient-to-b from-amber-50/90 to-white',
+  },
+  email: {
+    label: 'Email',
+    Icon: Mail,
+    iconWrap: 'bg-blue-100 text-blue-700',
+    chip: 'border-blue-200 bg-blue-50 text-blue-800',
+    card: 'border-blue-200/70 bg-gradient-to-b from-blue-50/80 to-white',
+  },
+  call: {
+    label: 'Call',
+    Icon: PhoneCall,
+    iconWrap: 'bg-emerald-100 text-emerald-700',
+    chip: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+    card: 'border-emerald-200/70 bg-gradient-to-b from-emerald-50/80 to-white',
+  },
+  meeting: {
+    label: 'Meeting',
+    Icon: CalendarCheck2,
+    iconWrap: 'bg-fuchsia-100 text-fuchsia-700',
+    chip: 'border-fuchsia-200 bg-fuchsia-50 text-fuchsia-800',
+    card: 'border-fuchsia-200/70 bg-gradient-to-b from-fuchsia-50/80 to-white',
+  },
+  task: {
+    label: 'Task',
+    Icon: CheckSquare,
+    iconWrap: 'bg-violet-100 text-violet-700',
+    chip: 'border-violet-200 bg-violet-50 text-violet-800',
+    card: 'border-violet-200/70 bg-gradient-to-b from-violet-50/80 to-white',
+  },
+  system: {
+    label: 'Activity',
+    Icon: Sparkles,
+    iconWrap: 'bg-slate-100 text-slate-700',
+    chip: 'border-slate-200 bg-slate-50 text-slate-700',
+    card: 'border-surface-border bg-white',
+  },
+}
+
+function activityPresentation(activityType) {
+  return ACTIVITY_STYLE[activityType] || ACTIVITY_STYLE.system
+}
+
+function formatTaskDueParts(value) {
+  if (!value) return { dateLine: '—', timeLine: null }
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return { dateLine: '—', timeLine: null }
+  const dateLine = d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+  const timeLine = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+  return { dateLine, timeLine }
+}
+
+function activityDayKey(value) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+function activityDayLabel(value) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '-'
+  const dd = String(date.getDate()).padStart(2, '0')
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const yyyy = date.getFullYear()
+  return `${dd}.${mm}.${yyyy}`
+}
+
+function activityTimeLabel(value) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '-'
+  const parts = new Intl.DateTimeFormat(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+    timeZoneName: 'short',
+  }).formatToParts(date)
+  const piece = (type) => parts.find((part) => part.type === type)?.value || ''
+  const hour = piece('hour')
+  const minute = piece('minute')
+  const second = piece('second')
+  const dayPeriod = (piece('dayPeriod') || '').toLowerCase()
+  const tz = piece('timeZoneName')
+  return `${hour}:${minute}:${second}${dayPeriod} ${tz}`.trim()
+}
+
+function activityDateTimeLabel(value) {
+  return `${activityDayLabel(value)}, ${activityTimeLabel(value)}`
 }
 
 export function LeadDetailPage() {
@@ -118,6 +241,7 @@ export function LeadDetailPage() {
     { id: 'calls', label: 'Calls' },
     { id: 'emails', label: 'Emails' },
     { id: 'tasks', label: 'Tasks' },
+    { id: 'followups', label: 'Follow-ups' },
     { id: 'notes', label: 'Notes' },
   ]
   const emailTimeLabel = (value) => {
@@ -155,13 +279,15 @@ export function LeadDetailPage() {
   )
 
 
+  const visibleActivities = useMemo(() => activities.filter((activity) => !isSystemNoteActivity(activity)), [activities])
+
   const filteredActivities = useMemo(() => {
-    if (activeTab === 'activity') return activities
-    if (activeTab === 'calls') return activities.filter((x) => x.type === 'call')
-    if (activeTab === 'emails') return activities.filter((x) => x.type === 'email')
-    if (activeTab === 'notes') return activities.filter((x) => x.type === 'note')
-    return activities
-  }, [activeTab, activities])
+    if (activeTab === 'activity') return visibleActivities
+    if (activeTab === 'calls') return visibleActivities.filter((x) => x.type === 'call')
+    if (activeTab === 'emails') return visibleActivities.filter((x) => x.type === 'email')
+    if (activeTab === 'notes') return visibleActivities.filter((x) => x.type === 'note')
+    return visibleActivities
+  }, [activeTab, visibleActivities])
 
   const fullName = lead?.contactName || lead?.title || 'Lead'
   const avatarLetter = String(fullName).charAt(0).toUpperCase()
@@ -236,62 +362,37 @@ export function LeadDetailPage() {
 
   return (
     <PageShell fullWidth>
-      <div className="grid gap-4 px-4 py-4 lg:grid-cols-[320px_1fr] lg:px-6 lg:py-5">
+      <div className="grid gap-2 px-2 py-2 lg:grid-cols-[320px_1fr] lg:px-3 lg:py-2.5">
         <aside className="space-y-3">
           <section className="overflow-hidden rounded-2xl border border-surface-border bg-white">
-            <div className="p-5">
-              <Link to="/leads" className="inline-flex items-center text-sm font-medium text-ink-muted hover:text-ink">
-                Back to leads
-              </Link>
-              <div className="mt-5 flex flex-col items-center text-center">
+            <div className="p-3.5">
+           
+              <div className="mt-3.5 flex flex-col items-center text-center">
                 <div className="flex h-20 w-20 items-center justify-center rounded-full bg-violet-100 text-2xl font-semibold text-violet-700">
                   {avatarLetter}
                 </div>
-                <p className="mt-3 text-2xl font-semibold text-ink">{fullName}</p>
+                <p className="mt-2 text-2xl font-semibold text-ink">{fullName}</p>
                 <p className="mt-1 text-sm text-ink-muted">{lead.company || lead.designation || 'Lead profile'}</p>
               </div>
 
-              <div className="mt-5 grid grid-cols-4 gap-2 text-center text-xs text-ink-muted">
+              <div className="mt-3 grid grid-cols-4 gap-2 text-center text-xs text-ink-muted">
                 <button type="button" className="rounded-xl border border-surface-border px-2 py-2">Log</button>
                 <a href={lead.email ? `mailto:${lead.email}` : undefined} className="rounded-xl border border-surface-border px-2 py-2">Email</a>
                 <a href={lead.phone ? `tel:${lead.phone}` : undefined} className="rounded-xl border border-surface-border px-2 py-2">Call</a>
                 <button type="button" className="rounded-xl border border-surface-border px-2 py-2">More</button>
               </div>
 
-              <button type="button" className="mt-4 h-11 w-full rounded-xl bg-orange-500 px-4 text-sm font-semibold text-white">
+              <button type="button" className="mt-3 h-10 w-full rounded-xl bg-orange-500 px-4 text-sm font-semibold text-white">
                 Convert to contact
               </button>
 
-              <div className="mt-4 flex items-center justify-between">
+              <div className="mt-3 flex items-center justify-between">
                 <LeadStatusBadge status={lead.status} />
                 <p className="text-xs text-ink-muted">
                   Last activity : {lastActivityAt ? new Date(lastActivityAt).toLocaleString() : '-'}
                 </p>
               </div>
 
-              <div className="mt-4 space-y-2">
-                <select
-                  className="h-10 w-full rounded-xl border border-surface-border px-3.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
-                  value={lead.status}
-                  onChange={async (e) => {
-                    const status = e.target.value
-                    if ((status === 'lost' || status === 'junk') && !lostReason) return
-                    await patchStatus({ id, status, lostReason }).unwrap()
-                  }}
-                >
-                  {STATUS_OPTIONS.map((status) => (
-                    <option key={status} value={status}>
-                      {status}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  className="h-10 w-full rounded-xl border border-surface-border px-3.5 text-sm"
-                  placeholder="Reason (required for lost/junk)"
-                  value={lostReason}
-                  onChange={(e) => setLostReason(e.target.value)}
-                />
-              </div>
             </div>
 
             <div className="border-t border-surface-border">
@@ -311,7 +412,7 @@ export function LeadDetailPage() {
                   Address info
                 </button>
               </div>
-              <div className="space-y-3 p-4 text-sm">
+              <div className="space-y-3 p-4 text-xs">
                 {profileInfoTab === 'lead' ? (
                   <>
                     <p><span className="text-ink-muted">Email</span><br /><span className="text-ink">{lead.email || '-'}</span></p>
@@ -339,15 +440,15 @@ export function LeadDetailPage() {
               </div>
             </div>
           </section>
-          <section className="rounded-2xl border border-surface-border p-5">
+          <section className="rounded-2xl border border-surface-border p-3.5">
             <p className="text-sm font-semibold text-ink">Tags</p>
-            <div className="mt-2">
+            <div className="mt-1.5">
               <LeadTagsInput value={(lead.tags || []).map((tag) => tag.name)} onChange={(tags) => updateLead({ id, tags })} />
             </div>
           </section>
         </aside>
 
-        <section className="rounded-2xl border border-surface-border p-4 sm:p-5">
+        <section className="rounded-2xl border border-surface-border bg-white p-4 sm:p-5">
           <div className="flex items-center gap-2 border-b border-surface-border pb-3">
             {tabs.map((tab) => (
               <button
@@ -373,11 +474,15 @@ export function LeadDetailPage() {
 
           {activeTab === 'emails' ? (
             <div className="mt-4 grid gap-4 lg:grid-cols-[340px_1fr]">
-              <GmailThreadList
-                threads={parsedThreads}
-                selectedId={selectedThreadId}
-                onSelect={setSelectedThreadId}
-              />
+              <section className="overflow-hidden rounded-xl border border-surface-border bg-white lg:h-[660px]">
+                <div className="h-full overflow-y-auto">
+                  <GmailThreadList
+                    threads={parsedThreads}
+                    selectedId={selectedThreadId}
+                    onSelect={setSelectedThreadId}
+                  />
+                </div>
+              </section>
               <section className="overflow-hidden rounded-xl border border-surface-border bg-white">
                 <GmailThreadView
                   thread={activeThread}
@@ -391,8 +496,10 @@ export function LeadDetailPage() {
             <div className="mt-4 space-y-3">
               {tasks.map((task) => {
                 const subs = task.subtasks || []
-                const doneSubs = subs.filter((s) => s.done).length
                 const commentCount = (task.comments || []).length
+                const dueAt = task.dueAt ? new Date(task.dueAt) : null
+                const dueParts = formatTaskDueParts(task.dueAt)
+                const isOverdue = Boolean(dueAt && task.status !== 'completed' && dueAt.getTime() < Date.now())
                 return (
                   <div
                     key={task.id}
@@ -409,62 +516,119 @@ export function LeadDetailPage() {
                       setTaskDrawerTaskId(task.id)
                       setTaskDrawerOpen(true)
                     }}
-                    className="w-full cursor-pointer rounded-2xl border border-surface-border bg-white p-4 text-left shadow-sm transition hover:border-brand-200 hover:shadow-md"
+                    className="w-full cursor-pointer rounded-2xl border border-surface-border bg-white text-left shadow-sm ring-1 ring-slate-100/80 transition hover:border-brand-200 hover:shadow-md"
                   >
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
+                    <div className="border-b border-surface-border bg-slate-50/60 px-4 py-2.5 sm:px-5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-brand-800">
+                          <span className="rounded-md bg-brand-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-brand-900">
                             {taskTypeLabel(task.taskType)}
                           </span>
-                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium capitalize text-ink-muted">{task.priority}</span>
-                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium capitalize text-ink-muted">{task.status}</span>
+                          <span className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+                            {task.priority}
+                          </span>
+                          <span
+                            className={`rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                              task.status === 'completed'
+                                ? 'bg-emerald-100 text-emerald-900'
+                                : task.status === 'open'
+                                  ? 'bg-amber-100 text-amber-900'
+                                  : 'bg-slate-200 text-slate-800'
+                            }`}
+                          >
+                            {task.status}
+                          </span>
                         </div>
-                        <p className="mt-2 text-sm font-semibold text-ink">{task.title}</p>
-                        <p className="mt-1 text-xs text-ink-muted">
-                          {task.assignee?.name ? <span>Assigned to {task.assignee.name} · </span> : null}
-                          Due {task.dueAt ? new Date(task.dueAt).toLocaleString() : '—'}
-                        </p>
-                        {task.description ? (
-                          <p className="mt-2 line-clamp-2 text-sm text-ink-muted">{task.description}</p>
-                        ) : null}
-                        <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-ink-muted">
-                          {subs.length > 0 ? (
-                            <span>
-                              Checklist {doneSubs}/{subs.length}
-                            </span>
+                        <div className="flex shrink-0 items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                          {task.status !== 'completed' ? (
+                            <button
+                              type="button"
+                              className="h-8 rounded-lg border border-brand-300 bg-white px-3 text-xs font-semibold text-brand-800 shadow-sm hover:bg-brand-50"
+                              onClick={async () => {
+                                await patchTask({ id, taskId: task.id, status: 'completed' }).unwrap()
+                              }}
+                            >
+                              Mark complete
+                            </button>
                           ) : null}
-                          {commentCount > 0 ? <span>{commentCount} comment{commentCount === 1 ? '' : 's'}</span> : null}
-                        </div>
-                      </div>
-                      <div className="flex shrink-0 flex-col items-end gap-1.5 sm:flex-row sm:items-center" onClick={(e) => e.stopPropagation()}>
-                        {task.status !== 'completed' ? (
                           <button
                             type="button"
-                            className="h-8 rounded-lg border border-brand-200 bg-brand-50 px-3 text-xs font-medium text-brand-700 hover:bg-brand-100"
+                            className="h-8 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
                             onClick={async () => {
-                              await patchTask({ id, taskId: task.id, status: 'completed' }).unwrap()
+                              await deleteTask({ id, taskId: task.id }).unwrap()
                             }}
                           >
-                            Done
+                            Delete
                           </button>
-                        ) : null}
-                        <button
-                          type="button"
-                          className="h-8 rounded-lg border border-red-200 bg-red-50 px-3 text-xs font-medium text-red-700 hover:bg-red-100"
-                          onClick={async () => {
-                            await deleteTask({ id, taskId: task.id }).unwrap()
-                          }}
-                        >
-                          Delete
-                        </button>
+                        </div>
                       </div>
+                    </div>
+                    <div className="space-y-3 px-4 py-4 sm:px-5">
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-muted">Task</p>
+                        <p className="mt-0.5 text-base font-semibold leading-snug text-ink">{task.title}</p>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="rounded-xl border border-slate-200 bg-gradient-to-b from-white to-slate-50/80 p-3 shadow-sm">
+                          <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
+                            <UserCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                            Assigned to
+                          </p>
+                          <p className="mt-2 text-sm font-semibold text-slate-900">{task.assignee?.name || 'Unassigned'}</p>
+                          <p className="mt-0.5 text-[11px] text-ink-muted">Owner responsible for this task</p>
+                        </div>
+                        <div
+                          className={`rounded-xl border p-3 shadow-sm ${
+                            isOverdue
+                              ? 'border-red-200 bg-gradient-to-b from-red-50/90 to-white'
+                              : 'border-slate-200 bg-gradient-to-b from-white to-slate-50/80'
+                          }`}
+                        >
+                          <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
+                            <CalendarClock className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                            Due date
+                          </p>
+                          <p className={`mt-2 text-sm font-semibold ${isOverdue ? 'text-red-800' : 'text-slate-900'}`}>{dueParts.dateLine}</p>
+                          {dueParts.timeLine ? <p className="mt-0.5 text-[11px] text-ink-muted">{dueParts.timeLine}</p> : null}
+                          {isOverdue ? <p className="mt-1.5 text-[11px] font-medium text-red-700">Overdue</p> : null}
+                        </div>
+                      </div>
+                      {task.description ? (
+                        <div className="rounded-xl border border-surface-border bg-slate-50/40 px-3 py-2.5">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-muted">Description</p>
+                          <p className="mt-1 line-clamp-3 text-xs leading-relaxed text-slate-700">{task.description}</p>
+                        </div>
+                      ) : null}
+                      {subs.length ? (
+                        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-muted">Checklist</p>
+                          <ul className="mt-2 space-y-1.5">
+                            {subs.slice(0, 5).map((subtask, index) => (
+                              <li key={`${task.id}-sub-${index}`}>
+                                <label className="flex cursor-pointer items-start gap-2 rounded-lg py-0.5 text-xs text-slate-700">
+                                  <input type="checkbox" checked={Boolean(subtask.done)} readOnly className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300" />
+                                  <span className={subtask.done ? 'text-ink-muted line-through' : ''}>{subtask.title || 'Untitled'}</span>
+                                </label>
+                              </li>
+                            ))}
+                          </ul>
+                          {subs.length > 5 ? <p className="mt-1.5 text-[11px] text-ink-muted">+{subs.length - 5} more in task details</p> : null}
+                        </div>
+                      ) : null}
+                      {commentCount > 0 ? (
+                        <p className="flex items-center gap-1.5 text-[11px] text-ink-muted">
+                          <MessageSquare className="h-3.5 w-3.5" aria-hidden />
+                          {commentCount} comment{commentCount === 1 ? '' : 's'}
+                        </p>
+                      ) : null}
                     </div>
                   </div>
                 )
               })}
               {tasks.length === 0 ? <p className="text-sm text-ink-muted">No tasks yet. Use Add task to create one.</p> : null}
             </div>
+          ) : activeTab === 'followups' ? (
+            <LeadFollowupsTab leadId={id} />
           ) : activeTab === 'notes' ? (
             <div className="mt-4 space-y-8">
               <LeadRichNotesEditor
@@ -481,8 +645,8 @@ export function LeadDetailPage() {
                 <p className="mb-4 text-xs font-semibold uppercase tracking-wide text-ink-muted">Your notes</p>
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                   {notes.map((note) => {
-                    const preview = notePreviewText(note.body || '')
-                    const snippet = preview.length > 180 ? `${preview.slice(0, 180)}…` : preview
+                    const noteHtml = sanitizeNoteBody(noteBodyToInitialHtml(note.body || ''))
+                    const hasRenderableBody = Boolean(notePlainText(note.body || '').trim())
                     return (
                       <div
                         key={note.id}
@@ -493,8 +657,12 @@ export function LeadDetailPage() {
                           <p className="shrink-0 text-[11px] text-ink-muted">{new Date(note.createdAt).toLocaleDateString()}</p>
                         </div>
                         <p className="mt-0.5 text-[11px] text-ink-muted">By {note.user?.name || 'System'}</p>
-                        <div className="mt-3 aspect-square max-h-[200px] w-full overflow-hidden rounded-xl border border-amber-100/80 bg-white/90 p-3 text-xs leading-relaxed text-ink-muted">
-                          {snippet || <span className="italic">Empty note</span>}
+                        <div className="note-card-preview prose prose-sm mt-3 max-h-[200px] w-full overflow-hidden rounded-xl border border-amber-100/80 bg-white/90 p-3 text-xs leading-relaxed text-ink prose-p:my-1 prose-headings:my-1">
+                          {hasRenderableBody ? (
+                            <div dangerouslySetInnerHTML={{ __html: noteHtml }} />
+                          ) : (
+                            <span className="italic text-ink-muted">Empty note</span>
+                          )}
                         </div>
                         <div className="mt-3 flex justify-end gap-2 border-t border-amber-100/60 pt-3">
                           <button
@@ -528,22 +696,83 @@ export function LeadDetailPage() {
               </div>
             </div>
           ) : (
-            <div className="mt-4 space-y-3">
-              {filteredActivities.map((activity) => (
-                <div key={activity.id} className="rounded-xl border border-surface-border p-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-semibold capitalize text-ink">{activity.type.replace('_', ' ')}</p>
-                    <p className="text-xs text-ink-muted">{new Date(activity.createdAt).toLocaleString()}</p>
-                  </div>
-                  <p className="mt-1 text-xs text-ink-muted">By {activity.user?.name || 'System user'}</p>
-                  <p className="mt-1 text-sm text-ink">{activity.body || '-'}</p>
+            <div className="mt-4 space-y-1">
+              {filteredActivities.map((activity, index) => {
+                const presentation = activityPresentation(activity.type)
+                const Icon = presentation.Icon
+                const metadata = activity.metadata || {}
+                const subtasks = Array.isArray(metadata.subtasks) ? metadata.subtasks : []
+                const assignee = metadata.assigneeName || metadata.assignedTo || metadata.assignee || ''
+                const isNote = activity.type === 'note'
+                const isEmail = activity.type === 'email'
+                const isTask = activity.type === 'task'
+                const label = presentation.label
+                const plainBody = activityPlainBody(activity.body || '')
+                const headlineText =
+                  isNote
+                    ? activity.metadata?.title?.trim() || 'Note added'
+                    : isTask
+                      ? plainBody || 'Task activity'
+                      : plainBody || label
+                const currentDayKey = activityDayKey(activity.createdAt)
+                const previousDayKey = index > 0 ? activityDayKey(filteredActivities[index - 1].createdAt) : null
+                const showDayMarker = index === 0 || currentDayKey !== previousDayKey
+                return (
+                  <article key={activity.id} className="relative grid grid-cols-[110px_26px_minmax(0,1fr)] gap-2.5 pb-4">
+                    <span className="pt-1 text-sm font-semibold text-slate-800">{showDayMarker ? activityDayLabel(activity.createdAt) : ''}</span>
+                    <div className="relative flex justify-center">
+                      <span className="absolute top-0 bottom-0 w-px bg-slate-200" aria-hidden="true" />
+                      <span className={`relative z-10 mt-1.5 flex h-6 w-6 items-center justify-center rounded-full border border-white shadow-sm ${presentation.iconWrap}`}>
+                        <Icon size={12} />
+                      </span>
+                    </div>
+                    <div className="pt-1">
+                      <p className="text-sm leading-6 text-ink">
+                        {headlineText}{' '}
+                        <span className="font-semibold text-slate-700">by {activity.user?.name || 'System user'}</span>
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-ink-muted">{activityDateTimeLabel(activity.createdAt)}</p>
+                      {isTask && assignee ? (
+                        <div className="mt-2 inline-flex min-w-[220px] items-center rounded-md border border-violet-200 bg-violet-50 px-2 py-1.5 text-[11px] text-violet-900">
+                          Assigned to: {assignee}
+                        </div>
+                      ) : null}
+                      {isTask && subtasks.length ? (
+                        <div className="mt-2 space-y-1 rounded-md border border-violet-200/80 bg-white p-2">
+                          {subtasks.map((subtask, subIndex) => (
+                            <label key={`${activity.id}-subtask-${subIndex}`} className="flex items-start gap-2 text-[11px] text-ink-muted">
+                              <input type="checkbox" checked={Boolean(subtask.done)} readOnly className="mt-0.5 h-3.5 w-3.5 rounded border-surface-border" />
+                              <span className={subtask.done ? 'line-through' : ''}>{subtask.title || 'Untitled subtask'}</span>
+                            </label>
+                          ))}
+                        </div>
+                      ) : null}
+                      {isNote ? (
+                        <div
+                          className="prose prose-sm mt-2 max-w-none rounded-md border border-amber-300 bg-amber-50/40 p-2.5 text-xs text-ink prose-p:my-1"
+                          dangerouslySetInnerHTML={{ __html: sanitizeNoteBody(noteBodyToInitialHtml(activity.body || '')) }}
+                        />
+                      ) : null}
+                      {isEmail ? (
+                        <div className="mt-2 rounded-md border border-blue-200 bg-blue-50/50 p-2 text-[11px] text-blue-900">
+                          Professional email activity
+                        </div>
+                      ) : null}
+                    </div>
+                  </article>
+                )
+              })}
+              {filteredActivities.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-surface-border p-8 text-center">
+                  <ClipboardList className="mx-auto h-6 w-6 text-ink-muted" />
+                  <p className="mt-2 text-sm font-medium text-ink">No activity yet</p>
+                  <p className="text-xs text-ink-muted">Start logging calls, notes, emails, and tasks to build a clean timeline.</p>
                 </div>
-              ))}
-              {filteredActivities.length === 0 ? <p className="text-sm text-ink-muted">No records found.</p> : null}
+              ) : null}
             </div>
           )}
 
-          {activeTab === 'notes' ? null : (
+          {activeTab === 'notes' || activeTab === 'activity' || activeTab === 'followups' ? null : (
           <div className="mt-4 rounded-xl border border-surface-border p-3">
             {activeTab === 'tasks' ? (
               <div className="flex flex-wrap items-center justify-between gap-3">
