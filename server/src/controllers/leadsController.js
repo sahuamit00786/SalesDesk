@@ -1371,6 +1371,86 @@ export async function listTasks(req, res, next) {
   }
 }
 
+export async function listAllTasks(req, res, next) {
+  try {
+    const workspaceIds = await allowedWorkspaceIdsForUser(req.user)
+    if (!workspaceIds.length) return res.json({ success: true, data: [], meta: {} })
+    const status = String(req.query.status || '').trim().toLowerCase()
+    const priority = String(req.query.priority || '').trim().toLowerCase()
+    const q = String(req.query.search || '').trim()
+    const horizon = String(req.query.horizon || '').trim().toLowerCase()
+    const createdFrom = req.query.createdFrom ? new Date(req.query.createdFrom) : null
+    const createdTo = req.query.createdTo ? new Date(req.query.createdTo) : null
+    const dueFrom = req.query.dueFrom ? new Date(req.query.dueFrom) : null
+    const dueTo = req.query.dueTo ? new Date(req.query.dueTo) : null
+    const now = new Date()
+    const endOfToday = new Date(now)
+    endOfToday.setHours(23, 59, 59, 999)
+    const endOfTomorrow = new Date(now)
+    endOfTomorrow.setDate(endOfTomorrow.getDate() + 1)
+    endOfTomorrow.setHours(23, 59, 59, 999)
+
+    const leadWhere = {
+      companyId: req.user.companyId,
+      workspaceId: { [Op.in]: workspaceIds },
+      ...(await leadAccessWhere(req.user)),
+      isDeleted: false,
+    }
+    const taskWhere = {
+      companyId: req.user.companyId,
+      workspaceId: { [Op.in]: workspaceIds },
+    }
+    if (['open', 'completed', 'cancelled'].includes(status)) taskWhere.status = status
+    if (['low', 'medium', 'high'].includes(priority)) taskWhere.priority = priority
+    if (horizon === 'today') {
+      taskWhere.dueAt = { [Op.ne]: null, [Op.lte]: endOfToday }
+    } else if (horizon === 'upcoming') {
+      taskWhere.dueAt = { [Op.ne]: null, [Op.gt]: endOfTomorrow }
+    }
+    if ((createdFrom && !Number.isNaN(createdFrom.getTime())) || (createdTo && !Number.isNaN(createdTo.getTime()))) {
+      taskWhere.createdAt = {}
+      if (createdFrom && !Number.isNaN(createdFrom.getTime())) taskWhere.createdAt[Op.gte] = createdFrom
+      if (createdTo && !Number.isNaN(createdTo.getTime())) taskWhere.createdAt[Op.lte] = createdTo
+    }
+    if ((dueFrom && !Number.isNaN(dueFrom.getTime())) || (dueTo && !Number.isNaN(dueTo.getTime()))) {
+      taskWhere.dueAt = { ...(taskWhere.dueAt || {}), [Op.ne]: null }
+      if (dueFrom && !Number.isNaN(dueFrom.getTime())) taskWhere.dueAt[Op.gte] = dueFrom
+      if (dueTo && !Number.isNaN(dueTo.getTime())) taskWhere.dueAt[Op.lte] = dueTo
+    }
+
+    const rows = await LeadTask.findAll({
+      where: taskWhere,
+      include: [
+        { model: Lead, as: 'lead', required: true, where: leadWhere, attributes: ['id', 'title', 'contactName', 'email'] },
+        { model: User, as: 'creator', attributes: ['id', 'name', 'email'], required: false },
+        { model: User, as: 'assignee', attributes: ['id', 'name', 'email'], required: false },
+        {
+          model: LeadTaskSubtask,
+          as: 'subtasks',
+          required: false,
+          separate: true,
+          order: [
+            ['position', 'ASC'],
+            ['createdAt', 'ASC'],
+          ],
+        },
+      ],
+      order: [['dueAt', 'ASC'], ['createdAt', 'DESC']],
+    })
+
+    const filtered = q
+      ? rows.filter((row) => {
+          const hay = `${row.title || ''} ${row.description || ''} ${row.lead?.title || ''} ${row.assignee?.name || ''} ${row.creator?.name || ''}`.toLowerCase()
+          return hay.includes(q.toLowerCase())
+        })
+      : rows
+
+    return res.json({ success: true, data: filtered, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
 export async function createTask(req, res, next) {
   try {
     const lead = await findCompanyLead(req, req.params.id)

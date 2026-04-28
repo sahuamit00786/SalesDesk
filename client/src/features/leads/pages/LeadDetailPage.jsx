@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useCallback } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import DOMPurify from 'dompurify'
 import {
+  Bell,
   Bold,
   CalendarCheck2,
   CalendarClock,
@@ -10,10 +11,13 @@ import {
   Italic,
   Link2,
   Mail,
+  MapPin,
   MessageSquare,
   NotebookPen,
   Paperclip,
   PhoneCall,
+  Presentation,
+  Search,
   Smile,
   Sparkles,
   UserCircle2,
@@ -94,49 +98,94 @@ const ACTIVITY_STYLE = {
   note: {
     label: 'Note',
     Icon: NotebookPen,
-    iconWrap: 'bg-amber-100 text-amber-700',
-    chip: 'border-amber-200 bg-amber-50 text-amber-800',
-    card: 'border-amber-200/80 bg-gradient-to-b from-amber-50/90 to-white',
+    iconWrap: 'bg-orange-100 text-orange-600',
+    chip: 'border-orange-200 bg-orange-50 text-orange-800',
+    card: 'bg-orange-50',
   },
   email: {
     label: 'Email',
     Icon: Mail,
     iconWrap: 'bg-blue-100 text-blue-700',
     chip: 'border-blue-200 bg-blue-50 text-blue-800',
-    card: 'border-blue-200/70 bg-gradient-to-b from-blue-50/80 to-white',
+    card: 'bg-blue-50',
   },
   call: {
     label: 'Call',
     Icon: PhoneCall,
     iconWrap: 'bg-emerald-100 text-emerald-700',
     chip: 'border-emerald-200 bg-emerald-50 text-emerald-800',
-    card: 'border-emerald-200/70 bg-gradient-to-b from-emerald-50/80 to-white',
+    card: 'bg-emerald-50',
   },
   meeting: {
     label: 'Meeting',
     Icon: CalendarCheck2,
-    iconWrap: 'bg-fuchsia-100 text-fuchsia-700',
+    iconWrap: 'bg-violet-100 text-violet-700',
     chip: 'border-fuchsia-200 bg-fuchsia-50 text-fuchsia-800',
-    card: 'border-fuchsia-200/70 bg-gradient-to-b from-fuchsia-50/80 to-white',
+    card: 'bg-violet-50',
+  },
+  follow_up: {
+    label: 'Follow-up',
+    Icon: Bell,
+    iconWrap: 'bg-sky-100 text-sky-700',
+    chip: 'border-sky-200 bg-sky-50 text-sky-800',
+    card: 'bg-sky-50',
+  },
+  discovery: {
+    label: 'Discovery',
+    Icon: Search,
+    iconWrap: 'bg-slate-100 text-slate-700',
+    chip: 'border-slate-200 bg-slate-50 text-slate-800',
+    card: 'bg-slate-50',
+  },
+  demo: {
+    label: 'Demo',
+    Icon: Presentation,
+    iconWrap: 'bg-cyan-100 text-cyan-700',
+    chip: 'border-cyan-200 bg-cyan-50 text-cyan-800',
+    card: 'bg-cyan-50',
+  },
+  in_person_visit: {
+    label: 'In-person visit',
+    Icon: MapPin,
+    iconWrap: 'bg-stone-100 text-stone-700',
+    chip: 'border-stone-200 bg-stone-50 text-stone-800',
+    card: 'bg-stone-50',
   },
   task: {
     label: 'Task',
-    Icon: CheckSquare,
-    iconWrap: 'bg-violet-100 text-violet-700',
-    chip: 'border-violet-200 bg-violet-50 text-violet-800',
-    card: 'border-violet-200/70 bg-gradient-to-b from-violet-50/80 to-white',
+    Icon: Bell,
+    iconWrap: 'bg-sky-100 text-sky-700',
+    chip: 'border-sky-200 bg-sky-50 text-sky-800',
+    card: 'bg-sky-50',
   },
   system: {
     label: 'Activity',
     Icon: Sparkles,
     iconWrap: 'bg-slate-100 text-slate-700',
     chip: 'border-slate-200 bg-slate-50 text-slate-700',
-    card: 'border-surface-border bg-white',
+    card: 'bg-slate-50',
   },
 }
 
 function activityPresentation(activityType) {
   return ACTIVITY_STYLE[activityType] || ACTIVITY_STYLE.system
+}
+
+function detectActivityVisualKey(activity, headline = '', detail = '') {
+  const fromMeta = String(activity?.metadata?.activityTypeKey || '').toLowerCase()
+  if (fromMeta && fromMeta !== 'system' && ACTIVITY_STYLE[fromMeta]) return fromMeta
+  const fromType = String(activity?.type || '').toLowerCase()
+  const text = `${headline} ${detail} ${activity?.body || ''}`.toLowerCase()
+  if (text.includes('follow-up') || text.includes('follow up') || text.includes('reminder')) return 'follow_up'
+  if (text.includes('email') || text.includes('@')) return 'email'
+  if (text.includes('task')) return 'task'
+  if (text.includes('call')) return 'call'
+  if (text.includes('note')) return 'note'
+  if (text.includes('meeting')) return 'meeting'
+  if (fromType && fromType !== 'system' && ACTIVITY_STYLE[fromType]) return fromType
+  if (fromMeta && ACTIVITY_STYLE[fromMeta]) return fromMeta
+  if (fromType && ACTIVITY_STYLE[fromType]) return fromType
+  return fromMeta || fromType || 'system'
 }
 
 function formatTaskDueParts(value) {
@@ -160,33 +209,45 @@ function activityDayKey(value) {
 function activityDayLabel(value) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return '-'
-  const dd = String(date.getDate()).padStart(2, '0')
-  const mm = String(date.getMonth() + 1).padStart(2, '0')
-  const yyyy = date.getFullYear()
-  return `${dd}.${mm}.${yyyy}`
+  return date.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 function activityTimeLabel(value) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return '-'
-  const parts = new Intl.DateTimeFormat(undefined, {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: true,
-    timeZoneName: 'short',
-  }).formatToParts(date)
-  const piece = (type) => parts.find((part) => part.type === type)?.value || ''
-  const hour = piece('hour')
-  const minute = piece('minute')
-  const second = piece('second')
-  const dayPeriod = (piece('dayPeriod') || '').toLowerCase()
-  const tz = piece('timeZoneName')
-  return `${hour}:${minute}:${second}${dayPeriod} ${tz}`.trim()
+  return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
 }
 
 function activityDateTimeLabel(value) {
   return `${activityDayLabel(value)}, ${activityTimeLabel(value)}`
+}
+
+function parseFollowUpTime(activity, headline, detailRaw) {
+  const fromMeta = activity.metadata?.scheduledAt || activity.metadata?.remindAt || activity.metadata?.followUpAt
+  if (fromMeta) {
+    const d = new Date(fromMeta)
+    if (!Number.isNaN(d.getTime())) return d
+  }
+  const txt = `${headline} ${detailRaw}`
+  const isoMatch = txt.match(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z/)
+  if (!isoMatch) return null
+  const d = new Date(isoMatch[0])
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
+function countdownLabel(targetDate) {
+  if (!targetDate) return ''
+  const diff = targetDate.getTime() - Date.now()
+  if (diff < 0) return 'Time over'
+  const mins = Math.floor(diff / 60000)
+  const days = Math.floor(mins / (60 * 24))
+  const hours = Math.floor((mins % (60 * 24)) / 60)
+  const minutes = mins % 60
+  const pieces = []
+  if (days) pieces.push(`${days}d`)
+  if (hours) pieces.push(`${hours}h`)
+  pieces.push(`${minutes}m`)
+  return `in ${pieces.join(' ')}`
 }
 
 export function LeadDetailPage() {
@@ -279,7 +340,19 @@ export function LeadDetailPage() {
   )
 
 
-  const visibleActivities = useMemo(() => activities.filter((activity) => !isSystemNoteActivity(activity)), [activities])
+  const visibleActivities = useMemo(() => {
+    const base = activities.filter((activity) => !isSystemNoteActivity(activity))
+    const seenTaskCreate = new Set()
+    return base.filter((activity) => {
+      const action = String(activity?.metadata?.action || '').toLowerCase()
+      const taskId = activity?.metadata?.taskId
+      if (action === 'task_created' && taskId) {
+        if (seenTaskCreate.has(taskId)) return false
+        seenTaskCreate.add(taskId)
+      }
+      return true
+    })
+  }, [activities])
 
   const filteredActivities = useMemo(() => {
     if (activeTab === 'activity') return visibleActivities
@@ -572,26 +645,34 @@ export function LeadDetailPage() {
                         <div className="rounded-xl border border-slate-200 bg-gradient-to-b from-white to-slate-50/80 p-3 shadow-sm">
                           <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
                             <UserCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                            Created by
+                          </p>
+                          <p className="mt-2 text-sm font-semibold text-slate-900">{task.creator?.name || 'System'}</p>
+                          <p className="mt-0.5 text-[11px] text-ink-muted">Task owner</p>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 bg-gradient-to-b from-white to-slate-50/80 p-3 shadow-sm">
+                          <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
+                            <UserCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
                             Assigned to
                           </p>
                           <p className="mt-2 text-sm font-semibold text-slate-900">{task.assignee?.name || 'Unassigned'}</p>
                           <p className="mt-0.5 text-[11px] text-ink-muted">Owner responsible for this task</p>
                         </div>
-                        <div
-                          className={`rounded-xl border p-3 shadow-sm ${
-                            isOverdue
-                              ? 'border-red-200 bg-gradient-to-b from-red-50/90 to-white'
-                              : 'border-slate-200 bg-gradient-to-b from-white to-slate-50/80'
-                          }`}
-                        >
-                          <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
-                            <CalendarClock className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                            Due date
-                          </p>
-                          <p className={`mt-2 text-sm font-semibold ${isOverdue ? 'text-red-800' : 'text-slate-900'}`}>{dueParts.dateLine}</p>
-                          {dueParts.timeLine ? <p className="mt-0.5 text-[11px] text-ink-muted">{dueParts.timeLine}</p> : null}
-                          {isOverdue ? <p className="mt-1.5 text-[11px] font-medium text-red-700">Overdue</p> : null}
-                        </div>
+                      </div>
+                      <div
+                        className={`rounded-xl border p-3 shadow-sm ${
+                          isOverdue
+                            ? 'border-red-200 bg-gradient-to-b from-red-50/90 to-white'
+                            : 'border-slate-200 bg-gradient-to-b from-white to-slate-50/80'
+                        }`}
+                      >
+                        <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
+                          <CalendarClock className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                          Due date
+                        </p>
+                        <p className={`mt-2 text-sm font-semibold ${isOverdue ? 'text-red-800' : 'text-slate-900'}`}>{dueParts.dateLine}</p>
+                        {dueParts.timeLine ? <p className="mt-0.5 text-[11px] text-ink-muted">{dueParts.timeLine}</p> : null}
+                        {isOverdue ? <p className="mt-1.5 text-[11px] font-medium text-red-700">Overdue</p> : null}
                       </div>
                       {task.description ? (
                         <div className="rounded-xl border border-surface-border bg-slate-50/40 px-3 py-2.5">
@@ -605,10 +686,24 @@ export function LeadDetailPage() {
                           <ul className="mt-2 space-y-1.5">
                             {subs.slice(0, 5).map((subtask, index) => (
                               <li key={`${task.id}-sub-${index}`}>
-                                <label className="flex cursor-pointer items-start gap-2 rounded-lg py-0.5 text-xs text-slate-700">
-                                  <input type="checkbox" checked={Boolean(subtask.done)} readOnly className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300" />
-                                  <span className={subtask.done ? 'text-ink-muted line-through' : ''}>{subtask.title || 'Untitled'}</span>
-                                </label>
+                                <div className="flex items-start justify-between gap-2 rounded-lg border border-slate-100 bg-white px-2 py-1.5 text-xs text-slate-700">
+                                  <label className="flex items-start gap-2">
+                                    <input
+                                      type="checkbox"
+                                      checked={Boolean(subtask.done)}
+                                      readOnly
+                                      className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-emerald-600"
+                                    />
+                                    <span className={subtask.done ? 'text-ink-muted line-through' : ''}>{subtask.title || 'Untitled'}</span>
+                                  </label>
+                                  <span
+                                    className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                                      subtask.done ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                                    }`}
+                                  >
+                                    {subtask.done ? 'Done' : 'Pending'}
+                                  </span>
+                                </div>
                               </li>
                             ))}
                           </ul>
@@ -696,77 +791,137 @@ export function LeadDetailPage() {
               </div>
             </div>
           ) : (
-            <div className="mt-4 space-y-1">
+            <div className="mt-4 space-y-2">
               {filteredActivities.map((activity, index) => {
-                const presentation = activityPresentation(activity.type)
-                const Icon = presentation.Icon
-                const metadata = activity.metadata || {}
-                const subtasks = Array.isArray(metadata.subtasks) ? metadata.subtasks : []
-                const assignee = metadata.assigneeName || metadata.assignedTo || metadata.assignee || ''
                 const isNote = activity.type === 'note'
-                const isEmail = activity.type === 'email'
-                const isTask = activity.type === 'task'
-                const label = presentation.label
+                const metadata = activity.metadata || {}
                 const plainBody = activityPlainBody(activity.body || '')
+                const detailRaw = (activity.metadata?.description || activity.body || '').trim()
+                const renderNoteHtml = isNote && Boolean(detailRaw)
                 const headlineText =
                   isNote
                     ? activity.metadata?.title?.trim() || 'Note added'
-                    : isTask
-                      ? plainBody || 'Task activity'
-                      : plainBody || label
+                    : plainBody || 'Activity'
+                const styleKey = detectActivityVisualKey(activity, headlineText, detailRaw)
+                const presentation = activityPresentation(styleKey)
+                const Icon = presentation.Icon
+                const isTask = styleKey === 'task' || activity.type === 'task'
+                const linkedTask =
+                  (metadata.taskId ? tasks.find((t) => t.id === metadata.taskId) : null) ||
+                  (metadata.title ? tasks.find((t) => String(t.title || '').trim() === String(metadata.title || '').trim()) : null) ||
+                  null
+                const assigneeName =
+                  linkedTask?.assignee?.name ||
+                  metadata.assigneeName ||
+                  metadata.assignedTo ||
+                  metadata.assignee ||
+                  'Unassigned'
+                const subtasks = Array.isArray(linkedTask?.subtasks)
+                  ? linkedTask.subtasks
+                  : Array.isArray(metadata.subtasks)
+                    ? metadata.subtasks
+                    : []
+                const taskDescription = linkedTask?.description || metadata.description || ''
+                const taskDueAt = linkedTask?.dueAt || metadata.dueAt || null
+                const taskDueLabel = taskDueAt ? activityDateTimeLabel(taskDueAt) : '-'
+                const followText = `${headlineText} ${detailRaw}`.toLowerCase()
+                const isFollowUp = styleKey === 'follow_up' || styleKey === 'task' || followText.includes('follow-up') || followText.includes('follow up') || followText.includes('reminder')
+                const followUpAt = isFollowUp ? parseFollowUpTime(activity, headlineText, detailRaw) : null
+                const displayHeadline = isFollowUp && followUpAt
+                  ? headlineText.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z/, activityDateTimeLabel(followUpAt))
+                  : headlineText
+                const normalizedHeadline = String(displayHeadline || '').trim().toLowerCase()
+                const normalizedDetail = String(detailRaw || '').trim().toLowerCase()
+                const shouldShowDetail = Boolean(detailRaw) && normalizedDetail !== normalizedHeadline
                 const currentDayKey = activityDayKey(activity.createdAt)
                 const previousDayKey = index > 0 ? activityDayKey(filteredActivities[index - 1].createdAt) : null
                 const showDayMarker = index === 0 || currentDayKey !== previousDayKey
                 return (
-                  <article key={activity.id} className="relative grid grid-cols-[110px_26px_minmax(0,1fr)] gap-2.5 pb-4">
-                    <span className="pt-1 text-sm font-semibold text-slate-800">{showDayMarker ? activityDayLabel(activity.createdAt) : ''}</span>
+                  <article key={activity.id} className="grid grid-cols-[160px_36px_minmax(0,1fr)] gap-2 py-1.5">
+                    <span className="pt-1 text-xs text-ink-muted">
+                      {showDayMarker ? activityDateTimeLabel(activity.createdAt) : activityTimeLabel(activity.createdAt)}
+                    </span>
                     <div className="relative flex justify-center">
-                      <span className="absolute top-0 bottom-0 w-px bg-slate-200" aria-hidden="true" />
-                      <span className={`relative z-10 mt-1.5 flex h-6 w-6 items-center justify-center rounded-full border border-white shadow-sm ${presentation.iconWrap}`}>
-                        <Icon size={12} />
+                      <span className="absolute inset-y-0 left-1/2 -translate-x-1/2 border-l border-surface-border" aria-hidden="true" />
+                      <span className={`relative z-10 mt-0.5 flex h-7 w-7 items-center justify-center rounded-full ${presentation.iconWrap}`}>
+                        <Icon size={14} />
                       </span>
                     </div>
-                    <div className="pt-1">
-                      <p className="text-sm leading-6 text-ink">
-                        {headlineText}{' '}
-                        <span className="font-semibold text-slate-700">by {activity.user?.name || 'System user'}</span>
-                      </p>
-                      <p className="mt-0.5 text-[11px] text-ink-muted">{activityDateTimeLabel(activity.createdAt)}</p>
-                      {isTask && assignee ? (
-                        <div className="mt-2 inline-flex min-w-[220px] items-center rounded-md border border-violet-200 bg-violet-50 px-2 py-1.5 text-[11px] text-violet-900">
-                          Assigned to: {assignee}
-                        </div>
+                    <div className={`rounded-xl p-2.5 ${presentation.card}`}>
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <p className="text-sm font-semibold text-ink">{displayHeadline}</p>
+                        {isFollowUp && followUpAt ? (
+                          <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-medium text-sky-700">{countdownLabel(followUpAt)}</span>
+                        ) : null}
+                      </div>
+                      {isFollowUp && followUpAt ? <p className="mt-1 text-xs text-ink-muted">Call time: {activityDateTimeLabel(followUpAt)}</p> : null}
+                      {shouldShowDetail ? (
+                        renderNoteHtml ? (
+                          <div
+                            className="prose prose-sm mt-1.5 max-w-none text-xs leading-relaxed text-ink prose-p:my-1 prose-headings:my-1"
+                            dangerouslySetInnerHTML={{ __html: sanitizeNoteBody(noteBodyToInitialHtml(detailRaw)) }}
+                          />
+                        ) : (
+                          <p className="mt-1.5 text-xs leading-relaxed text-ink-muted">{detailRaw}</p>
+                        )
                       ) : null}
-                      {isTask && subtasks.length ? (
-                        <div className="mt-2 space-y-1 rounded-md border border-violet-200/80 bg-white p-2">
-                          {subtasks.map((subtask, subIndex) => (
-                            <label key={`${activity.id}-subtask-${subIndex}`} className="flex items-start gap-2 text-[11px] text-ink-muted">
-                              <input type="checkbox" checked={Boolean(subtask.done)} readOnly className="mt-0.5 h-3.5 w-3.5 rounded border-surface-border" />
-                              <span className={subtask.done ? 'line-through' : ''}>{subtask.title || 'Untitled subtask'}</span>
-                            </label>
-                          ))}
-                        </div>
-                      ) : null}
-                      {isNote ? (
+                      {isNote && !detailRaw ? (
                         <div
-                          className="prose prose-sm mt-2 max-w-none rounded-md border border-amber-300 bg-amber-50/40 p-2.5 text-xs text-ink prose-p:my-1"
+                          className="prose prose-sm mt-1.5 max-w-none text-xs leading-relaxed text-ink prose-p:my-1 prose-headings:my-1"
                           dangerouslySetInnerHTML={{ __html: sanitizeNoteBody(noteBodyToInitialHtml(activity.body || '')) }}
                         />
                       ) : null}
-                      {isEmail ? (
-                        <div className="mt-2 rounded-md border border-blue-200 bg-blue-50/50 p-2 text-[11px] text-blue-900">
-                          Professional email activity
+                      {isTask ? (
+                        <div className="mt-2 space-y-2 rounded-lg bg-white/70 p-2">
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            <p className="text-[11px] text-ink-muted">
+                              Created by: <span className="font-medium text-ink">{linkedTask?.creator?.name || activity.user?.name || 'System'}</span>
+                            </p>
+                            <p className="text-[11px] text-ink-muted">
+                              Assigned to: <span className="font-medium text-ink">{assigneeName}</span>
+                            </p>
+                          </div>
+                          {linkedTask?.title ? (
+                            <p className="text-[11px] text-ink-muted">
+                              Task: <span className="font-medium text-ink">{linkedTask.title}</span>
+                            </p>
+                          ) : null}
+                          <p className="text-[11px] text-ink-muted">
+                            Due date: <span className="font-medium text-ink">{taskDueLabel}</span>
+                          </p>
+                          <p className="text-[11px] text-ink-muted">
+                            Description: <span className="font-medium text-ink">{taskDescription || '-'}</span>
+                          </p>
+                          {subtasks.length ? (
+                            <div className="space-y-1">
+                              {subtasks.map((subtask, subIndex) => (
+                                <div key={`${activity.id}-timeline-sub-${subIndex}`} className="flex items-start justify-between gap-2 rounded-md border border-slate-100 bg-white px-2 py-1.5">
+                                  <label className="flex items-start gap-2 text-[11px] text-ink-muted">
+                                    <input
+                                      type="checkbox"
+                                      checked={Boolean(subtask.done)}
+                                      readOnly
+                                      className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-emerald-600"
+                                    />
+                                    <span className={subtask.done ? 'line-through' : ''}>{subtask.title || 'Untitled subtask'}</span>
+                                  </label>
+                                  <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${subtask.done ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                                    {subtask.done ? 'Done' : 'Pending'}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
                         </div>
                       ) : null}
+                      {!isTask ? <p className="mt-2 text-right text-[11px] font-medium text-ink-muted">by {activity.user?.name || 'System user'}</p> : null}
                     </div>
                   </article>
                 )
               })}
               {filteredActivities.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-surface-border p-8 text-center">
-                  <ClipboardList className="mx-auto h-6 w-6 text-ink-muted" />
-                  <p className="mt-2 text-sm font-medium text-ink">No activity yet</p>
-                  <p className="text-xs text-ink-muted">Start logging calls, notes, emails, and tasks to build a clean timeline.</p>
+                  <p className="text-sm font-medium text-ink">No activity</p>
                 </div>
               ) : null}
             </div>
