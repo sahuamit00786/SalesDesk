@@ -57,7 +57,7 @@ export const ROUTE_META = {
     title: 'Tasks',
     sub: 'Action items with owners, due dates, and priorities — never let a follow-up slip',
   },
-  '/calls': {
+  '/meetings': {
     title: 'Calls & meetings',
     sub: 'Log, record, and analyse every phone call and meeting — full call intelligence',
   },
@@ -137,7 +137,7 @@ export const NAV_SECTIONS = [
     items: [
       { to: '/activities', label: 'Activities', icon: CheckSquare, badge: '7', badgeVariant: 'info' },
       { to: '/tasks', label: 'Tasks', icon: ListTodo, badge: '12' },
-      { to: '/calls', label: 'Calls & meetings', icon: Phone },
+      { to: '/meetings', label: 'Calls & meetings', icon: Phone },
       { to: '/email', label: 'Email', icon: Mail },
       { to: '/whatsapp', label: 'WhatsApp / SMS', icon: MessageCircle },
     ],

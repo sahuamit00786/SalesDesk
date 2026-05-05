@@ -44,6 +44,14 @@ import { WebFormSubmission } from './WebFormSubmission.js'
 import { WebFormEmailTemplate } from './WebFormEmailTemplate.js'
 import { Opportunity } from './Opportunity.js'
 import { OpportunityStage } from './OpportunityStage.js'
+import { Meeting } from './Meeting.js'
+import { CallLog } from './CallLog.js'
+import { ActionItem } from './ActionItem.js'
+import { AiMeetingSummary } from './AiMeetingSummary.js'
+import { MeetingParticipant } from './MeetingParticipant.js'
+import { MeetingTranscript } from './MeetingTranscript.js'
+import { MeetingRecording } from './MeetingRecording.js'
+import { MeetingNotification } from './MeetingNotification.js'
 
 User.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
 Company.hasMany(User, { foreignKey: 'companyId', as: 'users' })
@@ -195,6 +203,49 @@ User.hasMany(Opportunity, { foreignKey: 'ownerUserId', as: 'ownedOpportunities' 
 Opportunity.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' })
 Opportunity.belongsTo(User, { foreignKey: 'updatedBy', as: 'updater' })
 
+
+Lead.hasMany(Meeting,{
+foreignKey:'lead_id'
+})
+
+Meeting.belongsTo(Lead,{
+foreignKey:'lead_id'
+})
+
+// Meeting.hasMany(MeetingParticipant,{
+// foreignKey:'meeting_id'
+// })
+
+Meeting.hasMany(MeetingTranscript,{
+foreignKey:'meeting_id'
+})
+
+Meeting.hasOne(MeetingRecording,{
+foreignKey:'meeting_id'
+})
+
+Meeting.hasOne(AiMeetingSummary,{
+foreignKey:'meeting_id'
+})
+
+Meeting.hasMany(ActionItem,{
+foreignKey:'meeting_id'
+})
+
+Meeting.hasMany(MeetingParticipant, {
+  foreignKey: "meetingId",
+  as: "participants",
+});
+
+MeetingParticipant.belongsTo(Meeting, {
+  foreignKey: "meetingId",
+});
+
+Lead.hasMany(CallLog,{
+foreignKey:'lead_id'
+})
+
+
 export {
   sequelize,
   User,
@@ -242,4 +293,11 @@ export {
   WebFormEmailTemplate,
   Opportunity,
   OpportunityStage,
+  Meeting,
+  MeetingParticipant,
+  MeetingNotification,
+  MeetingRecording,
+  MeetingTranscript,
+  AiMeetingSummary,
+  CallLog
 }

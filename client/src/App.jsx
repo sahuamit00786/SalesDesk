@@ -21,6 +21,7 @@ import { WebFormsListPage } from '@/features/webforms/pages/WebFormsListPage'
 import { FormBuilderPage } from '@/features/webforms/pages/FormBuilderPage'
 import { OpportunityDetailPage } from '@/features/opportunities/pages/OpportunityDetailPage'
 import { DashboardPage } from '@/pages/DashboardPage'
+import { MeetingsPage } from '@/features/meetings/pages/MeetingsPage'
 
 const APP_PATHS = [
   '/',
@@ -45,6 +46,7 @@ const APP_PATHS = [
   '/lead-configuration',
   '/team',
   '/integrations',
+  '/meetings'
 ]
 
 export default function App() {
@@ -58,12 +60,29 @@ export default function App() {
         <Route element={<RequireOnboarded />}>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/workspace" element={<WorkspacePage />} />
-          {APP_PATHS.filter((path) => path !== '/' && path !== '/workspace' && path !== '/team' && path !== '/leads' && path !== '/opportunities' && path !== '/lead-configuration' && path !== '/integrations' && path !== '/documents' && path !== '/forms' && path !== '/activities' && path !== '/tasks' && path !== '/email').map((path) => (
+          {APP_PATHS.filter(
+            (path) =>
+              path !== '/' &&
+              path !== '/workspace' &&
+              path !== '/team' &&
+              path !== '/leads' &&
+              path !== '/opportunities' &&
+              path !== '/lead-configuration' &&
+              path !== '/integrations' &&
+              path !== '/documents' &&
+              path !== '/forms' &&
+              path !== '/activities' &&
+              path !== '/tasks' &&
+              path !== '/email' &&
+              path !== '/meetings'
+          ).map((path) => (
             <Route key={path} path={path} element={<ModulePlaceholderPage />} />
           ))}
+          
           <Route path="/leads" element={<LeadsPage />} />
           <Route path="/opportunities" element={<OpportunitiesPage />} />
           <Route path="/opportunities/:id" element={<OpportunityDetailPage />} />
+          <Route path="/meetings" element={<MeetingsPage />} />
           <Route path="/leads/:id" element={<LeadDetailPage />} />
           <Route path="/activities" element={<ActivitiesPage />} />
           <Route path="/tasks" element={<TasksPage />} />
