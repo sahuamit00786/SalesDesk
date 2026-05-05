@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
-import { ListChecks, Pencil, Plus, Tag, Trash2, Waypoints } from 'lucide-react'
+import { GitBranch, ListChecks, Pencil, Plus, Tag, Trash2, Waypoints } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
 import { Modal } from '@/components/ui/Modal'
 import {
@@ -8,13 +8,16 @@ import {
   useCreateLeadStatusCategoryMutation,
   useCreateLeadStatusMutation,
   useCreateLeadTagMutation,
+  useCreateOpportunityStageMutation,
   useDeleteLeadSourceMutation,
   useDeleteLeadStatusCategoryMutation,
   useDeleteLeadTagMutation,
+  useDeleteOpportunityStageMutation,
   useGetLeadSetupQuery,
   useUpdateLeadSourceMutation,
   useUpdateLeadStatusCategoryMutation,
   useUpdateLeadTagMutation,
+  useUpdateOpportunityStageMutation,
 } from '@/features/leads/leadsApi'
 import { cn } from '@/utils/cn'
 
@@ -22,6 +25,7 @@ const TABS = [
   { id: 'source', label: 'Source', icon: Waypoints },
   { id: 'tags', label: 'Tags', icon: Tag },
   { id: 'status', label: 'Status Creation', icon: ListChecks },
+  { id: 'opportunity-stages', label: 'Opportunity stages', icon: GitBranch },
 ]
 
 function apiErrorMessage(err) {
@@ -47,6 +51,9 @@ export function LeadConfigurationPage() {
   const [updateCategory, { isLoading: updatingCategory }] = useUpdateLeadStatusCategoryMutation()
   const [deleteCategory] = useDeleteLeadStatusCategoryMutation()
   const [createStatus, { isLoading: creatingStatus }] = useCreateLeadStatusMutation()
+  const [createOpportunityStage, { isLoading: creatingOppStage }] = useCreateOpportunityStageMutation()
+  const [updateOpportunityStage, { isLoading: updatingOppStage }] = useUpdateOpportunityStageMutation()
+  const [deleteOpportunityStage] = useDeleteOpportunityStageMutation()
 
   const [activeTab, setActiveTab] = useState('source')
   const [statusName, setStatusName] = useState('')
@@ -55,17 +62,22 @@ export function LeadConfigurationPage() {
   const [editor, setEditor] = useState({ open: false, mode: 'create', type: 'source', id: null, name: '' })
   const [deleteDialog, setDeleteDialog] = useState({ open: false, type: '', id: null, name: '' })
 
-  const setup = useMemo(() => data?.data || { sources: [], tags: [], categories: [] }, [data])
+  const setup = useMemo(
+    () => data?.data || { sources: [], tags: [], categories: [], opportunityStages: [] },
+    [data],
+  )
 
   function getEntityLabel(type) {
     if (type === 'source') return 'Source'
     if (type === 'tags') return 'Tag'
+    if (type === 'opportunityStages') return 'Opportunity stage'
     return 'Status Category'
   }
 
   function getActiveTabType() {
     if (activeTab === 'source') return 'source'
     if (activeTab === 'tags') return 'tags'
+    if (activeTab === 'opportunity-stages') return 'opportunityStages'
     return 'status'
   }
 
@@ -113,6 +125,15 @@ export function LeadConfigurationPage() {
           toast.success('Status category created')
         }
       }
+      if (editor.type === 'opportunityStages') {
+        if (editor.mode === 'edit') {
+          await updateOpportunityStage({ id: editor.id, name }).unwrap()
+          toast.success('Opportunity stage updated')
+        } else {
+          await createOpportunityStage({ name }).unwrap()
+          toast.success('Opportunity stage created')
+        }
+      }
       closeModal()
     } catch (err) {
       toast.error(apiErrorMessage(err))
@@ -152,14 +173,34 @@ export function LeadConfigurationPage() {
         if (statusCategoryId === deleteDialog.id) setStatusCategoryId('')
         toast.success('Status category deleted')
       }
+      if (deleteDialog.type === 'opportunityStages') {
+        await deleteOpportunityStage(deleteDialog.id).unwrap()
+        toast.success('Opportunity stage deleted')
+      }
       setDeleteDialog({ open: false, type: '', id: null, name: '' })
     } catch (err) {
       toast.error(apiErrorMessage(err))
     }
   }
 
-  const savingModal = creatingSource || updatingSource || creatingTag || updatingTag || creatingCategory || updatingCategory
+  const savingModal =
+    creatingSource ||
+    updatingSource ||
+    creatingTag ||
+    updatingTag ||
+    creatingCategory ||
+    updatingCategory ||
+    creatingOppStage ||
+    updatingOppStage
   const activeAddLabel = `Add ${getEntityLabel(getActiveTabType()).toLowerCase()}`
+
+  async function onSetOpportunityDefault(row, makeDefault) {
+    try {
+      await updateOpportunityStage({ id: row.id, isDefault: makeDefault }).unwrap()
+    } catch (err) {
+      toast.error(apiErrorMessage(err))
+    }
+  }
 
   return (
     <PageShell fullWidth>
@@ -377,6 +418,71 @@ export function LeadConfigurationPage() {
                       </tbody>
                     </table>
                   </div>
+                </div>
+              </div>
+            ) : null}
+
+            {activeTab === 'opportunity-stages' ? (
+              <div className="overflow-hidden rounded-xl border border-surface-border bg-white">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-full text-xs">
+                    <thead className="sticky top-0 z-10 bg-white">
+                      <tr className="border-b border-surface-border/70">
+                        <th className="px-2.5 py-2 text-left text-[11px] font-semibold text-ink-muted">Stage</th>
+                        <th className="px-2.5 py-2 text-center text-[11px] font-semibold text-ink-muted">Default</th>
+                        <th className="px-2.5 py-2 text-left text-[11px] font-semibold text-ink-muted">Created</th>
+                        <th className="px-2.5 py-2 text-right text-[11px] font-semibold text-ink-muted">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(setup.opportunityStages || []).length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="px-3 py-8 text-center text-ink-muted">
+                            No opportunity stages found.
+                          </td>
+                        </tr>
+                      ) : (
+                        setup.opportunityStages.map((item) => (
+                          <tr key={item.id} className="group border-b border-surface-border last:border-b-0 hover:bg-brand-50">
+                            <td className="px-2.5 py-2 text-xs text-ink">{item.name}</td>
+                            <td className="px-2.5 py-2 text-center">
+                              <input
+                                type="checkbox"
+                                className="h-3.5 w-3.5 rounded border-surface-border text-brand-600 focus:ring-brand-500"
+                                checked={!!item.isDefault}
+                                disabled={updatingOppStage}
+                                onChange={(e) => onSetOpportunityDefault(item, e.target.checked)}
+                                aria-label={item.isDefault ? 'Default pipeline stage' : 'Set as default pipeline stage'}
+                              />
+                            </td>
+                            <td className="px-2.5 py-2 text-xs text-ink-muted">{formatDate(item.createdAt)}</td>
+                            <td className="px-2.5 py-2 text-right">
+                              <div className="inline-flex gap-1 opacity-100 transition">
+                                <button
+                                  type="button"
+                                  onClick={() => openEditModal('opportunityStages', item)}
+                                  className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-brand-200 bg-brand-50 text-brand-700"
+                                  aria-label="Edit opportunity stage"
+                                  title="Edit opportunity stage"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => openDeleteDialog('opportunityStages', item)}
+                                  className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-danger"
+                                  aria-label="Delete opportunity stage"
+                                  title="Delete opportunity stage"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             ) : null}

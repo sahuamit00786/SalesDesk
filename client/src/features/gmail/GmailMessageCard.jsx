@@ -6,7 +6,7 @@ export default function GmailMessageCard({ message, defaultExpanded = false }) {
   const [expanded, setExpanded] = useState(defaultExpanded)
   return (
     <div className={`overflow-hidden rounded-2xl border border-surface-border bg-white ${!expanded ? 'cursor-pointer hover:bg-surface-muted' : ''}`}>
-      <div className="flex items-start gap-3 px-5 py-3" onClick={() => !expanded && setExpanded(true)} role="presentation">
+      <div className="flex items-start gap-3 px-5 py-3" onClick={() => setExpanded((prev) => !prev)} role="presentation">
         <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-600 text-xs font-semibold text-white">{message.from.initials || '??'}</div>
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 flex-wrap items-center gap-2">

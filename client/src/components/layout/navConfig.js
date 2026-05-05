@@ -1,10 +1,8 @@
 import {
   BarChart2,
-  Building2,
   CheckSquare,
   CircleDollarSign,
   ClipboardList,
-  Contact,
   FileStack,
   Kanban,
   LayoutGrid,
@@ -46,6 +44,10 @@ export const ROUTE_META = {
   '/deals': {
     title: 'Deals',
     sub: 'Revenue opportunities — track value, close date, probability, and products',
+  },
+  '/opportunities': {
+    title: 'Opportunities',
+    sub: 'Qualified sales opportunities tracked from discovery to close',
   },
   '/activities': {
     title: 'Activities',
@@ -124,9 +126,8 @@ export const NAV_SECTIONS = [
     label: 'Main',
     items: [
       { to: '/', label: 'Dashboard', icon: LayoutGrid, end: true },
+      { to: '/opportunities', label: 'Opportunities', icon: CircleDollarSign },
       { to: '/leads', label: 'Leads', icon: Users, badge: '48' },
-      { to: '/contacts', label: 'Contacts', icon: Contact },
-      { to: '/companies', label: 'Companies', icon: Building2 },
       { to: '/pipeline', label: 'Pipeline', icon: Kanban },
       { to: '/deals', label: 'Deals', icon: CircleDollarSign },
     ],

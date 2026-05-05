@@ -42,6 +42,8 @@ import { WebForm } from './WebForm.js'
 import { WebFormField } from './WebFormField.js'
 import { WebFormSubmission } from './WebFormSubmission.js'
 import { WebFormEmailTemplate } from './WebFormEmailTemplate.js'
+import { Opportunity } from './Opportunity.js'
+import { OpportunityStage } from './OpportunityStage.js'
 import { Meeting } from './Meeting.js'
 import { CallLog } from './CallLog.js'
 import { ActionItem } from './ActionItem.js'
@@ -50,7 +52,6 @@ import { MeetingParticipant } from './MeetingParticipant.js'
 import { MeetingTranscript } from './MeetingTranscript.js'
 import { MeetingRecording } from './MeetingRecording.js'
 import { MeetingNotification } from './MeetingNotification.js'
-
 
 User.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
 Company.hasMany(User, { foreignKey: 'companyId', as: 'users' })
@@ -191,6 +192,16 @@ WebFormEmailTemplate.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'work
 Workspace.hasMany(WebFormEmailTemplate, { foreignKey: 'workspaceId', as: 'webFormEmailTemplates' })
 WebFormEmailTemplate.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' })
 User.hasMany(WebFormEmailTemplate, { foreignKey: 'createdBy', as: 'createdWebFormEmailTemplates' })
+Opportunity.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
+Company.hasMany(Opportunity, { foreignKey: 'companyId', as: 'opportunities' })
+Opportunity.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
+Workspace.hasMany(Opportunity, { foreignKey: 'workspaceId', as: 'opportunities' })
+Opportunity.belongsTo(Lead, { foreignKey: 'leadId', as: 'lead' })
+Lead.hasMany(Opportunity, { foreignKey: 'leadId', as: 'opportunities' })
+Opportunity.belongsTo(User, { foreignKey: 'ownerUserId', as: 'owner' })
+User.hasMany(Opportunity, { foreignKey: 'ownerUserId', as: 'ownedOpportunities' })
+Opportunity.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' })
+Opportunity.belongsTo(User, { foreignKey: 'updatedBy', as: 'updater' })
 
 
 Lead.hasMany(Meeting,{
@@ -280,6 +291,8 @@ export {
   WebFormField,
   WebFormSubmission,
   WebFormEmailTemplate,
+  Opportunity,
+  OpportunityStage,
   Meeting,
   MeetingParticipant,
   MeetingNotification,
