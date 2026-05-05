@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import multer from 'multer'
 import { rateLimit } from '../../middleware/rateLimit.js'
 import { requireAuth } from '../../middleware/auth.js'
 import { requireCompany } from '../../middleware/requireCompany.js'
@@ -11,10 +12,12 @@ import * as activitiesController from '../../controllers/activitiesController.js
 import * as companyController from '../../controllers/companyController.js'
 import * as workspaceController from '../../controllers/workspaceController.js'
 import * as teamController from '../../controllers/teamController.js'
+import * as opportunitiesController from '../../controllers/opportunitiesController.js'
 import documentsRoutes from './documents.js'
 import webFormsRoutes from '../webFormsRoutes.js'
 
 const router = Router()
+const emailUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 10 } })
 
 const authLimiter = rateLimit({ routeKey: 'auth', windowSec: 60, max: 30 })
 const apiLimiter = rateLimit({ routeKey: 'api', windowSec: 60, max: 200 })
@@ -84,6 +87,9 @@ router.post('/leads/setup/tags', requireAuth, apiLimiter, requireCompany, loadPe
 router.patch('/leads/setup/tags/:id', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'admin'), leadsController.patchLeadTag)
 router.delete('/leads/setup/tags/:id', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'admin'), leadsController.deleteLeadTag)
 router.post('/leads/setup/stages', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'admin'), leadsController.createLeadStage)
+router.post('/leads/setup/opportunity-stages', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'admin'), leadsController.createOpportunityStage)
+router.patch('/leads/setup/opportunity-stages/:id', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'admin'), leadsController.patchOpportunityStage)
+router.delete('/leads/setup/opportunity-stages/:id', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'admin'), leadsController.deleteOpportunityStage)
 router.post('/leads/setup/status-categories', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'admin'), leadsController.createLeadStatusCategory)
 router.patch('/leads/setup/status-categories/:id', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'admin'), leadsController.patchLeadStatusCategory)
 router.delete('/leads/setup/status-categories/:id', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'admin'), leadsController.deleteLeadStatusCategory)
@@ -110,8 +116,17 @@ router.get('/leads/:id/email-threads', requireAuth, apiLimiter, requireCompany, 
 router.get('/leads/:id/email-threads/:threadId', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'view'), leadsController.getLeadEmailThread)
 router.post('/leads/:id/emails/send', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'edit'), leadsController.sendLeadEmail)
 router.post('/leads/:id/emails/sync', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'edit'), leadsController.syncLeadEmailReplies)
+router.get('/email/threads', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'view'), leadsController.listEmailThreads)
+router.get('/email/threads/:threadId', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'view'), leadsController.getEmailThread)
+router.post('/email/sync', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'edit'), leadsController.syncEmailReplies)
+router.post('/email/attachments', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'edit'), emailUpload.array('files', 10), leadsController.uploadEmailAttachments)
 router.get('/leads/:id/tasks', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'view'), leadsController.listTasks)
 router.get('/tasks', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'view'), leadsController.listAllTasks)
+router.get('/opportunities', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'view'), opportunitiesController.list)
+router.get('/opportunities/:id', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'view'), opportunitiesController.getOne)
+router.post('/opportunities', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'edit'), opportunitiesController.create)
+router.put('/opportunities/:id', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'edit'), opportunitiesController.update)
+router.patch('/opportunities/:id/stage', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'edit'), opportunitiesController.patchStage)
 router.post('/leads/:id/tasks', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'edit'), leadsController.createTask)
 router.patch('/leads/:id/tasks/:taskId', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'edit'), leadsController.patchTask)
 router.post(

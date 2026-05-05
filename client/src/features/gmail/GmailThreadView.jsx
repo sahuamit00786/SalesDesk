@@ -7,7 +7,7 @@ function EmptyThreadState() {
   return <div className="p-6 text-sm text-ink-muted">Select an email from the inbox.</div>
 }
 
-export default function GmailThreadView({ thread, onBack, onSync, onCreateEmail }) {
+export default function GmailThreadView({ thread, onBack, onSync, onCreateEmail, onReply }) {
   const [menuOpen, setMenuOpen] = useState(false)
   if (!thread) return <EmptyThreadState />
   const participants = (thread.participants || []).map((p) => p.name || p.email).filter(Boolean)
@@ -15,11 +15,11 @@ export default function GmailThreadView({ thread, onBack, onSync, onCreateEmail 
     <div className="flex min-h-[560px] flex-1 flex-col overflow-hidden bg-white">
       <div className="flex items-center justify-between border-b border-surface-border bg-white px-4 py-2">
         <div className="flex items-center gap-1">
-          <button type="button" className="h-8 rounded-lg border border-surface-border bg-white px-3 text-xs font-medium text-ink hover:bg-slate-50">
+          <button type="button" className="h-8 rounded-lg border border-surface-border bg-white px-3 text-xs font-medium text-ink hover:bg-slate-50" onClick={() => onReply?.(thread)}>
             <Reply size={13} className="mr-1 inline-block" />
             Reply
           </button>
-          <button type="button" className="h-8 rounded-lg border border-surface-border bg-white px-3 text-xs font-medium text-ink hover:bg-slate-50">
+          <button type="button" className="h-8 rounded-lg border border-surface-border bg-white px-3 text-xs font-medium text-ink hover:bg-slate-50" onClick={() => onReply?.(thread)}>
             <Forward size={13} className="mr-1 inline-block" />
             Forward
           </button>
@@ -31,7 +31,7 @@ export default function GmailThreadView({ thread, onBack, onSync, onCreateEmail 
       </div>
       <div className="flex flex-shrink-0 flex-col gap-2 border-b border-surface-border bg-white px-4 py-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
-          <h1 className="leading-tight text-[34px] font-semibold text-ink">{thread.subject}</h1>
+          <h1 className="leading-tight text-sm font-semibold text-ink md:text-base">Subject: {thread.subject}</h1>
           <p className="mt-0.5 line-clamp-2 text-xs text-ink-muted">
             {thread.messageCount} messages in this thread
             {participants.length ? ` · Participants: ${participants.join(', ')}` : ''}

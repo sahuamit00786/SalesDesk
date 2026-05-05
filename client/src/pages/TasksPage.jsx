@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { CalendarClock, Check, CheckSquare } from 'lucide-react'
+import { CalendarClock, Check, CheckSquare, Plus, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { PageShell } from '@/components/layout/PageShell'
+import { RightDrawer } from '@/components/ui/RightDrawer'
 import { useGetTasksQuery } from '@/features/tasks/tasksApi'
-import { usePatchLeadTaskMutation } from '@/features/leads/leadsApi'
+import { useCreateLeadTaskMutation, useGetLeadsQuery, usePatchLeadTaskMutation } from '@/features/leads/leadsApi'
+import { useTeamUsersQuery } from '@/features/team/teamApi'
 
 const TABS = [
   { id: 'all', label: 'All Tasks' },
@@ -30,6 +32,20 @@ const PRIORITY_STYLE = {
     edge: 'before:bg-slate-400',
     badge: 'TASK',
   },
+}
+
+const TASK_TYPE_OPTIONS = [
+  { value: 'call', label: 'Call' },
+  { value: 'email', label: 'Email' },
+  { value: 'meeting', label: 'Meeting' },
+  { value: 'follow_up', label: 'Follow-up' },
+  { value: 'internal', label: 'Internal' },
+  { value: 'document', label: 'Document' },
+  { value: 'other', label: 'Other' },
+]
+
+function makeSubtaskKey() {
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
 function TaskCard({ task, onToggleSubtask, onRequestComplete }) {
@@ -126,6 +142,145 @@ function TaskCard({ task, onToggleSubtask, onRequestComplete }) {
   )
 }
 
+function CreateTaskDrawer({ open, onClose }) {
+  const { data: leadsData } = useGetLeadsQuery({ page: 1, limit: 200, search: '' }, { skip: !open })
+  const { data: usersData } = useTeamUsersQuery(undefined, { skip: !open })
+  const [createLeadTask, { isLoading }] = useCreateLeadTaskMutation()
+
+  const leads = Array.isArray(leadsData?.data) ? leadsData.data : []
+  const users = Array.isArray(usersData?.data) ? usersData.data : Array.isArray(usersData?.data?.items) ? usersData.data.items : []
+
+  const [leadId, setLeadId] = useState('')
+  const [title, setTitle] = useState('')
+  const [description, setDescription] = useState('')
+  const [taskType, setTaskType] = useState('follow_up')
+  const [priority, setPriority] = useState('medium')
+  const [dueAtLocal, setDueAtLocal] = useState('')
+  const [assignedTo, setAssignedTo] = useState('')
+  const [subtasks, setSubtasks] = useState([])
+
+  function resetAndClose() {
+    setLeadId('')
+    setTitle('')
+    setDescription('')
+    setTaskType('follow_up')
+    setPriority('medium')
+    setDueAtLocal('')
+    setAssignedTo('')
+    setSubtasks([])
+    onClose()
+  }
+
+  async function handleCreate() {
+    if (!leadId) return toast.error('Select a lead.')
+    if (!title.trim()) return toast.error('Task title is required.')
+    const dueAt = dueAtLocal && !Number.isNaN(Date.parse(dueAtLocal)) ? new Date(dueAtLocal).toISOString() : null
+    const subPayload = subtasks
+      .map((s) => ({ title: String(s.title || '').trim(), done: Boolean(s.done) }))
+      .filter((s) => s.title)
+    try {
+      await createLeadTask({
+        id: leadId,
+        title: title.trim(),
+        description: description.trim() || null,
+        taskType,
+        priority,
+        dueAt,
+        assignedTo: assignedTo || null,
+        subtasks: subPayload,
+        status: 'open',
+      }).unwrap()
+      toast.success('Task created')
+      resetAndClose()
+    } catch {
+      toast.error('Could not create task.')
+    }
+  }
+
+  return (
+    <RightDrawer
+      open={open}
+      onClose={resetAndClose}
+      title="Create task"
+      description="Select a lead, assignee, due date, and subtasks."
+      footer={
+        <div className="flex justify-end gap-2">
+          <button type="button" className="h-9 rounded-lg border border-surface-border px-3 text-xs text-ink-muted hover:bg-surface-subtle" onClick={resetAndClose}>
+            Cancel
+          </button>
+          <button type="button" className="h-9 rounded-lg bg-brand-600 px-3 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-60" onClick={handleCreate} disabled={isLoading}>
+            {isLoading ? 'Creating...' : 'Create Task'}
+          </button>
+        </div>
+      }
+    >
+      <div className="space-y-4">
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-muted">Lead</label>
+          <select className="h-10 w-full rounded-lg border border-surface-border bg-white px-3 text-sm" value={leadId} onChange={(e) => setLeadId(e.target.value)}>
+            <option value="">Select lead</option>
+            {leads.map((lead) => <option key={lead.id} value={lead.id}>{lead.title || lead.contactName || lead.email}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-muted">Title</label>
+          <input className="h-10 w-full rounded-lg border border-surface-border px-3 text-sm" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Task title" />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-muted">Type</label>
+            <select className="h-10 w-full rounded-lg border border-surface-border bg-white px-3 text-sm" value={taskType} onChange={(e) => setTaskType(e.target.value)}>
+              {TASK_TYPE_OPTIONS.map((row) => <option key={row.value} value={row.value}>{row.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-muted">Priority</label>
+            <select className="h-10 w-full rounded-lg border border-surface-border bg-white px-3 text-sm" value={priority} onChange={(e) => setPriority(e.target.value)}>
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
+          </div>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-muted">Due date/time</label>
+            <input type="datetime-local" className="h-10 w-full rounded-lg border border-surface-border px-3 text-sm" value={dueAtLocal} onChange={(e) => setDueAtLocal(e.target.value)} />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-muted">Assign to</label>
+            <select className="h-10 w-full rounded-lg border border-surface-border bg-white px-3 text-sm" value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)}>
+              <option value="">Unassigned</option>
+              {users.map((u) => <option key={u.id} value={u.id}>{u.name || u.email}</option>)}
+            </select>
+          </div>
+        </div>
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-muted">Description</label>
+          <textarea className="min-h-[90px] w-full rounded-lg border border-surface-border px-3 py-2 text-sm" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Task description" />
+        </div>
+        <div className="rounded-lg border border-surface-border bg-slate-50 p-3">
+          <div className="space-y-2">
+            {subtasks.map((row, idx) => (
+              <div key={row.key} className="flex items-center gap-2 rounded-lg border border-surface-border bg-white p-2">
+                <input type="checkbox" checked={row.done} onChange={(e) => setSubtasks((prev) => prev.map((s, i) => (i === idx ? { ...s, done: e.target.checked } : s)))} />
+                <input className="h-8 flex-1 rounded-md border border-surface-border px-2 text-sm" value={row.title} onChange={(e) => setSubtasks((prev) => prev.map((s, i) => (i === idx ? { ...s, title: e.target.value } : s)))} placeholder="Subtask title" />
+                <button type="button" className="rounded p-1 text-ink-muted hover:bg-red-50 hover:text-red-600" onClick={() => setSubtasks((prev) => prev.filter((_, i) => i !== idx))}>
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+          <button type="button" className="mt-2 inline-flex items-center gap-1 rounded-lg border border-dashed border-brand-300 bg-brand-50 px-2.5 py-1.5 text-xs font-semibold text-brand-700" onClick={() => setSubtasks((prev) => [...prev, { key: makeSubtaskKey(), title: '', done: false }])}>
+            <Plus size={13} />
+            Add subtask
+          </button>
+        </div>
+      </div>
+    </RightDrawer>
+  )
+}
+
 export function TasksPage() {
   const [activeTab, setActiveTab] = useState('all')
   const [search, setSearch] = useState('')
@@ -136,6 +291,7 @@ export function TasksPage() {
   const [subtaskOverrides, setSubtaskOverrides] = useState({})
   const [completeModalTask, setCompleteModalTask] = useState(null)
   const [confirmingComplete, setConfirmingComplete] = useState(false)
+  const [showCreateDrawer, setShowCreateDrawer] = useState(false)
   const [patchLeadTask] = usePatchLeadTaskMutation()
   const queryParams = useMemo(() => {
     const out = {}
@@ -259,6 +415,9 @@ export function TasksPage() {
                 className="h-9 w-full rounded-lg border border-surface-border bg-white px-3 text-xs outline-none focus:border-brand-400"
               />
             </div>
+            <button type="button" className="h-9 rounded-lg bg-brand-600 px-3 text-xs font-semibold text-white hover:bg-brand-700" onClick={() => setShowCreateDrawer(true)}>
+              + Create Task
+            </button>
           </div>
           <div className="mt-3 grid gap-2 md:grid-cols-2">
             <div className="rounded-lg border border-surface-border bg-slate-50 p-2">
@@ -345,6 +504,7 @@ export function TasksPage() {
           </div>
         </div>
       ) : null}
+      <CreateTaskDrawer open={showCreateDrawer} onClose={() => setShowCreateDrawer(false)} />
     </PageShell>
   )
 }

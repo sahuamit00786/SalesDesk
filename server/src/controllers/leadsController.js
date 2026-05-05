@@ -1,4 +1,7 @@
 import Joi from 'joi'
+import { randomUUID } from 'node:crypto'
+import { mkdir, writeFile } from 'node:fs/promises'
+import path from 'node:path'
 import { Op, fn, col, where as sqlWhere } from 'sequelize'
 import { getCountries, getCountryCallingCode } from 'libphonenumber-js/min'
 import { google } from 'googleapis'
@@ -19,6 +22,7 @@ import {
   LeadStage,
   LeadStatus,
   LeadStatusCategory,
+  OpportunityStage,
   CountryPhoneCode,
   CompanyGoogleToken,
   LeadEmail,
@@ -326,6 +330,63 @@ function parseGmailMessage(detail) {
   }
 }
 
+function formatThreadSummary(row, mailboxEmail = '') {
+  const isInbound = row.direction === 'inbound'
+  const fromRaw = isInbound
+    ? (Array.isArray(row.toRecipients) && row.toRecipients.length ? row.toRecipients[0] : row.creator?.email || 'Lead')
+    : mailboxEmail || row.creator?.email || 'You'
+  const fromName = isInbound ? 'Lead' : 'You'
+  const when = row.sentAt || row.createdAt
+  return {
+    id: row.id,
+    threadId: row.threadId || `single:${row.id}`,
+    subject: row.subject || '(No subject)',
+    snippet: row.bodyText || htmlToText(row.bodyHtml || '') || '',
+    messageCount: 1,
+    hasAttachments: Array.isArray(row.attachments) && row.attachments.length > 0,
+    isUnread: false,
+    lastMessageAt: when,
+    lastDateFormatted: when ? new Date(when).toLocaleString() : '',
+    status: row.status,
+    lead: row.lead ? { id: row.lead.id, title: row.lead.title, contactName: row.lead.contactName, email: row.lead.email } : null,
+    lastMessage: {
+      from: {
+        name: fromName,
+        email: normalizeEmail(fromRaw) || '',
+        initials: fromName.slice(0, 2).toUpperCase(),
+      },
+    },
+  }
+}
+
+function mergeThreadRows(rows, mailboxEmail = '') {
+  const map = new Map()
+  for (const row of rows) {
+    const key = row.threadId || `single:${row.id}`
+    if (!map.has(key)) {
+      map.set(key, {
+        ...formatThreadSummary(row, mailboxEmail),
+        messageCount: 0,
+      })
+    }
+    const current = map.get(key)
+    current.messageCount += 1
+    const rowTime = new Date(row.sentAt || row.createdAt).getTime()
+    const currentTime = new Date(current.lastMessageAt || 0).getTime()
+    if (rowTime >= currentTime) {
+      const next = formatThreadSummary(row, mailboxEmail)
+      current.lastMessageAt = next.lastMessageAt
+      current.lastDateFormatted = next.lastDateFormatted
+      current.snippet = next.snippet
+      current.status = next.status
+      current.lastMessage = next.lastMessage
+      current.lead = next.lead
+      current.hasAttachments = next.hasAttachments || current.hasAttachments
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime())
+}
+
 function buildRawEmail({ from, to, cc = [], bcc = [], subject, bodyHtml }) {
   const lines = [
     `From: ${from}`,
@@ -357,6 +418,7 @@ const emailSendSchema = Joi.object({
       }),
     )
     .default([]),
+  threadId: Joi.string().allow('', null).optional(),
 }).required()
 
 const noteSchema = Joi.object({
@@ -711,10 +773,11 @@ export async function update(req, res, next) {
 export async function formMeta(req, res, next) {
   try {
     const workspaceId = req.headers['x-workspace-id']
-    const [sourceCount, stageCount, categoryCount] = await Promise.all([
+    const [sourceCount, stageCount, categoryCount, opportunityStageCount] = await Promise.all([
       LeadSource.count({ where: { workspaceId, companyId: req.user.companyId } }),
       LeadStage.count({ where: { workspaceId, companyId: req.user.companyId } }),
       LeadStatusCategory.count({ where: { workspaceId, companyId: req.user.companyId } }),
+      OpportunityStage.count({ where: { workspaceId, companyId: req.user.companyId } }),
     ])
     if (sourceCount === 0) {
       await LeadSource.bulkCreate([
@@ -732,6 +795,21 @@ export async function formMeta(req, res, next) {
     if (categoryCount === 0) {
       const category = await LeadStatusCategory.create({ name: 'Initial', workspaceId, companyId: req.user.companyId })
       await LeadStatus.create({ name: 'Initial', categoryId: category.id, isDefault: true, workspaceId, companyId: req.user.companyId })
+    }
+    if (opportunityStageCount === 0) {
+      const seedStages = [
+        { name: 'Lead Inbound', isDefault: true, sortOrder: 0 },
+        { name: 'New', sortOrder: 1 },
+        { name: 'Contacted', sortOrder: 2 },
+        { name: 'Qualified', sortOrder: 3 },
+        { name: 'Proposal Made', sortOrder: 4 },
+        { name: 'Negotiation', sortOrder: 5 },
+        { name: 'Won', sortOrder: 6 },
+        { name: 'Lost', sortOrder: 7 },
+      ]
+      await OpportunityStage.bulkCreate(
+        seedStages.map((s) => ({ ...s, workspaceId, companyId: req.user.companyId })),
+      )
     }
     const phoneCodeCount = await CountryPhoneCode.count()
     if (phoneCodeCount < 180) {
@@ -764,7 +842,7 @@ export async function formMeta(req, res, next) {
       }
     }
 
-    const [sources, stages, categories, users, phoneCodes] = await Promise.all([
+    const [sources, stages, categories, users, phoneCodes, opportunityStages] = await Promise.all([
       LeadSource.findAll({ where: { workspaceId, companyId: req.user.companyId, isActive: true }, order: [['name', 'ASC']] }),
       LeadStage.findAll({ where: { workspaceId, companyId: req.user.companyId, isActive: true }, order: [['isDefault', 'DESC'], ['name', 'ASC']] }),
       LeadStatusCategory.findAll({
@@ -774,8 +852,19 @@ export async function formMeta(req, res, next) {
       }),
       User.findAll({ where: { companyId: req.user.companyId, isActive: true }, attributes: ['id', 'name', 'email'], order: [['name', 'ASC']] }),
       CountryPhoneCode.findAll({ where: { isActive: true }, order: [['isDefault', 'DESC'], ['countryName', 'ASC']] }),
+      OpportunityStage.findAll({
+        where: { workspaceId, companyId: req.user.companyId },
+        order: [
+          ['sortOrder', 'ASC'],
+          ['createdAt', 'ASC'],
+        ],
+      }),
     ])
-    return res.json({ success: true, data: { sources, stages, statusCategories: categories, users, phoneCodes }, meta: {} })
+    return res.json({
+      success: true,
+      data: { sources, stages, statusCategories: categories, users, phoneCodes, opportunityStages },
+      meta: {},
+    })
   } catch (e) {
     return next(e)
   }
@@ -1277,7 +1366,9 @@ export async function sendLeadEmail(req, res, next) {
         subject: value.subject || '',
         bodyHtml: `${value.bodyHtml || ''}${attachmentFooter}`,
       })
-      const sent = await gmail.users.messages.send({ userId: 'me', requestBody: { raw } })
+      const requestBody = { raw }
+      if (value.threadId) requestBody.threadId = value.threadId
+      const sent = await gmail.users.messages.send({ userId: 'me', requestBody })
       await emailRow.update({
         status: 'sent',
         sentAt: new Date(),
@@ -1330,6 +1421,161 @@ export async function syncLeadEmailReplies(req, res, next) {
 
     const { created } = await syncRepliesForLead({ lead, tokenRow, userId: req.user.id })
     return res.json({ success: true, data: { created }, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function listEmailThreads(req, res, next) {
+  try {
+    const workspaceIds = await allowedWorkspaceIdsForUser(req.user)
+    if (!workspaceIds.length) return res.json({ success: true, data: [], meta: { total: 0 } })
+    const tokenRow = await CompanyGoogleToken.findOne({ where: { companyId: req.user.companyId } })
+    const mailboxEmail = tokenRow?.email || req.user.email || ''
+    const search = String(req.query.search || '').trim().toLowerCase()
+    const leadId = String(req.query.leadId || '').trim()
+    const direction = String(req.query.direction || '').trim().toLowerCase()
+    const status = String(req.query.status || '').trim().toLowerCase()
+    const unread = String(req.query.unread || '').trim().toLowerCase() === 'true'
+    const hasAttachments = String(req.query.hasAttachments || '').trim().toLowerCase() === 'true'
+    const from = req.query.from ? new Date(req.query.from) : null
+    const to = req.query.to ? new Date(req.query.to) : null
+    const page = Math.max(1, Number(req.query.page) || 1)
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50))
+
+    const leadWhere = {
+      companyId: req.user.companyId,
+      workspaceId: { [Op.in]: workspaceIds },
+      ...(await leadAccessWhere(req.user)),
+      isDeleted: false,
+    }
+    if (leadId) leadWhere.id = leadId
+
+    const rows = await LeadEmail.findAll({
+      where: {
+        companyId: req.user.companyId,
+        workspaceId: { [Op.in]: workspaceIds },
+      },
+      include: [
+        { model: User, as: 'creator', attributes: ['id', 'name', 'email'], required: false },
+        { model: Lead, as: 'lead', attributes: ['id', 'title', 'contactName', 'email'], required: true, where: leadWhere },
+      ],
+      order: [['sentAt', 'DESC'], ['createdAt', 'DESC']],
+      limit: 1500,
+    })
+
+    let filtered = rows
+    if (direction && ['inbound', 'outbound'].includes(direction)) filtered = filtered.filter((r) => r.direction === direction)
+    if (status && ['draft', 'queued', 'sent', 'failed'].includes(status)) filtered = filtered.filter((r) => r.status === status)
+    if (hasAttachments) filtered = filtered.filter((r) => Array.isArray(r.attachments) && r.attachments.length > 0)
+    if (unread) filtered = []
+    if (from && !Number.isNaN(from.getTime())) filtered = filtered.filter((r) => new Date(r.sentAt || r.createdAt).getTime() >= from.getTime())
+    if (to && !Number.isNaN(to.getTime())) filtered = filtered.filter((r) => new Date(r.sentAt || r.createdAt).getTime() <= to.getTime())
+    if (search) {
+      filtered = filtered.filter((r) => {
+        const hay = `${r.subject || ''} ${r.bodyText || ''} ${r.bodyHtml || ''} ${r.lead?.title || ''} ${r.lead?.contactName || ''}`.toLowerCase()
+        return hay.includes(search)
+      })
+    }
+
+    const threads = mergeThreadRows(filtered, mailboxEmail)
+    const offset = (page - 1) * limit
+    const paged = threads.slice(offset, offset + limit)
+    return res.json({ success: true, data: paged, meta: { page, limit, total: threads.length } })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function getEmailThread(req, res, next) {
+  try {
+    const workspaceIds = await allowedWorkspaceIdsForUser(req.user)
+    if (!workspaceIds.length) return res.json({ success: true, data: [], meta: {} })
+    const threadId = String(req.params.threadId || '')
+    if (!threadId) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'threadId is required' } })
+    const where = threadId.startsWith('single:')
+      ? { id: threadId.replace('single:', ''), companyId: req.user.companyId, workspaceId: { [Op.in]: workspaceIds } }
+      : { threadId, companyId: req.user.companyId, workspaceId: { [Op.in]: workspaceIds } }
+    const leadWhere = {
+      companyId: req.user.companyId,
+      workspaceId: { [Op.in]: workspaceIds },
+      ...(await leadAccessWhere(req.user)),
+      isDeleted: false,
+    }
+    const rows = await LeadEmail.findAll({
+      where,
+      include: [
+        { model: User, as: 'creator', attributes: ['id', 'name', 'email'], required: false },
+        { model: Lead, as: 'lead', attributes: ['id', 'title', 'contactName', 'email'], required: true, where: leadWhere },
+      ],
+      order: [['sentAt', 'ASC'], ['createdAt', 'ASC']],
+    })
+    return res.json({ success: true, data: rows, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function syncEmailReplies(req, res, next) {
+  try {
+    const workspaceIds = await allowedWorkspaceIdsForUser(req.user)
+    if (!workspaceIds.length) return res.json({ success: true, data: { created: 0 }, meta: {} })
+    const tokenRow = await CompanyGoogleToken.findOne({ where: { companyId: req.user.companyId } })
+    if (!tokenRow?.refreshToken) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'GOOGLE_EMAIL_NOT_CONNECTED', message: 'Connect Google email before syncing replies.' },
+      })
+    }
+    const leads = await Lead.findAll({
+      where: {
+        companyId: req.user.companyId,
+        workspaceId: { [Op.in]: workspaceIds },
+        ...(await leadAccessWhere(req.user)),
+        isDeleted: false,
+        email: { [Op.ne]: null },
+      },
+      order: [['updatedAt', 'DESC']],
+      limit: 250,
+    })
+    let created = 0
+    for (const lead of leads) {
+      try {
+        const out = await syncRepliesForLead({ lead, tokenRow, userId: req.user.id })
+        created += out.created || 0
+      } catch {
+        // keep sync resilient
+      }
+    }
+    return res.json({ success: true, data: { created }, meta: { scanned: leads.length } })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function uploadEmailAttachments(req, res, next) {
+  try {
+    const workspaceIds = await allowedWorkspaceIdsForUser(req.user)
+    const workspaceId = workspaceIds[0]
+    if (!workspaceId) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'No accessible workspace found' } })
+    const files = Array.isArray(req.files) ? req.files : []
+    if (!files.length) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'No files uploaded' } })
+    const root = path.resolve(process.cwd(), 'uploads', 'email')
+    const dir = path.join(root, workspaceId)
+    await mkdir(dir, { recursive: true })
+    const items = []
+    for (const file of files) {
+      const safeOriginal = String(file.originalname || 'file').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 180)
+      const storedName = `${Date.now()}_${randomUUID()}_${safeOriginal}`
+      await writeFile(path.join(dir, storedName), file.buffer)
+      items.push({
+        fileName: file.originalname || safeOriginal,
+        fileUrl: `/uploads/email/${workspaceId}/${storedName}`,
+        mimeType: file.mimetype || null,
+        sizeBytes: file.size || 0,
+      })
+    }
+    return res.status(201).json({ success: true, data: items, meta: { count: items.length } })
   } catch (e) {
     return next(e)
   }
@@ -1899,7 +2145,23 @@ export async function exportRows(req, res, next) {
 export async function getLeadSetup(req, res, next) {
   try {
     const workspaceId = req.headers['x-workspace-id']
-    const [sources, stages, categories, tags] = await Promise.all([
+    const oppStageCount = await OpportunityStage.count({ where: { workspaceId, companyId: req.user.companyId } })
+    if (oppStageCount === 0) {
+      const seedStages = [
+        { name: 'Lead Inbound', isDefault: true, sortOrder: 0 },
+        { name: 'New', sortOrder: 1 },
+        { name: 'Contacted', sortOrder: 2 },
+        { name: 'Qualified', sortOrder: 3 },
+        { name: 'Proposal Made', sortOrder: 4 },
+        { name: 'Negotiation', sortOrder: 5 },
+        { name: 'Won', sortOrder: 6 },
+        { name: 'Lost', sortOrder: 7 },
+      ]
+      await OpportunityStage.bulkCreate(
+        seedStages.map((s) => ({ ...s, workspaceId, companyId: req.user.companyId })),
+      )
+    }
+    const [sources, stages, categories, tags, opportunityStages] = await Promise.all([
       LeadSource.findAll({ where: { workspaceId, companyId: req.user.companyId }, order: [['createdAt', 'ASC']] }),
       LeadStage.findAll({ where: { workspaceId, companyId: req.user.companyId }, order: [['createdAt', 'ASC']] }),
       LeadStatusCategory.findAll({
@@ -1908,8 +2170,15 @@ export async function getLeadSetup(req, res, next) {
         order: [['createdAt', 'ASC']],
       }),
       Tag.findAll({ where: { workspaceId, companyId: req.user.companyId }, order: [['createdAt', 'ASC']] }),
+      OpportunityStage.findAll({
+        where: { workspaceId, companyId: req.user.companyId },
+        order: [
+          ['sortOrder', 'ASC'],
+          ['createdAt', 'ASC'],
+        ],
+      }),
     ])
-    return res.json({ success: true, data: { sources, stages, categories, tags }, meta: {} })
+    return res.json({ success: true, data: { sources, stages, categories, tags, opportunityStages }, meta: {} })
   } catch (e) {
     return next(e)
   }
@@ -1987,6 +2256,74 @@ export async function deleteLeadTag(req, res, next) {
     const workspaceId = req.headers['x-workspace-id']
     const row = await Tag.findOne({ where: { id: req.params.id, workspaceId, companyId: req.user.companyId } })
     if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Tag not found' } })
+    await row.destroy()
+    return res.json({ success: true, data: { id: req.params.id }, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function createOpportunityStage(req, res, next) {
+  try {
+    const workspaceId = req.headers['x-workspace-id']
+    const name = String(req.body?.name || '').trim()
+    if (!name) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Stage name is required' } })
+    const isDefault = Boolean(req.body?.isDefault)
+    const maxOrder = await OpportunityStage.max('sortOrder', { where: { workspaceId, companyId: req.user.companyId } })
+    const sortOrder = Number.isFinite(Number(maxOrder)) ? Number(maxOrder) + 1 : 0
+    const row = await sequelize.transaction(async (t) => {
+      if (isDefault) {
+        await OpportunityStage.update(
+          { isDefault: false },
+          { where: { workspaceId, companyId: req.user.companyId }, transaction: t },
+        )
+      }
+      return OpportunityStage.create(
+        { name, isDefault, sortOrder, workspaceId, companyId: req.user.companyId },
+        { transaction: t },
+      )
+    })
+    return res.status(201).json({ success: true, data: row, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function patchOpportunityStage(req, res, next) {
+  try {
+    const workspaceId = req.headers['x-workspace-id']
+    const row = await OpportunityStage.findOne({ where: { id: req.params.id, workspaceId, companyId: req.user.companyId } })
+    if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Stage not found' } })
+    const name = req.body?.name !== undefined ? String(req.body.name || '').trim() : undefined
+    if (name !== undefined && !name) {
+      return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Stage name is required' } })
+    }
+    const isDefault = req.body?.isDefault
+    await sequelize.transaction(async (t) => {
+      if (isDefault === true) {
+        await OpportunityStage.update(
+          { isDefault: false },
+          { where: { workspaceId, companyId: req.user.companyId }, transaction: t },
+        )
+        await row.update({ isDefault: true, ...(name !== undefined ? { name } : {}) }, { transaction: t })
+      } else if (isDefault === false) {
+        await row.update({ isDefault: false, ...(name !== undefined ? { name } : {}) }, { transaction: t })
+      } else if (name !== undefined) {
+        await row.update({ name }, { transaction: t })
+      }
+    })
+    await row.reload()
+    return res.json({ success: true, data: row, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function deleteOpportunityStage(req, res, next) {
+  try {
+    const workspaceId = req.headers['x-workspace-id']
+    const row = await OpportunityStage.findOne({ where: { id: req.params.id, workspaceId, companyId: req.user.companyId } })
+    if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Stage not found' } })
     await row.destroy()
     return res.json({ success: true, data: { id: req.params.id }, meta: {} })
   } catch (e) {
