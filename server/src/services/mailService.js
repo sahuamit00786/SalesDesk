@@ -219,3 +219,94 @@ export async function sendTeamInviteEmail({ to, name, companyName, inviteUrl, ro
 
   return { sent: true }
 }
+
+
+// ==============================
+// 📅 MEETING EMAIL
+// ==============================
+
+export function buildMeetingEmailHtml({
+  leadName,
+  meetingTitle,
+  agenda,
+  startTime,
+  meetLink,
+}) {
+  const safeName = escapeHtml(leadName || "there");
+  const safeTitle = escapeHtml(meetingTitle);
+  const safeAgenda = escapeHtml(agenda || "");
+  const safeTime = escapeHtml(startTime);
+  const safeLink = escapeHtml(meetLink || "");
+
+  return `<!DOCTYPE html>
+<html>
+<body style="font-family:Segoe UI,sans-serif;background:#f4f6fb;padding:20px;">
+  <div style="max-width:600px;margin:auto;background:#fff;border-radius:12px;padding:24px;">
+    
+    <h2 style="margin:0 0 12px;">📅 ${safeTitle}</h2>
+
+    <p>Hi ${safeName},</p>
+
+    <p>You have a scheduled meeting.</p>
+
+    <p><b>Agenda:</b> ${safeAgenda || "N/A"}</p>
+
+    <p><b>Date & Time:</b> ${safeTime}</p>
+
+    ${
+      meetLink
+        ? `<p style="margin-top:20px;">
+            <a href="${safeLink}" 
+               style="background:#2451eb;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;">
+               Join Meeting
+            </a>
+          </p>`
+        : `<p style="color:#888;">Meeting link will be shared soon.</p>`
+    }
+
+  </div>
+</body>
+</html>`;
+}
+
+export async function sendMeetingEmail({
+  to,
+  leadName,
+  meetingTitle,
+  agenda,
+  scheduledStart,
+  meetLink,
+}) {
+  const transport = getMailTransport();
+  const from = fromAddress();
+
+  const html = buildMeetingEmailHtml({
+    leadName,
+    meetingTitle,
+    agenda,
+    startTime: new Date(scheduledStart).toLocaleString(),
+    meetLink,
+  });
+
+  if (!transport) {
+    if (process.env.NODE_ENV !== "production") {
+      console.info(`[Meeting Email] Not sent. Link: ${meetLink}`);
+      return { sent: false };
+    }
+    throw new Error("SMTP not configured");
+  }
+
+  await transport.sendMail({
+    from,
+    to,
+    subject: `Meeting: ${meetingTitle}`,
+    html,
+    text: `
+Meeting: ${meetingTitle}
+Date: ${new Date(scheduledStart).toLocaleString()}
+Link: ${meetLink || "Not available"}
+    `,
+  });
+
+  return { sent: true };
+}

@@ -5,6 +5,8 @@ import { useAppDispatch, useAppSelector } from '@/app/hooks'
 import { logout } from '@/features/auth/authSlice'
 import { getRouteMeta } from '@/components/layout/navConfig'
 import { WorkspaceSwitcher } from '@/components/layout/WorkspaceSwitcher'
+import {MeetingNotificationBell}
+from '@/features/meetings/components/MeetingNotificationBell'
 
 export function Topbar({ onMenu }) {
   const { pathname } = useLocation()
@@ -37,9 +39,10 @@ export function Topbar({ onMenu }) {
       </div>
       <div className="flex shrink-0 items-center gap-2 sm:gap-3">
         <WorkspaceSwitcher />
-        <Button variant="icon" type="button" aria-label="Notifications">
+        {/* <Button variant="icon" type="button" aria-label="Notifications">
           <Bell className="w-5 h-5" />
-        </Button>
+        </Button> */}
+        <MeetingNotificationBell />
         <div className="hidden h-10 max-w-[140px] items-center truncate rounded-xl border border-surface-border px-3 text-sm text-ink-muted sm:flex">
           {user?.name ?? 'Signed out'}
         </div>

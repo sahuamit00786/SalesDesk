@@ -18,6 +18,7 @@ if (process.env.NODE_ENV === 'production') {
   app.set('trust proxy', 1)
 }
 
+
 app.use((req, res, next) => {
   const id = req.headers['x-request-id'] || randomUUID()
   res.setHeader('X-Request-Id', id)
