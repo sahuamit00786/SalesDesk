@@ -163,9 +163,9 @@ export function LeadConfigurationPage() {
 
   return (
     <PageShell fullWidth>
-      <div className="px-4 py-4 sm:px-6 sm:py-5">
+      <div className="pb-4 sm:pb-5">
         <section className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-y border-surface-border bg-white px-4 py-2.5 sm:px-6">
             <div className="flex min-w-max items-center gap-2 overflow-x-auto">
               {TABS.map((tab) => {
                 const Icon = tab.icon
@@ -176,11 +176,11 @@ export function LeadConfigurationPage() {
                     type="button"
                     onClick={() => setActiveTab(tab.id)}
                     className={cn(
-                      'inline-flex h-9 items-center gap-2 rounded-lg border px-4 text-sm',
+                      'inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium',
                       selected ? 'border-brand-200 bg-brand-50 text-brand-700' : 'border-surface-border bg-white text-ink',
                     )}
                   >
-                    <Icon className="h-4 w-4" aria-hidden />
+                    <Icon className="h-3.5 w-3.5" aria-hidden />
                     {tab.label}
                   </button>
                 )
@@ -190,18 +190,18 @@ export function LeadConfigurationPage() {
               <button
                 type="button"
                 onClick={openCreateModal}
-                className="inline-flex h-9 items-center gap-2 rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white"
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-brand-600 px-3 text-xs font-semibold text-white"
               >
-                <Plus className="h-3.5 w-3.5" />
+                <Plus className="h-3 w-3" />
                 {activeAddLabel}
               </button>
               {activeTab === 'status' ? (
                 <button
                   type="button"
                   onClick={() => setStatusModalOpen(true)}
-                  className="inline-flex h-9 items-center gap-2 rounded-lg border border-surface-border bg-white px-4 text-sm font-medium text-ink"
+                  className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-surface-border bg-white px-3 text-xs font-medium text-ink"
                 >
-                  <Plus className="h-3.5 w-3.5" />
+                  <Plus className="h-3 w-3" />
                   Add status
                 </button>
               ) : null}
@@ -213,7 +213,7 @@ export function LeadConfigurationPage() {
           {activeTab === 'source' ? (
             <div className="overflow-hidden rounded-xl border border-surface-border bg-white">
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[900px] text-xs">
+                <table className="w-full min-w-full text-xs">
                   <thead className="sticky top-0 z-10 bg-white">
                     <tr className="border-b border-surface-border/70">
                       <th className="px-2.5 py-2 text-left text-[11px] font-semibold text-ink-muted">Source</th>
@@ -231,8 +231,8 @@ export function LeadConfigurationPage() {
                     ) : (
                       setup.sources.map((item) => (
                         <tr key={item.id} className="group border-b border-surface-border last:border-b-0 hover:bg-brand-50">
-                          <td className="px-2.5 py-2 text-sm text-ink">{item.name}</td>
-                          <td className="px-2.5 py-2 text-sm text-ink-muted">{formatDate(item.createdAt)}</td>
+                          <td className="px-2.5 py-2 text-xs text-ink">{item.name}</td>
+                          <td className="px-2.5 py-2 text-xs text-ink-muted">{formatDate(item.createdAt)}</td>
                           <td className="px-2.5 py-2 text-right">
                             <div className="inline-flex gap-1 opacity-100 transition">
                               <button
@@ -267,7 +267,7 @@ export function LeadConfigurationPage() {
             {activeTab === 'tags' ? (
               <div className="overflow-hidden rounded-xl border border-surface-border bg-white">
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[900px] text-xs">
+                  <table className="w-full min-w-full text-xs">
                     <thead className="sticky top-0 z-10 bg-white">
                       <tr className="border-b border-surface-border/70">
                         <th className="px-2.5 py-2 text-left text-[11px] font-semibold text-ink-muted">Tag</th>
@@ -285,8 +285,8 @@ export function LeadConfigurationPage() {
                       ) : (
                         setup.tags.map((item) => (
                           <tr key={item.id} className="group border-b border-surface-border last:border-b-0 hover:bg-brand-50">
-                            <td className="px-2.5 py-2 text-sm text-ink">{item.name}</td>
-                            <td className="px-2.5 py-2 text-sm text-ink-muted">{formatDate(item.createdAt)}</td>
+                            <td className="px-2.5 py-2 text-xs text-ink">{item.name}</td>
+                            <td className="px-2.5 py-2 text-xs text-ink-muted">{formatDate(item.createdAt)}</td>
                             <td className="px-2.5 py-2 text-right">
                               <div className="inline-flex gap-1 opacity-100 transition">
                                 <button
@@ -322,7 +322,7 @@ export function LeadConfigurationPage() {
               <div className="space-y-4">
                 <div className="overflow-hidden rounded-xl border border-surface-border bg-white">
                   <div className="overflow-x-auto">
-                    <table className="w-full min-w-[1000px] text-xs">
+                    <table className="w-full min-w-full text-xs">
                       <thead className="sticky top-0 z-10 bg-white">
                         <tr className="border-b border-surface-border/70">
                           <th className="px-2.5 py-2 text-left text-[11px] font-semibold text-ink-muted">Category</th>
@@ -341,11 +341,11 @@ export function LeadConfigurationPage() {
                         ) : (
                           setup.categories.map((category) => (
                             <tr key={category.id} className="group border-b border-surface-border last:border-b-0 hover:bg-brand-50">
-                              <td className="px-2.5 py-2 text-sm font-medium text-ink">{category.name}</td>
-                              <td className="px-2.5 py-2 text-sm text-ink-muted">
+                              <td className="px-2.5 py-2 text-xs font-medium text-ink">{category.name}</td>
+                              <td className="px-2.5 py-2 text-xs text-ink-muted">
                                 {(category.statuses || []).map((status) => status.name).join(', ') || '-'}
                               </td>
-                              <td className="px-2.5 py-2 text-sm text-ink-muted">{formatDate(category.createdAt)}</td>
+                              <td className="px-2.5 py-2 text-xs text-ink-muted">{formatDate(category.createdAt)}</td>
                               <td className="px-2.5 py-2 text-right">
                                 <div className="inline-flex gap-1 opacity-100 transition">
                                   <button

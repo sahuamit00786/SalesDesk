@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import { EllipsisVertical } from 'lucide-react'
+import { Archive, EllipsisVertical, Forward, Reply, Trash2 } from 'lucide-react'
 import GmailMessageCard from '@/features/gmail/GmailMessageCard'
 import GmailReplyBox from '@/features/gmail/GmailReplyBox'
 
 function EmptyThreadState() {
-  return <div className="p-6 text-sm text-ink-muted">Select a thread on the left.</div>
+  return <div className="p-6 text-sm text-ink-muted">Select an email from the inbox.</div>
 }
 
 export default function GmailThreadView({ thread, onBack, onSync, onCreateEmail }) {
@@ -12,10 +12,26 @@ export default function GmailThreadView({ thread, onBack, onSync, onCreateEmail 
   if (!thread) return <EmptyThreadState />
   const participants = (thread.participants || []).map((p) => p.name || p.email).filter(Boolean)
   return (
-    <div className="flex min-h-[560px] flex-1 flex-col overflow-hidden bg-surface-muted">
-      <div className="flex flex-shrink-0 flex-col gap-2 border-b border-surface-border bg-white px-4 py-2.5 lg:flex-row lg:items-start lg:justify-between">
+    <div className="flex min-h-[560px] flex-1 flex-col overflow-hidden bg-white">
+      <div className="flex items-center justify-between border-b border-surface-border bg-white px-4 py-2">
+        <div className="flex items-center gap-1">
+          <button type="button" className="h-8 rounded-lg border border-surface-border bg-white px-3 text-xs font-medium text-ink hover:bg-slate-50">
+            <Reply size={13} className="mr-1 inline-block" />
+            Reply
+          </button>
+          <button type="button" className="h-8 rounded-lg border border-surface-border bg-white px-3 text-xs font-medium text-ink hover:bg-slate-50">
+            <Forward size={13} className="mr-1 inline-block" />
+            Forward
+          </button>
+        </div>
+        <div className="flex items-center gap-1">
+          <button type="button" className="flex h-8 w-8 items-center justify-center rounded-lg border border-surface-border text-ink-muted hover:bg-slate-50"><Archive size={14} /></button>
+          <button type="button" className="flex h-8 w-8 items-center justify-center rounded-lg border border-surface-border text-ink-muted hover:bg-slate-50"><Trash2 size={14} /></button>
+        </div>
+      </div>
+      <div className="flex flex-shrink-0 flex-col gap-2 border-b border-surface-border bg-white px-4 py-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
-          <h1 className="leading-tight text-base font-semibold text-ink">{thread.subject}</h1>
+          <h1 className="leading-tight text-[34px] font-semibold text-ink">{thread.subject}</h1>
           <p className="mt-0.5 line-clamp-2 text-xs text-ink-muted">
             {thread.messageCount} messages in this thread
             {participants.length ? ` · Participants: ${participants.join(', ')}` : ''}
@@ -62,7 +78,7 @@ export default function GmailThreadView({ thread, onBack, onSync, onCreateEmail 
           </div>
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto p-[2px]">
+      <div className="flex-1 overflow-y-auto bg-slate-50/40 p-3">
         <div className="flex flex-col gap-3">
           {thread.messages.map((msg, idx) => (
             <GmailMessageCard

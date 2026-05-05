@@ -410,9 +410,6 @@ export function TeamPage() {
 
         {activeTab === 'members' ? (
         <section className="overflow-hidden rounded-xl border border-surface-border bg-white">
-          <div className="border-b border-surface-border px-5 py-3">
-            <h2 className="font-medium text-ink">Members</h2>
-          </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[900px] text-xs">
               <thead className="sticky top-0 z-10 bg-white text-ink-muted">
@@ -485,9 +482,6 @@ export function TeamPage() {
 
         {activeTab === 'invitations' ? (
         <section className="overflow-hidden rounded-xl border border-surface-border bg-white">
-            <div className="border-b border-surface-border px-5 py-3">
-              <h2 className="font-medium text-ink">Pending invitations</h2>
-            </div>
             <div className="p-4">
               {invitesLoading ? (
                 <p className="text-sm text-ink-muted">Loading invites…</p>
@@ -521,9 +515,6 @@ export function TeamPage() {
 
         {activeTab === 'roles' ? (
         <section className="overflow-hidden rounded-xl border border-surface-border bg-white/90">
-            <div className="border-b border-surface-border px-5 py-3">
-              <h2 className="font-medium text-ink">Roles</h2>
-            </div>
             <div className="overflow-x-auto">
               {roles.length === 0 ? (
                 <p className="px-4 py-6 text-sm text-ink-muted">No custom roles yet.</p>
