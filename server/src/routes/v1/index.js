@@ -13,6 +13,8 @@ import * as workspaceController from '../../controllers/workspaceController.js'
 import * as teamController from '../../controllers/teamController.js'
 import documentsRoutes from './documents.js'
 import webFormsRoutes from '../webFormsRoutes.js'
+import googleRoutes from '../googleRoutes.js'
+import meetingRoutes from '../meetingRoutes.js'
 
 const router = Router()
 
@@ -22,6 +24,11 @@ const apiLimiter = rateLimit({ routeKey: 'api', windowSec: 60, max: 200 })
 router.get('/health', (_req, res) => {
   res.json({ success: true, data: { status: 'ok' }, meta: {} })
 })
+
+router.use('/google', requireAuth, googleRoutes);
+router.use('/meetings', requireAuth, meetingRoutes)
+
+
 
 router.post('/auth/register', authLimiter, authController.register)
 router.post('/auth/verify-email', authLimiter, authController.verifyEmail)
