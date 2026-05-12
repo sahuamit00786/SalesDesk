@@ -42,7 +42,7 @@ export function DuplicateWarning({ open, duplicates = [], attemptedPhone = '', o
           <div className="rounded-xl border border-surface-border p-3">
             <p className="text-sm font-semibold text-ink">{top.contactName || top.title} · {top.company || 'No company'}</p>
             <p className="mt-1 text-xs text-ink-muted">{top.email || '-'} · {formatPhone(top)}</p>
-            <div className="mt-2 flex items-center gap-2"><LeadScorePill score={top.score || 0} /><LeadStatusBadge status={top.status} /></div>
+            <div className="mt-2 flex items-center gap-2"><LeadScorePill score={top.score || 0} /><LeadStatusBadge status={top.status} pipelineStage={top.opportunityStage} /></div>
           </div>
         ) : null}
       </div>

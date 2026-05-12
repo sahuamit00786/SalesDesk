@@ -42,6 +42,53 @@ export const User = sequelize.define(
       type: DataTypes.STRING(512),
       allowNull: true,
     },
+    department: {
+      type: DataTypes.STRING(120),
+      allowNull: true,
+    },
+    jobTitle: {
+      type: DataTypes.STRING(160),
+      allowNull: true,
+      field: 'job_title',
+    },
+    businessPhone: {
+      type: DataTypes.STRING(32),
+      allowNull: true,
+      field: 'business_phone',
+    },
+    whatsappNumber: {
+      type: DataTypes.STRING(32),
+      allowNull: true,
+      field: 'whatsapp_number',
+    },
+    street: {
+      type: DataTypes.STRING(500),
+      allowNull: true,
+    },
+    city: {
+      type: DataTypes.STRING(120),
+      allowNull: true,
+    },
+    country: {
+      type: DataTypes.STRING(120),
+      allowNull: true,
+    },
+    postalCode: {
+      type: DataTypes.STRING(32),
+      allowNull: true,
+      field: 'postal_code',
+    },
+    profilePhotoUrl: {
+      // Base64 data URLs from "upload from device" are far longer than 1024 chars
+      type: DataTypes.TEXT('medium'),
+      allowNull: true,
+      field: 'profile_photo_url',
+    },
+    lastLoginAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'last_login_at',
+    },
     companyId: {
       type: DataTypes.UUID,
       allowNull: true,

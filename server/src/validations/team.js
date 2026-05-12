@@ -3,10 +3,24 @@ import Joi from 'joi'
 const email = Joi.string().email().required()
 const companyRoleId = Joi.string().uuid().required()
 
+const optionalProfilePhotoUrl = Joi.alternatives()
+  .try(Joi.string().uri().max(1024), Joi.string().pattern(/^data:image\//).max(2_000_000))
+  .allow('', null)
+  .optional()
+
 export const createInvitationSchema = Joi.object({
   email,
   companyRoleId,
   workspaceIds: Joi.array().items(Joi.string().uuid()).min(1).required(),
+  department: Joi.string().max(120).allow('', null).optional(),
+  jobTitle: Joi.string().max(160).allow('', null).optional(),
+  businessPhone: Joi.string().max(32).allow('', null).optional(),
+  whatsappNumber: Joi.string().max(32).allow('', null).optional(),
+  profilePhotoUrl: optionalProfilePhotoUrl,
+  street: Joi.string().max(500).allow('', null).optional(),
+  city: Joi.string().max(120).allow('', null).optional(),
+  country: Joi.string().max(120).allow('', null).optional(),
+  postalCode: Joi.string().max(32).allow('', null).optional(),
 })
 
 export const acceptInvitationSchema = Joi.object({
@@ -22,6 +36,19 @@ export const acceptInvitationSchema = Joi.object({
 export const patchUserRoleSchema = Joi.object({
   companyRoleId,
 })
+
+export const patchUserProfileSchema = Joi.object({
+  name: Joi.string().min(2).max(120).allow('', null).optional(),
+  department: Joi.string().max(120).allow('', null).optional(),
+  jobTitle: Joi.string().max(160).allow('', null).optional(),
+  businessPhone: Joi.string().max(32).allow('', null).optional(),
+  whatsappNumber: Joi.string().max(32).allow('', null).optional(),
+  profilePhotoUrl: optionalProfilePhotoUrl,
+  street: Joi.string().max(500).allow('', null).optional(),
+  city: Joi.string().max(120).allow('', null).optional(),
+  country: Joi.string().max(120).allow('', null).optional(),
+  postalCode: Joi.string().max(32).allow('', null).optional(),
+}).min(1)
 
 export const deactivateUserSchema = Joi.object({
   reassignOwnerUserId: Joi.string().uuid().allow(null).optional(),

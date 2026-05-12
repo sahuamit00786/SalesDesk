@@ -1,9 +1,32 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { PencilLine, ShieldCheck, Trash2, UserMinus, UserPlus, Users, X } from 'lucide-react'
+import {
+  Briefcase,
+  Building2,
+  Camera,
+  Clock,
+  Flag,
+  Hash,
+  Home,
+  LayoutGrid,
+  Mail,
+  MapPin,
+  MessageCircle,
+  PencilLine,
+  ShieldCheck,
+  Trash2,
+  Upload,
+  User,
+  UserMinus,
+  UserPlus,
+  Users,
+  X,
+} from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
 import { Modal } from '@/components/ui/Modal'
 import { RightDrawer } from '@/components/ui/RightDrawer'
+import { PhoneField } from '@/components/ui/PhoneField'
 import { useWorkspacesQuery } from '@/features/workspace/workspaceApi'
 import {
   useCancelInvitationMutation,
@@ -14,6 +37,7 @@ import {
   usePatchRoleMutation,
   useTeamMenusQuery,
   usePatchUserRoleMutation,
+  usePatchUserProfileMutation,
   useReplaceUserWorkspacesMutation,
   useTeamInvitationsQuery,
   useTeamRolesQuery,
@@ -21,10 +45,48 @@ import {
 } from '@/features/team/teamApi'
 import { cn } from '@/utils/cn'
 
+function isoCountryForPhone(countryField) {
+  const c = String(countryField || '')
+    .trim()
+    .toUpperCase()
+  return c.length === 2 ? c : 'IN'
+}
+
 const TEAM_TAB_STORAGE_KEY = 'leadflow.team.activeTab'
+
+const EMPTY_INVITE_FORM = {
+  name: '',
+  email: '',
+  companyRoleId: '',
+  workspaceIds: [],
+  department: '',
+  jobTitle: '',
+  businessPhone: '',
+  whatsappNumber: '',
+  profilePhotoUrl: '',
+  street: '',
+  city: '',
+  country: '',
+  postalCode: '',
+}
 
 function apiErrorMessage(err) {
   return err?.data?.error?.message ?? err?.error ?? 'Something went wrong'
+}
+
+function normalizeProfileDraft(draft) {
+  return {
+    name: draft.name?.trim() || null,
+    department: draft.department?.trim() || null,
+    jobTitle: draft.jobTitle?.trim() || null,
+    businessPhone: draft.businessPhone?.trim() || null,
+    whatsappNumber: draft.whatsappNumber?.trim() || null,
+    profilePhotoUrl: draft.profilePhotoUrl?.trim() || null,
+    street: draft.street?.trim() || null,
+    city: draft.city?.trim() || null,
+    country: draft.country?.trim() || null,
+    postalCode: draft.postalCode?.trim() || null,
+  }
 }
 
 function WorkspacePills({ selectedIds, all }) {
@@ -33,7 +95,7 @@ function WorkspacePills({ selectedIds, all }) {
   return (
     <div className="flex flex-wrap gap-1">
       {selected.map((w) => (
-        <span key={w.id} className="rounded-full bg-surface-muted px-2 py-0.5 text-[11px] text-ink-muted">
+        <span key={w.id} className="rounded-full border border-surface-border bg-white px-2 py-0.5 text-[11px] text-ink-muted">
           {w.name}
         </span>
       ))}
@@ -41,7 +103,122 @@ function WorkspacePills({ selectedIds, all }) {
   )
 }
 
+function IconInput({ icon: Icon, className = '', wrapperClassName = '', ...props }) {
+  return (
+    <div className={cn('relative', wrapperClassName)}>
+      <Icon className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-faint" strokeWidth={1.75} />
+      <input
+        {...props}
+        className={cn(
+          'h-10 w-full rounded-xl border border-surface-border bg-white pl-9 pr-3 text-sm outline-none transition-shadow placeholder:text-ink-faint/80 focus:border-brand-400 focus:ring-2 focus:ring-brand-500/15',
+          className,
+        )}
+      />
+    </div>
+  )
+}
+
+function IconTextarea({ icon: Icon, className = '', wrapperClassName = '', ...props }) {
+  return (
+    <div className={cn('relative', wrapperClassName)}>
+      <Icon className="pointer-events-none absolute left-3 top-3 h-3.5 w-3.5 text-ink-faint" strokeWidth={1.75} />
+      <textarea
+        {...props}
+        className={cn(
+          'min-h-[84px] w-full resize-y rounded-xl border border-surface-border bg-white px-3 py-2.5 pl-9 text-sm outline-none transition-shadow placeholder:text-ink-faint/80 focus:border-brand-400 focus:ring-2 focus:ring-brand-500/15',
+          className,
+        )}
+      />
+    </div>
+  )
+}
+
+function DrawerSection({ title, subtitle, icon: Icon, children }) {
+  return (
+    <section className="py-1">
+      <div className="space-y-2.5">{children}</div>
+    </section>
+  )
+}
+
+function ProfilePhotoPicker({ value, onChange, disabled }) {
+  return (
+    <div className="flex flex-wrap items-start gap-4">
+      <div
+        className={cn(
+          'relative flex h-[72px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 bg-white shadow-inner',
+          value ? 'border-brand-200' : 'border-dashed border-surface-border',
+        )}
+      >
+        {value ? (
+          <img src={value} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <Camera className="h-7 w-7 text-ink-faint/90" strokeWidth={1.5} />
+        )}
+      </div>
+      <div className="min-w-0 flex-1 space-y-2">
+        <label
+          className={cn(
+            'inline-flex cursor-pointer items-center gap-2 rounded-xl border border-brand-200 bg-white px-4 py-2.5 text-xs font-semibold text-brand-800 shadow-sm transition hover:border-brand-300 hover:bg-white',
+            disabled && 'pointer-events-none opacity-60',
+          )}
+        >
+          <Upload className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+          Choose from device
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            disabled={disabled}
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              const input = e.currentTarget
+              if (!file) return
+              const reader = new FileReader()
+              reader.onload = () => {
+                const result = typeof reader.result === 'string' ? reader.result : ''
+                onChange(result)
+                input.value = ''
+              }
+              reader.readAsDataURL(file)
+            }}
+          />
+        </label>
+        <p className="text-[11px] leading-relaxed text-ink-muted">
+          JPEG or PNG from your computer. Applies after you save (invite: when they accept).
+        </p>
+        {value ? (
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => onChange('')}
+            className="text-[11px] font-medium text-danger hover:underline disabled:opacity-50"
+          >
+            Remove photo
+          </button>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+function workspaceChipClass(active, opts = {}) {
+  const { disabled } = opts
+  return cn(
+    'rounded-xl border px-3.5 py-2 text-left text-xs font-medium transition-all duration-150',
+    active
+      ? 'border-brand-400 bg-white text-brand-900 shadow-sm ring-1 ring-brand-500/20'
+      : 'border-surface-border bg-white text-ink-muted hover:border-brand-200',
+    disabled && 'cursor-not-allowed opacity-50',
+  )
+}
+
+function hasInviteProfilePrefill(prefill) {
+  return Boolean(prefill && typeof prefill === 'object' && Object.keys(prefill).length > 0)
+}
+
 export function TeamPage() {
+  const navigate = useNavigate()
   const { data: rolesData } = useTeamRolesQuery()
   const { data: menusData } = useTeamMenusQuery()
   const { data: usersData, isLoading: usersLoading, refetch: refetchUsers } = useTeamUsersQuery()
@@ -54,6 +231,7 @@ export function TeamPage() {
   const [deleteRole, { isLoading: deletingRole }] = useDeleteRoleMutation()
   const [cancelInvitation, { isLoading: cancellingInvite }] = useCancelInvitationMutation()
   const [patchUserRole, { isLoading: patchingRole }] = usePatchUserRoleMutation()
+  const [patchUserProfile, { isLoading: patchingProfile }] = usePatchUserProfileMutation()
   const [replaceUserWorkspaces, { isLoading: patchingWorkspaces }] = useReplaceUserWorkspacesMutation()
   const [deactivateUser, { isLoading: deactivatingUser }] = useDeactivateUserMutation()
 
@@ -78,7 +256,7 @@ export function TeamPage() {
       return 'members'
     }
   })
-  const [inviteForm, setInviteForm] = useState({ email: '', companyRoleId: '', workspaceIds: [] })
+  const [inviteForm, setInviteForm] = useState(() => ({ ...EMPTY_INVITE_FORM }))
   const [roleForm, setRoleForm] = useState({ name: '', description: '', menuPermissions: [] })
   const [editingRoleId, setEditingRoleId] = useState(null)
   const [memberSearch, setMemberSearch] = useState('')
@@ -89,11 +267,23 @@ export function TeamPage() {
   const [accessUserId, setAccessUserId] = useState(null)
   const [accessRoleId, setAccessRoleId] = useState('')
   const [accessWorkspaceIds, setAccessWorkspaceIds] = useState([])
+  const [accessProfileDraft, setAccessProfileDraft] = useState({
+    name: '',
+    department: '',
+    jobTitle: '',
+    businessPhone: '',
+    whatsappNumber: '',
+    profilePhotoUrl: '',
+    street: '',
+    city: '',
+    country: '',
+    postalCode: '',
+  })
   const [deactivateDialog, setDeactivateDialog] = useState({ open: false, user: null })
   const [cancelInviteDialog, setCancelInviteDialog] = useState({ open: false, invite: null })
 
   const inviteBusy = creatingInvite
-  const userBusy = patchingRole || patchingWorkspaces || deactivatingUser
+  const userBusy = patchingRole || patchingProfile || patchingWorkspaces || deactivatingUser
 
   useEffect(() => {
     try {
@@ -212,7 +402,7 @@ export function TeamPage() {
                           className={cn(
                             'rounded-full border px-2.5 py-1 text-[11px]',
                             p[key]
-                              ? 'border-brand-300 bg-brand-50 text-brand-800'
+                              ? 'border-brand-300 bg-white text-brand-800 shadow-sm'
                               : 'border-surface-border bg-white text-ink-muted',
                           )}
                         >
@@ -232,7 +422,7 @@ export function TeamPage() {
 
   function closeInviteDrawer() {
     setInviteDrawerOpen(false)
-    setInviteForm({ email: '', companyRoleId: '', workspaceIds: [] })
+    setInviteForm({ ...EMPTY_INVITE_FORM })
   }
 
   async function submitInvite(e) {
@@ -241,10 +431,20 @@ export function TeamPage() {
     if (!inviteForm.companyRoleId) return toast.error('Choose a role')
     if (!inviteForm.workspaceIds.length) return toast.error('Assign at least one workspace')
     try {
+      const prof = normalizeProfileDraft(inviteForm)
       await createInvitation({
         email: inviteForm.email.trim(),
         companyRoleId: inviteForm.companyRoleId,
         workspaceIds: inviteForm.workspaceIds,
+        department: prof.department ?? undefined,
+        jobTitle: prof.jobTitle ?? undefined,
+        businessPhone: prof.businessPhone ?? undefined,
+        whatsappNumber: prof.whatsappNumber ?? undefined,
+        profilePhotoUrl: prof.profilePhotoUrl ?? undefined,
+        street: prof.street ?? undefined,
+        city: prof.city ?? undefined,
+        country: prof.country ?? undefined,
+        postalCode: prof.postalCode ?? undefined,
       }).unwrap()
       toast.success('Invitation sent')
       closeInviteDrawer()
@@ -259,6 +459,18 @@ export function TeamPage() {
     setAccessUserId(user.id)
     setAccessRoleId(user.companyRole?.id ?? '')
     setAccessWorkspaceIds(currentWs)
+    setAccessProfileDraft({
+      name: user.name || '',
+      department: user.department || '',
+      jobTitle: user.jobTitle || '',
+      businessPhone: user.businessPhone || '',
+      whatsappNumber: user.whatsappNumber || '',
+      profilePhotoUrl: user.profilePhotoUrl || '',
+      street: user.street || '',
+      city: user.city || '',
+      country: user.country || '',
+      postalCode: user.postalCode || '',
+    })
     setAccessDrawerOpen(true)
   }
 
@@ -267,6 +479,18 @@ export function TeamPage() {
     setAccessUserId(null)
     setAccessRoleId('')
     setAccessWorkspaceIds([])
+    setAccessProfileDraft({
+      name: '',
+      department: '',
+      jobTitle: '',
+      businessPhone: '',
+      whatsappNumber: '',
+      profilePhotoUrl: '',
+      street: '',
+      city: '',
+      country: '',
+      postalCode: '',
+    })
   }
 
   function toggleDraftWorkspace(workspaceId) {
@@ -284,8 +508,24 @@ export function TeamPage() {
       return
     }
     try {
+      const currentProfile = normalizeProfileDraft(accessUser || {})
+      const nextProfile = normalizeProfileDraft(accessProfileDraft)
       if (!accessUser.isCompanyAdmin && accessRoleId && accessRoleId !== (accessUser.companyRole?.id ?? '')) {
         await patchUserRole({ id: accessUser.id, companyRoleId: accessRoleId }).unwrap()
+      }
+      if (
+        nextProfile.name !== currentProfile.name ||
+        nextProfile.department !== currentProfile.department ||
+        nextProfile.jobTitle !== currentProfile.jobTitle ||
+        nextProfile.businessPhone !== currentProfile.businessPhone ||
+        nextProfile.whatsappNumber !== currentProfile.whatsappNumber ||
+        nextProfile.profilePhotoUrl !== currentProfile.profilePhotoUrl ||
+        nextProfile.street !== currentProfile.street ||
+        nextProfile.city !== currentProfile.city ||
+        nextProfile.country !== currentProfile.country ||
+        nextProfile.postalCode !== currentProfile.postalCode
+      ) {
+        await patchUserProfile({ id: accessUser.id, ...nextProfile }).unwrap()
       }
       await replaceUserWorkspaces({ id: accessUser.id, workspaceIds: accessWorkspaceIds }).unwrap()
       toast.success('Member access updated')
@@ -329,7 +569,7 @@ export function TeamPage() {
   return (
     <PageShell fullWidth>
       <div className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-surface-border bg-white/90 px-3 py-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-surface-border bg-white px-3 py-2">
           <div className="flex flex-wrap gap-1.5">
             {[
               { id: 'members', label: 'Members' },
@@ -341,10 +581,10 @@ export function TeamPage() {
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
-                  'h-8 rounded-lg px-3 text-xs font-medium transition',
+                  'h-8 rounded-lg border px-3 text-xs font-medium transition',
                   activeTab === tab.id
-                    ? 'bg-brand-600 text-white'
-                    : 'bg-surface-subtle text-ink-muted hover:bg-surface-muted',
+                    ? 'border-brand-600 bg-brand-600 text-white'
+                    : 'border-surface-border bg-white text-ink-muted hover:border-surface-border hover:bg-white',
                 )}
               >
                 {tab.label}
@@ -357,7 +597,7 @@ export function TeamPage() {
               onClick={() => setRoleDrawerOpen(true)}
               aria-label="Create role"
               title="Create role"
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-brand-200 bg-brand-50 px-3 text-xs font-medium text-brand-700 hover:bg-brand-100"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-brand-200 bg-white px-3 text-xs font-medium text-brand-700 shadow-sm hover:bg-white"
             >
               <ShieldCheck className="h-3.5 w-3.5" />
               Create role
@@ -367,7 +607,7 @@ export function TeamPage() {
               onClick={() => setInviteDrawerOpen(true)}
               aria-label="Add user"
               title="Add user"
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-brand-200 bg-brand-50 px-3 text-xs font-medium text-brand-700 hover:bg-brand-100"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-brand-200 bg-white px-3 text-xs font-medium text-brand-700 shadow-sm hover:bg-white"
             >
               <UserPlus className="h-3.5 w-3.5" />
               Add user
@@ -376,7 +616,7 @@ export function TeamPage() {
         </div>
 
         {activeTab === 'members' ? (
-          <section className="rounded-xl border border-surface-border bg-white/90 px-4 py-3">
+          <section className="rounded-xl border border-surface-border bg-white px-4 py-3">
             <div className="flex flex-wrap items-center gap-2">
               <input
                 type="text"
@@ -415,6 +655,9 @@ export function TeamPage() {
               <thead className="sticky top-0 z-10 bg-white text-ink-muted">
                 <tr>
                   <th className="px-2.5 py-2 text-left text-[11px]">Name</th>
+                  <th className="px-2.5 py-2 text-left text-[11px]">Job title</th>
+                  <th className="px-2.5 py-2 text-left text-[11px]">Department</th>
+                  <th className="px-2.5 py-2 text-left text-[11px]">Last login</th>
                   <th className="px-2.5 py-2 text-left text-[11px]">Role</th>
                   <th className="px-2.5 py-2 text-left text-[11px]">Workspaces</th>
                   <th className="px-2.5 py-2 text-left text-[11px]">Status</th>
@@ -423,36 +666,65 @@ export function TeamPage() {
               </thead>
               <tbody>
                 {usersLoading ? (
-                  <tr><td colSpan={5} className="px-3 py-8 text-center text-ink-muted">Loading members…</td></tr>
+                  <tr><td colSpan={8} className="px-3 py-8 text-center text-ink-muted">Loading members…</td></tr>
                 ) : filteredUsers.length === 0 ? (
-                  <tr><td colSpan={5} className="px-3 py-8 text-center text-ink-muted">No members found.</td></tr>
+                  <tr><td colSpan={8} className="px-3 py-8 text-center text-ink-muted">No members found.</td></tr>
                 ) : (
                   filteredUsers.map((u) => {
                     const currentWs = (u.workspaces || []).map((w) => w.id)
                     return (
-                      <tr key={u.id} className="group border-t border-surface-border hover:bg-brand-50">
+                      <tr
+                        key={u.id}
+                        className="group cursor-pointer border-t border-surface-border transition-colors hover:bg-brand-50/40"
+                        onClick={() => navigate(`/team/${u.id}`)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            navigate(`/team/${u.id}`)
+                          }
+                        }}
+                      >
                         <td className="px-2.5 py-2">
-                          <p className="font-medium text-ink">{u.name || 'Unnamed user'}</p>
-                          <p className="text-xs text-ink-faint">{u.email}</p>
+                          <div className="flex items-center gap-2">
+                            <div className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-surface-border bg-brand-50 text-[11px] font-semibold text-brand-700">
+                              {u.profilePhotoUrl ? (
+                                <img src={u.profilePhotoUrl} alt={u.name || 'User'} className="h-full w-full object-cover" />
+                              ) : (
+                                <span>{(u.name || u.email || '?').trim().charAt(0).toUpperCase()}</span>
+                              )}
+                            </div>
+                            <div>
+                              <p className="font-medium text-ink group-hover:text-brand-700">{u.name || 'Unnamed user'}</p>
+                              <p className="text-xs text-ink-faint">{u.email}</p>
+                            </div>
+                          </div>
                         </td>
+                        <td className="px-2.5 py-2 text-ink-muted">{u.jobTitle || '—'}</td>
+                        <td className="px-2.5 py-2 text-ink-muted">{u.department || '—'}</td>
+                        <td className="px-2.5 py-2 text-ink-muted">{u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : 'Never'}</td>
                         <td className="px-2.5 py-2 text-ink-muted">{u.companyRole?.name || 'No role'}</td>
                         <td className="px-2.5 py-2">
                           <WorkspacePills selectedIds={currentWs} all={workspaces} />
                         </td>
                         <td className="px-2.5 py-2">
-                          <span className={cn('rounded-full px-2 py-0.5 text-xs', u.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-surface-muted text-ink-muted')}>
+                          <span className={cn('rounded-full border px-2 py-0.5 text-xs', u.isActive ? 'border-emerald-200 bg-white text-emerald-700' : 'border-surface-border bg-white text-ink-muted')}>
                             {u.isActive ? 'Active' : 'Inactive'}
                           </span>
                         </td>
-                        <td className="px-2.5 py-2 text-right">
+                        <td className="px-2.5 py-2 text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="inline-flex gap-1 opacity-100 transition">
                             <button
                               type="button"
                               disabled={userBusy || !u.isActive}
-                              onClick={() => openAccessDrawer(u)}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                openAccessDrawer(u)
+                              }}
                               aria-label="Edit workspace access"
                               title={!u.isActive ? 'Inactive users cannot be edited' : 'Edit workspace access'}
-                              className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-brand-200 bg-brand-50 text-brand-700 hover:bg-brand-100 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-brand-200 bg-white text-brand-700 shadow-sm hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               <PencilLine className="h-3.5 w-3.5" />
                             </button>
@@ -460,7 +732,10 @@ export function TeamPage() {
                               <button
                                 type="button"
                                 disabled={userBusy}
-                                onClick={() => doDeactivate(u)}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  doDeactivate(u)
+                                }}
                                 aria-label="Deactivate user"
                                 title="Deactivate user"
                                 className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-danger hover:bg-red-100"
@@ -490,11 +765,19 @@ export function TeamPage() {
               ) : (
                 <ul className="space-y-2">
                   {invitations.map((inv) => (
-                    <li key={inv.id} className="rounded-xl border border-surface-border p-3">
-                      <p className="text-sm font-medium text-ink">{inv.email}</p>
-                      <p className="mt-0.5 text-xs text-ink-muted">
+                    <li
+                      key={inv.id}
+                      className="rounded-2xl border border-surface-border bg-white p-4 shadow-sm transition hover:border-surface-border"
+                    >
+                      <p className="text-sm font-semibold text-ink">{inv.email}</p>
+                      <p className="mt-1 text-xs text-ink-muted">
                         {inv.companyRole?.name || 'Role pending'} · Expires {new Date(inv.expiresAt).toLocaleString()}
                       </p>
+                      {hasInviteProfilePrefill(inv.profilePrefill) ? (
+                        <p className="mt-2 rounded-lg border border-surface-border bg-white px-2.5 py-1.5 text-[11px] font-medium leading-snug text-ink-muted">
+                          Profile details included — they’ll be applied when they accept the invite and finish signup.
+                        </p>
+                      ) : null}
                       <button
                         type="button"
                         disabled={cancellingInvite}
@@ -514,7 +797,7 @@ export function TeamPage() {
         ) : null}
 
         {activeTab === 'roles' ? (
-        <section className="overflow-hidden rounded-xl border border-surface-border bg-white/90">
+        <section className="overflow-hidden rounded-xl border border-surface-border bg-white">
             <div className="overflow-x-auto">
               {roles.length === 0 ? (
                 <p className="px-4 py-6 text-sm text-ink-muted">No custom roles yet.</p>
@@ -541,12 +824,12 @@ export function TeamPage() {
                   </thead>
                   <tbody>
                     {roles.map((r) => (
-                      <tr key={r.id} className="group border-t border-surface-border hover:bg-brand-50">
+                      <tr key={r.id} className="group border-t border-surface-border hover:bg-white">
                         <td className="px-2.5 py-2">
                           <div className="flex items-center gap-2">
                             <p className="font-medium text-ink">{r.name}</p>
                             {r.isDefault ? (
-                              <span className="rounded-full bg-surface-subtle px-2 py-0.5 text-[11px] text-ink-muted">
+                              <span className="rounded-full border border-surface-border bg-white px-2 py-0.5 text-[11px] text-ink-muted">
                                 Default
                               </span>
                             ) : null}
@@ -554,12 +837,12 @@ export function TeamPage() {
                         </td>
                         <td className="px-2.5 py-2 text-ink-muted">{r.description || 'No description'}</td>
                         <td className="px-2.5 py-2">
-                          <span className="rounded-full bg-surface-subtle px-2 py-0.5 text-[11px] text-ink-muted">
+                          <span className="rounded-full border border-surface-border bg-white px-2 py-0.5 text-[11px] text-ink-muted">
                             {r.menuCount || 0}
                           </span>
                         </td>
                         <td className="px-2.5 py-2">
-                          <span className="rounded-full bg-surface-subtle px-2 py-0.5 text-[11px] text-ink-muted">
+                          <span className="rounded-full border border-surface-border bg-white px-2 py-0.5 text-[11px] text-ink-muted">
                             {r.assignedUsers || 0}
                           </span>
                         </td>
@@ -569,7 +852,7 @@ export function TeamPage() {
                               type="button"
                               aria-label="Edit role"
                               title={r.isDefault ? 'Default role cannot be edited' : 'Edit role'}
-                              className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-brand-200 bg-brand-50 text-brand-700 hover:bg-brand-100 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-brand-200 bg-white text-brand-700 shadow-sm hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
                               disabled={r.isDefault}
                               onClick={() => {
                                 setEditingRoleId(r.id)
@@ -616,161 +899,385 @@ export function TeamPage() {
       <RightDrawer
         open={accessDrawerOpen}
         onClose={closeAccessDrawer}
-        title="Edit member access"
+        className="bg-white"
+        title="Edit member"
         description={
           accessUser
-            ? `Update role and workspace access for ${accessUser.name || accessUser.email}.`
-            : 'Update role and workspace access for this member.'
+            ? 'Update role, workspaces, and profile — same fields as when inviting someone new.'
+            : 'Update role, workspaces, and profile.'
         }
         footer={
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
               onClick={closeAccessDrawer}
-              className="h-10 rounded-xl border border-surface-border px-4 text-sm"
+              className="h-10 rounded-xl border border-surface-border bg-white px-4 text-sm font-medium text-ink-muted shadow-sm transition hover:bg-white"
             >
               Cancel
             </button>
             <button
               type="button"
-              disabled={patchingWorkspaces || patchingRole}
+              disabled={patchingWorkspaces || patchingRole || patchingProfile}
               onClick={saveAccessChanges}
-              className="h-10 rounded-xl bg-brand-600 px-4 text-sm font-medium text-white"
+              className="h-10 rounded-xl bg-brand-600 px-5 text-sm font-semibold text-white shadow-lg shadow-brand-600/25 transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {patchingWorkspaces || patchingRole ? 'Saving…' : 'Save access'}
+              {patchingWorkspaces || patchingRole || patchingProfile ? 'Saving…' : 'Save changes'}
             </button>
           </div>
         }
       >
-        <div className="space-y-3">
+        <div className="space-y-3.5">
           <div>
-            <label className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Name</label>
-            <input
+            <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Name</label>
+            <IconInput
+              wrapperClassName="mt-1.5"
+              icon={User}
               type="text"
-              value={accessUser?.name || ''}
-              readOnly
-              className="mt-2 h-10 w-full rounded-xl border border-surface-border bg-surface-muted px-3 text-sm text-ink-muted"
+              value={accessProfileDraft.name}
+              onChange={(e) => setAccessProfileDraft((s) => ({ ...s, name: e.target.value }))}
+              placeholder="Full name"
+              disabled={patchingProfile}
             />
           </div>
           <div>
-            <label className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Role</label>
-            <select
-              value={accessRoleId}
-              onChange={(e) => setAccessRoleId(e.target.value)}
-              disabled={patchingWorkspaces || patchingRole || accessUser?.isCompanyAdmin}
-              className="mt-2 h-10 w-full rounded-xl border border-surface-border bg-white px-3 text-sm disabled:cursor-not-allowed disabled:bg-surface-muted"
-            >
-              <option value="">Select role</option>
-              {roles.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
-            {accessUser?.isCompanyAdmin ? (
-              <p className="mt-1 text-[11px] text-ink-faint">Company admin role cannot be changed.</p>
-            ) : null}
-          </div>
-          <p className="text-xs text-ink-muted">Select one or more workspaces.</p>
-          <div className="flex flex-wrap gap-2">
-            {workspaces.map((w) => {
-              const active = accessWorkspaceIds.includes(w.id)
-              return (
-                <button
-                  key={w.id}
-                  type="button"
-                  disabled={patchingWorkspaces}
-                  onClick={() => toggleDraftWorkspace(w.id)}
-                  className={cn(
-                    'rounded-full border px-3 py-1 text-xs',
-                    active
-                      ? 'border-brand-300 bg-brand-50 text-brand-800'
-                      : 'border-surface-border bg-white text-ink-muted',
-                  )}
-                >
-                  {w.name}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      </RightDrawer>
-
-      <RightDrawer
-        open={inviteDrawerOpen}
-        onClose={closeInviteDrawer}
-        title="Invite team member"
-        description="Add email, role, and workspace access. The user receives a secure email invitation."
-        footer={
-          <div className="flex justify-end gap-2">
-            <button type="button" onClick={closeInviteDrawer} className="h-10 rounded-xl border border-surface-border px-4 text-sm">
-              Cancel
-            </button>
-            <button
-              type="submit"
-              form="invite-member-form"
-              disabled={inviteBusy}
-              className="h-10 rounded-xl bg-brand-600 px-4 text-sm font-medium text-white"
-            >
-              {inviteBusy ? 'Sending…' : 'Send invite'}
-            </button>
-          </div>
-        }
-      >
-        <form id="invite-member-form" className="space-y-4" onSubmit={submitInvite}>
-          <div>
-            <label className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Email</label>
-            <input
+            <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Email</label>
+            <IconInput
+              wrapperClassName="mt-1.5"
+              icon={Mail}
               type="email"
-              value={inviteForm.email}
-              onChange={(e) => setInviteForm((f) => ({ ...f, email: e.target.value }))}
-              placeholder="name@company.com"
-              className="mt-2 w-full rounded-xl border border-surface-border bg-surface-muted/40 px-3 py-2 text-sm"
+              value={accessUser?.email || ''}
+              readOnly
+              disabled
+              className="bg-white text-ink-muted"
+            />
+          </div>
+
+          <div>
+            <PhoneField
+              label="Business phone"
+              mode="e164"
+              defaultCountry={isoCountryForPhone(accessProfileDraft.country)}
+              value={accessProfileDraft.businessPhone}
+              onChange={(v) => setAccessProfileDraft((s) => ({ ...s, businessPhone: v || '' }))}
+              disabled={patchingProfile}
             />
           </div>
           <div>
-            <label className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Role</label>
-            <select
-              value={inviteForm.companyRoleId}
-              onChange={(e) => setInviteForm((f) => ({ ...f, companyRoleId: e.target.value }))}
-              className="mt-2 h-10 w-full rounded-xl border border-surface-border bg-white px-3 text-sm"
-            >
-              <option value="">Select role</option>
-              {roles.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
+            <PhoneField
+              label="WhatsApp"
+              mode="e164"
+              defaultCountry={isoCountryForPhone(accessProfileDraft.country)}
+              value={accessProfileDraft.whatsappNumber}
+              onChange={(v) => setAccessProfileDraft((s) => ({ ...s, whatsappNumber: v || '' }))}
+              disabled={patchingProfile}
+            />
           </div>
           <div>
-            <label className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Workspace access</label>
-            <div className="mt-2 flex flex-wrap gap-2">
+            <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Job title</label>
+            <IconInput
+              wrapperClassName="mt-1.5"
+              icon={Briefcase}
+              type="text"
+              value={accessProfileDraft.jobTitle}
+              onChange={(e) => setAccessProfileDraft((s) => ({ ...s, jobTitle: e.target.value }))}
+              placeholder="e.g. Account Executive"
+              disabled={patchingProfile}
+            />
+          </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">City</label>
+              <IconInput
+                wrapperClassName="mt-1.5"
+                icon={Building2}
+                type="text"
+                value={accessProfileDraft.city}
+                onChange={(e) => setAccessProfileDraft((s) => ({ ...s, city: e.target.value }))}
+                placeholder="City"
+                disabled={patchingProfile}
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Country</label>
+              <IconInput
+                wrapperClassName="mt-1.5"
+                icon={Flag}
+                type="text"
+                value={accessProfileDraft.country}
+                onChange={(e) => setAccessProfileDraft((s) => ({ ...s, country: e.target.value }))}
+                placeholder="Country"
+                disabled={patchingProfile}
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Pin code</label>
+              <IconInput
+                wrapperClassName="mt-1.5"
+                icon={Hash}
+                type="text"
+                inputMode="numeric"
+                value={accessProfileDraft.postalCode}
+                onChange={(e) => setAccessProfileDraft((s) => ({ ...s, postalCode: e.target.value }))}
+                placeholder="Postal / PIN code"
+                disabled={patchingProfile}
+              />
+            </div>
+          </div>
+          <div>
+            <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Address</label>
+            <IconTextarea
+              wrapperClassName="mt-1.5"
+              icon={Home}
+              rows={3}
+              value={accessProfileDraft.street}
+              onChange={(e) => setAccessProfileDraft((s) => ({ ...s, street: e.target.value }))}
+              placeholder="Street, building, landmark…"
+              disabled={patchingProfile}
+            />
+          </div>
+          <div>
+            <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Role</label>
+            <div className="relative mt-1.5">
+              <ShieldCheck className="pointer-events-none absolute left-3 top-1/2 z-[1] h-3.5 w-3.5 -translate-y-1/2 text-ink-faint" strokeWidth={1.75} />
+              <select
+                value={accessRoleId}
+                onChange={(e) => setAccessRoleId(e.target.value)}
+                disabled={patchingWorkspaces || patchingRole || patchingProfile || accessUser?.isCompanyAdmin}
+                className="h-10 w-full cursor-pointer appearance-none rounded-xl border border-surface-border bg-white pl-9 pr-3 text-sm outline-none transition-shadow focus:border-brand-400 focus:ring-2 focus:ring-brand-500/15 disabled:cursor-not-allowed disabled:bg-white disabled:text-ink-muted/70"
+              >
+                <option value="">Select role</option>
+                {roles.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Profile photo</label>
+            <div className="mt-1.5">
+              <ProfilePhotoPicker
+                value={accessProfileDraft.profilePhotoUrl}
+                disabled={patchingProfile}
+                onChange={(url) => setAccessProfileDraft((s) => ({ ...s, profilePhotoUrl: url }))}
+              />
+            </div>
+          </div>
+          <DrawerSection>
+            <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Workspaces</label>
+            <div className="flex flex-wrap gap-2">
               {workspaces.map((w) => {
-                const active = inviteForm.workspaceIds.includes(w.id)
+                const active = accessWorkspaceIds.includes(w.id)
                 return (
                   <button
                     key={w.id}
                     type="button"
-                    onClick={() =>
-                      setInviteForm((f) => ({
-                        ...f,
-                        workspaceIds: active
-                          ? f.workspaceIds.filter((id) => id !== w.id)
-                          : [...f.workspaceIds, w.id],
-                      }))
-                    }
-                    className={cn(
-                      'rounded-full border px-3 py-1 text-xs',
-                      active ? 'border-brand-300 bg-brand-50 text-brand-800' : 'border-surface-border bg-white text-ink-muted',
-                    )}
+                    disabled={patchingWorkspaces}
+                    onClick={() => toggleDraftWorkspace(w.id)}
+                    className={workspaceChipClass(active, { disabled: patchingWorkspaces })}
                   >
                     {w.name}
                   </button>
                 )
               })}
             </div>
+          </DrawerSection>
+        </div>
+      </RightDrawer>
+
+      <RightDrawer
+        open={inviteDrawerOpen}
+        onClose={closeInviteDrawer}
+        className="bg-white"
+        title="Add team member"
+        description="Invite by email. Profile details you fill are applied automatically when they accept and finish signup."
+        footer={
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={closeInviteDrawer}
+              className="h-10 rounded-xl border border-surface-border bg-white px-4 text-sm font-medium text-ink-muted shadow-sm transition hover:bg-white"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="invite-member-form"
+              disabled={inviteBusy}
+              className="h-10 rounded-xl bg-brand-600 px-5 text-sm font-semibold text-white shadow-lg shadow-brand-600/25 transition hover:bg-brand-700 disabled:opacity-60"
+            >
+              {inviteBusy ? 'Sending…' : 'Send invitation'}
+            </button>
           </div>
+        }
+      >
+        <form id="invite-member-form" className="space-y-3.5" onSubmit={submitInvite}>
+          <DrawerSection>
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Name</label>
+              <IconInput
+                wrapperClassName="mt-1.5"
+                icon={User}
+                type="text"
+                value={inviteForm.name}
+                onChange={(e) => setInviteForm((f) => ({ ...f, name: e.target.value }))}
+                placeholder="Full name"
+                disabled={inviteBusy}
+                className="bg-white"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Email</label>
+              <IconInput
+                wrapperClassName="mt-1.5"
+                icon={Mail}
+                type="email"
+                value={inviteForm.email}
+                onChange={(e) => setInviteForm((f) => ({ ...f, email: e.target.value }))}
+                placeholder="name@company.com"
+                disabled={inviteBusy}
+                className="bg-white"
+              />
+            </div>
+            <div>
+              <PhoneField
+                label="Business phone"
+                mode="e164"
+                defaultCountry={isoCountryForPhone(inviteForm.country)}
+                value={inviteForm.businessPhone}
+                onChange={(v) => setInviteForm((f) => ({ ...f, businessPhone: v || '' }))}
+                disabled={inviteBusy}
+              />
+            </div>
+            <div>
+              <PhoneField
+                label="WhatsApp"
+                mode="e164"
+                defaultCountry={isoCountryForPhone(inviteForm.country)}
+                value={inviteForm.whatsappNumber}
+                onChange={(v) => setInviteForm((f) => ({ ...f, whatsappNumber: v || '' }))}
+                disabled={inviteBusy}
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Job title</label>
+              <IconInput
+                wrapperClassName="mt-1.5"
+                icon={Briefcase}
+                type="text"
+                value={inviteForm.jobTitle}
+                onChange={(e) => setInviteForm((f) => ({ ...f, jobTitle: e.target.value }))}
+                placeholder="e.g. Account Executive"
+                disabled={inviteBusy}
+              />
+            </div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <div>
+                <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">City</label>
+                <IconInput
+                  wrapperClassName="mt-1.5"
+                  icon={Building2}
+                  type="text"
+                  value={inviteForm.city}
+                  onChange={(e) => setInviteForm((f) => ({ ...f, city: e.target.value }))}
+                  placeholder="City"
+                  disabled={inviteBusy}
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Country</label>
+                <IconInput
+                  wrapperClassName="mt-1.5"
+                  icon={Flag}
+                  type="text"
+                  value={inviteForm.country}
+                  onChange={(e) => setInviteForm((f) => ({ ...f, country: e.target.value }))}
+                  placeholder="Country"
+                  disabled={inviteBusy}
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Pin code</label>
+                <IconInput
+                  wrapperClassName="mt-1.5"
+                  icon={Hash}
+                  type="text"
+                  inputMode="numeric"
+                  value={inviteForm.postalCode}
+                  onChange={(e) => setInviteForm((f) => ({ ...f, postalCode: e.target.value }))}
+                  placeholder="Postal / PIN code"
+                  disabled={inviteBusy}
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Address</label>
+              <IconTextarea
+                wrapperClassName="mt-1.5"
+                icon={Home}
+                rows={3}
+                value={inviteForm.street}
+                onChange={(e) => setInviteForm((f) => ({ ...f, street: e.target.value }))}
+                placeholder="Street, building, landmark…"
+                disabled={inviteBusy}
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Role</label>
+              <div className="relative mt-1.5">
+                <ShieldCheck className="pointer-events-none absolute left-3 top-1/2 z-[1] h-3.5 w-3.5 -translate-y-1/2 text-ink-faint" strokeWidth={1.75} />
+                <select
+                  value={inviteForm.companyRoleId}
+                  onChange={(e) => setInviteForm((f) => ({ ...f, companyRoleId: e.target.value }))}
+                  disabled={inviteBusy}
+                  className="h-10 w-full cursor-pointer appearance-none rounded-xl border border-surface-border bg-white pl-9 pr-3 text-sm outline-none transition-shadow focus:border-brand-400 focus:ring-2 focus:ring-brand-500/15 disabled:opacity-70"
+                >
+                  <option value="">Select role</option>
+                  {roles.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Profile photo</label>
+              <div className="mt-1.5">
+                <ProfilePhotoPicker
+                  value={inviteForm.profilePhotoUrl}
+                  disabled={inviteBusy}
+                  onChange={(url) => setInviteForm((f) => ({ ...f, profilePhotoUrl: url }))}
+                />
+              </div>
+            </div>
+          </DrawerSection>
+
+          <DrawerSection>
+            <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Workspaces</label>
+            <div className="flex flex-wrap gap-2">
+              {workspaces.map((w) => {
+                const active = inviteForm.workspaceIds.includes(w.id)
+                return (
+                  <button
+                    key={w.id}
+                    type="button"
+                    disabled={inviteBusy}
+                    onClick={() =>
+                      setInviteForm((f) => ({
+                        ...f,
+                        workspaceIds: active ? f.workspaceIds.filter((id) => id !== w.id) : [...f.workspaceIds, w.id],
+                      }))
+                    }
+                    className={workspaceChipClass(active, { disabled: inviteBusy })}
+                  >
+                    {w.name}
+                  </button>
+                )
+              })}
+            </div>
+          </DrawerSection>
         </form>
       </RightDrawer>
 
@@ -816,7 +1323,7 @@ export function TeamPage() {
               type="text"
               value={roleForm.name}
               onChange={(e) => setRoleForm((f) => ({ ...f, name: e.target.value }))}
-              className="mt-2 w-full rounded-xl border border-surface-border bg-surface-muted/40 px-3 py-2 text-sm"
+              className="mt-2 w-full rounded-xl border border-surface-border bg-white px-3 py-2 text-sm"
             />
           </div>
           <div>
@@ -825,7 +1332,7 @@ export function TeamPage() {
               rows={3}
               value={roleForm.description}
               onChange={(e) => setRoleForm((f) => ({ ...f, description: e.target.value }))}
-              className="mt-2 w-full rounded-xl border border-surface-border bg-surface-muted/40 px-3 py-2 text-sm"
+              className="mt-2 w-full rounded-xl border border-surface-border bg-white px-3 py-2 text-sm"
             />
           </div>
           <div className="flex min-h-0 flex-1 flex-col">
@@ -878,7 +1385,7 @@ export function TeamPage() {
               type="text"
               value={roleForm.name}
               onChange={(e) => setRoleForm((f) => ({ ...f, name: e.target.value }))}
-              className="mt-2 w-full rounded-xl border border-surface-border bg-surface-muted/40 px-3 py-2 text-sm"
+              className="mt-2 w-full rounded-xl border border-surface-border bg-white px-3 py-2 text-sm"
               placeholder="e.g. SDR"
             />
           </div>
@@ -888,7 +1395,7 @@ export function TeamPage() {
               rows={3}
               value={roleForm.description}
               onChange={(e) => setRoleForm((f) => ({ ...f, description: e.target.value }))}
-              className="mt-2 w-full rounded-xl border border-surface-border bg-surface-muted/40 px-3 py-2 text-sm"
+              className="mt-2 w-full rounded-xl border border-surface-border bg-white px-3 py-2 text-sm"
             />
           </div>
           <div className="flex min-h-0 flex-1 flex-col">
@@ -907,7 +1414,7 @@ export function TeamPage() {
             <button
               type="button"
               onClick={() => setDeactivateDialog({ open: false, user: null })}
-              className="h-10 rounded-xl border border-surface-border bg-white px-4 text-sm font-medium text-ink-muted hover:bg-surface-muted"
+              className="h-10 rounded-xl border border-surface-border bg-white px-4 text-sm font-medium text-ink-muted hover:bg-white"
             >
               Cancel
             </button>
@@ -937,7 +1444,7 @@ export function TeamPage() {
             <button
               type="button"
               onClick={() => setCancelInviteDialog({ open: false, invite: null })}
-              className="h-10 rounded-xl border border-surface-border bg-white px-4 text-sm font-medium text-ink-muted hover:bg-surface-muted"
+              className="h-10 rounded-xl border border-surface-border bg-white px-4 text-sm font-medium text-ink-muted hover:bg-white"
             >
               Keep invite
             </button>
@@ -966,7 +1473,7 @@ export function TeamPage() {
             <button
               type="button"
               onClick={() => setDeleteRoleDialog({ open: false, roleId: null, roleName: '', fallbackRoleId: '' })}
-              className="h-10 rounded-xl border border-surface-border bg-white px-4 text-sm font-medium text-ink-muted hover:bg-surface-muted"
+              className="h-10 rounded-xl border border-surface-border bg-white px-4 text-sm font-medium text-ink-muted hover:bg-white"
             >
               Cancel
             </button>

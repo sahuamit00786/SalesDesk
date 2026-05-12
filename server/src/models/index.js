@@ -6,6 +6,8 @@ import { Team } from './Team.js'
 import { TeamMember } from './TeamMember.js'
 import { Invitation } from './Invitation.js'
 import { Lead } from './Lead.js'
+import { Deal } from './Deal.js'
+import { DealActivity } from './DealActivity.js'
 import { Activity } from './Activity.js'
 import { Tag } from './Tag.js'
 import { LeadTag } from './LeadTag.js'
@@ -19,9 +21,6 @@ import { LeadTaskSubtask } from './LeadTaskSubtask.js'
 import { LeadTaskComment } from './LeadTaskComment.js'
 import { LeadFollowup } from './LeadFollowup.js'
 import { LeadSource } from './LeadSource.js'
-import { LeadStage } from './LeadStage.js'
-import { LeadStatusCategory } from './LeadStatusCategory.js'
-import { LeadStatus } from './LeadStatus.js'
 import { LeadAssignment } from './LeadAssignment.js'
 import { LeadEmail } from './LeadEmail.js'
 import { CompanyGoogleToken } from './CompanyGoogleToken.js'
@@ -42,8 +41,8 @@ import { WebForm } from './WebForm.js'
 import { WebFormField } from './WebFormField.js'
 import { WebFormSubmission } from './WebFormSubmission.js'
 import { WebFormEmailTemplate } from './WebFormEmailTemplate.js'
-import { Opportunity } from './Opportunity.js'
 import { OpportunityStage } from './OpportunityStage.js'
+import { DealStatus } from './DealStatus.js'
 import { Meeting } from './Meeting.js'
 import { CallLog } from './CallLog.js'
 import { ActionItem } from './ActionItem.js'
@@ -52,6 +51,25 @@ import { MeetingParticipant } from './MeetingParticipant.js'
 import { MeetingTranscript } from './MeetingTranscript.js'
 import { MeetingRecording } from './MeetingRecording.js'
 import { MeetingNotification } from './MeetingNotification.js'
+import { Reminder } from './Reminder.js'
+import { EmailTemplate } from './EmailTemplate.js'
+import { LeadEmailLog } from './LeadEmailLog.js'
+import { EmailSuppression } from './EmailSuppression.js'
+import { WorkspaceBillingProfile } from './WorkspaceBillingProfile.js'
+import { QuotationTemplate } from './QuotationTemplate.js'
+import { Quotation } from './Quotation.js'
+import { QuotationItem } from './QuotationItem.js'
+import { InvoiceTemplate } from './InvoiceTemplate.js'
+import { Invoice } from './Invoice.js'
+import { InvoiceItem } from './InvoiceItem.js'
+import { InvoicePayment } from './InvoicePayment.js'
+import { Campaign } from './Campaign.js'
+import { CampaignTeamMember } from './CampaignTeamMember.js'
+import { CampaignLead } from './CampaignLead.js'
+import { Workflow } from './Workflow.js'
+import { WorkflowVersion } from './WorkflowVersion.js'
+import { WorkflowRun } from './WorkflowRun.js'
+import { WorkflowRunStep } from './WorkflowRunStep.js'
 
 User.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
 Company.hasMany(User, { foreignKey: 'companyId', as: 'users' })
@@ -93,13 +111,9 @@ Lead.belongsTo(User, { foreignKey: 'ownerUserId', as: 'owner' })
 Lead.belongsTo(User, { foreignKey: 'assignedTo', as: 'assignee' })
 Lead.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
 Lead.belongsTo(LeadSource, { foreignKey: 'sourceId', as: 'leadSource' })
-Lead.belongsTo(LeadStage, { foreignKey: 'leadStageId', as: 'leadStage' })
-Lead.belongsTo(LeadStatus, { foreignKey: 'leadStatusId', as: 'leadStatusLookup' })
 Company.hasMany(Lead, { foreignKey: 'companyId', as: 'leads' })
 Workspace.hasMany(Lead, { foreignKey: 'workspaceId', as: 'leads' })
 LeadSource.hasMany(Lead, { foreignKey: 'sourceId', as: 'leads' })
-LeadStage.hasMany(Lead, { foreignKey: 'leadStageId', as: 'leads' })
-LeadStatus.hasMany(Lead, { foreignKey: 'leadStatusId', as: 'leads' })
 Lead.hasMany(Activity, { foreignKey: 'leadId', as: 'activities' })
 Activity.belongsTo(Lead, { foreignKey: 'leadId', as: 'lead' })
 Activity.belongsTo(User, { foreignKey: 'userId', as: 'user' })
@@ -152,9 +166,21 @@ LeadFollowup.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' })
 User.hasMany(LeadFollowup, { foreignKey: 'createdBy', as: 'createdLeadFollowups' })
 AssignmentRule.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
 Workspace.hasMany(AssignmentRule, { foreignKey: 'workspaceId', as: 'assignmentRules' })
-LeadStatus.belongsTo(LeadStatusCategory, { foreignKey: 'categoryId', as: 'category' })
-LeadStatusCategory.hasMany(LeadStatus, { foreignKey: 'categoryId', as: 'statuses' })
 Lead.belongsToMany(User, { through: LeadAssignment, foreignKey: 'leadId', otherKey: 'userId', as: 'assignedUsers' })
+
+Deal.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
+Workspace.hasMany(Deal, { foreignKey: 'workspaceId', as: 'deals' })
+Deal.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
+Company.hasMany(Deal, { foreignKey: 'companyId', as: 'deals' })
+Deal.belongsTo(Lead, { foreignKey: 'opportunityLeadId', as: 'opportunity' })
+Lead.hasMany(Deal, { foreignKey: 'opportunityLeadId', as: 'pipelineDeals' })
+Deal.belongsTo(User, { foreignKey: 'assignedTo', as: 'assignee' })
+Deal.belongsTo(User, { foreignKey: 'ownerUserId', as: 'owner' })
+User.hasMany(Deal, { foreignKey: 'assignedTo', as: 'assignedDeals' })
+User.hasMany(Deal, { foreignKey: 'ownerUserId', as: 'ownedDeals' })
+Deal.hasMany(DealActivity, { foreignKey: 'dealId', as: 'dealActivities' })
+DealActivity.belongsTo(Deal, { foreignKey: 'dealId', as: 'deal' })
+DealActivity.belongsTo(User, { foreignKey: 'userId', as: 'user' })
 User.belongsToMany(Lead, { through: LeadAssignment, foreignKey: 'userId', otherKey: 'leadId', as: 'assignedLeads' })
 Document.belongsTo(User, { foreignKey: 'uploadedBy', as: 'uploader' })
 User.hasMany(Document, { foreignKey: 'uploadedBy', as: 'uploadedDocuments' })
@@ -192,18 +218,6 @@ WebFormEmailTemplate.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'work
 Workspace.hasMany(WebFormEmailTemplate, { foreignKey: 'workspaceId', as: 'webFormEmailTemplates' })
 WebFormEmailTemplate.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' })
 User.hasMany(WebFormEmailTemplate, { foreignKey: 'createdBy', as: 'createdWebFormEmailTemplates' })
-Opportunity.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
-Company.hasMany(Opportunity, { foreignKey: 'companyId', as: 'opportunities' })
-Opportunity.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
-Workspace.hasMany(Opportunity, { foreignKey: 'workspaceId', as: 'opportunities' })
-Opportunity.belongsTo(Lead, { foreignKey: 'leadId', as: 'lead' })
-Lead.hasMany(Opportunity, { foreignKey: 'leadId', as: 'opportunities' })
-Opportunity.belongsTo(User, { foreignKey: 'ownerUserId', as: 'owner' })
-User.hasMany(Opportunity, { foreignKey: 'ownerUserId', as: 'ownedOpportunities' })
-Opportunity.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' })
-Opportunity.belongsTo(User, { foreignKey: 'updatedBy', as: 'updater' })
-
-
 Lead.hasMany(Meeting,{
 foreignKey:'lead_id'
 })
@@ -241,10 +255,114 @@ MeetingParticipant.belongsTo(Meeting, {
   foreignKey: "meetingId",
 });
 
+Reminder.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
+Company.hasMany(Reminder, { foreignKey: 'companyId', as: 'reminders' })
+
+Reminder.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
+Workspace.hasMany(Reminder, { foreignKey: 'workspaceId', as: 'reminders' })
+
+Reminder.belongsTo(User, { foreignKey: 'ownerUserId', as: 'owner' })
+User.hasMany(Reminder, { foreignKey: 'ownerUserId', as: 'ownedReminders' })
+
+Reminder.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' })
+User.hasMany(Reminder, { foreignKey: 'createdBy', as: 'createdReminders' })
+
+EmailTemplate.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
+Company.hasMany(EmailTemplate, { foreignKey: 'companyId', as: 'emailTemplates' })
+EmailTemplate.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
+Workspace.hasMany(EmailTemplate, { foreignKey: 'workspaceId', as: 'emailTemplates' })
+EmailTemplate.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' })
+User.hasMany(EmailTemplate, { foreignKey: 'createdBy', as: 'createdEmailTemplates' })
+
+LeadEmailLog.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
+Company.hasMany(LeadEmailLog, { foreignKey: 'companyId', as: 'emailLogs' })
+LeadEmailLog.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
+Workspace.hasMany(LeadEmailLog, { foreignKey: 'workspaceId', as: 'emailLogs' })
+LeadEmailLog.belongsTo(Lead, { foreignKey: 'leadId', as: 'lead' })
+Lead.hasMany(LeadEmailLog, { foreignKey: 'leadId', as: 'emailLogs' })
+LeadEmailLog.belongsTo(EmailTemplate, { foreignKey: 'templateId', as: 'template' })
+EmailTemplate.hasMany(LeadEmailLog, { foreignKey: 'templateId', as: 'sendLogs' })
+
+EmailSuppression.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
+Company.hasMany(EmailSuppression, { foreignKey: 'companyId', as: 'emailSuppressions' })
+EmailSuppression.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
+Workspace.hasMany(EmailSuppression, { foreignKey: 'workspaceId', as: 'emailSuppressions' })
+EmailSuppression.belongsTo(Lead, { foreignKey: 'leadId', as: 'lead' })
+Lead.hasMany(EmailSuppression, { foreignKey: 'leadId', as: 'emailSuppressions' })
+
 Lead.hasMany(CallLog,{
 foreignKey:'lead_id'
 })
 
+WorkspaceBillingProfile.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
+Workspace.hasOne(WorkspaceBillingProfile, { foreignKey: 'workspaceId', as: 'billingProfile' })
+WorkspaceBillingProfile.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
+
+QuotationTemplate.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
+Workspace.hasMany(QuotationTemplate, { foreignKey: 'workspaceId', as: 'quotationTemplates' })
+QuotationTemplate.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
+
+Quotation.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
+Workspace.hasMany(Quotation, { foreignKey: 'workspaceId', as: 'quotations' })
+Quotation.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
+Quotation.belongsTo(Lead, { foreignKey: 'leadId', as: 'lead' })
+Lead.hasMany(Quotation, { foreignKey: 'leadId', as: 'quotations' })
+Quotation.belongsTo(QuotationTemplate, { foreignKey: 'quotationTemplateId', as: 'template' })
+Quotation.belongsTo(User, { foreignKey: 'ownerUserId', as: 'owner' })
+Quotation.belongsTo(Invoice, { foreignKey: 'convertedInvoiceId', as: 'convertedInvoice' })
+QuotationItem.belongsTo(Quotation, { foreignKey: 'quotationId', as: 'quotation' })
+Quotation.hasMany(QuotationItem, { foreignKey: 'quotationId', as: 'items' })
+
+InvoiceTemplate.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
+Workspace.hasMany(InvoiceTemplate, { foreignKey: 'workspaceId', as: 'invoiceTemplates' })
+InvoiceTemplate.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
+
+Invoice.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
+Workspace.hasMany(Invoice, { foreignKey: 'workspaceId', as: 'invoices' })
+Invoice.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
+Invoice.belongsTo(Lead, { foreignKey: 'leadId', as: 'lead' })
+Lead.hasMany(Invoice, { foreignKey: 'leadId', as: 'invoices' })
+Invoice.belongsTo(InvoiceTemplate, { foreignKey: 'invoiceTemplateId', as: 'template' })
+Invoice.belongsTo(Quotation, { foreignKey: 'quotationId', as: 'quotation' })
+Quotation.hasMany(Invoice, { foreignKey: 'quotationId', as: 'invoicesFromQuote' })
+Invoice.belongsTo(User, { foreignKey: 'ownerUserId', as: 'owner' })
+InvoiceItem.belongsTo(Invoice, { foreignKey: 'invoiceId', as: 'invoice' })
+Invoice.hasMany(InvoiceItem, { foreignKey: 'invoiceId', as: 'items' })
+InvoicePayment.belongsTo(Invoice, { foreignKey: 'invoiceId', as: 'invoice' })
+Invoice.hasMany(InvoicePayment, { foreignKey: 'invoiceId', as: 'payments' })
+InvoicePayment.belongsTo(User, { foreignKey: 'recordedByUserId', as: 'recordedBy' })
+
+Campaign.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
+Campaign.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
+Campaign.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' })
+Workspace.hasMany(Campaign, { foreignKey: 'workspaceId', as: 'campaigns' })
+Company.hasMany(Campaign, { foreignKey: 'companyId', as: 'campaigns' })
+
+CampaignTeamMember.belongsTo(Campaign, { foreignKey: 'campaignId', as: 'campaign' })
+CampaignTeamMember.belongsTo(User, { foreignKey: 'userId', as: 'user' })
+Campaign.hasMany(CampaignTeamMember, { foreignKey: 'campaignId', as: 'teamMembers' })
+User.hasMany(CampaignTeamMember, { foreignKey: 'userId', as: 'campaignTeamMemberships' })
+
+CampaignLead.belongsTo(Campaign, { foreignKey: 'campaignId', as: 'campaign' })
+CampaignLead.belongsTo(Lead, { foreignKey: 'leadId', as: 'lead' })
+CampaignLead.belongsTo(User, { foreignKey: 'assignedUserId', as: 'campaignAssignee' })
+Campaign.hasMany(CampaignLead, { foreignKey: 'campaignId', as: 'campaignLeads' })
+Lead.hasMany(CampaignLead, { foreignKey: 'leadId', as: 'campaignLeads' })
+
+Workflow.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
+Workflow.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
+Workflow.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' })
+Workspace.hasMany(Workflow, { foreignKey: 'workspaceId', as: 'workflows' })
+Company.hasMany(Workflow, { foreignKey: 'companyId', as: 'workflows' })
+
+WorkflowVersion.belongsTo(Workflow, { foreignKey: 'workflowId', as: 'workflow' })
+Workflow.hasMany(WorkflowVersion, { foreignKey: 'workflowId', as: 'versions' })
+
+WorkflowRun.belongsTo(Workflow, { foreignKey: 'workflowId', as: 'workflow' })
+Workflow.hasMany(WorkflowRun, { foreignKey: 'workflowId', as: 'runs' })
+
+WorkflowRunStep.belongsTo(WorkflowRun, { foreignKey: 'runId', as: 'run' })
+WorkflowRun.hasMany(WorkflowRunStep, { foreignKey: 'runId', as: 'steps' })
 
 export {
   sequelize,
@@ -259,6 +377,8 @@ export {
   UserWorkspace,
   Invitation,
   Lead,
+  Deal,
+  DealActivity,
   Activity,
   Tag,
   LeadTag,
@@ -272,9 +392,6 @@ export {
   LeadTaskComment,
   LeadFollowup,
   LeadSource,
-  LeadStage,
-  LeadStatusCategory,
-  LeadStatus,
   LeadAssignment,
   LeadEmail,
   CompanyGoogleToken,
@@ -291,13 +408,32 @@ export {
   WebFormField,
   WebFormSubmission,
   WebFormEmailTemplate,
-  Opportunity,
   OpportunityStage,
+  DealStatus,
   Meeting,
   MeetingParticipant,
   MeetingNotification,
+  Reminder,
   MeetingRecording,
   MeetingTranscript,
   AiMeetingSummary,
-  CallLog
+  CallLog,
+  EmailTemplate,
+  LeadEmailLog,
+  EmailSuppression,
+  WorkspaceBillingProfile,
+  QuotationTemplate,
+  Quotation,
+  QuotationItem,
+  InvoiceTemplate,
+  Invoice,
+  InvoiceItem,
+  InvoicePayment,
+  Campaign,
+  CampaignTeamMember,
+  CampaignLead,
+  Workflow,
+  WorkflowVersion,
+  WorkflowRun,
+  WorkflowRunStep,
 }

@@ -107,6 +107,7 @@ export async function listActivities(req, res, next) {
     const typeKeys = parseCsvList(req.query.types)
     const attendeeIds = parseCsvList(req.query.attendees)
     const assignedTo = parseCsvList(req.query.assignedTo)
+    const authorUserIds = parseCsvList(req.query.userId)
     const q = String(req.query.search || '').trim()
     const outcome = String(req.query.outcome || '').trim()
     const leadId = req.query.leadId ? String(req.query.leadId) : null
@@ -121,6 +122,7 @@ export async function listActivities(req, res, next) {
 
     const activityWhere = {}
     if (createdAtRange) activityWhere.createdAt = createdAtRange
+    if (authorUserIds.length) activityWhere.userId = { [Op.in]: authorUserIds }
     if (typeKeys.length) {
       const base = typeKeys.filter((x) => ['note', 'call', 'email', 'meeting'].includes(x))
       const custom = typeKeys.filter((x) => !base.includes(x))
@@ -156,6 +158,7 @@ export async function listActivities(req, res, next) {
     if (createdAtRange) taskWhere.createdAt = createdAtRange
     if (scope === 'lead' && leadId) taskWhere.leadId = leadId
     if (assignedTo.length) taskWhere.assignedTo = { [Op.in]: assignedTo }
+    if (authorUserIds.length) taskWhere.createdBy = { [Op.in]: authorUserIds }
     const taskRows = await LeadTask.findAll({
       where: taskWhere,
       include: [

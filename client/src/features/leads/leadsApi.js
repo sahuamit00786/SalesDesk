@@ -53,10 +53,6 @@ export const leadsApi = baseApi.injectEndpoints({
       query: (id) => ({ url: `/leads/setup/tags/${id}`, method: 'DELETE' }),
       invalidatesTags: [{ type: 'Lead', id: 'SETUP' }, { type: 'Lead', id: 'FORM_META' }],
     }),
-    createLeadStage: build.mutation({
-      query: (body) => ({ url: '/leads/setup/stages', method: 'POST', body }),
-      invalidatesTags: [{ type: 'Lead', id: 'SETUP' }, { type: 'Lead', id: 'FORM_META' }],
-    }),
     createOpportunityStage: build.mutation({
       query: (body) => ({ url: '/leads/setup/opportunity-stages', method: 'POST', body }),
       invalidatesTags: [{ type: 'Lead', id: 'SETUP' }, { type: 'Lead', id: 'FORM_META' }],
@@ -65,24 +61,28 @@ export const leadsApi = baseApi.injectEndpoints({
       query: ({ id, ...body }) => ({ url: `/leads/setup/opportunity-stages/${id}`, method: 'PATCH', body }),
       invalidatesTags: [{ type: 'Lead', id: 'SETUP' }, { type: 'Lead', id: 'FORM_META' }],
     }),
+    reorderOpportunityStages: build.mutation({
+      query: (body) => ({ url: '/leads/setup/opportunity-stages/reorder', method: 'POST', body }),
+      invalidatesTags: [{ type: 'Lead', id: 'SETUP' }, { type: 'Lead', id: 'FORM_META' }],
+    }),
     deleteOpportunityStage: build.mutation({
       query: (id) => ({ url: `/leads/setup/opportunity-stages/${id}`, method: 'DELETE' }),
       invalidatesTags: [{ type: 'Lead', id: 'SETUP' }, { type: 'Lead', id: 'FORM_META' }],
     }),
-    createLeadStatusCategory: build.mutation({
-      query: (body) => ({ url: '/leads/setup/status-categories', method: 'POST', body }),
+    createDealStatus: build.mutation({
+      query: (body) => ({ url: '/leads/setup/deal-statuses', method: 'POST', body }),
       invalidatesTags: [{ type: 'Lead', id: 'SETUP' }, { type: 'Lead', id: 'FORM_META' }],
     }),
-    updateLeadStatusCategory: build.mutation({
-      query: ({ id, ...body }) => ({ url: `/leads/setup/status-categories/${id}`, method: 'PATCH', body }),
+    updateDealStatus: build.mutation({
+      query: ({ id, ...body }) => ({ url: `/leads/setup/deal-statuses/${id}`, method: 'PATCH', body }),
       invalidatesTags: [{ type: 'Lead', id: 'SETUP' }, { type: 'Lead', id: 'FORM_META' }],
     }),
-    deleteLeadStatusCategory: build.mutation({
-      query: (id) => ({ url: `/leads/setup/status-categories/${id}`, method: 'DELETE' }),
+    deleteDealStatus: build.mutation({
+      query: (id) => ({ url: `/leads/setup/deal-statuses/${id}`, method: 'DELETE' }),
       invalidatesTags: [{ type: 'Lead', id: 'SETUP' }, { type: 'Lead', id: 'FORM_META' }],
     }),
-    createLeadStatus: build.mutation({
-      query: (body) => ({ url: '/leads/setup/statuses', method: 'POST', body }),
+    reorderDealStatuses: build.mutation({
+      query: (body) => ({ url: '/leads/setup/deal-statuses/reorder', method: 'POST', body }),
       invalidatesTags: [{ type: 'Lead', id: 'SETUP' }, { type: 'Lead', id: 'FORM_META' }],
     }),
     createLead: build.mutation({
@@ -91,7 +91,11 @@ export const leadsApi = baseApi.injectEndpoints({
     }),
     updateLead: build.mutation({
       query: ({ id, ...body }) => ({ url: `/leads/${id}`, method: 'PUT', body }),
-      invalidatesTags: (_r, _e, arg) => [{ type: 'Lead', id: arg.id }, { type: 'Lead', id: 'LIST' }],
+      invalidatesTags: (_r, _e, arg) => [
+        { type: 'Lead', id: arg.id },
+        { type: 'Lead', id: `${arg.id}-activities` },
+        { type: 'Lead', id: 'LIST' },
+      ],
     }),
     patchLeadStatus: build.mutation({
       query: ({ id, ...body }) => ({ url: `/leads/${id}/status`, method: 'PATCH', body }),
@@ -102,7 +106,11 @@ export const leadsApi = baseApi.injectEndpoints({
           toast.error('Something went wrong. Please try again.')
         }
       },
-      invalidatesTags: (_r, _e, arg) => [{ type: 'Lead', id: arg.id }, { type: 'Lead', id: 'LIST' }],
+      invalidatesTags: (_r, _e, arg) => [
+        { type: 'Lead', id: arg.id },
+        { type: 'Lead', id: `${arg.id}-activities` },
+        { type: 'Lead', id: 'LIST' },
+      ],
     }),
     deleteLead: build.mutation({
       query: (id) => ({ url: `/leads/${id}`, method: 'DELETE' }),
@@ -111,6 +119,10 @@ export const leadsApi = baseApi.injectEndpoints({
     bulkLeads: build.mutation({
       query: (body) => ({ url: '/leads/bulk', method: 'POST', body }),
       invalidatesTags: [{ type: 'Lead', id: 'LIST' }],
+    }),
+    distributeLeadsRoundRobin: build.mutation({
+      query: (body) => ({ url: '/leads/distribute-round-robin', method: 'POST', body }),
+      invalidatesTags: [{ type: 'Lead', id: 'LIST' }, { type: 'Lead', id: 'ACTIVITIES_FEED' }, { type: 'Pipeline', id: 'LIST' }],
     }),
     getLeadActivities: build.query({
       query: ({ id, ...params }) => ({ url: `/leads/${id}/activities`, params }),
@@ -190,15 +202,44 @@ export const leadsApi = baseApi.injectEndpoints({
     }),
     createLeadTask: build.mutation({
       query: ({ id, ...body }) => ({ url: `/leads/${id}/tasks`, method: 'POST', body }),
-      invalidatesTags: (_r, _e, arg) => [{ type: 'Lead', id: `${arg.id}-tasks` }, { type: 'Lead', id: arg.id }, { type: 'Task', id: 'LIST' }],
+      invalidatesTags: (_r, _e, arg) => [
+        { type: 'Lead', id: `${arg.id}-tasks` },
+        { type: 'Lead', id: `${arg.id}-activities` },
+        { type: 'Lead', id: 'ACTIVITIES_FEED' },
+        { type: 'Lead', id: arg.id },
+        { type: 'Task', id: 'LIST' },
+        'CalendarEvents',
+        'CalendarToday',
+      ],
     }),
     patchLeadTask: build.mutation({
       query: ({ id, taskId, ...body }) => ({ url: `/leads/${id}/tasks/${taskId}`, method: 'PATCH', body }),
-      invalidatesTags: (_r, _e, arg) => [{ type: 'Lead', id: `${arg.id}-tasks` }, { type: 'Lead', id: arg.id }, { type: 'Task', id: 'LIST' }],
+      invalidatesTags: (_r, _e, arg) => [
+        { type: 'Lead', id: `${arg.id}-tasks` },
+        { type: 'Lead', id: `${arg.id}-activities` },
+        { type: 'Lead', id: 'ACTIVITIES_FEED' },
+        { type: 'Lead', id: arg.id },
+        { type: 'Task', id: 'LIST' },
+        { type: 'Task', id: `TIMELINE-${arg.taskId}` },
+        'CalendarEvents',
+        'CalendarToday',
+      ],
     }),
     deleteLeadTask: build.mutation({
       query: ({ id, taskId }) => ({ url: `/leads/${id}/tasks/${taskId}`, method: 'DELETE' }),
-      invalidatesTags: (_r, _e, arg) => [{ type: 'Lead', id: `${arg.id}-tasks` }, { type: 'Lead', id: arg.id }, { type: 'Task', id: 'LIST' }],
+      invalidatesTags: (_r, _e, arg) => [
+        { type: 'Lead', id: `${arg.id}-tasks` },
+        { type: 'Lead', id: `${arg.id}-activities` },
+        { type: 'Lead', id: 'ACTIVITIES_FEED' },
+        { type: 'Lead', id: arg.id },
+        { type: 'Task', id: 'LIST' },
+        'CalendarEvents',
+        'CalendarToday',
+      ],
+    }),
+    getLeadTaskTimeline: build.query({
+      query: ({ id, taskId }) => `/leads/${id}/tasks/${taskId}/timeline`,
+      providesTags: (_r, _e, arg) => [{ type: 'Task', id: `TIMELINE-${arg.taskId}` }],
     }),
     getLeadFollowups: build.query({
       query: (id) => `/leads/${id}/followups`,
@@ -221,12 +262,16 @@ export const leadsApi = baseApi.injectEndpoints({
       invalidatesTags: (_r, _e, arg) => [{ type: 'Lead', id: `${arg.id}-followups` }, { type: 'Lead', id: arg.id }],
     }),
     createLeadTaskComment: build.mutation({
-      query: ({ id, taskId, body: text }) => ({
+      query: ({ id, taskId, body: text, isInternal }) => ({
         url: `/leads/${id}/tasks/${taskId}/comments`,
         method: 'POST',
-        body: { body: text },
+        body: { body: text, isInternal: Boolean(isInternal) },
       }),
-      invalidatesTags: (_r, _e, arg) => [{ type: 'Lead', id: `${arg.id}-tasks` }, { type: 'Lead', id: arg.id }],
+      invalidatesTags: (_r, _e, arg) => [
+        { type: 'Lead', id: `${arg.id}-tasks` },
+        { type: 'Lead', id: arg.id },
+        { type: 'Task', id: `TIMELINE-${arg.taskId}` },
+      ],
     }),
     getSavedViews: build.query({
       query: () => '/leads/saved-views',
@@ -293,19 +338,20 @@ export const {
   useCreateLeadTagMutation,
   useUpdateLeadTagMutation,
   useDeleteLeadTagMutation,
-  useCreateLeadStageMutation,
   useCreateOpportunityStageMutation,
   useUpdateOpportunityStageMutation,
+  useReorderOpportunityStagesMutation,
   useDeleteOpportunityStageMutation,
-  useCreateLeadStatusCategoryMutation,
-  useUpdateLeadStatusCategoryMutation,
-  useDeleteLeadStatusCategoryMutation,
-  useCreateLeadStatusMutation,
+  useCreateDealStatusMutation,
+  useUpdateDealStatusMutation,
+  useDeleteDealStatusMutation,
+  useReorderDealStatusesMutation,
   useCreateLeadMutation,
   useUpdateLeadMutation,
   usePatchLeadStatusMutation,
   useDeleteLeadMutation,
   useBulkLeadsMutation,
+  useDistributeLeadsRoundRobinMutation,
   useGetLeadActivitiesQuery,
   useGetGoogleEmailStatusQuery,
   useGetGoogleEmailConnectUrlMutation,
@@ -327,6 +373,7 @@ export const {
   useCreateLeadTaskMutation,
   usePatchLeadTaskMutation,
   useDeleteLeadTaskMutation,
+  useGetLeadTaskTimelineQuery,
   useGetLeadFollowupsQuery,
   useCreateLeadFollowupMutation,
   usePatchLeadFollowupMutation,

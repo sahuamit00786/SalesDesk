@@ -10,6 +10,13 @@ export const teamApi = baseApi.injectEndpoints({
       query: () => '/team/users',
       providesTags: [{ type: 'Team', id: 'USERS' }],
     }),
+    getTeamUser: build.query({
+      query: (id) => `/team/users/${id}`,
+      providesTags: (_res, _err, id) => [
+        { type: 'Team', id: `USER-${id}` },
+        { type: 'Team', id: 'USERS' },
+      ],
+    }),
     teamInvitations: build.query({
       query: () => '/team/invitations',
       providesTags: [{ type: 'Team', id: 'INVITES' }],
@@ -31,6 +38,14 @@ export const teamApi = baseApi.injectEndpoints({
         url: `/team/users/${id}/role`,
         method: 'PATCH',
         body: { companyRoleId },
+      }),
+      invalidatesTags: [{ type: 'Team', id: 'USERS' }],
+    }),
+    patchUserProfile: build.mutation({
+      query: ({ id, ...body }) => ({
+        url: `/team/users/${id}/profile`,
+        method: 'PATCH',
+        body,
       }),
       invalidatesTags: [{ type: 'Team', id: 'USERS' }],
     }),
@@ -103,11 +118,13 @@ export const teamApi = baseApi.injectEndpoints({
 export const {
   useTeamRolesQuery,
   useTeamUsersQuery,
+  useGetTeamUserQuery,
   useTeamInvitationsQuery,
   useTeamTeamsQuery,
   useCreateInvitationMutation,
   useCancelInvitationMutation,
   usePatchUserRoleMutation,
+  usePatchUserProfileMutation,
   useTeamMenusQuery,
   useCreateRoleMutation,
   usePatchRoleMutation,

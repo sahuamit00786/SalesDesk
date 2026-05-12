@@ -205,7 +205,7 @@ export function OnboardingPage() {
       </aside>
 
       <main className="flex min-h-0 flex-1 flex-col">
-        <div className="mx-auto w-full max-w-3xl flex-1 px-5 py-8 lg:px-8 lg:py-10">
+        <div className="w-full flex-1 px-5 py-8 lg:px-8 lg:py-10">
           {activeStep === 0 ? (
             <>
               <h1 className="text-2xl font-bold tracking-tight text-ink lg:text-[1.65rem]">Basic information</h1>

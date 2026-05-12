@@ -102,7 +102,11 @@ export async function submitForm(req, res, next) {
         form,
         form.workspaceId,
         req.user?.companyId || null,
-        { utmSource: req.body?.utm_source || null, landingUrl: req.body?.landing_url || null },
+        {
+          utmSource: req.body?.utm_source || null,
+          landingUrl: req.body?.landing_url || null,
+          actorUserId: form.createdBy || null,
+        },
       )
     }
 

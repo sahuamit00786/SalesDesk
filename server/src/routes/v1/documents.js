@@ -11,8 +11,10 @@ const upload = multer({
 
 router.get('/', documentsController.listAllDocuments)
 router.get('/folder-tree', documentsController.folderTree)
+router.get('/lead-summaries', documentsController.listLeadDocumentSummariesHandler)
 router.post('/folders', requirePermission('documents', 'edit'), documentsController.createFolder)
 router.post('/email-attachments/save', requirePermission('documents', 'edit'), documentsController.saveEmailAttachmentToDocuments)
+router.patch('/:id', requirePermission('documents', 'edit'), documentsController.patchDocument)
 router.get('/:id/viewer-meta', documentsController.getDocumentViewerMeta)
 router.get('/:id/versions', documentsController.listVersions)
 router.post('/:id/versions/:versionId/restore', requirePermission('documents', 'edit'), documentsController.restoreDocumentVersion)

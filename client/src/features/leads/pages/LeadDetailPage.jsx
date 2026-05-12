@@ -1,37 +1,59 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams, Link } from 'react-router-dom'
 import DOMPurify from 'dompurify'
+import toast from 'react-hot-toast'
 import {
+  BadgeIndianRupee,
   Bell,
   Bold,
   CalendarCheck2,
   CalendarClock,
   CheckSquare,
+  ChevronRight,
   ClipboardList,
+  Flag,
+  Plus,
+  Hash,
+  Home,
   Italic,
   Link2,
   Mail,
   MapPin,
+  MessageCircle,
   MessageSquare,
+  MoreHorizontal,
   NotebookPen,
   Paperclip,
+  Pencil,
+  Phone,
   PhoneCall,
   Presentation,
   Search,
   Smile,
   Sparkles,
+  Tag,
+  User,
   UserCircle2,
 } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
+import { AddLeadModal } from '@/features/leads/components/AddLeadModal'
 import { LeadFollowupsTab } from '@/features/leads/components/LeadFollowupsTab'
 import { LeadRichNotesEditor } from '@/features/leads/components/LeadRichNotesEditor'
-import { LeadTaskDrawer, taskTypeLabel } from '@/features/leads/components/LeadTaskDrawer'
-import { LeadStatusBadge } from '@/features/leads/components/LeadStatusBadge'
+import {
+  LeadTaskDrawer,
+  TaskOverdueBadge,
+  TaskPriorityIcon,
+  TaskRecurrenceIcon,
+  TaskStatusPill,
+  taskTypeLabel,
+} from '@/features/leads/components/LeadTaskDrawer'
 import { LeadScorePill } from '@/features/leads/components/LeadScorePill'
 import { LeadSourceTag } from '@/features/leads/components/LeadSourceTag'
 import { LeadTagsInput } from '@/features/leads/components/LeadTagsInput'
+import { LeadDocumentsWorkspace } from '@/features/documents/components/LeadDocumentsWorkspace'
 import {
   useCreateLeadActivityMutation,
+  useCreateLeadTagMutation,
   useCreateLeadNoteMutation,
   useDeleteLeadNoteMutation,
   useDeleteLeadTaskMutation,
@@ -42,18 +64,26 @@ import {
   useGetLeadFilesQuery,
   useGetLeadNotesQuery,
   useGetLeadQuery,
+  useGetLeadsQuery,
   useGetLeadTasksQuery,
+  useGetLeadFormMetaQuery,
   usePatchLeadNoteMutation,
-  usePatchLeadStatusMutation,
   usePatchLeadTaskMutation,
   useSendLeadEmailMutation,
   useSyncLeadEmailsMutation,
   useUpdateLeadMutation,
 } from '@/features/leads/leadsApi'
-import { STATUS_OPTIONS } from '@/features/leads/constants'
 import GmailThreadList from '@/features/gmail/GmailThreadList'
 import GmailThreadView from '@/features/gmail/GmailThreadView'
 import { parseStoredThread } from '@/features/gmail/gmailParserUtils'
+import { formatStageLabel as formatPipelineStageLabel } from '@/features/opportunities/components/OpportunitiesKanban'
+import { useCreateOpportunityMutation } from '@/features/opportunities/opportunitiesApi'
+import { AddDealDrawer } from '@/features/deals/components/AddDealDrawer'
+import { DealDetailPanel } from '@/features/deals/components/DealDetailPanel'
+import { formatDealMoney } from '@/features/deals/dealCurrencies'
+import { useGetDealsQuery } from '@/features/deals/dealsApi'
+import { parsePhoneNumber } from 'libphonenumber-js/min'
+import { digitsOnlyE164, inferE164FromStored, mergePartsToE164 } from '@/utils/phoneNumbers'
 
 const NOTE_HTML = {
   ALLOWED_TAGS: ['b', 'strong', 'i', 'em', 'u', 'br', 'p', 'div', 'span', 'ul', 'ol', 'li', 'a', 'img'],
@@ -158,6 +188,13 @@ const ACTIVITY_STYLE = {
     chip: 'border-sky-200 bg-sky-50 text-sky-800',
     card: 'bg-sky-50',
   },
+  tag: {
+    label: 'Tag',
+    Icon: Tag,
+    iconWrap: 'bg-violet-100 text-violet-700',
+    chip: 'border-violet-200 bg-violet-50 text-violet-800',
+    card: 'bg-violet-50',
+  },
   system: {
     label: 'Activity',
     Icon: Sparkles,
@@ -179,6 +216,7 @@ function detectActivityVisualKey(activity, headline = '', detail = '') {
   if (text.includes('follow-up') || text.includes('follow up') || text.includes('reminder')) return 'follow_up'
   if (text.includes('email') || text.includes('@')) return 'email'
   if (text.includes('task')) return 'task'
+  if (text.includes('tag')) return 'tag'
   if (text.includes('call')) return 'call'
   if (text.includes('note')) return 'note'
   if (text.includes('meeting')) return 'meeting'
@@ -235,6 +273,24 @@ function parseFollowUpTime(activity, headline, detailRaw) {
   return Number.isNaN(d.getTime()) ? null : d
 }
 
+function LeadInfoItem({ Icon, label, value, href }) {
+  return (
+    <div className="space-y-1">
+      <p className="flex items-center gap-1.5 text-[11px] font-medium text-ink-muted">
+        <Icon className="h-3.5 w-3.5" aria-hidden />
+        {label}
+      </p>
+      {href && value !== '-' ? (
+        <a href={href} className="block break-all text-sm font-medium text-ink hover:text-brand-700">
+          {value}
+        </a>
+      ) : (
+        <p className="break-words text-sm font-medium text-ink">{value}</p>
+      )}
+    </div>
+  )
+}
+
 function countdownLabel(targetDate) {
   if (!targetDate) return ''
   const diff = targetDate.getTime() - Date.now()
@@ -250,9 +306,62 @@ function countdownLabel(targetDate) {
   return `in ${pieces.join(' ')}`
 }
 
+function dealCardInitials(title) {
+  const t = String(title || '').trim()
+  if (!t) return '?'
+  const words = t.split(/\s+/).filter(Boolean)
+  if (words.length >= 2) return `${words[0][0]}${words[1][0]}`.toUpperCase()
+  return t.slice(0, 2).toUpperCase()
+}
+
+function dealCardCreatedLabel(value) {
+  if (value == null || value === '') return '—'
+  let normalized = value
+  if (typeof normalized === 'number') normalized = new Date(normalized).toISOString()
+  else if (typeof normalized === 'string') {
+    const s = normalized.trim()
+    // MySQL often returns "YYYY-MM-DD HH:mm:ss" which is not reliably parsed as local time in all engines
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(s)) normalized = s.replace(' ', 'T')
+    else normalized = s
+  }
+  const d = normalized instanceof Date ? normalized : new Date(normalized)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+/** Small ring for “health” / score (uses opportunity leadScore on deal card). */
+function DealHealthRing({ score }) {
+  const pct = Math.min(100, Math.max(0, Number(score) || 0))
+  const size = 20
+  const stroke = 2.5
+  const r = (size - stroke) / 2
+  const cx = size / 2
+  const cy = size / 2
+  const c = 2 * Math.PI * r
+  const offset = c - (pct / 100) * c
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0 -rotate-90" aria-hidden>
+      <circle cx={cx} cy={cy} r={r} fill="none" className="stroke-slate-200" strokeWidth={stroke} />
+      <circle
+        cx={cx}
+        cy={cy}
+        r={r}
+        fill="none"
+        className="stroke-emerald-500"
+        strokeWidth={stroke}
+        strokeDasharray={c}
+        strokeDashoffset={offset}
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
 export function LeadDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
+  const isPipelineDealRoute = location.pathname.startsWith('/opportunities/')
   const [activeTab, setActiveTab] = useState('activity')
   const [profileInfoTab, setProfileInfoTab] = useState('lead')
   const [draft, setDraft] = useState('')
@@ -268,8 +377,15 @@ export function LeadDetailPage() {
   const [editingNoteId, setEditingNoteId] = useState(null)
   const [noteEditorVersion, setNoteEditorVersion] = useState(0)
   const [lostReason, setLostReason] = useState('')
+  const [convertingToOpportunity, setConvertingToOpportunity] = useState(false)
+  const [editLeadOpen, setEditLeadOpen] = useState(false)
+  const [selectedTags, setSelectedTags] = useState([])
+  const [pipelineSaving, setPipelineSaving] = useState(false)
+  const [addDealDrawerOpen, setAddDealDrawerOpen] = useState(false)
+  const [dealPanelOpp, setDealPanelOpp] = useState(null)
 
   const { data, isLoading } = useGetLeadQuery(id)
+  const { data: formMetaData } = useGetLeadFormMetaQuery()
   const { data: activityData } = useGetLeadActivitiesQuery({ id, page: 1, limit: 100 }, { skip: !id })
   const { data: taskData } = useGetLeadTasksQuery(id, { skip: !id })
   const { data: emailThreadsData } = useGetLeadEmailThreadsQuery(id, { skip: !id })
@@ -286,8 +402,9 @@ export function LeadDetailPage() {
   const [syncLeadEmails, { isLoading: syncingEmails }] = useSyncLeadEmailsMutation()
   const [patchTask] = usePatchLeadTaskMutation()
   const [deleteTask] = useDeleteLeadTaskMutation()
-  const [patchStatus] = usePatchLeadStatusMutation()
   const [updateLead] = useUpdateLeadMutation()
+  const [createLeadTag] = useCreateLeadTagMutation()
+  const [createOpportunity] = useCreateOpportunityMutation()
 
   const lead = data?.data
   const summary = data?.meta?.summary || {}
@@ -297,14 +414,33 @@ export function LeadDetailPage() {
   const selectedThread = threadData?.data || []
   const notes = notesData?.data || []
   const leadFiles = filesData?.data || []
-  const tabs = [
-    { id: 'activity', label: 'Activity' },
-    { id: 'calls', label: 'Calls' },
-    { id: 'emails', label: 'Emails' },
-    { id: 'tasks', label: 'Tasks' },
-    { id: 'followups', label: 'Follow-ups' },
-    { id: 'notes', label: 'Notes' },
-  ]
+
+  const tabs = useMemo(() => {
+    const base = [
+      { id: 'activity', label: 'Activity' },
+      { id: 'calls', label: 'Calls' },
+      { id: 'emails', label: 'Emails' },
+      { id: 'tasks', label: 'Tasks' },
+      { id: 'followups', label: 'Follow-ups' },
+      { id: 'notes', label: 'Notes' },
+      { id: 'documents', label: 'Documents' },
+    ]
+    if (lead?.isOpportunity) {
+      return [...base, { id: 'deal', label: 'Deal' }]
+    }
+    return base
+  }, [lead?.isOpportunity])
+
+  const parentOppIdForChildren = lead?.isOpportunity ? id : null
+  const { data: childDealsForOppRes, refetch: refetchChildDeals } = useGetDealsQuery(
+    {
+      page: 1,
+      limit: 100,
+      parentOpportunityLeadId: parentOppIdForChildren || undefined,
+    },
+    { skip: !parentOppIdForChildren },
+  )
+  const childDealsForOpp = childDealsForOppRes?.data || []
   const emailTimeLabel = (value) => {
     if (!value) return '-'
     const date = new Date(value)
@@ -339,6 +475,15 @@ export function LeadDetailPage() {
     [taskDrawerTaskId, tasks],
   )
 
+  const opportunityStages = useMemo(() => {
+    const rows = formMetaData?.data?.opportunityStages || []
+    return [...rows].sort((a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0))
+  }, [formMetaData])
+
+  const availableTags = useMemo(
+    () => formMetaData?.data?.tags || [],
+    [formMetaData],
+  )
 
   const visibleActivities = useMemo(() => {
     const base = activities.filter((activity) => !isSystemNoteActivity(activity))
@@ -366,15 +511,86 @@ export function LeadDetailPage() {
   const avatarLetter = String(fullName).charAt(0).toUpperCase()
   const firstMeaningfulActivity = activities.find((activity) => ['note', 'call', 'email', 'meeting'].includes(activity.type))
   const lastActivityAt = summary.lastContactAt || firstMeaningfulActivity?.createdAt || lead?.updatedAt || lead?.createdAt
-  const formattedPhone = `${lead?.phoneCountryCode || ''} ${lead?.phone || ''}`.trim() || '-'
+  const leadCountryIso = useMemo(() => {
+    const c = String(lead?.country || '')
+      .trim()
+      .toUpperCase()
+    return c.length === 2 ? c : 'IN'
+  }, [lead?.country])
+
+  const primaryE164 = useMemo(() => mergePartsToE164(lead?.phoneCountryCode, lead?.phone), [lead?.phoneCountryCode, lead?.phone])
+
+  const formattedPhone = useMemo(() => {
+    if (!primaryE164) {
+      const fb = `${lead?.phoneCountryCode || ''} ${lead?.phone || ''}`.trim()
+      return fb || '-'
+    }
+    try {
+      return parsePhoneNumber(primaryE164).formatInternational()
+    } catch {
+      return `${lead?.phoneCountryCode || ''} ${lead?.phone || ''}`.trim() || '-'
+    }
+  }, [primaryE164, lead?.phoneCountryCode, lead?.phone])
+
+  const phoneTelHref = useMemo(() => {
+    if (!primaryE164) return undefined
+    try {
+      return `tel:${parsePhoneNumber(primaryE164).format('E.164')}`
+    } catch {
+      return undefined
+    }
+  }, [primaryE164])
+
+  const whatsappRaw = String(lead?.profileMeta?.whatsappNumber || '').trim()
+  const whatsappE164 = useMemo(
+    () => inferE164FromStored(lead?.profileMeta?.whatsappNumber, leadCountryIso),
+    [lead?.profileMeta?.whatsappNumber, leadCountryIso],
+  )
+  const formattedWhatsApp = useMemo(() => {
+    if (!whatsappRaw) return '-'
+    if (whatsappE164) {
+      try {
+        return parsePhoneNumber(whatsappE164).formatInternational()
+      } catch {
+        return whatsappRaw
+      }
+    }
+    return whatsappRaw
+  }, [whatsappRaw, whatsappE164])
+
+  const whatsappDigits = useMemo(() => {
+    if (whatsappE164) return digitsOnlyE164(whatsappE164)
+    return whatsappRaw.replace(/\D/g, '')
+  }, [whatsappE164, whatsappRaw])
   const formattedValue = `₹${Number(lead?.value || 0).toLocaleString('en-IN')}`
   const leadOwnerName =
     (lead?.assignedUsers || []).map((user) => user?.name).filter(Boolean).join(', ') || lead?.assignee?.name || lead?.owner?.name || '-'
   const addressLine = [lead?.street, lead?.city, lead?.state, lead?.country, lead?.postalCode].filter(Boolean).join(', ') || '-'
 
   useEffect(() => {
+    if (!isPipelineDealRoute || !id || isLoading || !lead) return
+    if (!lead.isOpportunity) {
+      navigate(`/leads/${id}`, { replace: true })
+    }
+  }, [isPipelineDealRoute, id, isLoading, lead, navigate])
+
+  useEffect(() => {
+    if (activeTab === 'deal' && lead && !lead.isOpportunity) {
+      setActiveTab('activity')
+    }
+  }, [activeTab, lead])
+
+  useEffect(() => {
+    setDealPanelOpp(null)
+  }, [id])
+
+  useEffect(() => {
     if (lead?.email) setEmailTo((prev) => prev || lead.email)
   }, [lead?.email])
+
+  useEffect(() => {
+    setSelectedTags((lead?.tags || []).map((tag) => tag.name))
+  }, [lead?.id, lead?.updatedAt, lead?.tags])
 
   const saveLeadNoteFromEditor = useCallback(
     async ({ title, html }) => {
@@ -433,6 +649,56 @@ export function LeadDetailPage() {
     setEmailBody((prev) => `${prev || ''}${text}`)
   }
 
+  async function convertToOpportunity() {
+    if (!lead) return
+    setConvertingToOpportunity(true)
+    try {
+      const phoneNumber = mergePartsToE164(lead.phoneCountryCode, lead.phone) || null
+      const res = await createOpportunity({
+        leadId: lead.id,
+        fullName: (lead.contactName || lead.title || '').trim() || 'Lead',
+        companyName: (lead.company || '').trim() || 'Unknown company',
+        email: lead.email || null,
+        phoneNumber,
+        jobTitle: lead.designation || null,
+        dealValue: Number(lead.value || 0),
+        leadScore: Number(lead.score ?? 0),
+        tags: (lead.tags || []).map((t) => t.name).filter(Boolean),
+        ownerUserId: lead.assignedTo || lead.ownerUserId || null,
+      }).unwrap()
+      const newId = res?.data?.id
+      if (newId) {
+        toast.success('Added to pipeline')
+        navigate(`/opportunities/${newId}`)
+      }
+    } catch (e) {
+      toast.error(e?.data?.error?.message || e?.error || 'Could not create opportunity')
+    } finally {
+      setConvertingToOpportunity(false)
+    }
+  }
+
+  async function submitLeadEdit(payload) {
+    try {
+      await updateLead({ id, ...payload }).unwrap()
+      toast.success('Lead updated')
+      setEditLeadOpen(false)
+    } catch (err) {
+      toast.error(err?.data?.error?.message || err?.error || 'Could not update lead')
+    }
+  }
+
+  async function handleLeadTagsChange(nextTags) {
+    const prev = selectedTags
+    setSelectedTags(nextTags)
+    try {
+      await updateLead({ id, tags: nextTags }).unwrap()
+    } catch (err) {
+      setSelectedTags(prev)
+      toast.error(err?.data?.error?.message || err?.error || 'Could not update tags')
+    }
+  }
+
   return (
     <PageShell fullWidth>
       <div className="grid gap-2 px-2 py-2 lg:grid-cols-[320px_1fr] lg:px-3 lg:py-2.5">
@@ -444,26 +710,75 @@ export function LeadDetailPage() {
                 <div className="flex h-20 w-20 items-center justify-center rounded-full bg-violet-100 text-2xl font-semibold text-violet-700">
                   {avatarLetter}
                 </div>
-                <p className="mt-2 text-2xl font-semibold text-ink">{fullName}</p>
-                <p className="mt-1 text-sm text-ink-muted">{lead.company || lead.designation || 'Lead profile'}</p>
-              </div>
-
-              <div className="mt-3 grid grid-cols-4 gap-2 text-center text-xs text-ink-muted">
-                <button type="button" className="rounded-xl border border-surface-border px-2 py-2">Log</button>
-                <a href={lead.email ? `mailto:${lead.email}` : undefined} className="rounded-xl border border-surface-border px-2 py-2">Email</a>
-                <a href={lead.phone ? `tel:${lead.phone}` : undefined} className="rounded-xl border border-surface-border px-2 py-2">Call</a>
-                <button type="button" className="rounded-xl border border-surface-border px-2 py-2">More</button>
-              </div>
-
-              <button type="button" className="mt-3 h-10 w-full rounded-xl bg-orange-500 px-4 text-sm font-semibold text-white">
-                Convert to contact
-              </button>
-
-              <div className="mt-3 flex items-center justify-between">
-                <LeadStatusBadge status={lead.status} />
-                <p className="text-xs text-ink-muted">
-                  Last activity : {lastActivityAt ? new Date(lastActivityAt).toLocaleString() : '-'}
+                <div className="mt-2 flex items-center justify-center gap-2">
+                  <p className="text-2xl font-semibold text-ink">{fullName}</p>
+                  <button
+                    type="button"
+                    onClick={() => setEditLeadOpen(true)}
+                    className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-surface-border bg-white text-ink-muted transition hover:bg-surface-subtle hover:text-ink"
+                    aria-label="Edit lead"
+                    title="Edit lead"
+                  >
+                    <Pencil className="h-3.5 w-3.5" aria-hidden />
+                  </button>
+                </div>
+                <p className="mt-1 text-sm text-ink-muted">
+                  {isPipelineDealRoute ? lead.company || lead.designation || 'Opportunity' : lead.company || lead.designation || 'Lead profile'}
                 </p>
+              </div>
+
+              {!lead.isOpportunity ? (
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    disabled={convertingToOpportunity}
+                    onClick={convertToOpportunity}
+                    className="h-10 w-full rounded-xl bg-orange-500 px-4 text-sm font-semibold text-white disabled:opacity-60"
+                  >
+                    {convertingToOpportunity ? 'Creating…' : 'Convert to opportunity'}
+                  </button>
+                </div>
+              ) : null}
+
+              <div className="mt-3 space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-left text-xs font-medium text-ink-muted">Lead status (pipeline)</p>
+                  <span className="rounded-full border border-surface-border bg-surface-subtle px-2 py-0.5 text-[11px] font-medium text-ink">
+                    {formatPipelineStageLabel(lead.opportunityStage) || 'Not set'}
+                  </span>
+                </div>
+                <select
+                  className="h-10 w-full rounded-xl border border-surface-border bg-white px-3 text-sm text-ink"
+                  value={lead.opportunityStage || ''}
+                  disabled={pipelineSaving}
+                  onChange={async (e) => {
+                    const next = e.target.value
+                    if (!next || next === lead.opportunityStage) return
+                    setPipelineSaving(true)
+                    try {
+                      await updateLead({ id, opportunityStage: next }).unwrap()
+                    } catch (err) {
+                      toast.error(err?.data?.error?.message || err?.error || 'Could not update lead status')
+                    } finally {
+                      setPipelineSaving(false)
+                    }
+                  }}
+                >
+                  {lead.opportunityStage && !opportunityStages.some((s) => s.name === lead.opportunityStage) ? (
+                    <option value={lead.opportunityStage}>{formatPipelineStageLabel(lead.opportunityStage)}</option>
+                  ) : null}
+                  {opportunityStages.length === 0 ? (
+                    <option value={lead.opportunityStage || ''}>
+                      {formatPipelineStageLabel(lead.opportunityStage) || '—'}
+                    </option>
+                  ) : (
+                    opportunityStages.map((s) => (
+                      <option key={s.id} value={s.name}>
+                        {formatPipelineStageLabel(s.name)}
+                      </option>
+                    ))
+                  )}
+                </select>
               </div>
 
             </div>
@@ -488,35 +803,54 @@ export function LeadDetailPage() {
               <div className="space-y-3 p-4 text-xs">
                 {profileInfoTab === 'lead' ? (
                   <>
-                    <p><span className="text-ink-muted">Email</span><br /><span className="text-ink">{lead.email || '-'}</span></p>
-                    <p><span className="text-ink-muted">Phone</span><br /><span className="text-ink">{formattedPhone}</span></p>
-                    <p><span className="text-ink-muted">Lead owner</span><br /><span className="text-ink">{leadOwnerName}</span></p>
-                    <p><span className="text-ink-muted">Job Title</span><br /><span className="text-ink">{lead.designation || '-'}</span></p>
-                    <p><span className="text-ink-muted">Annual revenue</span><br /><span className="text-ink">{formattedValue}</span></p>
-                    <p className="flex items-center gap-2"><span className="text-ink-muted">Lead source</span> <LeadSourceTag source={lead.source} /></p>
-                    <p><span className="text-ink-muted">Open tasks</span><br /><span className="text-ink">{summary.openTasks ?? 0}</span></p>
-                    <p><span className="text-ink-muted">Completed tasks</span><br /><span className="text-ink">{summary.completedTasks ?? 0}</span></p>
+                    <LeadInfoItem Icon={Mail} label="Email" value={lead.email || '-'} href={lead.email ? `mailto:${lead.email}` : undefined} />
+                    <LeadInfoItem Icon={Phone} label="Phone" value={formattedPhone} href={phoneTelHref} />
+                    <LeadInfoItem
+                      Icon={MessageCircle}
+                      label="WhatsApp"
+                      value={formattedWhatsApp}
+                      href={whatsappDigits ? `https://wa.me/${whatsappDigits}` : undefined}
+                    />
+                    <LeadInfoItem Icon={User} label="Lead owner" value={leadOwnerName} />
+                    <LeadInfoItem Icon={UserCircle2} label="Job title" value={lead.designation || '-'} />
+                    <LeadInfoItem Icon={BadgeIndianRupee} label="Annual revenue" value={formattedValue} />
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-medium text-ink-muted">Lead source</p>
+                      <div><LeadSourceTag source={lead.source} /></div>
+                    </div>
+                    <LeadInfoItem Icon={CheckSquare} label="Open tasks" value={String(summary.openTasks ?? 0)} />
+                    <LeadInfoItem Icon={CheckSquare} label="Completed tasks" value={String(summary.completedTasks ?? 0)} />
                     <div className="pt-1">
                       <LeadScorePill score={lead.score || 0} showBar />
                     </div>
                   </>
                 ) : (
                   <>
-                    <p><span className="text-ink-muted">Street</span><br /><span className="text-ink">{lead.street || '-'}</span></p>
-                    <p><span className="text-ink-muted">City</span><br /><span className="text-ink">{lead.city || '-'}</span></p>
-                    <p><span className="text-ink-muted">State</span><br /><span className="text-ink">{lead.state || '-'}</span></p>
-                    <p><span className="text-ink-muted">Country</span><br /><span className="text-ink">{lead.country || '-'}</span></p>
-                    <p><span className="text-ink-muted">Postal code</span><br /><span className="text-ink">{lead.postalCode || '-'}</span></p>
-                    <p><span className="text-ink-muted">Full address</span><br /><span className="text-ink">{addressLine}</span></p>
+                    <LeadInfoItem Icon={Home} label="Street" value={lead.street || '-'} />
+                    <LeadInfoItem Icon={MapPin} label="City" value={lead.city || '-'} />
+                    <LeadInfoItem Icon={MapPin} label="State" value={lead.state || '-'} />
+                    <LeadInfoItem Icon={Flag} label="Country" value={lead.country || '-'} />
+                    <LeadInfoItem Icon={Hash} label="Postal code" value={lead.postalCode || '-'} />
+                    <LeadInfoItem Icon={MapPin} label="Full address" value={addressLine} />
                   </>
                 )}
               </div>
             </div>
           </section>
-          <section className="rounded-2xl border border-surface-border p-3.5">
+          <section className="rounded-2xl border border-surface-border bg-white p-3.5">
             <p className="text-sm font-semibold text-ink">Tags</p>
             <div className="mt-1.5">
-              <LeadTagsInput value={(lead.tags || []).map((tag) => tag.name)} onChange={(tags) => updateLead({ id, tags })} />
+              <LeadTagsInput
+                value={selectedTags}
+                availableTags={availableTags}
+                onChange={handleLeadTagsChange}
+                onCreateTag={({ name, color }) => createLeadTag({ name, color }).unwrap()}
+              />
+            </div>
+            <div className="mt-3 border-t border-surface-border pt-3">
+              <p className="text-xs text-ink-muted">
+                Last activity: {lastActivityAt ? new Date(lastActivityAt).toLocaleString() : '-'}
+              </p>
             </div>
           </section>
         </aside>
@@ -572,7 +906,10 @@ export function LeadDetailPage() {
                 const commentCount = (task.comments || []).length
                 const dueAt = task.dueAt ? new Date(task.dueAt) : null
                 const dueParts = formatTaskDueParts(task.dueAt)
-                const isOverdue = Boolean(dueAt && task.status !== 'completed' && dueAt.getTime() < Date.now())
+                const isOverdue = Boolean(
+                  dueAt && task.status !== 'completed' && task.status !== 'cancelled' && dueAt.getTime() < Date.now(),
+                )
+                const attachmentsCount = Array.isArray(task.attachments) ? task.attachments.length : task.attachmentsCount || 0
                 return (
                   <div
                     key={task.id}
@@ -589,7 +926,9 @@ export function LeadDetailPage() {
                       setTaskDrawerTaskId(task.id)
                       setTaskDrawerOpen(true)
                     }}
-                    className="w-full cursor-pointer rounded-2xl border border-surface-border bg-white text-left shadow-sm ring-1 ring-slate-100/80 transition hover:border-brand-200 hover:shadow-md"
+                    className={`w-full cursor-pointer rounded-2xl border bg-white text-left shadow-sm ring-1 ring-slate-100/80 transition hover:border-brand-200 hover:shadow-md ${
+                      isOverdue ? 'border-red-200 border-l-4 border-l-red-500' : 'border-surface-border'
+                    }`}
                   >
                     <div className="border-b border-surface-border bg-slate-50/60 px-4 py-2.5 sm:px-5">
                       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -597,23 +936,21 @@ export function LeadDetailPage() {
                           <span className="rounded-md bg-brand-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-brand-900">
                             {taskTypeLabel(task.taskType)}
                           </span>
-                          <span className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+                          <span className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+                            <TaskPriorityIcon priority={task.priority} />
                             {task.priority}
                           </span>
-                          <span
-                            className={`rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-                              task.status === 'completed'
-                                ? 'bg-emerald-100 text-emerald-900'
-                                : task.status === 'open'
-                                  ? 'bg-amber-100 text-amber-900'
-                                  : 'bg-slate-200 text-slate-800'
-                            }`}
-                          >
-                            {task.status}
-                          </span>
+                          <TaskStatusPill value={task.status} />
+                          {isOverdue ? <TaskOverdueBadge /> : null}
+                          {task.recurrenceRule ? <TaskRecurrenceIcon rule={task.recurrenceRule} /> : null}
+                          {attachmentsCount ? (
+                            <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-ink-muted">
+                              📎 {attachmentsCount}
+                            </span>
+                          ) : null}
                         </div>
                         <div className="flex shrink-0 items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                          {task.status !== 'completed' ? (
+                          {task.status !== 'completed' && task.status !== 'cancelled' ? (
                             <button
                               type="button"
                               className="h-8 rounded-lg border border-brand-300 bg-white px-3 text-xs font-semibold text-brand-800 shadow-sm hover:bg-brand-50"
@@ -790,6 +1127,126 @@ export function LeadDetailPage() {
                 ) : null}
               </div>
             </div>
+          ) : activeTab === 'documents' ? (
+            <div className="mt-4 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm text-ink-muted">Upload, preview, and edit workspace files linked to this record.</p>
+                <Link
+                  to={`/documents?leadId=${encodeURIComponent(id)}`}
+                  className="text-sm font-semibold text-brand-700 underline-offset-2 hover:underline"
+                >
+                  Open in Documents
+                </Link>
+              </div>
+              <LeadDocumentsWorkspace leadId={id} showUpload />
+            </div>
+          ) : activeTab === 'deal' ? (
+            <div className="mt-4 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm text-ink-muted">
+                  Deals linked to this opportunity ({childDealsForOpp.length})
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setAddDealDrawerOpen(true)}
+                  className="inline-flex h-9 items-center gap-2 rounded-lg bg-brand-600 px-3 text-xs font-semibold text-white hover:bg-brand-700"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add deal
+                </button>
+              </div>
+              {childDealsForOpp.length ? (
+                <div className="w-full max-w-full md:max-w-[32.5%]">
+                  <ul className="space-y-4">
+                  {childDealsForOpp.map((row) => {
+                    const title = (row.dealName || row.fullName || 'Deal').trim()
+                    const stageLabel = formatPipelineStageLabel(row.currentStage) || '—'
+                    const valueLine = formatDealMoney(row.dealValue, row.dealCurrency ?? 'USD')
+                    const createdRaw = row.createdAt ?? row.created_at
+                    const createdLine = dealCardCreatedLabel(createdRaw)
+                    const healthPct = Math.min(100, Math.max(0, Number(row.leadScore) || 0))
+                    const ownerName = row.owner?.name?.trim() || row.owner?.email?.trim() || 'Unassigned'
+                    const ownerInitials = dealCardInitials(ownerName)
+                    return (
+                      <li key={row.id}>
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => setDealPanelOpp(row)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              setDealPanelOpp(row)
+                            }
+                          }}
+                          className="group block w-full cursor-pointer overflow-hidden rounded-2xl border border-surface-border bg-white text-left shadow-sm ring-1 ring-black/[0.03] transition hover:border-slate-300 hover:shadow-md"
+                          aria-label={`Open deal: ${title}`}
+                        >
+                          <div className="border-b border-surface-border px-5 pb-3 pt-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex min-w-0 flex-1 items-center gap-3">
+                                <div
+                                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 text-[13px] font-bold text-white shadow-md ring-2 ring-white"
+                                  aria-hidden
+                                >
+                                  {dealCardInitials(title)}
+                                </div>
+                                <p className="truncate text-lg font-bold leading-tight tracking-tight text-ink">{title}</p>
+                              </div>
+                              <MoreHorizontal className="h-5 w-5 shrink-0 text-ink-muted opacity-70 transition group-hover:opacity-100" aria-hidden />
+                            </div>
+                          </div>
+
+                          <div className="space-y-3 px-5 py-4">
+                            <div className="flex items-center justify-between gap-4 text-sm">
+                              <span className="text-ink-muted">Stage</span>
+                              <span className="flex max-w-[58%] items-center gap-2 font-semibold text-amber-600">
+                                <Flag className="h-4 w-4 shrink-0 fill-amber-500 text-amber-500" strokeWidth={1.75} aria-hidden />
+                                <span className="truncate text-right">{stageLabel}</span>
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between gap-4 text-sm">
+                              <span className="text-ink-muted">Created</span>
+                              <span className="font-medium text-ink">{createdLine}</span>
+                            </div>
+                            <div className="flex items-center justify-between gap-4 text-sm">
+                              <span className="text-ink-muted">Value</span>
+                              <span className="text-base font-bold tabular-nums text-ink">{valueLine}</span>
+                            </div>
+                            <div className="flex items-center justify-between gap-4 text-sm">
+                              <span className="text-ink-muted">Status</span>
+                              <span className="flex items-center gap-2 font-semibold text-ink">
+                                <DealHealthRing score={healthPct} />
+                                <span className="tabular-nums">{healthPct}%</span>
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between border-t border-surface-border bg-slate-50/70 px-5 py-3.5">
+                            <div className="flex min-w-0 items-center gap-2.5">
+                              <div
+                                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[11px] font-bold text-slate-700 ring-2 ring-white"
+                                aria-hidden
+                              >
+                                {ownerInitials}
+                              </div>
+                              <span className="truncate text-sm font-bold text-ink">{ownerName}</span>
+                            </div>
+                            <span className="flex shrink-0 items-center gap-1 text-sm font-medium text-ink-muted transition group-hover:text-brand-600">
+                              See details
+                              <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" aria-hidden />
+                            </span>
+                          </div>
+                        </div>
+                      </li>
+                    )
+                  })}
+                  </ul>
+                </div>
+              ) : (
+                <p className="text-sm text-ink-muted">No deals yet. Add one to track it on the Deals board.</p>
+              )}
+            </div>
           ) : (
             <div className="mt-4 space-y-2">
               {filteredActivities.map((activity, index) => {
@@ -927,7 +1384,7 @@ export function LeadDetailPage() {
             </div>
           )}
 
-          {activeTab === 'notes' || activeTab === 'activity' || activeTab === 'followups' ? null : (
+          {activeTab === 'notes' || activeTab === 'activity' || activeTab === 'followups' || activeTab === 'deal' || activeTab === 'documents' ? null : (
           <div className="mt-4 rounded-xl border border-surface-border p-3">
             {activeTab === 'tasks' ? (
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1007,7 +1464,7 @@ export function LeadDetailPage() {
           />
           {isComposeOpen ? (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-              <div className="w-full max-w-4xl overflow-hidden rounded-2xl border border-surface-border bg-white shadow-2xl">
+              <div className="w-full min-w-0 max-w-none overflow-hidden rounded-2xl border border-surface-border bg-white shadow-2xl">
                 <div className="flex items-center justify-between bg-slate-900 px-4 py-2.5 text-white">
                   <p className="text-sm font-semibold">New Message</p>
                   <button type="button" className="rounded border border-white/20 px-2 py-1 text-xs" onClick={() => setIsComposeOpen(false)}>Close</button>
@@ -1063,6 +1520,29 @@ export function LeadDetailPage() {
               </div>
             </div>
           ) : null}
+          {dealPanelOpp ? (
+            <DealDetailPanel
+              open
+              opp={dealPanelOpp}
+              opportunityStages={opportunityStages}
+              onClose={() => setDealPanelOpp(null)}
+            />
+          ) : null}
+          <AddDealDrawer
+            open={addDealDrawerOpen}
+            onClose={() => setAddDealDrawerOpen(false)}
+            users={formMetaData?.data?.users || []}
+            fixedOpportunityLeadId={id}
+            onCreated={() => {
+              refetchChildDeals()
+            }}
+          />
+          <AddLeadModal
+            open={editLeadOpen}
+            onClose={() => setEditLeadOpen(false)}
+            initialLead={lead}
+            onSubmit={submitLeadEdit}
+          />
         </section>
       </div>
     </PageShell>

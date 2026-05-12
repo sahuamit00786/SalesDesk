@@ -4,7 +4,9 @@ import { TeamMember } from '../models/index.js'
 /**
  * Sequelize `where` fragment for leads the user may see (company-scoped).
  * Company admin: all company leads.
- * Other roles: own leads and same-team leads.
+ * Other roles: leads they created OR are assigned to (`assignedTo`), and same for teammates
+ * (either field may match). Pipeline and list UIs use assignee heavily; filtering only
+ * `ownerUserId` hid deals assigned to the current user but created by someone else.
  */
 export async function leadAccessWhere(user) {
   const companyId = user.companyId
@@ -19,7 +21,10 @@ export async function leadAccessWhere(user) {
   })
   const teamIds = memberships.map((m) => m.teamId)
   if (!teamIds.length) {
-    return { companyId, ownerUserId: user.id }
+    return {
+      companyId,
+      [Op.or]: [{ ownerUserId: user.id }, { assignedTo: user.id }],
+    }
   }
   const peers = await TeamMember.findAll({
     where: { teamId: { [Op.in]: teamIds } },
@@ -27,5 +32,8 @@ export async function leadAccessWhere(user) {
   })
   const userIds = [...new Set(peers.map((p) => p.userId))]
   if (!userIds.includes(user.id)) userIds.push(user.id)
-  return { companyId, ownerUserId: { [Op.in]: userIds } }
+  return {
+    companyId,
+    [Op.or]: [{ ownerUserId: { [Op.in]: userIds } }, { assignedTo: { [Op.in]: userIds } }],
+  }
 }

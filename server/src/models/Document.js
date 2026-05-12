@@ -6,6 +6,7 @@ export const Document = sequelize.define(
   {
     id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
     name: { type: DataTypes.STRING(255), allowNull: false },
+    description: { type: DataTypes.TEXT, allowNull: true },
     fileType: { type: DataTypes.STRING(120), allowNull: false, field: 'file_type' },
     fileSize: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'file_size' },
     filePath: { type: DataTypes.STRING(1024), allowNull: false, field: 'file_path' },

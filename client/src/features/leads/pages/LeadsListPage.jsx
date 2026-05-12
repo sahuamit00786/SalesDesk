@@ -35,6 +35,8 @@ import {
   selectLeadSort,
 } from "@/features/leads/leadsSelectors";
 import { CreateMeetingModal } from "@/features/meetings/components/CreateMeetingModal";
+import { CreateOpportunityModal } from "@/features/opportunities/components/CreateOpportunityModal";
+import { useCreateOpportunityMutation } from "@/features/opportunities/opportunitiesApi";
 
 function downloadJsonAsCsv(name, rows) {
   if (!rows?.length) return;
@@ -56,9 +58,11 @@ function downloadJsonAsCsv(name, rows) {
   URL.revokeObjectURL(url);
 }
 
-export function LeadsListPage() {
+/** @param {{ variant?: 'leads' | 'opportunities' }} props */
+export function LeadsListPage({ variant = "leads" }) {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const isOpportunities = variant === "opportunities";
   const filters = useSelector(selectLeadFilters);
   const sort = useSelector(selectLeadSort);
   const pagination = useSelector(selectLeadPagination);
@@ -75,12 +79,15 @@ export function LeadsListPage() {
   });
   const [meetingOpen, setMeetingOpen] = useState(false);
   const [selectedLeadForMeeting, setSelectedLeadForMeeting] = useState(null);
+  const [createOppOpen, setCreateOppOpen] = useState(false);
 
   const query = {
     ...filters,
-    ...sort,
+    sort: sort.field,
+    order: sort.order,
     page: pagination.page,
     limit: pagination.limit,
+    isOpportunity: isOpportunities ? true : false,
   };
   const { data, isLoading, refetch } = useGetLeadsQuery(query);
   const { data: formMetaData } = useGetLeadFormMetaQuery();
@@ -90,11 +97,13 @@ export function LeadsListPage() {
   const [bulkLeads] = useBulkLeadsMutation();
   const [importLeads] = useImportLeadsMutation();
   const [exportLeads] = useExportLeadsMutation();
+  const [createOpportunity, { isLoading: creatingOpp }] = useCreateOpportunityMutation();
 
   const rows = data?.data || [];
   const total = data?.meta?.total || 0;
   const pages = Math.max(1, Math.ceil(total / pagination.limit));
   const users = formMetaData?.data?.users || [];
+  const opportunityStages = formMetaData?.data?.opportunityStages || [];
 
   useEffect(() => {
     dispatch(setTotal(total));
@@ -111,6 +120,8 @@ export function LeadsListPage() {
     try {
       await fn(body).unwrap();
       setEditLead(null);
+      toast.success(editLead ? "Lead updated" : "Lead saved");
+      refetch();
     } catch (err) {
       if (err?.data?.error?.code === "DUPLICATE_LEAD") {
         const attemptedPhone =
@@ -163,22 +174,39 @@ export function LeadsListPage() {
             </button>
             <button
               type="button"
-              onClick={() => exportAndDownload("leads-all", { filters: {} })}
+              onClick={() =>
+                exportAndDownload(isOpportunities ? "opportunities-all" : "leads-all", {
+                  filters: {
+                    isOpportunity: isOpportunities ? true : false,
+                  },
+                })
+              }
               className="h-9 rounded-lg border border-surface-border bg-white px-4 text-sm"
             >
               Export all
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                setEditLead(null);
-                setAddOpen(true);
-              }}
-              className="inline-flex h-9 items-center gap-2 rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Add Lead
-            </button>
+            {isOpportunities ? (
+              <button
+                type="button"
+                onClick={() => setCreateOppOpen(true)}
+                className="inline-flex h-9 items-center gap-2 rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                New opportunity
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditLead(null);
+                  setAddOpen(true);
+                }}
+                className="inline-flex h-9 items-center gap-2 rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add Lead
+              </button>
+            )}
             {/* <button
               type="button"
               onClick={() => setMeetingOpen(true)}
@@ -217,6 +245,7 @@ export function LeadsListPage() {
         ) : (
           <>
             <LeadsTable
+              variant={variant}
               rows={rows}
               selected={selected}
               onToggleRow={(id) => dispatch(toggleSelected(id))}
@@ -228,7 +257,12 @@ export function LeadsListPage() {
                 dispatch(
                   setSort({
                     field,
-                    order: sort.order === "asc" ? "desc" : "asc",
+                    order:
+                      sort.field === field
+                        ? sort.order === "asc"
+                          ? "desc"
+                          : "asc"
+                        : "desc",
                   }),
                 )
               }
@@ -290,6 +324,7 @@ export function LeadsListPage() {
           setEditLead(null);
         }}
         initialLead={editLead}
+        defaultIsOpportunity={false}
         onSubmit={(payload) => submitLead(payload)}
         onBulkImport={async (rowsForImport) =>
           importLeads(rowsForImport).unwrap()
@@ -374,6 +409,26 @@ export function LeadsListPage() {
           </div>
         </div>
       ) : null}
+      <CreateOpportunityModal
+        open={createOppOpen}
+        onClose={() => setCreateOppOpen(false)}
+        users={users}
+        opportunityStages={opportunityStages}
+        saving={creatingOpp}
+        onSave={async (payload) => {
+          await createOpportunity(payload).unwrap();
+          toast.success("Opportunity added");
+          setCreateOppOpen(false);
+          refetch();
+        }}
+        onSaveAndAddAnother={async (payload, reset) => {
+          await createOpportunity(payload).unwrap();
+          toast.success("Opportunity added");
+          reset();
+          refetch();
+        }}
+      />
+
       <DuplicateWarning
         open={dupeState.open}
         duplicates={dupeState.duplicates}

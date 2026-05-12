@@ -1,6 +1,7 @@
-import { Activity, CustomField, CustomFieldValue, Lead, Tag, Workspace } from '../models/index.js'
+import { Activity, CustomField, CustomFieldValue, Lead, OpportunityStage, Tag, Workspace } from '../models/index.js'
 import { autoAssignLead } from './assignmentRulesService.js'
 import { recalculateScore } from './leadScoringService.js'
+import { emitLeadWorkflowTriggers } from './workflowRunner.js'
 
 export async function createLeadFromSubmission(submission, form, workspaceId, companyId, meta = {}) {
   const leadData = {}
@@ -30,6 +31,26 @@ export async function createLeadFromSubmission(submission, form, workspaceId, co
     leadData.notes = `Landing URL: ${meta.landingUrl}`
   }
 
+  if (workspaceId && companyId && (!leadData.opportunityStage || !String(leadData.opportunityStage).trim())) {
+    const def = await OpportunityStage.findOne({
+      where: { workspaceId, companyId, isDefault: true },
+      order: [
+        ['sortOrder', 'ASC'],
+        ['createdAt', 'ASC'],
+      ],
+    })
+    const first =
+      def ||
+      (await OpportunityStage.findOne({
+        where: { workspaceId, companyId },
+        order: [
+          ['sortOrder', 'ASC'],
+          ['createdAt', 'ASC'],
+        ],
+      }))
+    leadData.opportunityStage = first?.name || 'Lead Inbound'
+  }
+
   const lead = await Lead.create(leadData)
 
   for (const [key, value] of Object.entries(customFields)) {
@@ -40,7 +61,7 @@ export async function createLeadFromSubmission(submission, form, workspaceId, co
   }
 
   if (Array.isArray(form.autoTags) && form.autoTags.length) {
-    const tags = await Tag.findAll({ where: { id: form.autoTags, workspaceId } })
+    const tags = await Tag.findAll({ where: { id: form.autoTags, companyId } })
     if (tags.length) await lead.addTags(tags)
   }
 
@@ -53,5 +74,13 @@ export async function createLeadFromSubmission(submission, form, workspaceId, co
 
   if (form.autoAssign) await autoAssignLead(lead)
   await recalculateScore(lead.id)
+  await emitLeadWorkflowTriggers({
+    eventType: 'lead_created',
+    lead,
+    before: null,
+    companyId,
+    workspaceId,
+    actorUserId: meta.actorUserId || lead.ownerUserId || null,
+  }).catch(() => {})
   return lead
 }

@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Building2, Briefcase, UserCircle2 } from 'lucide-react'
 import { RightDrawer } from '@/components/ui/RightDrawer'
+import { PhoneField } from '@/components/ui/PhoneField'
+import { DEAL_CURRENCY_OPTIONS, normalizeDealCurrency } from '@/features/deals/dealCurrencies'
 
 const FALLBACK_STAGE_NAMES = ['Lead Inbound', 'New', 'Contacted', 'Qualified', 'Proposal Made', 'Negotiation', 'Won', 'Lost']
 const INDUSTRIES = ['Software / SaaS', 'FinTech', 'Healthcare', 'Logistics', 'Manufacturing', 'Education', 'Other']
 const COMPANY_SIZES = ['1-10 employees', '11-50 employees', '51-200 employees', '201-1000 employees', '1000+ employees']
 
 const EMPTY_FORM = {
+  dealName: '',
+  dealDescription: '',
   fullName: '',
   email: '',
   phoneNumber: '',
@@ -17,6 +21,7 @@ const EMPTY_FORM = {
   website: '',
   linkedin: '',
   dealValue: '',
+  dealCurrency: 'USD',
   ownerUserId: '',
 }
 
@@ -68,9 +73,13 @@ export function CreateOpportunityModal({
   }
 
   function normalizedPayload() {
+    const dn = String(form.dealName || '').trim()
     return {
       ...form,
+      dealName: dn || null,
+      dealDescription: String(form.dealDescription || '').trim() || null,
       dealValue: Number(form.dealValue || 0),
+      dealCurrency: normalizeDealCurrency(form.dealCurrency),
       website: form.website || null,
       linkedin: form.linkedin || null,
       email: form.email || null,
@@ -83,7 +92,7 @@ export function CreateOpportunityModal({
   async function submit(kind) {
     if (!form.fullName.trim()) return setError('Full name is required')
     if (!form.companyName.trim()) return setError('Company is required')
-    if (!form.currentStage.trim()) return setError('Current stage is required')
+    if (!form.currentStage.trim()) return setError('Pipeline status is required')
     setError('')
     if (kind === 'add-another') {
       await onSaveAndAddAnother(normalizedPayload(), () =>
@@ -91,6 +100,7 @@ export function CreateOpportunityModal({
           ...EMPTY_FORM,
           currentStage: defaultStage,
           ownerUserId: users[0]?.id || '',
+          dealCurrency: 'USD',
         }),
       )
     }
@@ -113,6 +123,9 @@ export function CreateOpportunityModal({
       }
     >
       <div className="space-y-4">
+          <p className="rounded-md border border-brand-100 bg-brand-50/90 px-2.5 py-2 text-[11px] leading-relaxed text-ink">
+            Saves one row in the <strong>Leads</strong> table with <span className="font-mono text-[10px]">is_opportunity: true</span>, so it appears in Pipeline / Opportunities. Add separate <strong>deals</strong> from the opportunity or the Deals page. You can also create the same shape from <strong>Leads → Add Lead</strong> by turning on <strong>Save as sales opportunity</strong>.
+          </p>
           <section>
             <div className="mb-2 flex items-center gap-1.5">
               <UserCircle2 className="h-4 w-4 text-brand-700" />
@@ -128,8 +141,14 @@ export function CreateOpportunityModal({
                 <input className="h-8 w-full rounded-md border border-surface-border px-2 text-xs" value={form.email} onChange={(e) => patch('email', e.target.value)} placeholder="sarah@company.com" />
               </label>
               <label>
-                <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Phone number</p>
-                <input className="h-8 w-full rounded-md border border-surface-border px-2 text-xs" value={form.phoneNumber} onChange={(e) => patch('phoneNumber', e.target.value)} placeholder="+1 (555) 000-0000" />
+                <PhoneField
+                  compact
+                  label="Phone number"
+                  mode="e164"
+                  defaultCountry="IN"
+                  value={form.phoneNumber}
+                  onChange={(v) => patch('phoneNumber', v || '')}
+                />
               </label>
               <label>
                 <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Job title</p>
@@ -177,12 +196,50 @@ export function CreateOpportunityModal({
               <h3 className="text-sm font-semibold text-ink">Opportunity Info</h3>
             </div>
             <div className="grid gap-2 sm:grid-cols-3">
+              <label className="sm:col-span-3">
+                <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Deal name</p>
+                <input
+                  className="h-8 w-full rounded-md border border-surface-border px-2 text-xs"
+                  value={form.dealName}
+                  onChange={(e) => patch('dealName', e.target.value)}
+                  placeholder={
+                    form.companyName || form.fullName
+                      ? [form.companyName, form.fullName].filter(Boolean).join(' — ')
+                      : 'e.g. Acme — Enterprise pilot'
+                  }
+                />
+                <p className="mt-0.5 text-[10px] text-ink-muted">Shown on pipeline and deal boards. Leave blank to use company / contact.</p>
+              </label>
+              <label className="sm:col-span-3">
+                <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Deal description</p>
+                <textarea
+                  className="min-h-[72px] w-full resize-y rounded-md border border-surface-border px-2 py-1.5 text-xs"
+                  value={form.dealDescription}
+                  onChange={(e) => patch('dealDescription', e.target.value)}
+                  placeholder="Scope, products, terms, or other context…"
+                  rows={3}
+                />
+              </label>
               <label>
                 <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Deal value</p>
                 <input className="h-8 w-full rounded-md border border-surface-border px-2 text-xs" value={form.dealValue} onChange={(e) => patch('dealValue', e.target.value)} placeholder="$ 0.00" />
               </label>
               <label>
-                <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Current stage</p>
+                <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Currency</p>
+                <select
+                  className="h-8 w-full rounded-md border border-surface-border px-2 text-xs"
+                  value={form.dealCurrency}
+                  onChange={(e) => patch('dealCurrency', e.target.value)}
+                >
+                  {DEAL_CURRENCY_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.value}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Pipeline status</p>
                 <select className="h-8 w-full rounded-md border border-surface-border px-2 text-xs" value={form.currentStage} onChange={(e) => patch('currentStage', e.target.value)}>
                   {stageOptions.map((x) => <option key={x} value={x}>{x}</option>)}
                 </select>

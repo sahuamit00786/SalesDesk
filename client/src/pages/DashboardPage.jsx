@@ -22,7 +22,6 @@ import { PageShell } from '@/components/layout/PageShell'
 import { Loader } from '@/components/shared/Loader'
 import { useGetActivitiesFeedQuery } from '@/features/activities/activitiesApi'
 import { useGetLeadsQuery } from '@/features/leads/leadsApi'
-import { useGetOpportunitiesQuery } from '@/features/opportunities/opportunitiesApi'
 import { useGetTasksQuery } from '@/features/tasks/tasksApi'
 import {
   CHART_COLORS,
@@ -132,7 +131,7 @@ export function DashboardPage() {
     data: oppsData,
     isLoading: oppsLoading,
     isError: oppsError,
-  } = useGetOpportunitiesQuery({ page: 1, limit: 1 })
+  } = useGetLeadsQuery({ page: 1, limit: 1, isOpportunity: true })
 
   const {
     data: tasksData,
@@ -310,7 +309,7 @@ export function DashboardPage() {
           )}
         </section>
 
-        <section aria-label="Trend charts" className="mx-auto mt-12 max-w-7xl border-t border-surface-border pt-10">
+        <section aria-label="Trend charts" className="mt-12 w-full border-t border-surface-border pt-10">
           <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
             <div>
               <h2 className="text-base font-semibold text-ink">Trends & breakdowns</h2>

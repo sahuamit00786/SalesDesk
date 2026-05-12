@@ -7,10 +7,12 @@
     "dev": "node --watch index.js",
     "start": "node index.js",
     "db:migrate": "sequelize-cli db:migrate",
-    "db:migrate:undo": "sequelize-cli db:migrate:undo"
+    "db:migrate:undo": "sequelize-cli db:migrate:undo",
+    "db:purge-draft-sales": "node scripts/deleteDraftSalesData.js"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
+    "bullmq": "^5.76.6",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",

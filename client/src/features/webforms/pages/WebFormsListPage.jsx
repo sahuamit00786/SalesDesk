@@ -132,7 +132,7 @@ export function WebFormsListPage() {
         open={Boolean(shareForm)}
         onClose={() => setShareForm(null)}
         title={`Share form: ${shareForm?.name || ''}`}
-        maxWidthClassName="max-w-3xl"
+        maxWidthClassName="max-w-[min(96vw,1400px)]"
       >
         <EmbedCodeModal formToken={shareForm?.publicToken} />
       </Modal>
@@ -141,7 +141,7 @@ export function WebFormsListPage() {
         open={Boolean(submissionFormId)}
         onClose={() => setSubmissionFormId(null)}
         title={`Submissions: ${selectedFormDetail?.form?.name || ''}`}
-        maxWidthClassName="max-w-5xl"
+        maxWidthClassName="max-w-[min(96vw,1600px)]"
       >
         {submissionsLoading ? (
           <div className="rounded-xl border border-surface-border p-4 text-sm text-ink-muted">Loading submissions...</div>

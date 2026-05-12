@@ -56,6 +56,11 @@ export const Invitation = sequelize.define(
       allowNull: true,
       field: 'invited_workspace_ids',
     },
+    profilePrefill: {
+      type: DataTypes.JSON,
+      allowNull: true,
+      field: 'profile_prefill',
+    },
   },
   {
     tableName: 'invitations',

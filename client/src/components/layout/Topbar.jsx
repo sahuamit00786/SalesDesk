@@ -1,13 +1,11 @@
-import { Bell, LogOut, Menu } from 'lucide-react'
+import { LogOut, Menu } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 import { useAppDispatch, useAppSelector } from '@/app/hooks'
 import { logout } from '@/features/auth/authSlice'
 import { getRouteMeta } from '@/components/layout/navConfig'
 import { WorkspaceSwitcher } from '@/components/layout/WorkspaceSwitcher'
-import {MeetingNotificationBell}
-from '@/features/meetings/components/MeetingNotificationBell'
-
+import { MeetingNotificationBell } from '@/features/meetings/components/MeetingNotificationBell'
 export function Topbar({ onMenu }) {
   const { pathname } = useLocation()
   const meta = getRouteMeta(pathname)
@@ -34,14 +32,13 @@ export function Topbar({ onMenu }) {
         </Button>
         <div className="min-w-0 flex-1 py-0.5">
           <h1 className="truncate text-base font-medium text-ink">{meta.title}</h1>
-          <p className="mt-1 line-clamp-2 text-xs leading-snug text-ink-muted sm:line-clamp-none">{meta.sub}</p>
+          {meta.sub ? (
+            <p className="mt-1 line-clamp-2 text-xs leading-snug text-ink-muted sm:line-clamp-none">{meta.sub}</p>
+          ) : null}
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-2 sm:gap-3">
         <WorkspaceSwitcher />
-        {/* <Button variant="icon" type="button" aria-label="Notifications">
-          <Bell className="w-5 h-5" />
-        </Button> */}
         <MeetingNotificationBell />
         <div className="hidden h-10 max-w-[140px] items-center truncate rounded-xl border border-surface-border px-3 text-sm text-ink-muted sm:flex">
           {user?.name ?? 'Signed out'}

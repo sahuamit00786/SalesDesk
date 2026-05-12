@@ -1,5 +1,6 @@
 import { Op } from 'sequelize'
 import { User, UserWorkspace, Workspace } from '../models/index.js'
+import { ensureLibrarySalesDocTemplates } from '../services/defaultSalesDocTemplates.js'
 import { createWorkspaceSchema, patchWorkspaceSchema } from '../validations/workspace.js'
 
 async function userCompanyId(userId) {
@@ -116,6 +117,7 @@ export async function createWorkspace(req, res, next) {
       name: value.name,
       description: desc,
     })
+    await ensureLibrarySalesDocTemplates({ workspaceId: created.id, companyId })
     if (created && !req.user.isCompanyAdmin) {
       await UserWorkspace.findOrCreate({
         where: { userId: req.user.id, workspaceId: created.id },

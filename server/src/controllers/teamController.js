@@ -27,6 +27,7 @@ import {
   deleteCompanyRoleSchema,
   patchTeamSchema,
   patchCompanyRoleSchema,
+  patchUserProfileSchema,
   patchUserRoleSchema,
   replaceUserWorkspacesSchema,
   reassignLeadsSchema,
@@ -52,6 +53,52 @@ function inviteAcceptBaseUrl() {
 
 function uniqueIds(ids) {
   return [...new Set((Array.isArray(ids) ? ids : []).filter(Boolean))]
+}
+
+const INVITE_PROFILE_KEYS = [
+  'department',
+  'jobTitle',
+  'businessPhone',
+  'whatsappNumber',
+  'profilePhotoUrl',
+  'street',
+  'city',
+  'country',
+  'postalCode',
+]
+
+/** Persist only non-empty invite profile hints (stored JSON on Invitation). */
+function buildInvitationProfilePrefill(body) {
+  const out = {}
+  for (const k of INVITE_PROFILE_KEYS) {
+    if (body[k] === undefined) continue
+    const raw = body[k]
+    if (raw == null || raw === '') continue
+    const s = typeof raw === 'string' ? raw.trim() : ''
+    if (typeof raw === 'string') {
+      if (!s) continue
+      out[k] = s
+    } else {
+      out[k] = raw
+    }
+  }
+  return Object.keys(out).length ? out : null
+}
+
+/** Plain columns to merge onto User rows when accepting an invitation. */
+function invitationPrefillForUser(pref) {
+  const out = {}
+  if (!pref || typeof pref !== 'object') return out
+  for (const k of INVITE_PROFILE_KEYS) {
+    const raw = pref[k]
+    if (raw == null) continue
+    if (typeof raw === 'string') {
+      const s = raw.trim()
+      if (!s) continue
+      out[k] = s
+    }
+  }
+  return out
 }
 
 function normalizeRoleMenuPermissions(items) {
@@ -412,6 +459,7 @@ export async function listInvitations(req, res, next) {
           email: i.email,
           companyRole: i.companyRole ? { id: i.companyRole.id, name: i.companyRole.name } : null,
           workspaceIds: uniqueIds(i.invitedWorkspaceIds),
+          profilePrefill: i.profilePrefill && typeof i.profilePrefill === 'object' ? i.profilePrefill : null,
           expiresAt: i.expiresAt?.toISOString() ?? null,
           invitedBy: i.inviter ? { id: i.inviter.id, name: i.inviter.name, email: i.inviter.email } : null,
           createdAt: i.createdAt?.toISOString() ?? null,
@@ -484,6 +532,7 @@ export async function createInvitation(req, res, next) {
 
     const plain = generateInvitePlainToken()
     const tokenHash = await hashInviteToken(plain)
+    const profilePrefill = buildInvitationProfilePrefill(value)
 
     await Invitation.destroy({
       where: { companyId, email: normEmail, acceptedAt: null },
@@ -494,6 +543,7 @@ export async function createInvitation(req, res, next) {
       email: normEmail,
       companyRoleId: selectedCompanyRole.id,
       invitedWorkspaceIds: workspaceIds,
+      profilePrefill,
       tokenHash,
       expiresAt: inviteExpiresAt(48),
       invitedBy: req.user.id,
@@ -589,6 +639,7 @@ export async function acceptInvitation(req, res, next) {
     const normEmail = inv.email.trim().toLowerCase()
 
     let user = await User.unscoped().findOne({ where: { email: normEmail } })
+    const prefillAttrs = invitationPrefillForUser(inv.profilePrefill)
 
     await sequelize.transaction(async (t) => {
       if (user) {
@@ -609,6 +660,7 @@ export async function acceptInvitation(req, res, next) {
         user.emailVerified = true
         user.emailVerificationOtpHash = null
         user.emailVerificationOtpExpiresAt = null
+        Object.assign(user, prefillAttrs)
         await user.save({ transaction: t })
       } else {
         user = await User.unscoped().create(
@@ -621,6 +673,7 @@ export async function acceptInvitation(req, res, next) {
             isCompanyAdmin: false,
             isActive: true,
             emailVerified: true,
+            ...prefillAttrs,
           },
           { transaction: t },
         )
@@ -653,6 +706,8 @@ export async function acceptInvitation(req, res, next) {
     })
 
     await user.reload({ include: userAuthIncludes })
+    user.lastLoginAt = new Date()
+    await user.save()
 
     const tokens = {
       accessToken: signAccessToken({
@@ -689,7 +744,26 @@ export async function listCompanyUsers(req, res, next) {
       where: { companyId },
       include: [{ model: CompanyRole, as: 'companyRole', attributes: ['id', 'name'] }],
       order: [['createdAt', 'ASC']],
-      attributes: ['id', 'name', 'email', 'isActive', 'deactivatedAt', 'createdAt', 'companyRoleId', 'isCompanyAdmin'],
+      attributes: [
+        'id',
+        'name',
+        'email',
+        'isActive',
+        'deactivatedAt',
+        'createdAt',
+        'companyRoleId',
+        'isCompanyAdmin',
+        'department',
+        'jobTitle',
+        'businessPhone',
+        'whatsappNumber',
+        'profilePhotoUrl',
+        'street',
+        'city',
+        'country',
+        'postalCode',
+        'lastLoginAt',
+      ],
     })
     const workspaceSummaryByUser = await hydrateWorkspaceSummaryForUsers(rows.map((u) => u.id))
     return res.json({
@@ -703,6 +777,16 @@ export async function listCompanyUsers(req, res, next) {
             email: u.email,
             isActive: u.isActive,
             deactivatedAt: u.deactivatedAt?.toISOString() ?? null,
+            department: u.department ?? null,
+            jobTitle: u.jobTitle ?? null,
+            businessPhone: u.businessPhone ?? null,
+            whatsappNumber: u.whatsappNumber ?? null,
+            profilePhotoUrl: u.profilePhotoUrl ?? null,
+            street: u.street ?? null,
+            city: u.city ?? null,
+            country: u.country ?? null,
+            postalCode: u.postalCode ?? null,
+            lastLoginAt: u.lastLoginAt?.toISOString() ?? null,
             companyRole: u.companyRole ? { id: u.companyRole.id, name: u.companyRole.name } : null,
             isCompanyAdmin: false,
             workspaces:
@@ -711,6 +795,77 @@ export async function listCompanyUsers(req, res, next) {
                 : (workspaceSummaryByUser.get(u.id) || []).filter((w) => allowedWorkspaceIds.includes(w.id)),
             createdAt: u.createdAt?.toISOString() ?? null,
           })),
+      },
+      meta: {},
+    })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function getCompanyUser(req, res, next) {
+  try {
+    const companyId = req.user.companyId
+    const allowedWorkspaceIds = await allowedWorkspaceIdsForUser(req.user)
+    const user = await User.findOne({
+      where: { id: req.params.id, companyId },
+      include: [{ model: CompanyRole, as: 'companyRole', attributes: ['id', 'name'] }],
+      attributes: [
+        'id',
+        'name',
+        'email',
+        'isActive',
+        'deactivatedAt',
+        'createdAt',
+        'companyRoleId',
+        'isCompanyAdmin',
+        'department',
+        'jobTitle',
+        'businessPhone',
+        'whatsappNumber',
+        'profilePhotoUrl',
+        'street',
+        'city',
+        'country',
+        'postalCode',
+        'lastLoginAt',
+        'avatar',
+      ],
+    })
+    if (!user) {
+      const err = new Error('Not found')
+      err.status = 404
+      err.code = 'NOT_FOUND'
+      err.publicMessage = 'User not found'
+      throw err
+    }
+    const workspaceSummaryByUser = await hydrateWorkspaceSummaryForUsers([user.id])
+    const workspaces = req.user.isCompanyAdmin
+      ? workspaceSummaryByUser.get(user.id) || []
+      : (workspaceSummaryByUser.get(user.id) || []).filter((w) => allowedWorkspaceIds.includes(w.id))
+    return res.json({
+      success: true,
+      data: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        isActive: user.isActive,
+        deactivatedAt: user.deactivatedAt?.toISOString() ?? null,
+        department: user.department ?? null,
+        jobTitle: user.jobTitle ?? null,
+        businessPhone: user.businessPhone ?? null,
+        whatsappNumber: user.whatsappNumber ?? null,
+        profilePhotoUrl: user.profilePhotoUrl ?? null,
+        avatar: user.avatar ?? null,
+        street: user.street ?? null,
+        city: user.city ?? null,
+        country: user.country ?? null,
+        postalCode: user.postalCode ?? null,
+        lastLoginAt: user.lastLoginAt?.toISOString() ?? null,
+        companyRole: user.companyRole ? { id: user.companyRole.id, name: user.companyRole.name } : null,
+        isCompanyAdmin: Boolean(user.isCompanyAdmin),
+        workspaces,
+        createdAt: user.createdAt?.toISOString() ?? null,
       },
       meta: {},
     })
@@ -767,6 +922,62 @@ export async function patchUserRole(req, res, next) {
     target.companyRoleId = value.companyRoleId
     await target.save()
     return res.json({ success: true, data: { id: target.id, companyRoleId: target.companyRoleId }, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function patchUserProfile(req, res, next) {
+  try {
+    const { error, value } = patchUserProfileSchema.validate(req.body, { abortEarly: false, stripUnknown: true })
+    if (error) {
+      const err = new Error('Validation failed')
+      err.status = 400
+      err.code = 'VALIDATION'
+      err.publicMessage = joiPublicMessages(error)
+      throw err
+    }
+
+    const targetId = req.params.id
+    const companyId = req.user.companyId
+    const target = await User.findOne({ where: { id: targetId, companyId } })
+    if (!target) {
+      const err = new Error('Not found')
+      err.status = 404
+      err.code = 'NOT_FOUND'
+      err.publicMessage = 'User not found'
+      throw err
+    }
+
+    if (value.name !== undefined) target.name = value.name?.trim() || target.name
+    if (value.department !== undefined) target.department = value.department?.trim() || null
+    if (value.jobTitle !== undefined) target.jobTitle = value.jobTitle?.trim() || null
+    if (value.businessPhone !== undefined) target.businessPhone = value.businessPhone?.trim() || null
+    if (value.whatsappNumber !== undefined) target.whatsappNumber = value.whatsappNumber?.trim() || null
+    if (value.profilePhotoUrl !== undefined) target.profilePhotoUrl = value.profilePhotoUrl?.trim() || null
+    if (value.street !== undefined) target.street = value.street?.trim() || null
+    if (value.city !== undefined) target.city = value.city?.trim() || null
+    if (value.country !== undefined) target.country = value.country?.trim() || null
+    if (value.postalCode !== undefined) target.postalCode = value.postalCode?.trim() || null
+
+    await target.save()
+    return res.json({
+      success: true,
+      data: {
+        id: target.id,
+        name: target.name,
+        department: target.department ?? null,
+        jobTitle: target.jobTitle ?? null,
+        businessPhone: target.businessPhone ?? null,
+        whatsappNumber: target.whatsappNumber ?? null,
+        profilePhotoUrl: target.profilePhotoUrl ?? null,
+        street: target.street ?? null,
+        city: target.city ?? null,
+        country: target.country ?? null,
+        postalCode: target.postalCode ?? null,
+      },
+      meta: {},
+    })
   } catch (e) {
     return next(e)
   }

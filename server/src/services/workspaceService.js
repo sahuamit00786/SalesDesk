@@ -1,4 +1,5 @@
 import { Workspace } from '../models/index.js'
+import { ensureLibrarySalesDocTemplates } from './defaultSalesDocTemplates.js'
 
 const SUFFIX = ' workspace'
 const MAX_LEN = 240
@@ -37,11 +38,16 @@ export async function ensureCompanyWorkspace(company, opts = {}) {
     return existing
   }
 
-  return Workspace.create(
+  const created = await Workspace.create(
     {
       companyId: company.id,
       name: desiredName,
     },
     { transaction },
   )
+  await ensureLibrarySalesDocTemplates(
+    { workspaceId: created.id, companyId: company.id },
+    { transaction },
+  )
+  return created
 }

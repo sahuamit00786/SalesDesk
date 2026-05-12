@@ -5,6 +5,7 @@ import { BrowserRouter } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { store } from '@/app/store'
 import App from '@/App.jsx'
+import 'react-phone-number-input/style.css'
 import './index.css'
 
 createRoot(document.getElementById('root')).render(

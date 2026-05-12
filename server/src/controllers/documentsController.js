@@ -4,13 +4,16 @@ import {
   addDocumentLinks,
   createDocumentShare,
   createDocumentWithLinks,
+  getDocumentApiPayload,
   getFolderTree,
   isValidDocumentType,
   isValidLinks,
   listDocuments,
   listDocumentShares,
   listDocumentVersions,
+  listLeadDocumentSummaries,
   parseLinks,
+  patchDocumentMetadata,
   restoreVersion,
 } from '../services/documentsService.js'
 
@@ -36,6 +39,7 @@ export async function createDocument(req, res, next) {
       }
     }
     const links = parseLinks(req.body?.links)
+    const description = req.body?.description
 
     if (!name) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Document name is required' } })
     if (!isValidDocumentType(fileType)) {
@@ -49,6 +53,7 @@ export async function createDocument(req, res, next) {
       file: req.file,
       name,
       fileType,
+      description,
       workspaceId,
       uploadedBy: req.user.id,
       folderId,
@@ -57,7 +62,8 @@ export async function createDocument(req, res, next) {
       source: req.body?.source || 'manual',
     })
 
-    return res.status(201).json({ success: true, data: row, meta: {} })
+    const payload = await getDocumentApiPayload({ id: row.id, workspaceId })
+    return res.status(201).json({ success: true, data: payload || row.get({ plain: true }), meta: {} })
   } catch (error) {
     return next(error)
   }
@@ -69,6 +75,42 @@ export async function listAllDocuments(req, res, next) {
     if (!workspaceId) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'workspaceId is required' } })
     const rows = await listDocuments({ workspaceId, filters: req.query || {} })
     return res.json({ success: true, data: rows, meta: {} })
+  } catch (error) {
+    return next(error)
+  }
+}
+
+export async function listLeadDocumentSummariesHandler(req, res, next) {
+  try {
+    const workspaceId = resolveWorkspaceId(req)
+    if (!workspaceId) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'workspaceId is required' } })
+    const rows = await listLeadDocumentSummaries({ workspaceId })
+    return res.json({ success: true, data: rows, meta: {} })
+  } catch (error) {
+    return next(error)
+  }
+}
+
+export async function patchDocument(req, res, next) {
+  try {
+    const workspaceId = resolveWorkspaceId(req)
+    if (!workspaceId) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'workspaceId is required' } })
+    const body = req.body || {}
+    const result = await patchDocumentMetadata({
+      id: req.params.id,
+      workspaceId,
+      name: body.name,
+      description: body.description,
+      fileType: body.fileType,
+    })
+    if (result === null) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Document not found' } })
+    if (result === 'BAD_TYPE') {
+      return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Invalid fileType' } })
+    }
+    if (result === 'BAD_NAME') {
+      return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Name cannot be empty' } })
+    }
+    return res.json({ success: true, data: result, meta: {} })
   } catch (error) {
     return next(error)
   }

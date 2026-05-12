@@ -19,13 +19,12 @@ import {
   LeadTaskComment,
   LeadFollowup,
   LeadSource,
-  LeadStage,
-  LeadStatus,
-  LeadStatusCategory,
   OpportunityStage,
+  DealStatus,
   CountryPhoneCode,
   CompanyGoogleToken,
   LeadEmail,
+  Reminder,
   SavedView,
   Tag,
   User,
@@ -37,12 +36,267 @@ import { exportLeads, importLeads } from '../services/importExportService.js'
 import { recalculateScore } from '../services/leadScoringService.js'
 import { leadAccessWhere } from '../services/leadVisibility.js'
 import { allowedWorkspaceIdsForUser } from '../services/userWorkspaceService.js'
+import {
+  maybePromotePendingTaskFromSubtasks,
+  promotePendingTasksByDueOrStartMany,
+} from '../services/leadTaskAutoStatusService.js'
+import { createLeadSystemActivity as createSystemActivity } from '../services/leadSystemActivity.js'
+import { emitLeadWorkflowTriggers, emitLeadWorkflowTriggersBulkImport } from '../services/workflowRunner.js'
 
-const LEAD_TASK_TYPES = ['call', 'email', 'meeting', 'follow_up', 'internal', 'document', 'other']
+const LEAD_TASK_TYPES = [
+  'call',
+  'email',
+  'meeting',
+  'demo',
+  'follow_up',
+  'whatsapp',
+  'site_visit',
+  'internal',
+  'document',
+  'custom',
+  'other',
+]
+
+const LEAD_TASK_PRIORITIES = ['low', 'medium', 'high', 'urgent']
+const LEAD_TASK_STATUSES = ['pending', 'in_progress', 'completed', 'cancelled']
 
 function normalizeLeadTaskType(value) {
   const t = String(value || '').trim()
   return LEAD_TASK_TYPES.includes(t) ? t : 'follow_up'
+}
+
+function normalizeLeadTaskStatus(value) {
+  const t = String(value || '').trim().toLowerCase()
+  if (t === 'open') return 'pending'
+  if (LEAD_TASK_STATUSES.includes(t)) return t
+  return null
+}
+
+function normalizeLeadTaskPriority(value) {
+  const t = String(value || '').trim().toLowerCase()
+  return LEAD_TASK_PRIORITIES.includes(t) ? t : null
+}
+
+function isOverdueTask(row) {
+  if (!row) return false
+  const status = String(row.status || '').toLowerCase()
+  if (!['pending', 'in_progress'].includes(status)) return false
+  if (!row.dueAt) return false
+  const t = new Date(row.dueAt).getTime()
+  if (Number.isNaN(t)) return false
+  return t < Date.now()
+}
+
+function sanitizeAttachmentsInput(value) {
+  if (value === undefined) return undefined
+  if (value === null) return null
+  if (!Array.isArray(value)) return null
+  const cleaned = []
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue
+    const filename = String(item.filename || item.fileName || '').trim().slice(0, 255)
+    const url = String(item.url || item.fileUrl || '').trim().slice(0, 1024)
+    if (!filename || !url) continue
+    const sizeNum = Number(item.size ?? item.sizeBytes ?? 0)
+    cleaned.push({
+      filename,
+      url,
+      size: Number.isFinite(sizeNum) && sizeNum >= 0 ? sizeNum : 0,
+    })
+  }
+  return cleaned
+}
+
+function attachmentsArray(value) {
+  if (Array.isArray(value)) return value
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value)
+      return Array.isArray(parsed) ? parsed : []
+    } catch {
+      return []
+    }
+  }
+  return []
+}
+
+function attachmentsCountFor(row) {
+  return attachmentsArray(row?.attachments).length
+}
+
+function commentsCountFor(row) {
+  if (Array.isArray(row?.comments)) return row.comments.length
+  return null
+}
+
+const RECURRENCE_FREQ = ['daily', 'weekly', 'monthly', 'custom']
+
+function sanitizeRecurrenceRule(value) {
+  if (value === undefined) return undefined
+  if (value === null) return null
+  if (typeof value !== 'object') return null
+  const freq = String(value.freq || '').trim().toLowerCase()
+  if (!RECURRENCE_FREQ.includes(freq)) return null
+  const intervalNum = Number(value.interval || 1)
+  const interval = Number.isFinite(intervalNum) && intervalNum > 0 ? Math.min(Math.floor(intervalNum), 365) : 1
+  const out = { freq, interval }
+  if (value.until) {
+    const u = new Date(value.until)
+    if (!Number.isNaN(u.getTime())) out.until = u.toISOString()
+  }
+  if (Array.isArray(value.byweekday)) {
+    const days = value.byweekday
+      .map((d) => Number(d))
+      .filter((n) => Number.isInteger(n) && n >= 0 && n <= 6)
+    if (days.length) out.byweekday = Array.from(new Set(days)).sort((a, b) => a - b)
+  }
+  return out
+}
+
+function describeRecurrence(rule) {
+  if (!rule || typeof rule !== 'object') return null
+  const freq = rule.freq
+  const interval = rule.interval || 1
+  if (freq === 'daily') return interval === 1 ? 'Daily' : `Every ${interval} days`
+  if (freq === 'weekly') return interval === 1 ? 'Weekly' : `Every ${interval} weeks`
+  if (freq === 'monthly') return interval === 1 ? 'Monthly' : `Every ${interval} months`
+  if (freq === 'custom') return `Custom (${interval}x)`
+  return null
+}
+
+function advanceDateByRule(date, rule) {
+  if (!date) return null
+  const rawDate = new Date(date)
+  if (Number.isNaN(rawDate.getTime())) return null
+  const interval = rule.interval || 1
+  const next = new Date(rawDate.getTime())
+  if (rule.freq === 'daily' || rule.freq === 'custom') {
+    next.setDate(next.getDate() + interval)
+  } else if (rule.freq === 'weekly') {
+    if (Array.isArray(rule.byweekday) && rule.byweekday.length) {
+      // Find the next byweekday after the current date.
+      for (let i = 1; i <= 7 * Math.max(interval, 1); i += 1) {
+        const candidate = new Date(rawDate.getTime())
+        candidate.setDate(candidate.getDate() + i)
+        if (rule.byweekday.includes(candidate.getDay())) {
+          return candidate
+        }
+      }
+      next.setDate(next.getDate() + 7 * interval)
+    } else {
+      next.setDate(next.getDate() + 7 * interval)
+    }
+  } else if (rule.freq === 'monthly') {
+    next.setMonth(next.getMonth() + interval)
+  } else {
+    return null
+  }
+  return next
+}
+
+async function spawnNextRecurrence(parentTask, actorUserId) {
+  if (!parentTask?.recurrenceRule) return null
+  const rule = parentTask.recurrenceRule
+  const baseDue = parentTask.dueAt ? new Date(parentTask.dueAt) : null
+  if (!baseDue) return null
+  const nextDue = advanceDateByRule(baseDue, rule)
+  if (!nextDue) return null
+  if (rule.until) {
+    const until = new Date(rule.until)
+    if (!Number.isNaN(until.getTime()) && nextDue.getTime() > until.getTime()) return null
+  }
+  let nextStart = null
+  if (parentTask.startAt) {
+    const baseStart = new Date(parentTask.startAt)
+    if (!Number.isNaN(baseStart.getTime())) {
+      nextStart = advanceDateByRule(baseStart, rule)
+    }
+  }
+  const rootParentId = parentTask.recurrenceParentId || parentTask.id
+  // Avoid duplicates: don't spawn if a child for this exact dueAt already exists.
+  const existing = await LeadTask.findOne({
+    where: {
+      recurrenceParentId: rootParentId,
+      dueAt: nextDue,
+    },
+  })
+  if (existing) return existing
+  const child = await LeadTask.create({
+    leadId: parentTask.leadId,
+    workspaceId: parentTask.workspaceId,
+    companyId: parentTask.companyId,
+    title: parentTask.title,
+    taskType: parentTask.taskType,
+    description: parentTask.description,
+    startAt: nextStart,
+    dueAt: nextDue,
+    priority: parentTask.priority,
+    status: 'pending',
+    createdBy: actorUserId || parentTask.createdBy,
+    assignedTo: parentTask.assignedTo,
+    recurrenceRule: rule,
+    recurrenceParentId: rootParentId,
+    attachments: attachmentsArray(parentTask.attachments),
+  })
+  await createSystemActivity({
+    leadId: parentTask.leadId,
+    userId: actorUserId || parentTask.createdBy,
+    body: `Recurring task spawned for ${nextDue.toISOString()}`,
+    metadata: {
+      action: 'task_recurrence_spawned',
+      taskId: child.id,
+      parentTaskId: parentTask.id,
+      title: child.title,
+      dueAt: nextDue.toISOString(),
+    },
+  })
+  return child
+}
+
+function sanitizeReminderInput(item) {
+  if (!item || typeof item !== 'object') return null
+  const remindAtRaw = item.remindAt || item.remind_at || null
+  if (!remindAtRaw) return null
+  const remindAt = new Date(remindAtRaw)
+  if (Number.isNaN(remindAt.getTime())) return null
+  const channelPush = item.channelPush !== undefined ? Boolean(item.channelPush) : true
+  const channelEmail = item.channelEmail !== undefined ? Boolean(item.channelEmail) : true
+  if (!channelPush && !channelEmail) return null
+  return {
+    id: item.id ? String(item.id) : null,
+    remindAt,
+    channelPush,
+    channelEmail,
+  }
+}
+
+async function syncTaskReminders({ task, remindersInput, actorUserId, workspaceId, companyId }) {
+  if (remindersInput === undefined) return
+  const list = Array.isArray(remindersInput) ? remindersInput.map(sanitizeReminderInput).filter(Boolean) : []
+  // Replace strategy: soft-delete all existing task reminders, then recreate.
+  await Reminder.destroy({
+    where: {
+      companyId,
+      targetType: 'task',
+      targetId: task.id,
+    },
+  })
+  for (const r of list) {
+    await Reminder.create({
+      companyId,
+      workspaceId,
+      ownerUserId: task.assignedTo || actorUserId || task.createdBy,
+      createdBy: actorUserId || task.createdBy,
+      title: task.title,
+      notes: task.description || null,
+      remindAt: r.remindAt,
+      status: 'pending',
+      targetType: 'task',
+      targetId: task.id,
+      channelPush: r.channelPush,
+      channelEmail: r.channelEmail,
+    })
+  }
 }
 
 async function replaceLeadTaskSubtasks(leadTaskId, subtasksInput, transaction) {
@@ -114,9 +368,14 @@ function buildListWhere(query) {
   const status = parseCsvList(query.status).filter((v) => statusValues.includes(v))
   const source = parseCsvList(query.source).filter((v) => sourceValues.includes(v))
   const assignedTo = parseCsvList(query.assignedTo)
+  const unassignedOnly = ['true', '1', 'yes'].includes(String(query.unassignedOnly ?? '').trim().toLowerCase())
   if (status.length) where.status = { [Op.in]: status }
   if (source.length) where.source = { [Op.in]: source }
-  if (assignedTo.length) where.assignedTo = { [Op.in]: assignedTo }
+  if (unassignedOnly && !assignedTo.length) {
+    where.assignedTo = { [Op.or]: [{ [Op.is]: null }, { [Op.eq]: '' }] }
+  } else if (assignedTo.length) {
+    where.assignedTo = { [Op.in]: assignedTo }
+  }
   const parseNumericQuery = (value) => {
     if (value === undefined || value === null) return null
     const raw = String(value).trim().toLowerCase()
@@ -148,6 +407,16 @@ function buildListWhere(query) {
       sqlWhere(fn('LOWER', col('Lead.email')), { [Op.like]: q }),
     ]
   }
+  const iso = String(query.isOpportunity ?? '').toLowerCase()
+  if (iso === 'true' || iso === '1') where.isOpportunity = true
+  if (iso === 'false' || iso === '0') where.isOpportunity = false
+
+  const oppStageFilter = parseCsvList(query.stage)
+  if (oppStageFilter.length && (iso === 'true' || iso === '1')) {
+    if (oppStageFilter.length === 1) where.opportunityStage = oppStageFilter[0]
+    else where.opportunityStage = { [Op.in]: oppStageFilter }
+  }
+
   return where
 }
 
@@ -170,14 +439,77 @@ function extractLegacyProfile(notesRaw) {
   }
 }
 
-async function createSystemActivity({ leadId, userId, body, metadata = {} }) {
-  await Activity.create({
-    type: 'system',
-    body,
-    metadata: { actorUserId: userId, ...metadata },
-    leadId,
-    userId,
+async function resolveActorDisplayName(userId, emailFallback) {
+  const u = await User.findByPk(userId, { attributes: ['name', 'email'] })
+  const n = u?.name?.trim()
+  if (n) return n
+  return u?.email?.trim() || emailFallback || 'Someone'
+}
+
+function formatPipelineStageLabelForMessage(value) {
+  const text = String(value || '').trim()
+  if (!text) return '—'
+  return text
+    .split(/[_\s]+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ')
+}
+
+async function normalizeOpportunityStageOrder(workspaceId, companyId, transaction) {
+  const rows = await OpportunityStage.findAll({
+    where: { workspaceId, companyId },
+    order: [
+      ['sortOrder', 'ASC'],
+      ['createdAt', 'ASC'],
+    ],
+    transaction,
   })
+  for (let i = 0; i < rows.length; i += 1) {
+    await rows[i].update({ sortOrder: i, isDefault: i === 0 }, { transaction })
+  }
+}
+
+async function normalizeOpportunityStageDealStatusFlag(workspaceId, companyId, transaction, preferredId = null) {
+  const rows = await OpportunityStage.findAll({
+    where: { workspaceId, companyId },
+    order: [
+      ['sortOrder', 'ASC'],
+      ['createdAt', 'ASC'],
+    ],
+    transaction,
+  })
+  if (!rows.length) return
+
+  let winnerId = preferredId ? String(preferredId) : null
+  if (!winnerId) {
+    const existing = rows.find((row) => row.isDealStatus)
+    winnerId = existing ? String(existing.id) : null
+  }
+  if (!winnerId) {
+    winnerId = String(rows[0].id)
+  }
+
+  for (const row of rows) {
+    const shouldBeDealStage = winnerId ? String(row.id) === winnerId : false
+    if (Boolean(row.isDealStatus) !== shouldBeDealStage) {
+      await row.update({ isDealStatus: shouldBeDealStage }, { transaction })
+    }
+  }
+}
+
+async function normalizeDealStatusOrder(workspaceId, companyId, transaction) {
+  const rows = await DealStatus.findAll({
+    where: { workspaceId, companyId },
+    order: [
+      ['sortOrder', 'ASC'],
+      ['createdAt', 'ASC'],
+    ],
+    transaction,
+  })
+  for (let i = 0; i < rows.length; i += 1) {
+    await rows[i].update({ sortOrder: i, isInitial: i === 0 }, { transaction })
+  }
 }
 
 async function findCompanyLead(req, id) {
@@ -499,8 +831,6 @@ const leadSchema = Joi.object({
     .valid(...sourceValues)
     .required(),
   sourceId: Joi.string().uuid().allow(null, ''),
-  leadStageId: Joi.string().uuid().allow(null, ''),
-  leadStatusId: Joi.string().uuid().allow(null, ''),
   assignedTo: Joi.string().uuid().allow(null, ''),
   assignedUserIds: Joi.array().items(Joi.string().uuid()).default([]),
   closingDate: Joi.date().iso().allow(null, ''),
@@ -516,6 +846,8 @@ const leadSchema = Joi.object({
   tags: Joi.array().items(Joi.string().trim()).default([]),
   customFields: Joi.object().default({}),
   force: Joi.boolean().default(false),
+  isOpportunity: Joi.boolean(),
+  opportunityStage: Joi.string().trim().max(80).allow(null, ''),
 }).custom((value, helpers) => {
   const phone = normalizePhone(value.phone)
   const altPhone = normalizePhone(value.altPhone)
@@ -525,6 +857,28 @@ const leadSchema = Joi.object({
   }
   return value
 }, 'Phone/alternate phone uniqueness')
+
+async function resolveInitialOpportunityStageForLead(workspaceId, companyId, requested) {
+  const trimmed = requested !== undefined && requested !== null ? String(requested).trim() : ''
+  if (trimmed) return trimmed
+  const def = await OpportunityStage.findOne({
+    where: { workspaceId, companyId, isDefault: true },
+    order: [
+      ['sortOrder', 'ASC'],
+      ['createdAt', 'ASC'],
+    ],
+  })
+  if (def) return def.name
+  const first = await OpportunityStage.findOne({
+    where: { workspaceId, companyId },
+    order: [
+      ['sortOrder', 'ASC'],
+      ['createdAt', 'ASC'],
+    ],
+  })
+  if (first) return first.name
+  return 'Lead Inbound'
+}
 
 export async function list(req, res, next) {
   try {
@@ -549,13 +903,25 @@ export async function list(req, res, next) {
 
     const where = { ...accessWhere, ...buildListWhere(req.query) }
 
-    const sort = ['createdAt', 'updatedAt', 'title', 'status', 'score', 'value'].includes(req.query.sort)
+    const sort = [
+      'createdAt',
+      'updatedAt',
+      'title',
+      'status',
+      'score',
+      'value',
+      'opportunityStage',
+      'assignedTo',
+      'source',
+      'contactName',
+      'company',
+    ].includes(req.query.sort)
       ? req.query.sort
       : 'createdAt'
     const order = String(req.query.order || 'desc').toUpperCase() === 'ASC' ? 'ASC' : 'DESC'
 
     const include = [
-      { model: User, as: 'assignee', attributes: ['id', 'name'], required: false },
+      { model: User, as: 'assignee', attributes: ['id', 'name', 'email'], required: false },
       { model: Tag, as: 'tags', attributes: ['id', 'name', 'color'], through: { attributes: [] }, required: false },
     ]
     if (await hasLeadAssignmentsTable()) {
@@ -661,6 +1027,10 @@ export async function create(req, res, next) {
     }
 
     const legacy = extractLegacyProfile(value.notes)
+    const requestedOpp =
+      value.opportunityStage !== undefined && value.opportunityStage !== null
+        ? String(value.opportunityStage).trim()
+        : ''
     const payload = {
       ...value,
       designation: value.designation || legacy.designation || null,
@@ -674,6 +1044,8 @@ export async function create(req, res, next) {
       workspaceId,
       isDeleted: false,
     }
+    payload.opportunityStage =
+      requestedOpp || (await resolveInitialOpportunityStageForLead(String(workspaceId), req.user.companyId, null))
     const lead = await Lead.create(payload)
     if (value.assignedUserIds?.length && (await hasLeadAssignmentsTable())) {
       await LeadAssignment.bulkCreate(
@@ -685,9 +1057,9 @@ export async function create(req, res, next) {
     if (value.tags?.length) {
       const tags = await Promise.all(
         value.tags.map(async (name) => {
-          const existing = await Tag.findOne({ where: { workspaceId, companyId: req.user.companyId, name } })
+          const existing = await Tag.findOne({ where: { companyId: req.user.companyId, name } })
           if (existing) return existing
-          return Tag.create({ name, workspaceId, companyId: req.user.companyId })
+          return Tag.create({ name, companyId: req.user.companyId, workspaceId })
         }),
       )
       await lead.setTags(tags)
@@ -702,6 +1074,14 @@ export async function create(req, res, next) {
     })
     await recalculateScore(lead.id)
     await clearLeadListCache(workspaceId)
+    await emitLeadWorkflowTriggers({
+      eventType: 'lead_created',
+      lead,
+      before: null,
+      companyId: req.user.companyId,
+      workspaceId: String(workspaceId),
+      actorUserId: req.user.id,
+    }).catch(() => {})
     return res.status(201).json({ success: true, data: lead, meta: {} })
   } catch (e) {
     return next(e)
@@ -731,6 +1111,22 @@ export async function update(req, res, next) {
       })
     }
 
+    if (value.opportunityStage !== undefined) {
+      const trimmed = String(value.opportunityStage ?? '').trim()
+      if (trimmed) {
+        const stageOk = await OpportunityStage.findOne({
+          where: { name: trimmed, workspaceId: lead.workspaceId, companyId: req.user.companyId },
+        })
+        if (!stageOk) {
+          return res.status(400).json({
+            success: false,
+            error: { code: 'VALIDATION', message: 'Invalid pipeline stage for this workspace' },
+          })
+        }
+      }
+    }
+
+    const hasTagsField = Object.prototype.hasOwnProperty.call(req.body || {}, 'tags')
     const before = lead.get({ plain: true })
     const legacy = extractLegacyProfile(value.notes || before.notes)
     const payload = {
@@ -740,10 +1136,58 @@ export async function update(req, res, next) {
       state: value.state ?? before.state ?? legacy.state ?? null,
     }
     await lead.update(payload)
+    await lead.reload()
+    const afterStage = lead.opportunityStage || ''
+    if (
+      value.opportunityStage !== undefined &&
+      String(value.opportunityStage || '').trim() &&
+      String(before.opportunityStage || '') !== String(afterStage)
+    ) {
+      const actorName = await resolveActorDisplayName(req.user.id, req.user.email)
+      await Activity.create({
+        type: 'status_change',
+        body: `Pipeline stage changed from ${formatPipelineStageLabelForMessage(before.opportunityStage)} to ${formatPipelineStageLabelForMessage(afterStage)} by ${actorName}`,
+        metadata: {
+          action: 'opportunity_stage_changed',
+          from: before.opportunityStage || '',
+          to: afterStage,
+          actorUserId: req.user.id,
+        },
+        leadId: lead.id,
+        userId: req.user.id,
+      })
+    }
     if (value.assignedUserIds && (await hasLeadAssignmentsTable())) {
       await LeadAssignment.destroy({ where: { leadId: lead.id } })
       if (value.assignedUserIds.length) {
         await LeadAssignment.bulkCreate(value.assignedUserIds.map((userId) => ({ leadId: lead.id, userId })))
+      }
+    }
+    if (hasTagsField) {
+      const existingTags = await lead.getTags({ attributes: ['name'] })
+      const beforeTagNames = [...new Set(existingTags.map((t) => String(t.name || '').trim().toLowerCase()).filter(Boolean))]
+      const nextTagNames = Array.isArray(value.tags) ? value.tags : []
+      const tags = await Promise.all(
+        nextTagNames.map(async (name) => {
+          const existing = await Tag.findOne({ where: { companyId: lead.companyId, name } })
+          if (existing) return existing
+          return Tag.create({ name, companyId: lead.companyId, workspaceId: lead.workspaceId || null })
+        }),
+      )
+      await lead.setTags(tags)
+      const afterTagNames = [...new Set(nextTagNames.map((x) => String(x || '').trim().toLowerCase()).filter(Boolean))]
+      const added = afterTagNames.filter((tag) => !beforeTagNames.includes(tag))
+      if (added.length) {
+        const addedDetails = tags
+          .filter((t) => added.includes(String(t.name || '').trim().toLowerCase()))
+          .map((t) => ({ name: String(t.name || '').trim().toLowerCase(), color: t.color || '#3b73f5' }))
+        const detailText = addedDetails.map((t) => `${t.name} (${t.color})`).join(', ')
+        await createSystemActivity({
+          leadId: lead.id,
+          userId: req.user.id,
+          body: `Tag added: ${detailText}`,
+          metadata: { action: 'lead_tags_added', activityTypeKey: 'tag', added: addedDetails },
+        })
       }
     }
     if (before.status !== lead.status) {
@@ -764,6 +1208,14 @@ export async function update(req, res, next) {
     }
     await recalculateScore(lead.id)
     await clearLeadListCache(lead.workspaceId)
+    await emitLeadWorkflowTriggers({
+      eventType: 'lead_updated',
+      lead,
+      before,
+      companyId: req.user.companyId,
+      workspaceId: String(lead.workspaceId),
+      actorUserId: req.user.id,
+    }).catch(() => {})
     return res.json({ success: true, data: lead, meta: {} })
   } catch (e) {
     return next(e)
@@ -773,11 +1225,10 @@ export async function update(req, res, next) {
 export async function formMeta(req, res, next) {
   try {
     const workspaceId = req.headers['x-workspace-id']
-    const [sourceCount, stageCount, categoryCount, opportunityStageCount] = await Promise.all([
+    const [sourceCount, opportunityStageCount, dealStatusCount] = await Promise.all([
       LeadSource.count({ where: { workspaceId, companyId: req.user.companyId } }),
-      LeadStage.count({ where: { workspaceId, companyId: req.user.companyId } }),
-      LeadStatusCategory.count({ where: { workspaceId, companyId: req.user.companyId } }),
       OpportunityStage.count({ where: { workspaceId, companyId: req.user.companyId } }),
+      DealStatus.count({ where: { workspaceId, companyId: req.user.companyId } }),
     ])
     if (sourceCount === 0) {
       await LeadSource.bulkCreate([
@@ -786,30 +1237,34 @@ export async function formMeta(req, res, next) {
         { name: 'Referral', workspaceId, companyId: req.user.companyId },
       ])
     }
-    if (stageCount === 0) {
-      await LeadStage.bulkCreate([
-        { name: 'New', isDefault: true, workspaceId, companyId: req.user.companyId },
-        { name: 'Qualified', workspaceId, companyId: req.user.companyId },
-      ])
-    }
-    if (categoryCount === 0) {
-      const category = await LeadStatusCategory.create({ name: 'Initial', workspaceId, companyId: req.user.companyId })
-      await LeadStatus.create({ name: 'Initial', categoryId: category.id, isDefault: true, workspaceId, companyId: req.user.companyId })
-    }
     if (opportunityStageCount === 0) {
       const seedStages = [
-        { name: 'Lead Inbound', isDefault: true, sortOrder: 0 },
-        { name: 'New', sortOrder: 1 },
-        { name: 'Contacted', sortOrder: 2 },
-        { name: 'Qualified', sortOrder: 3 },
-        { name: 'Proposal Made', sortOrder: 4 },
-        { name: 'Negotiation', sortOrder: 5 },
-        { name: 'Won', sortOrder: 6 },
-        { name: 'Lost', sortOrder: 7 },
+        { name: 'open', isDefault: true, isDealStatus: false, sortOrder: 0 },
+        { name: 'discovery', sortOrder: 1 },
+        { name: 'demo_scheduled', sortOrder: 2 },
+        { name: 'demo_completed', sortOrder: 3 },
+        { name: 'solution_fit_confirmed', sortOrder: 4 },
+        { name: 'proposal_in_progress', sortOrder: 5 },
+        { name: 'proposal_sent', isDealStatus: true, sortOrder: 6 },
+        { name: 'on_hold', sortOrder: 7 },
       ]
       await OpportunityStage.bulkCreate(
         seedStages.map((s) => ({ ...s, workspaceId, companyId: req.user.companyId })),
       )
+    }
+    await sequelize.transaction(async (transaction) => {
+      await normalizeOpportunityStageOrder(workspaceId, req.user.companyId, transaction)
+      await normalizeOpportunityStageDealStatusFlag(workspaceId, req.user.companyId, transaction)
+    })
+    if (dealStatusCount === 0) {
+      await DealStatus.bulkCreate([
+        { name: 'qualification', isDealCompleteStatus: false, isInitial: true, sortOrder: 0, workspaceId, companyId: req.user.companyId },
+        { name: 'proposal', isDealCompleteStatus: false, isInitial: false, sortOrder: 1, workspaceId, companyId: req.user.companyId },
+        { name: 'negotiation', isDealCompleteStatus: false, isInitial: false, sortOrder: 2, workspaceId, companyId: req.user.companyId },
+        { name: 'contract_sent', isDealCompleteStatus: false, isInitial: false, sortOrder: 3, workspaceId, companyId: req.user.companyId },
+        { name: 'won', isDealCompleteStatus: true, isInitial: false, sortOrder: 4, workspaceId, companyId: req.user.companyId },
+        { name: 'lost', isDealCompleteStatus: false, isInitial: false, sortOrder: 5, workspaceId, companyId: req.user.companyId },
+      ])
     }
     const phoneCodeCount = await CountryPhoneCode.count()
     if (phoneCodeCount < 180) {
@@ -842,14 +1297,8 @@ export async function formMeta(req, res, next) {
       }
     }
 
-    const [sources, stages, categories, users, phoneCodes, opportunityStages] = await Promise.all([
+    const [sources, users, phoneCodes, opportunityStages, dealStatuses, tags] = await Promise.all([
       LeadSource.findAll({ where: { workspaceId, companyId: req.user.companyId, isActive: true }, order: [['name', 'ASC']] }),
-      LeadStage.findAll({ where: { workspaceId, companyId: req.user.companyId, isActive: true }, order: [['isDefault', 'DESC'], ['name', 'ASC']] }),
-      LeadStatusCategory.findAll({
-        where: { workspaceId, companyId: req.user.companyId },
-        include: [{ model: LeadStatus, as: 'statuses', required: false }],
-        order: [['name', 'ASC']],
-      }),
       User.findAll({ where: { companyId: req.user.companyId, isActive: true }, attributes: ['id', 'name', 'email'], order: [['name', 'ASC']] }),
       CountryPhoneCode.findAll({ where: { isActive: true }, order: [['isDefault', 'DESC'], ['countryName', 'ASC']] }),
       OpportunityStage.findAll({
@@ -859,10 +1308,18 @@ export async function formMeta(req, res, next) {
           ['createdAt', 'ASC'],
         ],
       }),
+      DealStatus.findAll({
+        where: { workspaceId, companyId: req.user.companyId },
+        order: [
+          ['sortOrder', 'ASC'],
+          ['createdAt', 'ASC'],
+        ],
+      }),
+      Tag.findAll({ where: { companyId: req.user.companyId }, order: [['name', 'ASC'], ['createdAt', 'ASC']] }),
     ])
     return res.json({
       success: true,
-      data: { sources, stages, statusCategories: categories, users, phoneCodes, opportunityStages },
+      data: { sources, users, phoneCodes, opportunityStages, dealStatuses, tags },
       meta: {},
     })
   } catch (e) {
@@ -882,9 +1339,10 @@ export async function patchStatus(req, res, next) {
     if (!lead) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Lead not found' } })
     const previousStatus = lead.status
     await lead.update({ status, lostReason: lostReason || null, notes: notes || lead.notes })
+    const actorName = await resolveActorDisplayName(req.user.id, req.user.email)
     await Activity.create({
       type: 'status_change',
-      body: `Status changed from ${previousStatus} to ${status}`,
+      body: `Status changed from ${previousStatus} to ${status} by ${actorName}`,
       metadata: { from: previousStatus, to: status, reason: lostReason || null, actorUserId: req.user.id, action: 'status_changed' },
       leadId: lead.id,
       userId: req.user.id,
@@ -931,9 +1389,9 @@ export async function bulk(req, res, next) {
       for (const lead of leads) {
         const tags = await Promise.all(
           (payload.tags || []).map(async (name) => {
-            const existing = await Tag.findOne({ where: { workspaceId: lead.workspaceId, companyId: lead.companyId, name } })
+            const existing = await Tag.findOne({ where: { companyId: lead.companyId, name } })
             if (existing) return existing
-            return Tag.create({ name, workspaceId: lead.workspaceId, companyId: lead.companyId })
+            return Tag.create({ name, companyId: lead.companyId, workspaceId: lead.workspaceId })
           }),
         )
         await lead.addTags(tags)
@@ -945,6 +1403,118 @@ export async function bulk(req, res, next) {
     }
     await clearLeadListCache(leads[0].workspaceId)
     return res.json({ success: true, data: { updated: leads.length }, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+const distributeRoundRobinSchema = Joi.object({
+  leadIds: Joi.array().items(Joi.string().uuid()).min(1).max(500).required(),
+  userIds: Joi.array().items(Joi.string().uuid()).min(1).max(50).required(),
+})
+
+/** Assigns unassigned leads to callers in strict round-robin order (userIds[0], userIds[1], …, wrap). */
+export async function distributeRoundRobin(req, res, next) {
+  try {
+    const { error, value } = distributeRoundRobinSchema.validate(req.body || {}, { abortEarly: false, stripUnknown: true })
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VALIDATION', message: error.details.map((d) => d.message).join(', ') },
+      })
+    }
+    const workspaceId = req.headers['x-workspace-id'] || req.body.workspaceId
+    if (!workspaceId) {
+      return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'workspaceId is required' } })
+    }
+    const allowed = await allowedWorkspaceIdsForUser(req.user)
+    if (allowed.length && !allowed.includes(String(workspaceId)) && !req.user.isCompanyAdmin) {
+      return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to workspace' } })
+    }
+
+    const validUsers = await User.findAll({
+      where: {
+        id: { [Op.in]: value.userIds },
+        companyId: req.user.companyId,
+        isActive: true,
+      },
+      attributes: ['id'],
+    })
+    const validUserIdSet = new Set(validUsers.map((u) => String(u.id)))
+    const orderedUserIds = value.userIds.filter((id) => validUserIdSet.has(String(id)))
+    if (!orderedUserIds.length) {
+      return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'No valid active callers selected' } })
+    }
+    if (orderedUserIds.length !== value.userIds.length) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VALIDATION', message: 'One or more selected users are invalid or inactive' },
+      })
+    }
+
+    const accessWhere = await leadAccessWhere(req.user)
+    accessWhere.workspaceId = String(workspaceId)
+
+    const rows = await Lead.findAll({
+      where: {
+        ...accessWhere,
+        id: { [Op.in]: value.leadIds },
+        companyId: req.user.companyId,
+        isDeleted: false,
+        assignedTo: { [Op.or]: [{ [Op.is]: null }, { [Op.eq]: '' }] },
+      },
+      attributes: ['id', 'workspaceId', 'assignedTo'],
+    })
+    const byId = new Map(rows.map((r) => [String(r.id), r]))
+    const orderedLeads = []
+    for (const id of value.leadIds) {
+      const row = byId.get(String(id))
+      if (row) orderedLeads.push(row)
+    }
+    if (!orderedLeads.length) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VALIDATION', message: 'No matching unassigned leads (check selection and permissions)' },
+      })
+    }
+
+    const hasLA = await hasLeadAssignmentsTable()
+    const assignments = await sequelize.transaction(async (transaction) => {
+      const out = []
+      for (let i = 0; i < orderedLeads.length; i++) {
+        const lead = orderedLeads[i]
+        const assigneeId = orderedUserIds[i % orderedUserIds.length]
+        await lead.update({ assignedTo: assigneeId }, { transaction })
+        if (hasLA) {
+          await LeadAssignment.destroy({ where: { leadId: lead.id }, transaction })
+          await LeadAssignment.create({ leadId: lead.id, userId: assigneeId }, { transaction })
+        }
+        await Activity.create(
+          {
+            type: 'system',
+            body: 'Lead assigned via round-robin distribution',
+            metadata: { action: 'owner_reassigned', from: null, to: assigneeId, via: 'round_robin', actorUserId: req.user.id },
+            leadId: lead.id,
+            userId: req.user.id,
+          },
+          { transaction },
+        )
+        out.push({ leadId: lead.id, assignedTo: assigneeId })
+      }
+      return out
+    })
+
+    await clearLeadListCache(String(workspaceId))
+    const skipped = value.leadIds.length - orderedLeads.length
+    return res.json({
+      success: true,
+      data: {
+        assigned: orderedLeads.length,
+        skipped,
+        assignments,
+      },
+      meta: {},
+    })
   } catch (e) {
     return next(e)
   }
@@ -1581,6 +2151,17 @@ export async function uploadEmailAttachments(req, res, next) {
   }
 }
 
+function decorateTaskRow(row) {
+  if (!row) return row
+  const json = typeof row.toJSON === 'function' ? row.toJSON() : { ...row }
+  json.attachments = attachmentsArray(json.attachments)
+  json.attachmentsCount = json.attachments.length
+  json.commentsCount = commentsCountFor(json) ?? json.commentsCount ?? 0
+  json.isOverdue = isOverdueTask(json)
+  json.recurrenceLabel = describeRecurrence(json.recurrenceRule)
+  return json
+}
+
 export async function listTasks(req, res, next) {
   try {
     const lead = await findCompanyLead(req, req.params.id)
@@ -1611,7 +2192,27 @@ export async function listTasks(req, res, next) {
       ],
       order: [['dueAt', 'ASC'], ['createdAt', 'DESC']],
     })
-    return res.json({ success: true, data: rows, meta: {} })
+    await promotePendingTasksByDueOrStartMany(rows)
+    const taskIds = rows.map((r) => r.id)
+    const reminderRows = taskIds.length
+      ? await Reminder.findAll({
+          where: { companyId: req.user.companyId, targetType: 'task', targetId: { [Op.in]: taskIds } },
+          attributes: ['id', 'targetId', 'remindAt', 'channelPush', 'channelEmail', 'status'],
+          order: [['remindAt', 'ASC']],
+        })
+      : []
+    const reminderByTask = new Map()
+    for (const r of reminderRows) {
+      const list = reminderByTask.get(r.targetId) || []
+      list.push(r)
+      reminderByTask.set(r.targetId, list)
+    }
+    const decorated = rows.map((row) => {
+      const json = decorateTaskRow(row)
+      json.reminders = reminderByTask.get(row.id) || []
+      return json
+    })
+    return res.json({ success: true, data: decorated, meta: {} })
   } catch (e) {
     return next(e)
   }
@@ -1621,8 +2222,13 @@ export async function listAllTasks(req, res, next) {
   try {
     const workspaceIds = await allowedWorkspaceIdsForUser(req.user)
     if (!workspaceIds.length) return res.json({ success: true, data: [], meta: {} })
-    const status = String(req.query.status || '').trim().toLowerCase()
-    const priority = String(req.query.priority || '').trim().toLowerCase()
+    const statusFilters = parseCsvList(req.query.status)
+      .map((v) => String(v || '').trim().toLowerCase())
+      .map((v) => (v === 'open' ? 'pending' : v))
+    const priorityFilters = parseCsvList(req.query.priority).map((v) => String(v || '').trim().toLowerCase())
+    const taskTypeFilters = parseCsvList(req.query.taskType).map((v) => String(v || '').trim().toLowerCase())
+    const wantsOverdue = statusFilters.includes('overdue')
+    const realStatuses = statusFilters.filter((v) => LEAD_TASK_STATUSES.includes(v))
     const q = String(req.query.search || '').trim()
     const horizon = String(req.query.horizon || '').trim().toLowerCase()
     const createdFrom = req.query.createdFrom ? new Date(req.query.createdFrom) : null
@@ -1646,12 +2252,28 @@ export async function listAllTasks(req, res, next) {
       companyId: req.user.companyId,
       workspaceId: { [Op.in]: workspaceIds },
     }
-    if (['open', 'completed', 'cancelled'].includes(status)) taskWhere.status = status
-    if (['low', 'medium', 'high'].includes(priority)) taskWhere.priority = priority
+    if (realStatuses.length) {
+      taskWhere.status = realStatuses.length === 1 ? realStatuses[0] : { [Op.in]: realStatuses }
+    } else if (wantsOverdue) {
+      taskWhere.status = { [Op.in]: ['pending', 'in_progress'] }
+    }
+    const validPriorities = priorityFilters.filter((v) => LEAD_TASK_PRIORITIES.includes(v))
+    if (validPriorities.length) {
+      taskWhere.priority = validPriorities.length === 1 ? validPriorities[0] : { [Op.in]: validPriorities }
+    }
+    const validTaskTypes = taskTypeFilters.filter((v) => LEAD_TASK_TYPES.includes(v))
+    if (validTaskTypes.length) {
+      taskWhere.taskType = validTaskTypes.length === 1 ? validTaskTypes[0] : { [Op.in]: validTaskTypes }
+    }
+    const assignedToParam = req.query.assignedTo ? String(req.query.assignedTo).trim() : ''
+    if (/^[0-9a-fA-F-]{36}$/.test(assignedToParam)) taskWhere.assignedTo = assignedToParam
     if (horizon === 'today') {
       taskWhere.dueAt = { [Op.ne]: null, [Op.lte]: endOfToday }
     } else if (horizon === 'upcoming') {
       taskWhere.dueAt = { [Op.ne]: null, [Op.gt]: endOfTomorrow }
+    }
+    if (wantsOverdue) {
+      taskWhere.dueAt = { ...(taskWhere.dueAt || {}), [Op.ne]: null, [Op.lt]: now }
     }
     if ((createdFrom && !Number.isNaN(createdFrom.getTime())) || (createdTo && !Number.isNaN(createdTo.getTime()))) {
       taskWhere.createdAt = {}
@@ -1691,7 +2313,9 @@ export async function listAllTasks(req, res, next) {
         })
       : rows
 
-    return res.json({ success: true, data: filtered, meta: {} })
+    await promotePendingTasksByDueOrStartMany(filtered)
+    const decorated = filtered.map((row) => decorateTaskRow(row))
+    return res.json({ success: true, data: decorated, meta: {} })
   } catch (e) {
     return next(e)
   }
@@ -1703,6 +2327,12 @@ export async function createTask(req, res, next) {
     if (!lead) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Lead not found' } })
     const title = String(req.body?.title || '').trim()
     if (!title) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Task title is required' } })
+
+    const status = normalizeLeadTaskStatus(req.body?.status) || 'pending'
+    const priority = normalizeLeadTaskPriority(req.body?.priority) || 'medium'
+    const recurrenceRule = sanitizeRecurrenceRule(req.body?.recurrenceRule)
+    const attachments = sanitizeAttachmentsInput(req.body?.attachments)
+
     const row = await LeadTask.create({
       leadId: lead.id,
       workspaceId: lead.workspaceId,
@@ -1710,21 +2340,33 @@ export async function createTask(req, res, next) {
       title,
       taskType: normalizeLeadTaskType(req.body?.taskType),
       description: req.body?.description || null,
-      dueAt: req.body?.dueAt || null,
-      priority: ['low', 'medium', 'high'].includes(req.body?.priority) ? req.body.priority : 'medium',
-      status: ['open', 'completed', 'cancelled'].includes(req.body?.status) ? req.body.status : 'open',
-      completedAt: req.body?.status === 'completed' ? new Date() : null,
+      startAt: req.body?.startAt ? new Date(req.body.startAt) : null,
+      dueAt: req.body?.dueAt ? new Date(req.body.dueAt) : null,
+      priority,
+      status,
+      completedAt: status === 'completed' ? new Date() : null,
       createdBy: req.user.id,
       assignedTo: req.body?.assignedTo || null,
+      recurrenceRule: recurrenceRule === undefined ? null : recurrenceRule,
+      attachments: attachments === undefined ? [] : attachments || [],
     })
     await replaceLeadTaskSubtasks(row.id, req.body?.subtasks)
+    await maybePromotePendingTaskFromSubtasks(row)
+    await row.reload()
+    await syncTaskReminders({
+      task: row,
+      remindersInput: req.body?.reminders,
+      actorUserId: req.user.id,
+      workspaceId: lead.workspaceId,
+      companyId: lead.companyId,
+    })
     await createSystemActivity({
       leadId: lead.id,
       userId: req.user.id,
       body: 'Task created',
       metadata: { action: 'task_created', taskId: row.id, title: row.title },
     })
-    return res.status(201).json({ success: true, data: row, meta: {} })
+    return res.status(201).json({ success: true, data: decorateTaskRow(row), meta: {} })
   } catch (e) {
     return next(e)
   }
@@ -1736,7 +2378,13 @@ export async function patchTask(req, res, next) {
       where: { id: req.params.taskId, leadId: req.params.id, companyId: req.user.companyId },
     })
     if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Task not found' } })
-    const beforeStatus = row.status
+    const before = {
+      status: row.status,
+      priority: row.priority,
+      assignedTo: row.assignedTo,
+      dueAt: row.dueAt ? new Date(row.dueAt).toISOString() : null,
+      attachmentsCount: attachmentsCountFor(row),
+    }
     const payload = {}
     if ('title' in req.body) {
       const nextTitle = String(req.body.title || '').trim()
@@ -1745,24 +2393,114 @@ export async function patchTask(req, res, next) {
     }
     if ('taskType' in req.body) payload.taskType = normalizeLeadTaskType(req.body.taskType)
     if ('description' in req.body) payload.description = req.body.description || null
-    if ('dueAt' in req.body) payload.dueAt = req.body.dueAt || null
-    if ('priority' in req.body && ['low', 'medium', 'high'].includes(req.body.priority)) payload.priority = req.body.priority
-    if ('status' in req.body && ['open', 'completed', 'cancelled'].includes(req.body.status)) {
-      payload.status = req.body.status
-      payload.completedAt = req.body.status === 'completed' ? new Date() : null
+    if ('startAt' in req.body) payload.startAt = req.body.startAt ? new Date(req.body.startAt) : null
+    if ('dueAt' in req.body) payload.dueAt = req.body.dueAt ? new Date(req.body.dueAt) : null
+    if ('priority' in req.body) {
+      const p = normalizeLeadTaskPriority(req.body.priority)
+      if (p) payload.priority = p
+    }
+    if ('status' in req.body) {
+      const s = normalizeLeadTaskStatus(req.body.status)
+      if (s) {
+        payload.status = s
+        payload.completedAt = s === 'completed' ? new Date() : null
+        // Manual Pending = do not auto-move to in_progress when overdue; any other status re-enables time-based auto.
+        if (s === 'pending') payload.skipTimeAutoInProgress = true
+        else payload.skipTimeAutoInProgress = false
+      }
     }
     if ('assignedTo' in req.body) payload.assignedTo = req.body.assignedTo || null
-    await row.update(payload)
-    if ('subtasks' in req.body) await replaceLeadTaskSubtasks(row.id, req.body.subtasks)
-    if (beforeStatus !== row.status && row.status === 'completed') {
+    if ('recurrenceRule' in req.body) {
+      const sanitized = sanitizeRecurrenceRule(req.body.recurrenceRule)
+      payload.recurrenceRule = sanitized === undefined ? null : sanitized
+    }
+    if ('attachments' in req.body) {
+      const sanitized = sanitizeAttachmentsInput(req.body.attachments)
+      payload.attachments = sanitized === undefined ? [] : sanitized || []
+    }
+    if (Object.keys(payload).length) await row.update(payload)
+    if ('subtasks' in req.body) {
+      await replaceLeadTaskSubtasks(row.id, req.body.subtasks)
+      await maybePromotePendingTaskFromSubtasks(row)
+    }
+    await row.reload()
+    if ('reminders' in req.body) {
+      await syncTaskReminders({
+        task: row,
+        remindersInput: req.body.reminders,
+        actorUserId: req.user.id,
+        workspaceId: row.workspaceId,
+        companyId: row.companyId,
+      })
+    }
+
+    const after = {
+      status: row.status,
+      priority: row.priority,
+      assignedTo: row.assignedTo,
+      dueAt: row.dueAt ? new Date(row.dueAt).toISOString() : null,
+      attachmentsCount: attachmentsCountFor(row),
+    }
+    if (before.status !== after.status) {
       await createSystemActivity({
         leadId: row.leadId,
         userId: req.user.id,
-        body: 'Task completed',
-        metadata: { action: 'task_completed', taskId: row.id, title: row.title },
+        body: after.status === 'completed' ? 'Task completed' : `Task status: ${after.status}`,
+        metadata: {
+          action: after.status === 'completed' ? 'task_completed' : 'task_status_changed',
+          taskId: row.id,
+          title: row.title,
+          fromStatus: before.status,
+          toStatus: after.status,
+        },
+      })
+      if (after.status === 'completed') {
+        try {
+          await spawnNextRecurrence(row, req.user.id)
+        } catch {
+          // recurrence spawn is best-effort; don't fail the patch
+        }
+      }
+    }
+    if (before.priority !== after.priority) {
+      await createSystemActivity({
+        leadId: row.leadId,
+        userId: req.user.id,
+        body: `Priority changed to ${after.priority}`,
+        metadata: { action: 'task_priority_changed', taskId: row.id, fromPriority: before.priority, toPriority: after.priority },
       })
     }
-    return res.json({ success: true, data: row, meta: {} })
+    if (before.assignedTo !== after.assignedTo) {
+      await createSystemActivity({
+        leadId: row.leadId,
+        userId: req.user.id,
+        body: after.assignedTo ? 'Task reassigned' : 'Task unassigned',
+        metadata: { action: 'task_assigned', taskId: row.id, fromUserId: before.assignedTo, toUserId: after.assignedTo },
+      })
+    }
+    if (before.dueAt !== after.dueAt) {
+      await createSystemActivity({
+        leadId: row.leadId,
+        userId: req.user.id,
+        body: 'Due date updated',
+        metadata: { action: 'task_due_changed', taskId: row.id, fromDueAt: before.dueAt, toDueAt: after.dueAt },
+      })
+    }
+    if (before.attachmentsCount !== after.attachmentsCount) {
+      const added = after.attachmentsCount > before.attachmentsCount
+      await createSystemActivity({
+        leadId: row.leadId,
+        userId: req.user.id,
+        body: added ? 'Attachment added to task' : 'Attachment removed from task',
+        metadata: {
+          action: added ? 'task_attachment_added' : 'task_attachment_removed',
+          taskId: row.id,
+          fromCount: before.attachmentsCount,
+          toCount: after.attachmentsCount,
+        },
+      })
+    }
+    return res.json({ success: true, data: decorateTaskRow(row), meta: {} })
   } catch (e) {
     return next(e)
   }
@@ -1774,6 +2512,9 @@ export async function deleteTask(req, res, next) {
       where: { id: req.params.taskId, leadId: req.params.id, companyId: req.user.companyId },
     })
     if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Task not found' } })
+    await Reminder.destroy({
+      where: { companyId: row.companyId, targetType: 'task', targetId: row.id },
+    })
     await row.destroy()
     return res.json({ success: true, data: { ok: true }, meta: {} })
   } catch (e) {
@@ -1904,15 +2645,74 @@ export async function addTaskComment(req, res, next) {
     if (!task) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Task not found' } })
     const body = String(req.body?.body || '').trim()
     if (!body) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Comment cannot be empty' } })
+    const isInternal = Boolean(req.body?.isInternal)
     const row = await LeadTaskComment.create({
       leadTaskId: task.id,
       userId: req.user.id,
       body: body.slice(0, 8000),
+      isInternal,
     })
     const full = await LeadTaskComment.findByPk(row.id, {
       include: [{ model: User, as: 'author', attributes: ['id', 'name', 'email'], required: false }],
     })
     return res.status(201).json({ success: true, data: full, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function getTaskTimeline(req, res, next) {
+  try {
+    const lead = await findCompanyLead(req, req.params.id)
+    if (!lead) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Lead not found' } })
+    const task = await LeadTask.findOne({
+      where: { id: req.params.taskId, leadId: lead.id, companyId: req.user.companyId },
+    })
+    if (!task) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Task not found' } })
+
+    const comments = await LeadTaskComment.findAll({
+      where: { leadTaskId: task.id },
+      include: [{ model: User, as: 'author', attributes: ['id', 'name', 'email'], required: false }],
+      order: [['createdAt', 'ASC']],
+    })
+
+    const activities = await Activity.findAll({
+      where: {
+        leadId: lead.id,
+        type: 'system',
+      },
+      include: [{ model: User, as: 'user', attributes: ['id', 'name', 'email'], required: false }],
+      order: [['createdAt', 'ASC']],
+    })
+    const taskActivities = activities.filter((a) => {
+      const meta = a.metadata || {}
+      return meta && (meta.taskId === task.id || meta.parentTaskId === task.id)
+    })
+
+    const items = []
+    for (const c of comments) {
+      items.push({
+        id: c.id,
+        kind: c.isInternal ? 'note' : 'comment',
+        createdAt: c.createdAt,
+        body: c.body,
+        author: c.author ? { id: c.author.id, name: c.author.name, email: c.author.email } : null,
+        isInternal: Boolean(c.isInternal),
+      })
+    }
+    for (const a of taskActivities) {
+      items.push({
+        id: a.id,
+        kind: 'event',
+        createdAt: a.createdAt,
+        body: a.body,
+        author: a.user ? { id: a.user.id, name: a.user.name, email: a.user.email } : null,
+        action: a.metadata?.action || null,
+        metadata: a.metadata || null,
+      })
+    }
+    items.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+    return res.json({ success: true, data: items, meta: {} })
   } catch (e) {
     return next(e)
   }
@@ -2126,6 +2926,14 @@ export async function importRows(req, res, next) {
     const workspaceId = req.headers['x-workspace-id']
     const results = await importLeads(workspaceId, req.user.companyId, req.user.id, req.body?.rows || [])
     await clearLeadListCache(workspaceId)
+    if (results.createdLeadIds?.length) {
+      await emitLeadWorkflowTriggersBulkImport({
+        leadIds: results.createdLeadIds,
+        companyId: req.user.companyId,
+        workspaceId: String(workspaceId),
+        actorUserId: req.user.id,
+      }).catch(() => {})
+    }
     return res.json({ success: true, data: results, meta: {} })
   } catch (e) {
     return next(e)
@@ -2145,31 +2953,42 @@ export async function exportRows(req, res, next) {
 export async function getLeadSetup(req, res, next) {
   try {
     const workspaceId = req.headers['x-workspace-id']
-    const oppStageCount = await OpportunityStage.count({ where: { workspaceId, companyId: req.user.companyId } })
+    const [oppStageCount, dealStatusCount] = await Promise.all([
+      OpportunityStage.count({ where: { workspaceId, companyId: req.user.companyId } }),
+      DealStatus.count({ where: { workspaceId, companyId: req.user.companyId } }),
+    ])
     if (oppStageCount === 0) {
       const seedStages = [
-        { name: 'Lead Inbound', isDefault: true, sortOrder: 0 },
-        { name: 'New', sortOrder: 1 },
-        { name: 'Contacted', sortOrder: 2 },
-        { name: 'Qualified', sortOrder: 3 },
-        { name: 'Proposal Made', sortOrder: 4 },
-        { name: 'Negotiation', sortOrder: 5 },
-        { name: 'Won', sortOrder: 6 },
-        { name: 'Lost', sortOrder: 7 },
+        { name: 'open', isDefault: true, isDealStatus: false, sortOrder: 0 },
+        { name: 'discovery', sortOrder: 1 },
+        { name: 'demo_scheduled', sortOrder: 2 },
+        { name: 'demo_completed', sortOrder: 3 },
+        { name: 'solution_fit_confirmed', sortOrder: 4 },
+        { name: 'proposal_in_progress', sortOrder: 5 },
+        { name: 'proposal_sent', isDealStatus: true, sortOrder: 6 },
+        { name: 'on_hold', sortOrder: 7 },
       ]
       await OpportunityStage.bulkCreate(
         seedStages.map((s) => ({ ...s, workspaceId, companyId: req.user.companyId })),
       )
     }
-    const [sources, stages, categories, tags, opportunityStages] = await Promise.all([
+    await sequelize.transaction(async (transaction) => {
+      await normalizeOpportunityStageOrder(workspaceId, req.user.companyId, transaction)
+      await normalizeOpportunityStageDealStatusFlag(workspaceId, req.user.companyId, transaction)
+    })
+    if (dealStatusCount === 0) {
+      await DealStatus.bulkCreate([
+        { name: 'qualification', isDealCompleteStatus: false, isInitial: true, sortOrder: 0, workspaceId, companyId: req.user.companyId },
+        { name: 'proposal', isDealCompleteStatus: false, isInitial: false, sortOrder: 1, workspaceId, companyId: req.user.companyId },
+        { name: 'negotiation', isDealCompleteStatus: false, isInitial: false, sortOrder: 2, workspaceId, companyId: req.user.companyId },
+        { name: 'contract_sent', isDealCompleteStatus: false, isInitial: false, sortOrder: 3, workspaceId, companyId: req.user.companyId },
+        { name: 'won', isDealCompleteStatus: true, isInitial: false, sortOrder: 4, workspaceId, companyId: req.user.companyId },
+        { name: 'lost', isDealCompleteStatus: false, isInitial: false, sortOrder: 5, workspaceId, companyId: req.user.companyId },
+      ])
+    }
+    const [sources, tags, opportunityStages, dealStatuses] = await Promise.all([
       LeadSource.findAll({ where: { workspaceId, companyId: req.user.companyId }, order: [['createdAt', 'ASC']] }),
-      LeadStage.findAll({ where: { workspaceId, companyId: req.user.companyId }, order: [['createdAt', 'ASC']] }),
-      LeadStatusCategory.findAll({
-        where: { workspaceId, companyId: req.user.companyId },
-        include: [{ model: LeadStatus, as: 'statuses', required: false, order: [['createdAt', 'ASC']] }],
-        order: [['createdAt', 'ASC']],
-      }),
-      Tag.findAll({ where: { workspaceId, companyId: req.user.companyId }, order: [['createdAt', 'ASC']] }),
+      Tag.findAll({ where: { companyId: req.user.companyId }, order: [['name', 'ASC'], ['createdAt', 'ASC']] }),
       OpportunityStage.findAll({
         where: { workspaceId, companyId: req.user.companyId },
         order: [
@@ -2177,8 +2996,111 @@ export async function getLeadSetup(req, res, next) {
           ['createdAt', 'ASC'],
         ],
       }),
+      DealStatus.findAll({
+        where: { workspaceId, companyId: req.user.companyId },
+        order: [
+          ['sortOrder', 'ASC'],
+          ['createdAt', 'ASC'],
+        ],
+      }),
     ])
-    return res.json({ success: true, data: { sources, stages, categories, tags, opportunityStages }, meta: {} })
+    return res.json({ success: true, data: { sources, tags, opportunityStages, dealStatuses }, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function createDealStatus(req, res, next) {
+  try {
+    const workspaceId = req.headers['x-workspace-id']
+    const name = String(req.body?.name || '').trim()
+    if (!name) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Deal status name is required' } })
+    const requestedComplete = Boolean(req.body?.isDealCompleteStatus)
+    const row = await sequelize.transaction(async (transaction) => {
+      const maxOrder = await DealStatus.max('sortOrder', { where: { workspaceId, companyId: req.user.companyId }, transaction })
+      const sortOrder = Number.isFinite(Number(maxOrder)) ? Number(maxOrder) + 1 : 0
+      if (requestedComplete) {
+        await DealStatus.update(
+          { isDealCompleteStatus: false },
+          { where: { workspaceId, companyId: req.user.companyId, isDealCompleteStatus: true }, transaction },
+        )
+      }
+      const created = await DealStatus.create(
+        { name, isDealCompleteStatus: requestedComplete, isInitial: false, sortOrder, workspaceId, companyId: req.user.companyId },
+        { transaction },
+      )
+      await normalizeDealStatusOrder(workspaceId, req.user.companyId, transaction)
+      return created
+    })
+    return res.status(201).json({ success: true, data: row, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function patchDealStatus(req, res, next) {
+  try {
+    const workspaceId = req.headers['x-workspace-id']
+    const row = await DealStatus.findOne({ where: { id: req.params.id, workspaceId, companyId: req.user.companyId } })
+    if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Deal status not found' } })
+    const hasName = Object.prototype.hasOwnProperty.call(req.body || {}, 'name')
+    const hasComplete = Object.prototype.hasOwnProperty.call(req.body || {}, 'isDealCompleteStatus')
+    const name = hasName ? String(req.body?.name || '').trim() : row.name
+    if (!name) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Deal status name is required' } })
+    const makeComplete = hasComplete ? Boolean(req.body?.isDealCompleteStatus) : row.isDealCompleteStatus
+    await sequelize.transaction(async (transaction) => {
+      if (makeComplete) {
+        await DealStatus.update(
+          { isDealCompleteStatus: false },
+          { where: { workspaceId, companyId: req.user.companyId, isDealCompleteStatus: true }, transaction },
+        )
+      }
+      await row.update({ name, isDealCompleteStatus: makeComplete }, { transaction })
+      await normalizeDealStatusOrder(workspaceId, req.user.companyId, transaction)
+    })
+    return res.json({ success: true, data: row, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function deleteDealStatus(req, res, next) {
+  try {
+    const workspaceId = req.headers['x-workspace-id']
+    const row = await DealStatus.findOne({ where: { id: req.params.id, workspaceId, companyId: req.user.companyId } })
+    if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Deal status not found' } })
+    await sequelize.transaction(async (transaction) => {
+      await row.destroy({ transaction })
+      await normalizeDealStatusOrder(workspaceId, req.user.companyId, transaction)
+    })
+    return res.json({ success: true, data: { id: req.params.id }, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function reorderDealStatuses(req, res, next) {
+  try {
+    const workspaceId = req.headers['x-workspace-id']
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids.map((x) => String(x)) : []
+    if (!ids.length) {
+      return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'ids are required' } })
+    }
+    const rows = await DealStatus.findAll({
+      where: { workspaceId, companyId: req.user.companyId },
+      order: [['sortOrder', 'ASC'], ['createdAt', 'ASC']],
+    })
+    const byId = new Map(rows.map((r) => [String(r.id), r]))
+    const ordered = ids.map((id) => byId.get(id)).filter(Boolean)
+    for (const row of rows) {
+      if (!ids.includes(String(row.id))) ordered.push(row)
+    }
+    await sequelize.transaction(async (transaction) => {
+      for (let i = 0; i < ordered.length; i += 1) {
+        await ordered[i].update({ sortOrder: i, isInitial: i === 0 }, { transaction })
+      }
+    })
+    return res.json({ success: true, data: { reordered: ordered.length }, meta: {} })
   } catch (e) {
     return next(e)
   }
@@ -2226,10 +3148,12 @@ export async function createLeadTag(req, res, next) {
   try {
     const workspaceId = req.headers['x-workspace-id']
     const name = String(req.body?.name || '').trim()
+    const colorInput = String(req.body?.color || '').trim()
+    const color = /^#[0-9a-fA-F]{6}$/.test(colorInput) ? colorInput : '#3b73f5'
     if (!name) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Tag name is required' } })
     const [row] = await Tag.findOrCreate({
-      where: { workspaceId, companyId: req.user.companyId, name },
-      defaults: { workspaceId, companyId: req.user.companyId, name, color: '#3b73f5' },
+      where: { companyId: req.user.companyId, name },
+      defaults: { companyId: req.user.companyId, workspaceId: workspaceId || null, name, color },
     })
     return res.status(201).json({ success: true, data: row, meta: {} })
   } catch (e) {
@@ -2239,12 +3163,13 @@ export async function createLeadTag(req, res, next) {
 
 export async function patchLeadTag(req, res, next) {
   try {
-    const workspaceId = req.headers['x-workspace-id']
-    const row = await Tag.findOne({ where: { id: req.params.id, workspaceId, companyId: req.user.companyId } })
+    const row = await Tag.findOne({ where: { id: req.params.id, companyId: req.user.companyId } })
     if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Tag not found' } })
     const name = String(req.body?.name || '').trim()
+    const colorInput = String(req.body?.color || '').trim()
+    const color = /^#[0-9a-fA-F]{6}$/.test(colorInput) ? colorInput : row.color
     if (!name) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Tag name is required' } })
-    await row.update({ name })
+    await row.update({ name, color })
     return res.json({ success: true, data: row, meta: {} })
   } catch (e) {
     return next(e)
@@ -2253,8 +3178,7 @@ export async function patchLeadTag(req, res, next) {
 
 export async function deleteLeadTag(req, res, next) {
   try {
-    const workspaceId = req.headers['x-workspace-id']
-    const row = await Tag.findOne({ where: { id: req.params.id, workspaceId, companyId: req.user.companyId } })
+    const row = await Tag.findOne({ where: { id: req.params.id, companyId: req.user.companyId } })
     if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Tag not found' } })
     await row.destroy()
     return res.json({ success: true, data: { id: req.params.id }, meta: {} })
@@ -2267,21 +3191,18 @@ export async function createOpportunityStage(req, res, next) {
   try {
     const workspaceId = req.headers['x-workspace-id']
     const name = String(req.body?.name || '').trim()
+    const requestedDealStatus = Boolean(req.body?.isDealStatus)
     if (!name) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Stage name is required' } })
-    const isDefault = Boolean(req.body?.isDefault)
     const maxOrder = await OpportunityStage.max('sortOrder', { where: { workspaceId, companyId: req.user.companyId } })
     const sortOrder = Number.isFinite(Number(maxOrder)) ? Number(maxOrder) + 1 : 0
     const row = await sequelize.transaction(async (t) => {
-      if (isDefault) {
-        await OpportunityStage.update(
-          { isDefault: false },
-          { where: { workspaceId, companyId: req.user.companyId }, transaction: t },
-        )
-      }
-      return OpportunityStage.create(
-        { name, isDefault, sortOrder, workspaceId, companyId: req.user.companyId },
+      const created = await OpportunityStage.create(
+        { name, isDefault: false, isDealStatus: requestedDealStatus, sortOrder, workspaceId, companyId: req.user.companyId },
         { transaction: t },
       )
+      await normalizeOpportunityStageOrder(workspaceId, req.user.companyId, t)
+      await normalizeOpportunityStageDealStatusFlag(workspaceId, req.user.companyId, t, requestedDealStatus ? created.id : null)
+      return created
     })
     return res.status(201).json({ success: true, data: row, meta: {} })
   } catch (e) {
@@ -2295,22 +3216,28 @@ export async function patchOpportunityStage(req, res, next) {
     const row = await OpportunityStage.findOne({ where: { id: req.params.id, workspaceId, companyId: req.user.companyId } })
     if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Stage not found' } })
     const name = req.body?.name !== undefined ? String(req.body.name || '').trim() : undefined
+    const hasDealStatus = Object.prototype.hasOwnProperty.call(req.body || {}, 'isDealStatus')
+    const requestedDealStatus = hasDealStatus ? Boolean(req.body?.isDealStatus) : undefined
     if (name !== undefined && !name) {
       return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Stage name is required' } })
     }
-    const isDefault = req.body?.isDefault
     await sequelize.transaction(async (t) => {
-      if (isDefault === true) {
-        await OpportunityStage.update(
-          { isDefault: false },
-          { where: { workspaceId, companyId: req.user.companyId }, transaction: t },
+      if (name !== undefined || requestedDealStatus !== undefined) {
+        await row.update(
+          {
+            ...(name !== undefined ? { name } : {}),
+            ...(requestedDealStatus !== undefined ? { isDealStatus: requestedDealStatus } : {}),
+          },
+          { transaction: t },
         )
-        await row.update({ isDefault: true, ...(name !== undefined ? { name } : {}) }, { transaction: t })
-      } else if (isDefault === false) {
-        await row.update({ isDefault: false, ...(name !== undefined ? { name } : {}) }, { transaction: t })
-      } else if (name !== undefined) {
-        await row.update({ name }, { transaction: t })
       }
+      await normalizeOpportunityStageOrder(workspaceId, req.user.companyId, t)
+      await normalizeOpportunityStageDealStatusFlag(
+        workspaceId,
+        req.user.companyId,
+        t,
+        requestedDealStatus ? row.id : null,
+      )
     })
     await row.reload()
     return res.json({ success: true, data: row, meta: {} })
@@ -2324,92 +3251,40 @@ export async function deleteOpportunityStage(req, res, next) {
     const workspaceId = req.headers['x-workspace-id']
     const row = await OpportunityStage.findOne({ where: { id: req.params.id, workspaceId, companyId: req.user.companyId } })
     if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Stage not found' } })
-    await row.destroy()
+    await sequelize.transaction(async (transaction) => {
+      await row.destroy({ transaction })
+      await normalizeOpportunityStageOrder(workspaceId, req.user.companyId, transaction)
+      await normalizeOpportunityStageDealStatusFlag(workspaceId, req.user.companyId, transaction)
+    })
     return res.json({ success: true, data: { id: req.params.id }, meta: {} })
   } catch (e) {
     return next(e)
   }
 }
 
-export async function createLeadStage(req, res, next) {
+export async function reorderOpportunityStages(req, res, next) {
   try {
     const workspaceId = req.headers['x-workspace-id']
-    const name = String(req.body?.name || '').trim()
-    if (!name) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Stage name is required' } })
-    const row = await LeadStage.create({
-      name,
-      isDefault: Boolean(req.body?.isDefault),
-      isActive: req.body?.isActive !== false,
-      workspaceId,
-      companyId: req.user.companyId,
-    })
-    return res.status(201).json({ success: true, data: row, meta: {} })
-  } catch (e) {
-    return next(e)
-  }
-}
-
-export async function createLeadStatusCategory(req, res, next) {
-  try {
-    const workspaceId = req.headers['x-workspace-id']
-    const name = String(req.body?.name || '').trim()
-    if (!name) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Category name is required' } })
-    const row = await LeadStatusCategory.create({ name, workspaceId, companyId: req.user.companyId })
-    return res.status(201).json({ success: true, data: row, meta: {} })
-  } catch (e) {
-    return next(e)
-  }
-}
-
-export async function patchLeadStatusCategory(req, res, next) {
-  try {
-    const workspaceId = req.headers['x-workspace-id']
-    const row = await LeadStatusCategory.findOne({ where: { id: req.params.id, workspaceId, companyId: req.user.companyId } })
-    if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Category not found' } })
-    const name = String(req.body?.name || '').trim()
-    if (!name) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Category name is required' } })
-    await row.update({ name })
-    return res.json({ success: true, data: row, meta: {} })
-  } catch (e) {
-    return next(e)
-  }
-}
-
-export async function deleteLeadStatusCategory(req, res, next) {
-  try {
-    const workspaceId = req.headers['x-workspace-id']
-    const row = await LeadStatusCategory.findOne({ where: { id: req.params.id, workspaceId, companyId: req.user.companyId } })
-    if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Category not found' } })
-    await LeadStatus.destroy({ where: { categoryId: row.id, workspaceId, companyId: req.user.companyId } })
-    await row.destroy()
-    return res.json({ success: true, data: { id: req.params.id }, meta: {} })
-  } catch (e) {
-    return next(e)
-  }
-}
-
-export async function createLeadStatus(req, res, next) {
-  try {
-    const workspaceId = req.headers['x-workspace-id']
-    const name = String(req.body?.name || '').trim()
-    const categoryId = req.body?.categoryId
-    if (!name || !categoryId) {
-      return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Status name and categoryId are required' } })
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids.map((x) => String(x)) : []
+    if (!ids.length) {
+      return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'ids are required' } })
     }
-    const category = await LeadStatusCategory.findOne({
-      where: { id: categoryId, workspaceId, companyId: req.user.companyId },
+    const rows = await OpportunityStage.findAll({
+      where: { workspaceId, companyId: req.user.companyId },
+      order: [['sortOrder', 'ASC'], ['createdAt', 'ASC']],
     })
-    if (!category) {
-      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Category not found for this company' } })
+    const byId = new Map(rows.map((r) => [String(r.id), r]))
+    const ordered = ids.map((id) => byId.get(id)).filter(Boolean)
+    for (const row of rows) {
+      if (!ids.includes(String(row.id))) ordered.push(row)
     }
-    const row = await LeadStatus.create({
-      name,
-      categoryId,
-      isDefault: Boolean(req.body?.isDefault),
-      workspaceId,
-      companyId: req.user.companyId,
+    await sequelize.transaction(async (transaction) => {
+      for (let i = 0; i < ordered.length; i += 1) {
+        await ordered[i].update({ sortOrder: i, isDefault: i === 0 }, { transaction })
+      }
+      await normalizeOpportunityStageDealStatusFlag(workspaceId, req.user.companyId, transaction)
     })
-    return res.status(201).json({ success: true, data: row, meta: {} })
+    return res.json({ success: true, data: { reordered: ordered.length }, meta: {} })
   } catch (e) {
     return next(e)
   }

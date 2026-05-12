@@ -222,7 +222,7 @@ export function LeadFollowupsTab({ leadId }) {
           <p className="mt-1 text-xs text-ink-muted">Schedule the next touchpoint so nothing slips.</p>
         </div>
       ) : (
-        <ul className="grid max-w-3xl grid-cols-1 gap-2.5">
+        <ul className="grid w-full grid-cols-1 gap-2.5">
           {followups.map((fu) => {
             const at = new Date(fu.scheduledAt)
             const tMs = at.getTime()

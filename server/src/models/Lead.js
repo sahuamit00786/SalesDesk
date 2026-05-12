@@ -77,6 +77,13 @@ export const Lead = sequelize.define(
       allowNull: false,
       defaultValue: 0,
     },
+    /** ISO 4217 code for `value` (deals / opportunities). */
+    valueCurrency: {
+      type: DataTypes.STRING(3),
+      allowNull: false,
+      defaultValue: 'USD',
+      field: 'value_currency',
+    },
     status: {
       type: DataTypes.ENUM('new', 'contacted', 'qualified', 'proposal', 'won', 'lost', 'junk'),
       allowNull: false,
@@ -90,16 +97,6 @@ export const Lead = sequelize.define(
       type: DataTypes.UUID,
       allowNull: true,
       field: 'source_id',
-    },
-    leadStageId: {
-      type: DataTypes.UUID,
-      allowNull: true,
-      field: 'lead_stage_id',
-    },
-    leadStatusId: {
-      type: DataTypes.UUID,
-      allowNull: true,
-      field: 'lead_status_id',
     },
     score: {
       type: DataTypes.INTEGER.UNSIGNED,
@@ -164,6 +161,17 @@ export const Lead = sequelize.define(
       allowNull: false,
       defaultValue: false,
       field: 'is_deleted',
+    },
+    isOpportunity: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+      field: 'is_opportunity',
+    },
+    opportunityStage: {
+      type: DataTypes.STRING(80),
+      allowNull: true,
+      field: 'opportunity_stage',
     },
   },
   {

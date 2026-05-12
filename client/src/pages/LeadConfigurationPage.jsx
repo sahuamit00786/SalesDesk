@@ -1,21 +1,22 @@
 import { useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
-import { GitBranch, ListChecks, Pencil, Plus, Tag, Trash2, Waypoints } from 'lucide-react'
+import { GitBranch, GripVertical, Pencil, Plus, Tag, Trash2, Waypoints } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
 import { Modal } from '@/components/ui/Modal'
 import {
   useCreateLeadSourceMutation,
-  useCreateLeadStatusCategoryMutation,
-  useCreateLeadStatusMutation,
   useCreateLeadTagMutation,
+  useCreateDealStatusMutation,
   useCreateOpportunityStageMutation,
+  useDeleteDealStatusMutation,
   useDeleteLeadSourceMutation,
-  useDeleteLeadStatusCategoryMutation,
   useDeleteLeadTagMutation,
   useDeleteOpportunityStageMutation,
   useGetLeadSetupQuery,
+  useReorderDealStatusesMutation,
+  useReorderOpportunityStagesMutation,
+  useUpdateDealStatusMutation,
   useUpdateLeadSourceMutation,
-  useUpdateLeadStatusCategoryMutation,
   useUpdateLeadTagMutation,
   useUpdateOpportunityStageMutation,
 } from '@/features/leads/leadsApi'
@@ -24,8 +25,8 @@ import { cn } from '@/utils/cn'
 const TABS = [
   { id: 'source', label: 'Source', icon: Waypoints },
   { id: 'tags', label: 'Tags', icon: Tag },
-  { id: 'status', label: 'Status Creation', icon: ListChecks },
-  { id: 'opportunity-stages', label: 'Opportunity stages', icon: GitBranch },
+  { id: 'opportunity-stages', label: 'Lead status (pipeline)', icon: GitBranch },
+  { id: 'deal-statuses', label: 'Deal status name', icon: GitBranch },
 ]
 
 function apiErrorMessage(err) {
@@ -39,6 +40,16 @@ function formatDate(value) {
   return date.toLocaleDateString()
 }
 
+function formatStatusName(value) {
+  const text = String(value || '').trim()
+  if (!text) return ''
+  return text
+    .split(/[_\s]+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ')
+}
+
 export function LeadConfigurationPage() {
   const { data, isLoading } = useGetLeadSetupQuery()
   const [createSource, { isLoading: creatingSource }] = useCreateLeadSourceMutation()
@@ -47,51 +58,53 @@ export function LeadConfigurationPage() {
   const [createTag, { isLoading: creatingTag }] = useCreateLeadTagMutation()
   const [updateTag, { isLoading: updatingTag }] = useUpdateLeadTagMutation()
   const [deleteTag] = useDeleteLeadTagMutation()
-  const [createCategory, { isLoading: creatingCategory }] = useCreateLeadStatusCategoryMutation()
-  const [updateCategory, { isLoading: updatingCategory }] = useUpdateLeadStatusCategoryMutation()
-  const [deleteCategory] = useDeleteLeadStatusCategoryMutation()
-  const [createStatus, { isLoading: creatingStatus }] = useCreateLeadStatusMutation()
   const [createOpportunityStage, { isLoading: creatingOppStage }] = useCreateOpportunityStageMutation()
   const [updateOpportunityStage, { isLoading: updatingOppStage }] = useUpdateOpportunityStageMutation()
+  const [reorderOpportunityStages, { isLoading: reorderingOppStages }] = useReorderOpportunityStagesMutation()
   const [deleteOpportunityStage] = useDeleteOpportunityStageMutation()
+  const [createDealStatus, { isLoading: creatingDealStatus }] = useCreateDealStatusMutation()
+  const [updateDealStatus, { isLoading: updatingDealStatus }] = useUpdateDealStatusMutation()
+  const [deleteDealStatus] = useDeleteDealStatusMutation()
+  const [reorderDealStatuses, { isLoading: reorderingDealStatuses }] = useReorderDealStatusesMutation()
 
   const [activeTab, setActiveTab] = useState('source')
-  const [statusName, setStatusName] = useState('')
-  const [statusCategoryId, setStatusCategoryId] = useState('')
-  const [statusModalOpen, setStatusModalOpen] = useState(false)
-  const [editor, setEditor] = useState({ open: false, mode: 'create', type: 'source', id: null, name: '' })
+  const [editor, setEditor] = useState({ open: false, mode: 'create', type: 'source', id: null, name: '', color: '#3b73f5' })
   const [deleteDialog, setDeleteDialog] = useState({ open: false, type: '', id: null, name: '' })
+  const [draggingOpportunityStageId, setDraggingOpportunityStageId] = useState(null)
+  const [draggingDealStatusId, setDraggingDealStatusId] = useState(null)
 
   const setup = useMemo(
-    () => data?.data || { sources: [], tags: [], categories: [], opportunityStages: [] },
+    () => data?.data || { sources: [], tags: [], opportunityStages: [], dealStatuses: [] },
     [data],
   )
 
   function getEntityLabel(type) {
     if (type === 'source') return 'Source'
     if (type === 'tags') return 'Tag'
-    if (type === 'opportunityStages') return 'Opportunity stage'
-    return 'Status Category'
+    if (type === 'opportunityStages') return 'Lead status'
+    if (type === 'dealStatuses') return 'Deal status'
+    return 'Item'
   }
 
   function getActiveTabType() {
     if (activeTab === 'source') return 'source'
     if (activeTab === 'tags') return 'tags'
     if (activeTab === 'opportunity-stages') return 'opportunityStages'
-    return 'status'
+    if (activeTab === 'deal-statuses') return 'dealStatuses'
+    return 'source'
   }
 
   function openCreateModal() {
     const type = getActiveTabType()
-    setEditor({ open: true, mode: 'create', type, id: null, name: '' })
+    setEditor({ open: true, mode: 'create', type, id: null, name: '', color: '#3b73f5' })
   }
 
   function openEditModal(type, row) {
-    setEditor({ open: true, mode: 'edit', type, id: row.id, name: row.name || '' })
+    setEditor({ open: true, mode: 'edit', type, id: row.id, name: row.name || '', color: row.color || '#3b73f5' })
   }
 
   function closeModal() {
-    setEditor({ open: false, mode: 'create', type: 'source', id: null, name: '' })
+    setEditor({ open: false, mode: 'create', type: 'source', id: null, name: '', color: '#3b73f5' })
   }
 
   async function onSaveModal() {
@@ -109,46 +122,32 @@ export function LeadConfigurationPage() {
       }
       if (editor.type === 'tags') {
         if (editor.mode === 'edit') {
-          await updateTag({ id: editor.id, name }).unwrap()
+          await updateTag({ id: editor.id, name, color: editor.color }).unwrap()
           toast.success('Tag updated')
         } else {
-          await createTag({ name }).unwrap()
+          await createTag({ name, color: editor.color }).unwrap()
           toast.success('Tag created')
-        }
-      }
-      if (editor.type === 'status') {
-        if (editor.mode === 'edit') {
-          await updateCategory({ id: editor.id, name }).unwrap()
-          toast.success('Status category updated')
-        } else {
-          await createCategory({ name }).unwrap()
-          toast.success('Status category created')
         }
       }
       if (editor.type === 'opportunityStages') {
         if (editor.mode === 'edit') {
           await updateOpportunityStage({ id: editor.id, name }).unwrap()
-          toast.success('Opportunity stage updated')
+          toast.success('Lead status updated')
         } else {
           await createOpportunityStage({ name }).unwrap()
-          toast.success('Opportunity stage created')
+          toast.success('Lead status created')
+        }
+      }
+      if (editor.type === 'dealStatuses') {
+        if (editor.mode === 'edit') {
+          await updateDealStatus({ id: editor.id, name }).unwrap()
+          toast.success('Deal status updated')
+        } else {
+          await createDealStatus({ name }).unwrap()
+          toast.success('Deal status created')
         }
       }
       closeModal()
-    } catch (err) {
-      toast.error(apiErrorMessage(err))
-    }
-  }
-
-  async function onCreateStatus() {
-    const name = statusName.trim()
-    if (!name || !statusCategoryId) return
-    try {
-      await createStatus({ name, categoryId: statusCategoryId }).unwrap()
-      setStatusName('')
-      setStatusCategoryId('')
-      setStatusModalOpen(false)
-      toast.success('Status created')
     } catch (err) {
       toast.error(apiErrorMessage(err))
     }
@@ -168,14 +167,13 @@ export function LeadConfigurationPage() {
         await deleteTag(deleteDialog.id).unwrap()
         toast.success('Tag deleted')
       }
-      if (deleteDialog.type === 'status') {
-        await deleteCategory(deleteDialog.id).unwrap()
-        if (statusCategoryId === deleteDialog.id) setStatusCategoryId('')
-        toast.success('Status category deleted')
-      }
       if (deleteDialog.type === 'opportunityStages') {
         await deleteOpportunityStage(deleteDialog.id).unwrap()
-        toast.success('Opportunity stage deleted')
+        toast.success('Lead status deleted')
+      }
+      if (deleteDialog.type === 'dealStatuses') {
+        await deleteDealStatus(deleteDialog.id).unwrap()
+        toast.success('Deal status deleted')
       }
       setDeleteDialog({ open: false, type: '', id: null, name: '' })
     } catch (err) {
@@ -188,15 +186,53 @@ export function LeadConfigurationPage() {
     updatingSource ||
     creatingTag ||
     updatingTag ||
-    creatingCategory ||
-    updatingCategory ||
     creatingOppStage ||
-    updatingOppStage
+    updatingOppStage ||
+    creatingDealStatus ||
+    updatingDealStatus
   const activeAddLabel = `Add ${getEntityLabel(getActiveTabType()).toLowerCase()}`
 
-  async function onSetOpportunityDefault(row, makeDefault) {
+  async function onSetDealCompleteStatus(row, isComplete) {
     try {
-      await updateOpportunityStage({ id: row.id, isDefault: makeDefault }).unwrap()
+      await updateDealStatus({ id: row.id, isDealCompleteStatus: isComplete }).unwrap()
+    } catch (err) {
+      toast.error(apiErrorMessage(err))
+    }
+  }
+
+  async function onReorderDealStatuses(sourceId, targetId) {
+    const rows = Array.isArray(setup.dealStatuses) ? setup.dealStatuses : []
+    const sourceIndex = rows.findIndex((r) => r.id === sourceId)
+    const targetIndex = rows.findIndex((r) => r.id === targetId)
+    if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return
+    const next = [...rows]
+    const [moved] = next.splice(sourceIndex, 1)
+    next.splice(targetIndex, 0, moved)
+    try {
+      await reorderDealStatuses({ ids: next.map((r) => r.id) }).unwrap()
+    } catch (err) {
+      toast.error(apiErrorMessage(err))
+    }
+  }
+
+  async function onReorderOpportunityStages(sourceId, targetId) {
+    const rows = Array.isArray(setup.opportunityStages) ? setup.opportunityStages : []
+    const sourceIndex = rows.findIndex((r) => r.id === sourceId)
+    const targetIndex = rows.findIndex((r) => r.id === targetId)
+    if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return
+    const next = [...rows]
+    const [moved] = next.splice(sourceIndex, 1)
+    next.splice(targetIndex, 0, moved)
+    try {
+      await reorderOpportunityStages({ ids: next.map((r) => r.id) }).unwrap()
+    } catch (err) {
+      toast.error(apiErrorMessage(err))
+    }
+  }
+
+  async function onSetOpportunityDealStatus(row, isDealStatus) {
+    try {
+      await updateOpportunityStage({ id: row.id, isDealStatus }).unwrap()
     } catch (err) {
       toast.error(apiErrorMessage(err))
     }
@@ -236,16 +272,6 @@ export function LeadConfigurationPage() {
                 <Plus className="h-3 w-3" />
                 {activeAddLabel}
               </button>
-              {activeTab === 'status' ? (
-                <button
-                  type="button"
-                  onClick={() => setStatusModalOpen(true)}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-surface-border bg-white px-3 text-xs font-medium text-ink"
-                >
-                  <Plus className="h-3 w-3" />
-                  Add status
-                </button>
-              ) : null}
             </div>
           </div>
 
@@ -312,6 +338,7 @@ export function LeadConfigurationPage() {
                     <thead className="sticky top-0 z-10 bg-white">
                       <tr className="border-b border-surface-border/70">
                         <th className="px-2.5 py-2 text-left text-[11px] font-semibold text-ink-muted">Tag</th>
+                        <th className="px-2.5 py-2 text-left text-[11px] font-semibold text-ink-muted">Color</th>
                         <th className="px-2.5 py-2 text-left text-[11px] font-semibold text-ink-muted">Created</th>
                         <th className="px-2.5 py-2 text-right text-[11px] font-semibold text-ink-muted">Actions</th>
                       </tr>
@@ -319,7 +346,7 @@ export function LeadConfigurationPage() {
                     <tbody>
                       {setup.tags.length === 0 ? (
                         <tr>
-                          <td colSpan={3} className="px-3 py-8 text-center text-ink-muted">
+                          <td colSpan={4} className="px-3 py-8 text-center text-ink-muted">
                             No tags found.
                           </td>
                         </tr>
@@ -327,6 +354,12 @@ export function LeadConfigurationPage() {
                         setup.tags.map((item) => (
                           <tr key={item.id} className="group border-b border-surface-border last:border-b-0 hover:bg-brand-50">
                             <td className="px-2.5 py-2 text-xs text-ink">{item.name}</td>
+                            <td className="px-2.5 py-2">
+                              <span className="inline-flex items-center gap-2 text-xs text-ink-muted">
+                                <span className="h-3.5 w-3.5 rounded-full border border-surface-border" style={{ backgroundColor: item.color || '#3b73f5' }} />
+                                {item.color || '#3b73f5'}
+                              </span>
+                            </td>
                             <td className="px-2.5 py-2 text-xs text-ink-muted">{formatDate(item.createdAt)}</td>
                             <td className="px-2.5 py-2 text-right">
                               <div className="inline-flex gap-1 opacity-100 transition">
@@ -359,77 +392,16 @@ export function LeadConfigurationPage() {
               </div>
             ) : null}
 
-            {activeTab === 'status' ? (
-              <div className="space-y-4">
-                <div className="overflow-hidden rounded-xl border border-surface-border bg-white">
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-full text-xs">
-                      <thead className="sticky top-0 z-10 bg-white">
-                        <tr className="border-b border-surface-border/70">
-                          <th className="px-2.5 py-2 text-left text-[11px] font-semibold text-ink-muted">Category</th>
-                          <th className="px-2.5 py-2 text-left text-[11px] font-semibold text-ink-muted">Statuses</th>
-                          <th className="px-2.5 py-2 text-left text-[11px] font-semibold text-ink-muted">Created</th>
-                          <th className="px-2.5 py-2 text-right text-[11px] font-semibold text-ink-muted">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {setup.categories.length === 0 ? (
-                          <tr>
-                            <td colSpan={4} className="px-3 py-8 text-center text-ink-muted">
-                              No status categories found.
-                            </td>
-                          </tr>
-                        ) : (
-                          setup.categories.map((category) => (
-                            <tr key={category.id} className="group border-b border-surface-border last:border-b-0 hover:bg-brand-50">
-                              <td className="px-2.5 py-2 text-xs font-medium text-ink">{category.name}</td>
-                              <td className="px-2.5 py-2 text-xs text-ink-muted">
-                                {(category.statuses || []).map((status) => status.name).join(', ') || '-'}
-                              </td>
-                              <td className="px-2.5 py-2 text-xs text-ink-muted">{formatDate(category.createdAt)}</td>
-                              <td className="px-2.5 py-2 text-right">
-                                <div className="inline-flex gap-1 opacity-100 transition">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      openEditModal('status', category)
-                                      setStatusCategoryId(category.id)
-                                    }}
-                                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-brand-200 bg-brand-50 text-brand-700"
-                                    aria-label="Edit category"
-                                    title="Edit category"
-                                  >
-                                    <Pencil className="h-3.5 w-3.5" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => openDeleteDialog('status', category)}
-                                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-danger"
-                                    aria-label="Delete category"
-                                    title="Delete category"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            ) : null}
-
             {activeTab === 'opportunity-stages' ? (
               <div className="overflow-hidden rounded-xl border border-surface-border bg-white">
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-full text-xs">
                     <thead className="sticky top-0 z-10 bg-white">
                       <tr className="border-b border-surface-border/70">
+                        <th className="w-8 px-2.5 py-2 text-left text-[11px] font-semibold text-ink-muted">Move</th>
                         <th className="px-2.5 py-2 text-left text-[11px] font-semibold text-ink-muted">Stage</th>
-                        <th className="px-2.5 py-2 text-center text-[11px] font-semibold text-ink-muted">Default</th>
+                        <th className="px-2.5 py-2 text-center text-[11px] font-semibold text-ink-muted">Initial</th>
+                        <th className="px-2.5 py-2 text-center text-[11px] font-semibold text-ink-muted">Deal status</th>
                         <th className="px-2.5 py-2 text-left text-[11px] font-semibold text-ink-muted">Created</th>
                         <th className="px-2.5 py-2 text-right text-[11px] font-semibold text-ink-muted">Actions</th>
                       </tr>
@@ -437,22 +409,44 @@ export function LeadConfigurationPage() {
                     <tbody>
                       {(setup.opportunityStages || []).length === 0 ? (
                         <tr>
-                          <td colSpan={4} className="px-3 py-8 text-center text-ink-muted">
-                            No opportunity stages found.
+                          <td colSpan={6} className="px-3 py-8 text-center text-ink-muted">
+                            No lead statuses found.
                           </td>
                         </tr>
                       ) : (
                         setup.opportunityStages.map((item) => (
-                          <tr key={item.id} className="group border-b border-surface-border last:border-b-0 hover:bg-brand-50">
-                            <td className="px-2.5 py-2 text-xs text-ink">{item.name}</td>
+                          <tr
+                            key={item.id}
+                            draggable={!reorderingOppStages}
+                            onDragStart={() => setDraggingOpportunityStageId(item.id)}
+                            onDragEnd={() => setDraggingOpportunityStageId(null)}
+                            onDragOver={(e) => e.preventDefault()}
+                            onDrop={() => {
+                              if (draggingOpportunityStageId && draggingOpportunityStageId !== item.id) {
+                                onReorderOpportunityStages(draggingOpportunityStageId, item.id)
+                              }
+                              setDraggingOpportunityStageId(null)
+                            }}
+                            className={cn(
+                              'group border-b border-surface-border last:border-b-0 hover:bg-brand-50',
+                              draggingOpportunityStageId === item.id ? 'opacity-50' : '',
+                            )}
+                          >
+                            <td className="px-2.5 py-2 text-ink-muted">
+                              <span className="inline-flex cursor-grab items-center" title="Drag to reorder">
+                                <GripVertical className="h-3.5 w-3.5" />
+                              </span>
+                            </td>
+                            <td className="px-2.5 py-2 text-xs text-ink">{formatStatusName(item.name)}</td>
+                            <td className="px-2.5 py-2 text-center text-xs text-ink-muted">{item.isDefault ? 'Yes' : 'No'}</td>
                             <td className="px-2.5 py-2 text-center">
                               <input
                                 type="checkbox"
                                 className="h-3.5 w-3.5 rounded border-surface-border text-brand-600 focus:ring-brand-500"
-                                checked={!!item.isDefault}
-                                disabled={updatingOppStage}
-                                onChange={(e) => onSetOpportunityDefault(item, e.target.checked)}
-                                aria-label={item.isDefault ? 'Default pipeline stage' : 'Set as default pipeline stage'}
+                                checked={!!item.isDealStatus}
+                                disabled={updatingOppStage || reorderingOppStages}
+                                onChange={(e) => onSetOpportunityDealStatus(item, e.target.checked)}
+                                aria-label={item.isDealStatus ? 'Deal stage selected' : 'Set as deal stage'}
                               />
                             </td>
                             <td className="px-2.5 py-2 text-xs text-ink-muted">{formatDate(item.createdAt)}</td>
@@ -462,8 +456,8 @@ export function LeadConfigurationPage() {
                                   type="button"
                                   onClick={() => openEditModal('opportunityStages', item)}
                                   className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-brand-200 bg-brand-50 text-brand-700"
-                                  aria-label="Edit opportunity stage"
-                                  title="Edit opportunity stage"
+                                  aria-label="Edit lead status"
+                                  title="Edit lead status"
                                 >
                                   <Pencil className="h-3.5 w-3.5" />
                                 </button>
@@ -471,8 +465,98 @@ export function LeadConfigurationPage() {
                                   type="button"
                                   onClick={() => openDeleteDialog('opportunityStages', item)}
                                   className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-danger"
-                                  aria-label="Delete opportunity stage"
-                                  title="Delete opportunity stage"
+                                  aria-label="Delete lead status"
+                                  title="Delete lead status"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : null}
+            {activeTab === 'deal-statuses' ? (
+              <div className="overflow-hidden rounded-xl border border-surface-border bg-white">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-full text-xs">
+                    <thead className="sticky top-0 z-10 bg-white">
+                      <tr className="border-b border-surface-border/70">
+                        <th className="w-8 px-2.5 py-2 text-left text-[11px] font-semibold text-ink-muted">Move</th>
+                        <th className="px-2.5 py-2 text-left text-[11px] font-semibold text-ink-muted">Status name</th>
+                        <th className="px-2.5 py-2 text-center text-[11px] font-semibold text-ink-muted">Initial</th>
+                        <th className="px-2.5 py-2 text-center text-[11px] font-semibold text-ink-muted">Is deal complete status</th>
+                        <th className="px-2.5 py-2 text-left text-[11px] font-semibold text-ink-muted">Created</th>
+                        <th className="px-2.5 py-2 text-right text-[11px] font-semibold text-ink-muted">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(setup.dealStatuses || []).length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="px-3 py-8 text-center text-ink-muted">
+                            No deal statuses found.
+                          </td>
+                        </tr>
+                      ) : (
+                        setup.dealStatuses.map((item) => (
+                          <tr
+                            key={item.id}
+                            draggable={!reorderingDealStatuses}
+                            onDragStart={() => setDraggingDealStatusId(item.id)}
+                            onDragEnd={() => setDraggingDealStatusId(null)}
+                            onDragOver={(e) => e.preventDefault()}
+                            onDrop={() => {
+                              if (draggingDealStatusId && draggingDealStatusId !== item.id) {
+                                onReorderDealStatuses(draggingDealStatusId, item.id)
+                              }
+                              setDraggingDealStatusId(null)
+                            }}
+                            className={cn(
+                              'group border-b border-surface-border last:border-b-0 hover:bg-brand-50',
+                              draggingDealStatusId === item.id ? 'opacity-50' : '',
+                            )}
+                          >
+                            <td className="px-2.5 py-2 text-ink-muted">
+                              <span className="inline-flex cursor-grab items-center" title="Drag to reorder">
+                                <GripVertical className="h-3.5 w-3.5" />
+                              </span>
+                            </td>
+                            <td className="px-2.5 py-2 text-xs text-ink">{item.name}</td>
+                            <td className="px-2.5 py-2 text-center text-xs text-ink-muted">
+                              {item.isInitial ? 'Yes' : 'No'}
+                            </td>
+                            <td className="px-2.5 py-2 text-center">
+                              <input
+                                type="checkbox"
+                                className="h-3.5 w-3.5 rounded border-surface-border text-brand-600 focus:ring-brand-500"
+                                checked={!!item.isDealCompleteStatus}
+                                disabled={updatingDealStatus || reorderingDealStatuses}
+                                onChange={(e) => onSetDealCompleteStatus(item, e.target.checked)}
+                                aria-label={item.isDealCompleteStatus ? 'Deal complete status selected' : 'Set as deal complete status'}
+                              />
+                            </td>
+                            <td className="px-2.5 py-2 text-xs text-ink-muted">{formatDate(item.createdAt)}</td>
+                            <td className="px-2.5 py-2 text-right">
+                              <div className="inline-flex gap-1 opacity-100 transition">
+                                <button
+                                  type="button"
+                                  onClick={() => openEditModal('dealStatuses', item)}
+                                  className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-brand-200 bg-brand-50 text-brand-700"
+                                  aria-label="Edit deal status"
+                                  title="Edit deal status"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => openDeleteDialog('dealStatuses', item)}
+                                  className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-danger"
+                                  aria-label="Delete deal status"
+                                  title="Delete deal status"
                                 >
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </button>
@@ -524,60 +608,20 @@ export function LeadConfigurationPage() {
           className="h-10 rounded-xl border border-surface-border px-3.5 text-sm"
           autoFocus
         />
-      </Modal>
-
-      <Modal
-        open={statusModalOpen}
-        onClose={() => {
-          setStatusModalOpen(false)
-          setStatusName('')
-        }}
-        title="Add status"
-        footer={
-          <>
-            <button
-              type="button"
-              onClick={() => {
-                setStatusModalOpen(false)
-                setStatusName('')
-              }}
-              className="h-10 rounded-xl border border-surface-border bg-white px-4 text-sm font-medium text-ink-muted"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={onCreateStatus}
-              disabled={creatingStatus || !statusCategoryId || !statusName.trim()}
-              className="h-10 rounded-xl bg-brand-600 px-4 text-sm font-medium text-white disabled:opacity-60"
-            >
-              {creatingStatus ? 'Adding…' : 'Add status'}
-            </button>
-          </>
-        }
-      >
-        <label className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Category</label>
-        <select
-          className="h-10 rounded-xl border border-surface-border px-3.5 text-sm"
-          value={statusCategoryId}
-          onChange={(e) => setStatusCategoryId(e.target.value)}
-        >
-          <option value="">Select category first</option>
-          {setup.categories.map((category) => (
-            <option key={category.id} value={category.id}>
-              {category.name}
-            </option>
-          ))}
-        </select>
-        <label className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Status</label>
-        <input
-          type="text"
-          value={statusName}
-          onChange={(e) => setStatusName(e.target.value)}
-          placeholder="Enter status name"
-          className="h-10 rounded-xl border border-surface-border px-3.5 text-sm"
-          disabled={!statusCategoryId}
-        />
+        {editor.type === 'tags' ? (
+          <div className="mt-3">
+            <label className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Color</label>
+            <div className="mt-1.5 flex items-center gap-2">
+              <input
+                type="color"
+                value={editor.color || '#3b73f5'}
+                onChange={(e) => setEditor((prev) => ({ ...prev, color: e.target.value }))}
+                className="h-9 w-12 cursor-pointer rounded border border-surface-border bg-white p-1"
+              />
+              <span className="text-xs text-ink-muted">{editor.color || '#3b73f5'}</span>
+            </div>
+          </div>
+        ) : null}
       </Modal>
 
       <Modal

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Archive, ArchiveRestore, Building2, CheckCircle2, Pencil, Plus, Trash2, Users } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
+import { Archive, ArchiveRestore, Building2, CheckCircle2, IdCard, Pencil, Plus, Trash2, Users } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
 import { Modal } from '@/components/ui/Modal'
 import { RightDrawer } from '@/components/ui/RightDrawer'
@@ -11,8 +12,14 @@ import {
   useWorkspacesQuery,
 } from '@/features/workspace/workspaceApi'
 import { cn } from '@/utils/cn'
+import { WorkspaceCompanyTab } from '@/pages/workspace/WorkspaceCompanyTab'
 
 const DESCRIPTION_MAX = 199
+
+const SETTINGS_TABS = [
+  { id: 'workspaces', label: 'Workspaces', icon: Building2 },
+  { id: 'company', label: 'Company information', icon: IdCard },
+]
 
 function apiErrorMessage(err) {
   return err?.data?.error?.message ?? err?.error ?? 'Something went wrong'
@@ -125,6 +132,16 @@ function WorkspaceTableRow({ row, busy, onEdit, onToggleArchive, onDelete }) {
 }
 
 export function WorkspacePage() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const settingsTab = searchParams.get('tab') === 'company' ? 'company' : 'workspaces'
+
+  const setSettingsTab = (id) => {
+    const next = new URLSearchParams(searchParams)
+    if (id === 'workspaces') next.delete('tab')
+    else next.set('tab', id)
+    setSearchParams(next, { replace: true })
+  }
+
   const { data, isLoading, isError, error, refetch } = useWorkspacesQuery()
   const [createWorkspace, { isLoading: creating }] = useCreateWorkspaceMutation()
   const [patchWorkspace, { isLoading: patching }] = usePatchWorkspaceMutation()
@@ -234,52 +251,87 @@ export function WorkspacePage() {
 
   return (
     <PageShell fullWidth>
-      <div className="space-y-4">
+      <div className="space-y-4 px-2 py-3 sm:px-4">
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-surface-border bg-white/90 px-3 py-2">
-          <div className="flex flex-wrap gap-1.5">
-            <button
-              type="button"
-              onClick={() => setStatusFilter('active')}
-              aria-label="Show active workspaces"
-              title="Active workspaces"
-              className={cn(
-                'inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition',
-                statusFilter === 'active'
-                  ? 'border-brand-200 bg-brand-50 text-brand-700'
-                  : 'border-surface-border bg-surface-subtle text-ink-muted hover:bg-surface-muted',
-              )}
-            >
-              <CheckCircle2 className="h-4 w-4" aria-hidden />
-              Active
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter('archived')}
-              aria-label="Show archived workspaces"
-              title="Archived workspaces"
-              className={cn(
-                'inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition',
-                statusFilter === 'archived'
-                  ? 'border-brand-200 bg-brand-50 text-brand-700'
-                  : 'border-surface-border bg-surface-subtle text-ink-muted hover:bg-surface-muted',
-              )}
-            >
-              <Archive className="h-4 w-4" aria-hidden />
-              Archived
-            </button>
+          <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Workspace settings">
+            {SETTINGS_TABS.map((t) => {
+              const Icon = t.icon
+              const active = settingsTab === t.id
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setSettingsTab(t.id)}
+                  className={cn(
+                    'inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition',
+                    active
+                      ? 'border-brand-200 bg-brand-50 text-brand-700'
+                      : 'border-surface-border bg-surface-subtle text-ink-muted hover:bg-surface-muted',
+                  )}
+                >
+                  <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  {t.label}
+                </button>
+              )
+            })}
           </div>
-          <button
-            type="button"
-            onClick={openCreate}
-            aria-label="New workspace"
-            title="New workspace"
-            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-brand-200 bg-brand-50 px-3 text-xs font-medium text-brand-700 hover:bg-brand-100"
-          >
-            <Plus className="h-3.5 w-3.5" aria-hidden />
-            Add workspace
-          </button>
+
+          {settingsTab === 'workspaces' ? (
+            <div className="flex flex-wrap items-center justify-end gap-1.5">
+              <button
+                type="button"
+                onClick={() => setStatusFilter('active')}
+                aria-label="Show active workspaces"
+                title="Active workspaces"
+                className={cn(
+                  'inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition',
+                  statusFilter === 'active'
+                    ? 'border-brand-200 bg-brand-50 text-brand-700'
+                    : 'border-surface-border bg-surface-subtle text-ink-muted hover:bg-surface-muted',
+                )}
+              >
+                <CheckCircle2 className="h-4 w-4" aria-hidden />
+                Active
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter('archived')}
+                aria-label="Show archived workspaces"
+                title="Archived workspaces"
+                className={cn(
+                  'inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition',
+                  statusFilter === 'archived'
+                    ? 'border-brand-200 bg-brand-50 text-brand-700'
+                    : 'border-surface-border bg-surface-subtle text-ink-muted hover:bg-surface-muted',
+                )}
+              >
+                <Archive className="h-4 w-4" aria-hidden />
+                Archived
+              </button>
+              <button
+                type="button"
+                onClick={openCreate}
+                aria-label="New workspace"
+                title="New workspace"
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-brand-200 bg-brand-50 px-3 text-xs font-medium text-brand-700 hover:bg-brand-100"
+              >
+                <Plus className="h-3.5 w-3.5" aria-hidden />
+                Add workspace
+              </button>
+            </div>
+          ) : (
+            <p className="max-w-md text-right text-xs leading-snug text-ink-muted">
+              Company profile applies to the workspace currently selected in the header.
+            </p>
+          )}
         </div>
 
+        {settingsTab === 'company' ? <WorkspaceCompanyTab /> : null}
+
+        {settingsTab === 'workspaces' ? (
+          <>
         {isError ? (
           <div className="rounded-xl border border-surface-border bg-white/90 p-4 text-sm text-ink-muted">
             {apiErrorMessage(error)}
@@ -332,6 +384,8 @@ export function WorkspacePage() {
             </table>
           </div>
         </div>
+          </>
+        ) : null}
       </div>
 
       <RightDrawer

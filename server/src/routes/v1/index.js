@@ -13,6 +13,18 @@ import * as companyController from '../../controllers/companyController.js'
 import * as workspaceController from '../../controllers/workspaceController.js'
 import * as teamController from '../../controllers/teamController.js'
 import * as opportunitiesController from '../../controllers/opportunitiesController.js'
+import * as dealsController from '../../controllers/dealsController.js'
+import * as calendarController from '../../controllers/calendarController.js'
+import * as remindersController from '../../controllers/remindersController.js'
+import * as campaignsController from '../../controllers/campaignsController.js'
+import * as workflowsController from '../../controllers/workflowsController.js'
+import * as templatesController from '../../controllers/templatesController.js'
+import * as billingProfileController from '../../controllers/billingProfileController.js'
+import * as quotationsController from '../../controllers/quotationsController.js'
+import * as quotationTemplatesController from '../../controllers/quotationTemplatesController.js'
+import * as invoicesController from '../../controllers/invoicesController.js'
+import * as invoiceTemplatesController from '../../controllers/invoiceTemplatesController.js'
+import * as emailTrackingController from '../../controllers/emailTrackingController.js'
 import documentsRoutes from './documents.js'
 import webFormsRoutes from '../webFormsRoutes.js'
 import googleRoutes from '../googleRoutes.js'
@@ -49,6 +61,209 @@ router.patch('/workspaces/:id', requireAuth, apiLimiter, workspaceController.pat
 router.delete('/workspaces/:id', requireAuth, apiLimiter, workspaceController.deleteWorkspace)
 
 router.get('/analytics/dashboard', requireAuth, apiLimiter, analyticsController.dashboardStats)
+
+router.get(
+  '/billing-profile',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'view'),
+  billingProfileController.getBillingProfile,
+)
+router.patch(
+  '/billing-profile',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'edit'),
+  billingProfileController.patchBillingProfile,
+)
+
+router.get(
+  '/quotations/templates',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'view'),
+  quotationTemplatesController.listQuotationTemplates,
+)
+router.post(
+  '/quotations/templates',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'edit'),
+  quotationTemplatesController.createQuotationTemplate,
+)
+router.get(
+  '/quotations/templates/:id',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'view'),
+  quotationTemplatesController.getQuotationTemplate,
+)
+router.patch(
+  '/quotations/templates/:id',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'edit'),
+  quotationTemplatesController.patchQuotationTemplate,
+)
+router.delete(
+  '/quotations/templates/:id',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'edit'),
+  quotationTemplatesController.deleteQuotationTemplate,
+)
+
+router.post(
+  '/quotations/:id/convert-to-invoice',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'edit'),
+  quotationsController.convertQuotationToInvoice,
+)
+router.get(
+  '/quotations',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'view'),
+  quotationsController.listQuotations,
+)
+router.post(
+  '/quotations',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'edit'),
+  quotationsController.createQuotation,
+)
+router.get(
+  '/quotations/:id',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'view'),
+  quotationsController.getQuotation,
+)
+router.patch(
+  '/quotations/:id',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'edit'),
+  quotationsController.patchQuotation,
+)
+
+router.get(
+  '/invoices/templates',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'view'),
+  invoiceTemplatesController.listInvoiceTemplates,
+)
+router.post(
+  '/invoices/templates',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'edit'),
+  invoiceTemplatesController.createInvoiceTemplate,
+)
+router.get(
+  '/invoices/templates/:id',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'view'),
+  invoiceTemplatesController.getInvoiceTemplate,
+)
+router.patch(
+  '/invoices/templates/:id',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'edit'),
+  invoiceTemplatesController.patchInvoiceTemplate,
+)
+router.delete(
+  '/invoices/templates/:id',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'edit'),
+  invoiceTemplatesController.deleteInvoiceTemplate,
+)
+
+router.post(
+  '/invoices/:id/payments',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'edit'),
+  invoicesController.recordInvoicePayment,
+)
+router.get(
+  '/invoices',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'view'),
+  invoicesController.listInvoices,
+)
+router.post(
+  '/invoices',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'edit'),
+  invoicesController.createInvoice,
+)
+router.get(
+  '/invoices/:id',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'view'),
+  invoicesController.getInvoice,
+)
+router.patch(
+  '/invoices/:id',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'edit'),
+  invoicesController.patchInvoice,
+)
 
 router.get('/activities/book/:token', apiLimiter, activitiesController.getBookingLinkInfo)
 router.post('/activities/book/:token', apiLimiter, activitiesController.confirmBooking)
@@ -93,15 +308,24 @@ router.delete('/leads/setup/sources/:id', requireAuth, apiLimiter, requireCompan
 router.post('/leads/setup/tags', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'admin'), leadsController.createLeadTag)
 router.patch('/leads/setup/tags/:id', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'admin'), leadsController.patchLeadTag)
 router.delete('/leads/setup/tags/:id', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'admin'), leadsController.deleteLeadTag)
-router.post('/leads/setup/stages', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'admin'), leadsController.createLeadStage)
 router.post('/leads/setup/opportunity-stages', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'admin'), leadsController.createOpportunityStage)
 router.patch('/leads/setup/opportunity-stages/:id', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'admin'), leadsController.patchOpportunityStage)
 router.delete('/leads/setup/opportunity-stages/:id', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'admin'), leadsController.deleteOpportunityStage)
-router.post('/leads/setup/status-categories', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'admin'), leadsController.createLeadStatusCategory)
-router.patch('/leads/setup/status-categories/:id', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'admin'), leadsController.patchLeadStatusCategory)
-router.delete('/leads/setup/status-categories/:id', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'admin'), leadsController.deleteLeadStatusCategory)
-router.post('/leads/setup/statuses', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'admin'), leadsController.createLeadStatus)
+router.post('/leads/setup/opportunity-stages/reorder', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'admin'), leadsController.reorderOpportunityStages)
+router.post('/leads/setup/deal-statuses', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'admin'), leadsController.createDealStatus)
+router.patch('/leads/setup/deal-statuses/:id', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'admin'), leadsController.patchDealStatus)
+router.delete('/leads/setup/deal-statuses/:id', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'admin'), leadsController.deleteDealStatus)
+router.post('/leads/setup/deal-statuses/reorder', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'admin'), leadsController.reorderDealStatuses)
 router.post('/leads/bulk', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'edit'), leadsController.bulk)
+router.post(
+  '/leads/distribute-round-robin',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'edit'),
+  leadsController.distributeRoundRobin,
+)
 router.get('/leads/:id', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'view'), leadsController.getOne)
 router.post('/leads', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'edit'), leadsController.create)
 router.put('/leads/:id', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'edit'), leadsController.update)
@@ -134,6 +358,12 @@ router.get('/opportunities/:id', requireAuth, apiLimiter, requireCompany, loadPe
 router.post('/opportunities', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'edit'), opportunitiesController.create)
 router.put('/opportunities/:id', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'edit'), opportunitiesController.update)
 router.patch('/opportunities/:id/stage', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'edit'), opportunitiesController.patchStage)
+router.get('/deals', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'view'), dealsController.list)
+router.get('/deals/:id', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'view'), dealsController.getOne)
+router.post('/deals', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'edit'), dealsController.create)
+router.patch('/deals/:id/stage', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'edit'), dealsController.patchStage)
+router.get('/deals/:id/activities', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'view'), dealsController.listActivities)
+router.post('/deals/:id/activities', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'edit'), dealsController.createActivity)
 router.post('/leads/:id/tasks', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'edit'), leadsController.createTask)
 router.patch('/leads/:id/tasks/:taskId', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'edit'), leadsController.patchTask)
 router.post(
@@ -144,6 +374,15 @@ router.post(
   loadPermissions,
   requirePermission('leads', 'edit'),
   leadsController.addTaskComment,
+)
+router.get(
+  '/leads/:id/tasks/:taskId/timeline',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'view'),
+  leadsController.getTaskTimeline,
 )
 router.delete('/leads/:id/tasks/:taskId', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'edit'), leadsController.deleteTask)
 router.get('/leads/:id/followups', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'view'), leadsController.listFollowups)
@@ -261,6 +500,15 @@ router.get(
   requirePermission('team', 'view'),
   teamController.listCompanyUsers,
 )
+router.get(
+  '/team/users/:id',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('team', 'view'),
+  teamController.getCompanyUser,
+)
 router.patch(
   '/team/users/:id/role',
   requireAuth,
@@ -269,6 +517,15 @@ router.patch(
   loadPermissions,
   requirePermission('team', 'admin'),
   teamController.patchUserRole,
+)
+router.patch(
+  '/team/users/:id/profile',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('team', 'admin'),
+  teamController.patchUserProfile,
 )
 router.get(
   '/team/users/:id/workspaces',
@@ -360,6 +617,294 @@ router.delete(
   requirePermission('team', 'edit'),
   teamController.removeTeamMember,
 )
+
+// Calendar & Reminders routes
+router.get(
+  '/calendar/events',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'view'),
+  calendarController.listEvents,
+)
+router.get(
+  '/calendar/today',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'view'),
+  calendarController.getDayDigest,
+)
+router.get(
+  '/reminders',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'view'),
+  remindersController.listReminders,
+)
+router.post(
+  '/reminders',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'edit'),
+  remindersController.createReminder,
+)
+router.patch(
+  '/reminders/:id',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'edit'),
+  remindersController.patchReminder,
+)
+router.delete(
+  '/reminders/:id',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'edit'),
+  remindersController.deleteReminder,
+)
+
+router.get(
+  '/campaigns',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('campaigns', 'view'),
+  campaignsController.list,
+)
+router.post(
+  '/campaigns',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('campaigns', 'edit'),
+  campaignsController.create,
+)
+router.get(
+  '/campaigns/:id/leads',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('campaigns', 'view'),
+  campaignsController.listLeads,
+)
+router.patch(
+  '/campaigns/:id/leads/:leadId/stage',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('campaigns', 'edit'),
+  campaignsController.patchLeadStage,
+)
+router.get(
+  '/campaigns/:id',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('campaigns', 'view'),
+  campaignsController.getOne,
+)
+router.patch(
+  '/campaigns/:id',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('campaigns', 'edit'),
+  campaignsController.patchCampaign,
+)
+
+router.get(
+  '/workflows',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'view'),
+  workflowsController.list,
+)
+router.post(
+  '/workflows',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'edit'),
+  workflowsController.create,
+)
+router.get(
+  '/workflows/:id',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'view'),
+  workflowsController.getOne,
+)
+router.patch(
+  '/workflows/:id',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'edit'),
+  workflowsController.patch,
+)
+router.delete(
+  '/workflows/:id',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'edit'),
+  workflowsController.remove,
+)
+router.post(
+  '/workflows/:id/publish',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'edit'),
+  workflowsController.publish,
+)
+router.post(
+  '/workflows/:id/test',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'edit'),
+  workflowsController.testRun,
+)
+router.get(
+  '/workflows/:id/runs',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'view'),
+  workflowsController.listRuns,
+)
+router.get(
+  '/workflow-runs/:runId',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'view'),
+  workflowsController.getRun,
+)
+
+router.post(
+  '/templates',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'edit'),
+  templatesController.createTemplate,
+)
+router.get(
+  '/templates',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'view'),
+  templatesController.getTemplateListWithStats,
+)
+router.get(
+  '/templates/:id',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'view'),
+  templatesController.getTemplate,
+)
+router.put(
+  '/templates/:id',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'edit'),
+  templatesController.updateTemplate,
+)
+router.delete(
+  '/templates/:id',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'edit'),
+  templatesController.archiveTemplate,
+)
+router.post(
+  '/templates/:id/preview-send',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'edit'),
+  templatesController.previewSend,
+)
+router.post(
+  '/templates/generate-content',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'edit'),
+  templatesController.generateTemplateContent,
+)
+router.post(
+  '/templates/:id/send',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'edit'),
+  templatesController.sendTemplate,
+)
+router.get(
+  '/templates/:id/send-history',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'view'),
+  templatesController.templateSendHistory,
+)
+router.get(
+  '/leads/:id/email-history',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'view'),
+  templatesController.leadEmailHistory,
+)
+
+router.get('/track/open', emailTrackingController.trackOpen)
+router.get('/track/click', emailTrackingController.trackClick)
+router.get('/unsubscribe', emailTrackingController.unsubscribe)
 
 router.use((_req, res) => {
   res.status(404).json({

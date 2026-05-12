@@ -226,6 +226,7 @@ export async function verifyEmail(req, res, next) {
     user.emailVerified = true
     user.emailVerificationOtpHash = null
     user.emailVerificationOtpExpiresAt = null
+    user.lastLoginAt = new Date()
     await user.save()
     await user.reload({ include: userAuthIncludes })
 
@@ -364,6 +365,9 @@ export async function login(req, res, next) {
       })
       await user.reload({ include: userAuthIncludes })
     }
+
+    user.lastLoginAt = new Date()
+    await user.save()
 
     const tokens = tokensForUser(user)
     return res.json({
