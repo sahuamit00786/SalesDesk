@@ -55,6 +55,11 @@ import GmailThreadList from '@/features/gmail/GmailThreadList'
 import GmailThreadView from '@/features/gmail/GmailThreadView'
 import { parseStoredThread } from '@/features/gmail/gmailParserUtils'
 
+import {
+  useGetMeetingsQuery,
+  useDeleteMeetingMutation,
+} from "@/features/meetings/meetingsApi";
+
 const NOTE_HTML = {
   ALLOWED_TAGS: ['b', 'strong', 'i', 'em', 'u', 'br', 'p', 'div', 'span', 'ul', 'ol', 'li', 'a', 'img'],
   ALLOWED_ATTR: ['href', 'target', 'rel', 'src', 'alt'],
@@ -297,6 +302,15 @@ export function LeadDetailPage() {
   const selectedThread = threadData?.data || []
   const notes = notesData?.data || []
   const leadFiles = filesData?.data || []
+
+  const { data: meetingsData } = useGetMeetingsQuery({
+  leadId: id,
+});
+
+const [deleteMeeting] = useDeleteMeetingMutation();
+
+const meetings = meetingsData?.data || [];
+  
   const tabs = [
     { id: 'activity', label: 'Activity' },
     { id: 'calls', label: 'Calls' },
@@ -304,6 +318,7 @@ export function LeadDetailPage() {
     { id: 'tasks', label: 'Tasks' },
     { id: 'followups', label: 'Follow-ups' },
     { id: 'notes', label: 'Notes' },
+    { id: 'meetings', label: 'Meetings' },
   ]
   const emailTimeLabel = (value) => {
     if (!value) return '-'
@@ -722,6 +737,229 @@ export function LeadDetailPage() {
               })}
               {tasks.length === 0 ? <p className="text-sm text-ink-muted">No tasks yet. Use Add task to create one.</p> : null}
             </div>
+
+          ) : activeTab === "meetings" ? (
+  <div className="mt-4 space-y-4">
+    {meetings.length === 0 ? (
+      <div className="rounded-2xl border border-dashed border-surface-border p-8 text-center">
+        <p className="text-sm font-medium text-ink">
+          No meetings found
+        </p>
+      </div>
+    ) : (
+      meetings.map((meeting) => {
+        const start = new Date(meeting.scheduledStart);
+        const end = new Date(meeting.scheduledEnd);
+
+        const now = Date.now();
+
+const startTime = start.getTime();
+const endTime = end.getTime();
+
+const isUpcoming = now < startTime;
+
+const isLive =
+  now >= startTime &&
+  now <= endTime;
+
+const isCompleted =
+  now > endTime &&
+  meeting.status === "completed";
+
+const isExpired =
+  now > endTime &&
+  meeting.status !== "completed";
+
+        return (
+          <div
+            key={meeting.id}
+            className="rounded-2xl border border-surface-border bg-white p-5 shadow-sm"
+          >
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              
+              {/* LEFT */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-semibold text-ink">
+                    {meeting.title}
+                  </h3>
+
+                  <span
+  className={`rounded-full px-2 py-1 text-xs font-semibold ${
+    isLive
+      ? "bg-green-100 text-green-700"
+      : isUpcoming
+      ? "bg-blue-100 text-blue-700"
+      : isCompleted
+      ? "bg-emerald-100 text-emerald-700"
+      : "bg-red-100 text-red-700"
+  }`}
+>
+  {isLive
+    ? "LIVE"
+    : isUpcoming
+    ? "UPCOMING"
+    : isCompleted
+    ? "COMPLETED"
+    : "EXPIRED"}
+</span>
+                </div>
+
+                <p className="text-sm text-ink-muted">
+                  {meeting.meetingType}
+                </p>
+
+                <p className="text-sm text-ink-muted">
+                  📅{" "}
+                  {start.toLocaleDateString([], {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  })}
+                </p>
+
+                <p className="text-sm text-ink-muted">
+                  🕒{" "}
+                  {start.toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}{" "}
+                  -{" "}
+                  {end.toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </p>
+
+                {meeting.agenda ? (
+                  <div className="mt-2 rounded-xl bg-slate-50 p-3 text-sm text-slate-700">
+                    {meeting.agenda}
+                  </div>
+                ) : null}
+              </div>
+
+              {/* RIGHT */}
+              <div className="flex flex-wrap items-center gap-3">
+                
+                {/* JOIN */}
+{(() => {
+  const now = Date.now();
+
+  const start = new Date(
+    meeting.scheduledStart
+  ).getTime();
+
+  const end = new Date(
+    meeting.scheduledEnd
+  ).getTime();
+
+  const isCompleted =
+    meeting.status === "completed";
+
+  const isExpired =
+    now > end &&
+    meeting.status !== "completed";
+
+  const disabled =
+    !meeting.googleMeetLink ||
+    isCompleted ||
+    isExpired;
+
+  if (disabled) {
+    return (
+      <button
+        disabled
+        className="inline-flex items-center gap-2 rounded-xl bg-gray-300 px-4 py-2 text-sm font-semibold text-gray-600 cursor-not-allowed"
+        title={
+          isCompleted
+            ? "Meeting completed"
+            : isExpired
+            ? "Meeting expired"
+            : "No meeting link"
+        }
+      >
+        <Presentation className="h-4 w-4" />
+
+        {isCompleted
+          ? "Completed"
+          : isExpired
+          ? "Expired"
+          : "No Link"}
+      </button>
+    );
+  }
+
+  return (
+    <a
+      href={meeting.googleMeetLink}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
+    >
+      <Presentation className="h-4 w-4" />
+      Join Meeting
+    </a>
+  );
+})()}
+
+                {/* EDIT */}
+                <button
+                  type="button"
+                  className="rounded-xl border border-surface-border px-4 py-2 text-sm font-medium hover:bg-slate-50"
+                  onClick={() => {
+                    // optional later
+                    console.log("Edit", meeting);
+                  }}
+                >
+                  Edit
+                </button>
+
+                {/* DELETE */}
+                <button
+                  type="button"
+                  className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100"
+                  onClick={async () => {
+                    const ok = confirm(
+                      "Delete this meeting?"
+                    );
+
+                    if (!ok) return;
+
+                    await deleteMeeting(meeting.id);
+                  }}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+
+            {/* PARTICIPANTS */}
+            {!!meeting.participants?.length && (
+              <div className="mt-4 border-t border-surface-border pt-4">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">
+                  Participants
+                </p>
+
+                <div className="flex flex-wrap gap-2">
+                  {meeting.participants.map((p) => (
+                    <span
+                      key={p.userId}
+                      className="rounded-full bg-brand-50 px-3 py-1 text-xs text-brand-700"
+                    >
+                      {p.user?.name ||
+                        p.user?.email ||
+                        p.userId}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })
+    )}
+  </div>
+
           ) : activeTab === 'followups' ? (
             <LeadFollowupsTab leadId={id} />
           ) : activeTab === 'notes' ? (

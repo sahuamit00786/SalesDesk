@@ -103,7 +103,10 @@ export const selectWorkspaceList = (state) => {
 export const selectResolvedActiveWorkspaceId = (state) => {
   const list = selectWorkspaceList(state)
   const pref = state.workspace.activeWorkspaceId
-  if (!list.length) return null
+  if (!list.length) {
+    if (pref && state.auth?.accessToken) return pref
+    return null
+  }
   if (pref && list.some((w) => w.id === pref)) return pref
   return list[0].id
 }

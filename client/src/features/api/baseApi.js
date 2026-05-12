@@ -1,13 +1,35 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react'
 import { readAuthFromStorage, setCredentials, logout } from '@/features/auth/authSlice'
+import { selectResolvedActiveWorkspaceId } from '@/features/workspace/workspaceSlice'
+
+function resolveAccessToken(getState) {
+  const fromStore = getState()?.auth?.accessToken
+  const fromStorage = readAuthFromStorage().accessToken
+  const pick = (t) => {
+    if (typeof t !== 'string') return ''
+    const s = t.trim()
+    if (!s || s === 'undefined' || s === 'null') return ''
+    return s
+  }
+  return pick(fromStore) || pick(fromStorage) || null
+}
+
+function isUnauthorized(error) {
+  if (!error) return false
+  const s = error.status ?? error.originalStatus
+  return s === 401 || s === '401'
+}
 
 const rawBaseQuery = fetchBaseQuery({
   baseUrl: '/api/v1',
+  credentials: 'include',
   prepareHeaders: (headers, { getState }) => {
-    const workspaceId = getState()?.workspace?.activeWorkspaceId
-    const fromStore = getState()?.auth?.accessToken
-    const fromStorage = readAuthFromStorage().accessToken
-    const token = fromStore || fromStorage
+    const state = getState()
+    const token = resolveAccessToken(getState)
+    const resolvedWs = selectResolvedActiveWorkspaceId(state)
+    const workspaceId =
+      resolvedWs ||
+      (token ? state.workspace?.activeWorkspaceId?.trim?.() || null : null)
     if (token) {
       headers.set('Authorization', `Bearer ${token}`)
     }
@@ -37,12 +59,15 @@ let refreshPromise = null
 const baseQueryWithReauth = async (args, api, extraOptions) => {
   let result = await rawBaseQuery(args, api, extraOptions)
 
-  if (result.error?.status !== 401 || isAuthRefreshExempt(args)) {
+  if (!isUnauthorized(result.error) || isAuthRefreshExempt(args)) {
     return result
   }
 
+  const stored = readAuthFromStorage()
   const refreshToken =
-    api.getState().auth.refreshToken ?? readAuthFromStorage().refreshToken
+    (api.getState().auth.refreshToken && String(api.getState().auth.refreshToken).trim()) ||
+    (stored.refreshToken && String(stored.refreshToken).trim()) ||
+    null
 
   if (!refreshToken) {
     api.dispatch(logout())
@@ -57,7 +82,7 @@ const baseQueryWithReauth = async (args, api, extraOptions) => {
         extraOptions,
       )
       const d = refreshResult.data
-      if (d?.success && d?.data?.accessToken) {
+      if (!refreshResult.error && d?.success && d?.data?.accessToken) {
         api.dispatch(
           setCredentials({
             accessToken: d.data.accessToken,
@@ -75,7 +100,7 @@ const baseQueryWithReauth = async (args, api, extraOptions) => {
 
   await refreshPromise
 
-  if (!api.getState().auth.accessToken && !readAuthFromStorage().accessToken) {
+  if (!resolveAccessToken(api.getState)) {
     return result
   }
 

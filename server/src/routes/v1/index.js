@@ -15,8 +15,10 @@ import * as teamController from '../../controllers/teamController.js'
 import * as opportunitiesController from '../../controllers/opportunitiesController.js'
 import documentsRoutes from './documents.js'
 import webFormsRoutes from '../webFormsRoutes.js'
-import googleRoutes from '../googleRoutes.js'
+import * as googleController from '../../controllers/googleController.js'
 import meetingRoutes from '../meetingRoutes.js'
+import transcriptionRoutes from '../transcriptionRoutes.js'
+import aiMeetingRoutes from '../aiMeetingRoutes.js'
 
 const router = Router()
 const emailUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 10 } })
@@ -28,8 +30,22 @@ router.get('/health', (_req, res) => {
   res.json({ success: true, data: { status: 'ok' }, meta: {} })
 })
 
-router.use('/google', requireAuth, googleRoutes);
+/** Browser OAuth redirect — must stay public (no Authorization header on redirect). */
+router.get('/google/callback', apiLimiter, googleController.googleCallback)
+
 router.use('/meetings', requireAuth, meetingRoutes)
+
+router.use(
+  '/transcription',
+  requireAuth,
+  transcriptionRoutes
+)
+
+router.use(
+  '/ai-meetings',
+  requireAuth,
+  aiMeetingRoutes
+)
 
 
 

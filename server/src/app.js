@@ -44,6 +44,20 @@ app.use(cookieParser())
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'))
 app.use('/uploads', express.static(path.join(appRoot, 'uploads')))
 
+app.use(
+  '/pdfs',
+  express.static(
+    path.join(appRoot, 'pdfs')
+  )
+)
+
+app.use(
+  '/recordings',
+  express.static(
+    path.join(appRoot, 'recordings')
+  )
+)
+
 app.use('/api/v1', v1)
 app.use('/api/public', cors({ origin: true, credentials: false }), publicRoutes)
 app.get('/embed/form.js', cors({ origin: true, credentials: false }), publicFormController.embedScript)

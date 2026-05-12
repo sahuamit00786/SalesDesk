@@ -1,11 +1,77 @@
 import { Meeting } from "../models/Meeting.js";
 import { MeetingParticipant } from "../models/MeetingParticipant.js";
 import { sequelize } from "../config/db.js";
-import { createGoogleMeet } from "../services/google/googleMeetService.js";
+import {
+  createGoogleMeet,
+  patchGoogleMeet,
+  syncGoogleMeetFromEvent,
+} from "../services/google/googleMeetService.js";
 import { scheduleReminders } from "../jobs/reminderJob.js";
 import { Op } from "sequelize";
 import { deleteCalendarEvent } from "../services/google/googleCalendarService.js";
 import { notifyMeetingParticipants } from "../services/notification/meetingNotificationService.js"
+
+/** Only persist fields the client is allowed to set (avoids `...req.body` overwriting Google columns). */
+function pickMeetingCreatePayload(body) {
+  const keys = [
+    "title",
+    "leadId",
+    "meetingType",
+    "scheduledStart",
+    "scheduledEnd",
+    "agenda",
+    "timezone",
+    "recordingBotConsent",
+  ];
+  const out = {};
+  for (const k of keys) {
+    if (body[k] !== undefined && body[k] !== null) out[k] = body[k];
+  }
+  if (typeof out.recordingBotConsent === "string") {
+    out.recordingBotConsent = out.recordingBotConsent === "true";
+  }
+  return out;
+}
+
+export async function setMeetingBotConsent(id, consent, user, workspaceId) {
+  const meeting = await Meeting.findOne({
+    where: { id, workspaceId },
+  });
+
+  if (!meeting) {
+    const err = new Error("Meeting not found");
+    err.status = 404;
+    throw err;
+  }
+
+  if (String(meeting.ownerUserId) !== String(user.id)) {
+    const err = new Error("Only the meeting organizer can change bot consent");
+    err.status = 403;
+    throw err;
+  }
+
+  if (consent && !meeting.googleMeetLink?.trim()) {
+    const err = new Error("Meeting needs a Google Meet link before enabling the bot");
+    err.status = 400;
+    throw err;
+  }
+
+  if (
+    !consent &&
+    meeting.botStatus &&
+    !["scheduled"].includes(meeting.botStatus)
+  ) {
+    const err = new Error(
+      "Cannot disable the bot after it has started processing"
+    );
+    err.status = 400;
+    throw err;
+  }
+
+  await meeting.update({ recordingBotConsent: Boolean(consent) });
+  await meeting.reload();
+  return meeting;
+}
 
 /**
  * CREATE MEETING
@@ -22,24 +88,33 @@ export async function createMeeting(user, payload, workspaceId) {
       throw new Error("Lead ID is required");
     }
 
-    let googleEvent = { id: null, meetLink: null };
+    const googleResult = await createGoogleMeet(payload);
 
-    try {
-      googleEvent = await createGoogleMeet(payload);
-    } catch (e) {
-      console.error("⚠️ Google Meet failed:", e.message);
-    }
+    const picked = pickMeetingCreatePayload(payload);
+    const wantsBot = Boolean(picked.recordingBotConsent);
+    const recordingBotConsent =
+      wantsBot && googleResult.meetLink ? true : false;
 
     const meeting = await Meeting.create(
       {
-        ...payload,
+        ...picked,
+        recordingBotConsent,
         workspaceId,
         ownerUserId: user.id,
-        googleEventId: googleEvent?.id || null,
-        googleMeetLink: googleEvent?.meetLink || null,
+        googleEventId: googleResult.id || null,
+        googleMeetLink: googleResult.meetLink || null,
       },
       { transaction: tx }
     );
+
+    const botConsentMeta = {
+      requested: wantsBot,
+      stored: recordingBotConsent,
+      skippedReason:
+        wantsBot && !googleResult.meetLink
+          ? 'NO_GOOGLE_MEET_LINK'
+          : null,
+    };
 
     if (payload.participants?.length) {
       await MeetingParticipant.bulkCreate(
@@ -57,7 +132,11 @@ export async function createMeeting(user, payload, workspaceId) {
   await notifyMeetingParticipants(meeting);
     await scheduleReminders(meeting);
 
-    return meeting;
+    return {
+      meeting,
+      googleMeetMeta: googleResult.meta,
+      botConsentMeta,
+    };
   } catch (e) {
     await tx.rollback();
     throw e;
@@ -175,27 +254,38 @@ export async function updateMeeting(id, payload, workspaceId) {
   let googleEventId = meeting.googleEventId;
   let googleMeetLink = meeting.googleMeetLink;
 
-  const timeChanged =
-    payload.scheduledStart || payload.scheduledEnd;
+  const merged = { ...meeting.toJSON(), ...payload };
+  const timeChanged = Boolean(
+    payload.scheduledStart || payload.scheduledEnd
+  );
+  const detailsChanged =
+    payload.title !== undefined || payload.agenda !== undefined;
 
   try {
-    // ✅ CASE 1: NO LINK → CREATE NEW GOOGLE MEET
     if (!googleEventId) {
-      const googleEvent = await createGoogleMeet({
-        ...meeting.toJSON(),
-        ...payload,
-      });
-
+      const googleEvent = await createGoogleMeet(merged);
       googleEventId = googleEvent?.id || null;
       googleMeetLink = googleEvent?.meetLink || null;
-
-      console.log("✅ Created new Google Meet on update");
-    }
-
-    // ✅ CASE 2: LINK EXISTS + TIME CHANGED → (OPTIONAL)
-    else if (timeChanged) {
-      console.log("⚠️ TODO: reschedule Google Meet");
-      // future improvement: update calendar event
+    } else {
+      if (!googleMeetLink) {
+        const synced = await syncGoogleMeetFromEvent(googleEventId);
+        googleMeetLink = synced.meetLink || googleMeetLink;
+      }
+      if (timeChanged || detailsChanged) {
+        const patched = await patchGoogleMeet(googleEventId, merged);
+        googleMeetLink = patched.meetLink || googleMeetLink;
+        googleEventId = patched.googleEventId || googleEventId;
+      }
+      if (!googleMeetLink && googleEventId) {
+        try {
+          await deleteCalendarEvent(googleEventId);
+        } catch (_) {
+          /* ignore */
+        }
+        const recreated = await createGoogleMeet(merged);
+        googleEventId = recreated?.id || googleEventId;
+        googleMeetLink = recreated?.meetLink || null;
+      }
     }
   } catch (e) {
     console.error("Google Meet update failed:", e.message);

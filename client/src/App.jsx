@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { RequireAuth } from '@/components/auth/RequireAuth'
 import { RequireOnboarded } from '@/components/auth/RequireOnboarded'
+import { SessionSync } from '@/components/auth/SessionSync'
 import { LoginPage } from '@/pages/LoginPage'
 import { ModulePlaceholderPage } from '@/pages/ModulePlaceholderPage'
 import { WorkspacePage } from '@/pages/WorkspacePage'
@@ -57,44 +58,46 @@ export default function App() {
       <Route path="/accept-invite" element={<AcceptInvitePage />} />
       <Route element={<RequireAuth />}>
         <Route path="/onboarding" element={<OnboardingPage />} />
-        <Route element={<RequireOnboarded />}>
-          <Route path="/" element={<DashboardPage />} />
-          <Route path="/workspace" element={<WorkspacePage />} />
-          {APP_PATHS.filter(
-            (path) =>
-              path !== '/' &&
-              path !== '/workspace' &&
-              path !== '/team' &&
-              path !== '/leads' &&
-              path !== '/opportunities' &&
-              path !== '/lead-configuration' &&
-              path !== '/integrations' &&
-              path !== '/documents' &&
-              path !== '/forms' &&
-              path !== '/activities' &&
-              path !== '/tasks' &&
-              path !== '/email' &&
-              path !== '/meetings'
-          ).map((path) => (
-            <Route key={path} path={path} element={<ModulePlaceholderPage />} />
-          ))}
-          
-          <Route path="/leads" element={<LeadsPage />} />
-          <Route path="/opportunities" element={<OpportunitiesPage />} />
-          <Route path="/opportunities/:id" element={<OpportunityDetailPage />} />
-          <Route path="/meetings" element={<MeetingsPage />} />
-          <Route path="/leads/:id" element={<LeadDetailPage />} />
-          <Route path="/activities" element={<ActivitiesPage />} />
-          <Route path="/tasks" element={<TasksPage />} />
-          <Route path="/email" element={<EmailPage />} />
-          <Route path="/lead-configuration" element={<LeadConfigurationPage />} />
-          <Route path="/team" element={<TeamPage />} />
-          <Route path="/integrations" element={<IntegrationsPage />} />
-          <Route path="/documents" element={<DocumentsPage />} />
-          <Route path="/forms" element={<WebFormsListPage />} />
-          <Route path="/forms/:id/builder" element={<FormBuilderPage />} />
-          <Route path="/analytics" element={<Navigate to="/reports" replace />} />
-          <Route path="/settings" element={<Navigate to="/workspace" replace />} />
+        <Route element={<SessionSync />}>
+          <Route element={<RequireOnboarded />}>
+            <Route path="/" element={<DashboardPage />} />
+            <Route path="/workspace" element={<WorkspacePage />} />
+            {APP_PATHS.filter(
+              (path) =>
+                path !== '/' &&
+                path !== '/workspace' &&
+                path !== '/team' &&
+                path !== '/leads' &&
+                path !== '/opportunities' &&
+                path !== '/lead-configuration' &&
+                path !== '/integrations' &&
+                path !== '/documents' &&
+                path !== '/forms' &&
+                path !== '/activities' &&
+                path !== '/tasks' &&
+                path !== '/email' &&
+                path !== '/meetings',
+            ).map((path) => (
+              <Route key={path} path={path} element={<ModulePlaceholderPage />} />
+            ))}
+
+            <Route path="/leads" element={<LeadsPage />} />
+            <Route path="/opportunities" element={<OpportunitiesPage />} />
+            <Route path="/opportunities/:id" element={<OpportunityDetailPage />} />
+            <Route path="/meetings" element={<MeetingsPage />} />
+            <Route path="/leads/:id" element={<LeadDetailPage />} />
+            <Route path="/activities" element={<ActivitiesPage />} />
+            <Route path="/tasks" element={<TasksPage />} />
+            <Route path="/email" element={<EmailPage />} />
+            <Route path="/lead-configuration" element={<LeadConfigurationPage />} />
+            <Route path="/team" element={<TeamPage />} />
+            <Route path="/integrations" element={<IntegrationsPage />} />
+            <Route path="/documents" element={<DocumentsPage />} />
+            <Route path="/forms" element={<WebFormsListPage />} />
+            <Route path="/forms/:id/builder" element={<FormBuilderPage />} />
+            <Route path="/analytics" element={<Navigate to="/reports" replace />} />
+            <Route path="/settings" element={<Navigate to="/workspace" replace />} />
+          </Route>
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

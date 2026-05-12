@@ -69,3 +69,36 @@ Wire remaining Sequelize models (Lead, Contact, Pipeline, Task, Activity, Tag), 
 ## Team access rollout
 
 Use `TEAM_WORKSPACE_ROLLOUT.md` for environment setup, migration order, membership backfill, and smoke-test steps for the `/team` workspace-scoped access flow.
+
+## Meeting bot (Google Meet recording)
+
+Full variable list and comments live in `.env.example` (search for `MEETING_BOT` and `GROQ_API_KEY`).
+
+**Windows audio device for ffmpeg**
+
+1. Install ffmpeg and ensure it is on your `PATH`.
+2. List DirectShow audio devices:
+
+   ```bash
+   ffmpeg -f dshow -list_devices true -i dummy
+   ```
+
+3. Set `MEETING_BOT_WIN_DSHOW` to the **full** dshow input, including the `audio=` prefix, for example:
+
+   ```bash
+   MEETING_BOT_WIN_DSHOW="audio=Stereo Mix (Realtek(R) Audio)"
+   ```
+
+   Use the exact name from the list (including parentheses). `Microphone Array` records the mic only; to capture meeting playback from the PC, use Stereo Mix or a virtual cable (e.g. VB-Audio) if your driver exposes it.
+
+**macOS (skip on Windows)**
+
+Only if you run the server on macOS, set something like:
+
+```bash
+MEETING_BOT_MAC_AVFOUNDATION=":BlackHole 2ch"
+```
+
+**Transcription and summary**
+
+After recording finishes, the server calls Groq (`GROQ_API_KEY`) for speech-to-text and an LLM summary. Optional: `GROQ_TRANSCRIBE_MODEL` (default `whisper-large-v3-turbo`) and `GROQ_MODEL` (default `llama-3.3-70b-versatile`); see [Groq deprecations](https://console.groq.com/docs/deprecations) if a model id stops working. The bot waits until the meeting’s **scheduled end** (or a capped duration); keep `npm run dev:server` running until the run completes—stopping the server skips transcription.
