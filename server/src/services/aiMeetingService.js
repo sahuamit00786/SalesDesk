@@ -1,6 +1,9 @@
 import OpenAI from 'openai'
-import {MeetingTranscript} from '../../../models/MeetingTranscript.js'
-import {AiMeetingSummary} from '../../../models/AiMeetingSummary.js'
+import {MeetingTranscript} from '../../src/models/MeetingTranscript.js'
+import {AiMeetingSummary} from '../../src/models/AiMeetingSummary.js'
+import dotenv from 'dotenv'
+
+dotenv.config()
 
 const openai=
 new OpenAI({

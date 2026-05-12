@@ -1,4 +1,5 @@
 import '@/features/auth/authApi'
+import '@/features/meetings/meetingsApi'
 import '@/features/leads/leadsApi'
 import '@/features/contacts/contactsApi'
 import '@/features/tasks/tasksApi'

@@ -1,6 +1,9 @@
 import fs from 'fs'
 import OpenAI from 'openai'
-import {MeetingTranscript} from '../../../models/MeetingTranscript.js'
+import {MeetingTranscript} from '../../src/models/MeetingTranscript.js'
+import dotenv from 'dotenv'
+
+dotenv.config()
 
 const openai=new OpenAI({
 apiKey:process.env.OPENAI_API_KEY

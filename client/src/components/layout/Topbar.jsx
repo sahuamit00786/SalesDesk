@@ -6,6 +6,7 @@ import { logout } from '@/features/auth/authSlice'
 import { getRouteMeta } from '@/components/layout/navConfig'
 import { WorkspaceSwitcher } from '@/components/layout/WorkspaceSwitcher'
 import { MeetingNotificationBell } from '@/features/meetings/components/MeetingNotificationBell'
+import { MeetingBotConsentBanner } from '@/features/meetings/components/MeetingBotConsentBanner'
 export function Topbar({ onMenu }) {
   const { pathname } = useLocation()
   const meta = getRouteMeta(pathname)
@@ -19,6 +20,8 @@ export function Topbar({ onMenu }) {
   }
 
   return (
+    <>
+    <MeetingBotConsentBanner />
     <header className="flex h-auto min-h-16 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-surface-border bg-white px-4 py-3 sm:px-6">
       <div className="flex min-w-0 flex-1 items-start gap-3">
         <Button
@@ -48,5 +51,6 @@ export function Topbar({ onMenu }) {
         </Button>
       </div>
     </header>
+    </>
   )
 }

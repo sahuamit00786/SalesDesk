@@ -1,0 +1,58 @@
+/**
+ * Read Google OAuth vars from process.env with trim + strip one pair of surrounding quotes.
+ * Tries alternate key names people often copy from different Google / blog examples.
+ */
+function trimEnv(key) {
+  const raw = process.env[key]
+  if (typeof raw !== 'string') return ''
+  let v = raw.trim().replace(/^\uFEFF/, '')
+  if (
+    (v.startsWith('"') && v.endsWith('"')) ||
+    (v.startsWith("'") && v.endsWith("'"))
+  ) {
+    v = v.slice(1, -1).trim()
+  }
+  return v
+}
+
+function firstTruthy(...keys) {
+  for (const key of keys) {
+    const v = trimEnv(key)
+    if (v) return v
+  }
+  return ''
+}
+
+export function readGoogleOAuthEnv() {
+  return {
+    clientId: firstTruthy('GOOGLE_CLIENT_ID', 'GOOGLE_OAUTH_CLIENT_ID'),
+    clientSecret: firstTruthy(
+      'GOOGLE_CLIENT_SECRET',
+      'GOOGLE_OAUTH_CLIENT_SECRET',
+    ),
+    redirectUri: firstTruthy(
+      'GOOGLE_REDIRECT_URI',
+      'GOOGLE_CALLBACK_URL',
+      'GOOGLE_OAUTH_REDIRECT_URI',
+    ),
+    refreshToken: firstTruthy(
+      'GOOGLE_REFRESH_TOKEN',
+      'GOOGLE_OAUTH_REFRESH_TOKEN',
+      'GOOGLE_CALENDAR_REFRESH_TOKEN',
+    ),
+  }
+}
+
+export function missingGoogleOAuthEnvKeys() {
+  const e = readGoogleOAuthEnv()
+  const missing = []
+  if (!e.clientId) missing.push('GOOGLE_CLIENT_ID')
+  if (!e.clientSecret) missing.push('GOOGLE_CLIENT_SECRET')
+  if (!e.redirectUri) missing.push('GOOGLE_REDIRECT_URI')
+  if (!e.refreshToken) missing.push('GOOGLE_REFRESH_TOKEN')
+  return missing
+}
+
+export function isGoogleCalendarConfigured() {
+  return missingGoogleOAuthEnvKeys().length === 0
+}

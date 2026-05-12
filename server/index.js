@@ -4,12 +4,17 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
 import { validateEnv } from './src/config/env.js'
+import {
+  isGoogleCalendarConfigured,
+  missingGoogleOAuthEnvKeys,
+} from './src/services/google/googleEnv.js'
 import app from './src/app.js'
 import { sequelize } from './src/config/db.js'
 import { runEmailAutoSyncJob } from './src/controllers/leadsController.js'
 import { startEmailTemplateWorker } from './src/queues/emailTemplateQueue.js'
 import { startWorkflowTriggerWorker } from './src/queues/workflowTriggerQueue.js'
 import { processWorkflowWakeups } from './src/services/workflowRunner.js'
+import { startReminderJob } from './src/jobs/reminderJob.js'
 
 validateEnv()
 
@@ -66,10 +71,24 @@ async function start() {
   setInterval(() => {
     processWorkflowWakeups().catch(() => {})
   }, 30000)
+  // Reminders, live/completed flags, optional Meet bot → transcription → summary (see reminderJob.js)
+  if (process.env.MEETING_CRON_ENABLED !== 'false') {
+    startReminderJob()
+  }
   const server = http.createServer(app)
   server.listen(port, () => {
     // eslint-disable-next-line no-console
     console.log(`LeadFlow API listening on http://localhost:${port}`)
+    if (isGoogleCalendarConfigured()) {
+      // eslint-disable-next-line no-console
+      console.log('Google Calendar / Meet: enabled')
+    } else {
+      // eslint-disable-next-line no-console
+      console.warn(
+        'Google Calendar / Meet: disabled — missing .env:',
+        missingGoogleOAuthEnvKeys().join(', '),
+      )
+    }
   })
 }
 
