@@ -18,12 +18,13 @@ import {
   Trash2,
   Upload,
   User,
+  UserCheck,
   UserMinus,
   UserPlus,
   Users,
   X,
 } from 'lucide-react'
-import { PageShell } from '@/components/layout/PageShell'
+import { COMPANY_USER_ROLE_KIND_ALL_OPTIONS, COMPANY_USER_ROLE_KIND_CREATE_OPTIONS, labelCompanyUserRoleKind } from '@/constants/companyUserRoleKind'
 import { Modal } from '@/components/ui/Modal'
 import { RightDrawer } from '@/components/ui/RightDrawer'
 import { PhoneField } from '@/components/ui/PhoneField'
@@ -34,6 +35,7 @@ import {
   useDeleteRoleMutation,
   useCreateInvitationMutation,
   useDeactivateUserMutation,
+  useReactivateUserMutation,
   usePatchRoleMutation,
   useTeamMenusQuery,
   usePatchUserRoleMutation,
@@ -44,6 +46,8 @@ import {
   useTeamUsersQuery,
 } from '@/features/team/teamApi'
 import { cn } from '@/utils/cn'
+import { PageShell } from '@/components/layout/PageShell'
+import { IconInput, IconTextarea } from '@/components/ui/IconInput'
 
 function isoCountryForPhone(countryField) {
   const c = String(countryField || '')
@@ -99,36 +103,6 @@ function WorkspacePills({ selectedIds, all }) {
           {w.name}
         </span>
       ))}
-    </div>
-  )
-}
-
-function IconInput({ icon: Icon, className = '', wrapperClassName = '', ...props }) {
-  return (
-    <div className={cn('relative', wrapperClassName)}>
-      <Icon className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-faint" strokeWidth={1.75} />
-      <input
-        {...props}
-        className={cn(
-          'h-10 w-full rounded-xl border border-surface-border bg-white pl-9 pr-3 text-sm outline-none transition-shadow placeholder:text-ink-faint/80 focus:border-brand-400 focus:ring-2 focus:ring-brand-500/15',
-          className,
-        )}
-      />
-    </div>
-  )
-}
-
-function IconTextarea({ icon: Icon, className = '', wrapperClassName = '', ...props }) {
-  return (
-    <div className={cn('relative', wrapperClassName)}>
-      <Icon className="pointer-events-none absolute left-3 top-3 h-3.5 w-3.5 text-ink-faint" strokeWidth={1.75} />
-      <textarea
-        {...props}
-        className={cn(
-          'min-h-[84px] w-full resize-y rounded-xl border border-surface-border bg-white px-3 py-2.5 pl-9 text-sm outline-none transition-shadow placeholder:text-ink-faint/80 focus:border-brand-400 focus:ring-2 focus:ring-brand-500/15',
-          className,
-        )}
-      />
     </div>
   )
 }
@@ -217,6 +191,16 @@ function hasInviteProfilePrefill(prefill) {
   return Boolean(prefill && typeof prefill === 'object' && Object.keys(prefill).length > 0)
 }
 
+/** List API only returns non-expired pending invites; still show relative urgency in Status. */
+function invitationStatusPill(inv) {
+  const exp = inv.expiresAt ? new Date(inv.expiresAt).getTime() : 0
+  const msLeft = exp - Date.now()
+  if (msLeft < 48 * 60 * 60 * 1000) {
+    return { label: 'Expiring soon', className: 'border-amber-200 bg-amber-50 text-amber-900' }
+  }
+  return { label: 'Pending', className: 'border-emerald-200 bg-emerald-50 text-emerald-800' }
+}
+
 export function TeamPage() {
   const navigate = useNavigate()
   const { data: rolesData } = useTeamRolesQuery()
@@ -234,6 +218,7 @@ export function TeamPage() {
   const [patchUserProfile, { isLoading: patchingProfile }] = usePatchUserProfileMutation()
   const [replaceUserWorkspaces, { isLoading: patchingWorkspaces }] = useReplaceUserWorkspacesMutation()
   const [deactivateUser, { isLoading: deactivatingUser }] = useDeactivateUserMutation()
+  const [reactivateUser, { isLoading: reactivatingUser }] = useReactivateUserMutation()
 
   const roles = useMemo(() => {
     const payload = rolesData?.data
@@ -257,7 +242,12 @@ export function TeamPage() {
     }
   })
   const [inviteForm, setInviteForm] = useState(() => ({ ...EMPTY_INVITE_FORM }))
-  const [roleForm, setRoleForm] = useState({ name: '', description: '', menuPermissions: [] })
+  const [roleForm, setRoleForm] = useState({
+    name: '',
+    description: '',
+    userRoleKind: '',
+    menuPermissions: [],
+  })
   const [editingRoleId, setEditingRoleId] = useState(null)
   const [memberSearch, setMemberSearch] = useState('')
   const [memberRoleFilter, setMemberRoleFilter] = useState('all')
@@ -283,7 +273,7 @@ export function TeamPage() {
   const [cancelInviteDialog, setCancelInviteDialog] = useState({ open: false, invite: null })
 
   const inviteBusy = creatingInvite
-  const userBusy = patchingRole || patchingProfile || patchingWorkspaces || deactivatingUser
+  const userBusy = patchingRole || patchingProfile || patchingWorkspaces || deactivatingUser || reactivatingUser
 
   useEffect(() => {
     try {
@@ -594,7 +584,10 @@ export function TeamPage() {
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={() => setRoleDrawerOpen(true)}
+              onClick={() => {
+                setRoleForm({ name: '', description: '', userRoleKind: '', menuPermissions: [] })
+                setRoleDrawerOpen(true)
+              }}
               aria-label="Create role"
               title="Create role"
               className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-brand-200 bg-white px-3 text-xs font-medium text-brand-700 shadow-sm hover:bg-white"
@@ -632,7 +625,10 @@ export function TeamPage() {
               >
                 <option value="all">All roles</option>
                 {roles.map((r) => (
-                  <option key={r.id} value={r.id}>{r.name}</option>
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                    {r.userRoleKind ? ` — ${labelCompanyUserRoleKind(r.userRoleKind)}` : ''}
+                  </option>
                 ))}
               </select>
               <select
@@ -651,17 +647,17 @@ export function TeamPage() {
         {activeTab === 'members' ? (
         <section className="overflow-hidden rounded-xl border border-surface-border bg-white">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] text-xs">
-              <thead className="sticky top-0 z-10 bg-white text-ink-muted">
+            <table className="cx-table min-w-[900px] text-xs">
+              <thead className="cx-table-sticky-head">
                 <tr>
-                  <th className="px-2.5 py-2 text-left text-[11px]">Name</th>
-                  <th className="px-2.5 py-2 text-left text-[11px]">Job title</th>
-                  <th className="px-2.5 py-2 text-left text-[11px]">Department</th>
-                  <th className="px-2.5 py-2 text-left text-[11px]">Last login</th>
-                  <th className="px-2.5 py-2 text-left text-[11px]">Role</th>
-                  <th className="px-2.5 py-2 text-left text-[11px]">Workspaces</th>
-                  <th className="px-2.5 py-2 text-left text-[11px]">Status</th>
-                  <th className="px-2.5 py-2 text-right text-[11px]">Actions</th>
+                  <th>Name</th>
+                  <th>Job title</th>
+                  <th>Department</th>
+                  <th>Last login</th>
+                  <th>Role</th>
+                  <th>Workspaces</th>
+                  <th>Status</th>
+                  <th className="cx-table-cell-actions text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -675,7 +671,7 @@ export function TeamPage() {
                     return (
                       <tr
                         key={u.id}
-                        className="group cursor-pointer border-t border-surface-border transition-colors hover:bg-brand-50/40"
+                        className="group cursor-pointer"
                         onClick={() => navigate(`/team/${u.id}`)}
                         role="button"
                         tabIndex={0}
@@ -686,7 +682,7 @@ export function TeamPage() {
                           }
                         }}
                       >
-                        <td className="px-2.5 py-2">
+                        <td>
                           <div className="flex items-center gap-2">
                             <div className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-surface-border bg-brand-50 text-[11px] font-semibold text-brand-700">
                               {u.profilePhotoUrl ? (
@@ -701,29 +697,38 @@ export function TeamPage() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-2.5 py-2 text-ink-muted">{u.jobTitle || '—'}</td>
-                        <td className="px-2.5 py-2 text-ink-muted">{u.department || '—'}</td>
-                        <td className="px-2.5 py-2 text-ink-muted">{u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : 'Never'}</td>
-                        <td className="px-2.5 py-2 text-ink-muted">{u.companyRole?.name || 'No role'}</td>
-                        <td className="px-2.5 py-2">
+                        <td className="text-ink-muted">{u.jobTitle || '—'}</td>
+                        <td className="text-ink-muted">{u.department || '—'}</td>
+                        <td className="text-ink-muted">{u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : 'Never'}</td>
+                        <td className="text-ink-muted">
+                          <div className="flex flex-col gap-0.5">
+                            <span>{u.companyRole?.name || 'No role'}</span>
+                            {u.companyRole?.userRoleKind ? (
+                              <span className="w-fit rounded-full border border-surface-border bg-white px-2 py-0.5 text-[10px] text-ink-faint">
+                                {labelCompanyUserRoleKind(u.companyRole.userRoleKind)}
+                              </span>
+                            ) : null}
+                          </div>
+                        </td>
+                        <td>
                           <WorkspacePills selectedIds={currentWs} all={workspaces} />
                         </td>
-                        <td className="px-2.5 py-2">
+                        <td>
                           <span className={cn('rounded-full border px-2 py-0.5 text-xs', u.isActive ? 'border-emerald-200 bg-white text-emerald-700' : 'border-surface-border bg-white text-ink-muted')}>
                             {u.isActive ? 'Active' : 'Inactive'}
                           </span>
                         </td>
-                        <td className="px-2.5 py-2 text-right" onClick={(e) => e.stopPropagation()}>
+                        <td className="cx-table-cell-actions text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="inline-flex gap-1 opacity-100 transition">
                             <button
                               type="button"
-                              disabled={userBusy || !u.isActive}
+                              disabled={userBusy}
                               onClick={(e) => {
                                 e.stopPropagation()
                                 openAccessDrawer(u)
                               }}
-                              aria-label="Edit workspace access"
-                              title={!u.isActive ? 'Inactive users cannot be edited' : 'Edit workspace access'}
+                              aria-label="Edit member access"
+                              title="Edit role, workspaces, and profile"
                               className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-brand-200 bg-white text-brand-700 shadow-sm hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               <PencilLine className="h-3.5 w-3.5" />
@@ -742,7 +747,27 @@ export function TeamPage() {
                               >
                                 <UserMinus className="h-3.5 w-3.5" />
                               </button>
-                            ) : null}
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={userBusy}
+                                onClick={async (e) => {
+                                  e.stopPropagation()
+                                  try {
+                                    await reactivateUser({ id: u.id }).unwrap()
+                                    toast.success('Member reactivated')
+                                    await refetchUsers()
+                                  } catch (err) {
+                                    toast.error(apiErrorMessage(err))
+                                  }
+                                }}
+                                aria-label="Reactivate user"
+                                title="Restore access for this member"
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
+                              >
+                                <UserCheck className="h-3.5 w-3.5" />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -757,42 +782,114 @@ export function TeamPage() {
 
         {activeTab === 'invitations' ? (
         <section className="overflow-hidden rounded-xl border border-surface-border bg-white">
-            <div className="p-4">
-              {invitesLoading ? (
-                <p className="text-sm text-ink-muted">Loading invites…</p>
-              ) : invitations.length === 0 ? (
-                <p className="text-sm text-ink-muted">No pending invitations.</p>
-              ) : (
-                <ul className="space-y-2">
-                  {invitations.map((inv) => (
-                    <li
-                      key={inv.id}
-                      className="rounded-2xl border border-surface-border bg-white p-4 shadow-sm transition hover:border-surface-border"
-                    >
-                      <p className="text-sm font-semibold text-ink">{inv.email}</p>
-                      <p className="mt-1 text-xs text-ink-muted">
-                        {inv.companyRole?.name || 'Role pending'} · Expires {new Date(inv.expiresAt).toLocaleString()}
-                      </p>
-                      {hasInviteProfilePrefill(inv.profilePrefill) ? (
-                        <p className="mt-2 rounded-lg border border-surface-border bg-white px-2.5 py-1.5 text-[11px] font-medium leading-snug text-ink-muted">
-                          Profile details included — they’ll be applied when they accept the invite and finish signup.
-                        </p>
-                      ) : null}
-                      <button
-                        type="button"
-                        disabled={cancellingInvite}
-                        onClick={() => setCancelInviteDialog({ open: true, invite: inv })}
-                        aria-label="Cancel invite"
-                        title="Cancel invite"
-                        className="mt-2 inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-danger hover:bg-red-100"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
+          <div className="overflow-x-auto">
+            {invitesLoading ? (
+              <p className="px-4 py-8 text-center text-sm text-ink-muted">Loading invitations…</p>
+            ) : invitations.length === 0 ? (
+              <p className="px-4 py-8 text-center text-sm text-ink-muted">No pending invitations.</p>
+            ) : (
+              <table className="cx-table min-w-[980px] text-xs">
+                <thead className="cx-table-sticky-head">
+                  <tr>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Role type</th>
+                    <th>Workspaces</th>
+                    <th>Invited by</th>
+                    <th>Sent</th>
+                    <th>Expires</th>
+                    <th>Profile</th>
+                    <th>Status</th>
+                    <th className="cx-table-cell-actions text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invitations.map((inv) => {
+                    const status = invitationStatusPill(inv)
+                    const profileExtra = hasInviteProfilePrefill(inv.profilePrefill)
+                    return (
+                      <tr key={inv.id}>
+                        <td>
+                          <span className="font-medium text-ink">{inv.email}</span>
+                        </td>
+                        <td className="max-w-[140px] text-ink-muted">
+                          <span className="line-clamp-2" title={inv.companyRole?.name || ''}>
+                            {inv.companyRole?.name || '—'}
+                          </span>
+                        </td>
+                        <td className="text-ink-muted">
+                          {inv.companyRole?.userRoleKind ? (
+                            <span className="inline-flex rounded-full border border-surface-border bg-white px-2 py-0.5 text-[11px] text-ink-muted">
+                              {labelCompanyUserRoleKind(inv.companyRole.userRoleKind)}
+                            </span>
+                          ) : (
+                            <span className="text-ink-faint">—</span>
+                          )}
+                        </td>
+                        <td className="min-w-[120px] max-w-[220px]">
+                          <WorkspacePills selectedIds={inv.workspaceIds || []} all={workspaces} />
+                        </td>
+                        <td className="max-w-[160px] text-ink-muted">
+                          {inv.invitedBy ? (
+                            <div className="flex flex-col gap-0.5">
+                              <span className="line-clamp-1 font-medium text-ink" title={inv.invitedBy.name || ''}>
+                                {inv.invitedBy.name || '—'}
+                              </span>
+                              <span className="line-clamp-1 text-[11px] text-ink-faint" title={inv.invitedBy.email || ''}>
+                                {inv.invitedBy.email || ''}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-ink-faint">—</span>
+                          )}
+                        </td>
+                        <td className="whitespace-nowrap text-ink-muted">
+                          {inv.createdAt ? new Date(inv.createdAt).toLocaleString() : '—'}
+                        </td>
+                        <td className="whitespace-nowrap text-ink-muted">
+                          {inv.expiresAt ? new Date(inv.expiresAt).toLocaleString() : '—'}
+                        </td>
+                        <td>
+                          {profileExtra ? (
+                            <span
+                              className="inline-flex rounded-full border border-brand-200 bg-brand-50 px-2 py-0.5 text-[11px] font-medium text-brand-800"
+                              title="Job title, address, phone, and other fields were included on the invite and apply at signup."
+                            >
+                              Included
+                            </span>
+                          ) : (
+                            <span className="text-ink-faint">—</span>
+                          )}
+                        </td>
+                        <td>
+                          <span
+                            className={cn(
+                              'inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium',
+                              status.className,
+                            )}
+                          >
+                            {status.label}
+                          </span>
+                        </td>
+                        <td className="cx-table-cell-actions text-right">
+                          <button
+                            type="button"
+                            disabled={cancellingInvite}
+                            onClick={() => setCancelInviteDialog({ open: true, invite: inv })}
+                            aria-label="Cancel invitation"
+                            title="Cancel invitation"
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-danger hover:bg-red-100 disabled:opacity-50"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
         </section>
         ) : null}
 
@@ -802,30 +899,31 @@ export function TeamPage() {
               {roles.length === 0 ? (
                 <p className="px-4 py-6 text-sm text-ink-muted">No custom roles yet.</p>
               ) : (
-                <table className="w-full min-w-[860px] text-xs">
-                  <thead className="sticky top-0 z-10 bg-white text-ink-muted">
+                <table className="cx-table min-w-[920px] text-xs">
+                  <thead className="cx-table-sticky-head">
                     <tr>
-                      <th className="px-2.5 py-2 text-left text-[11px]">Role</th>
-                      <th className="px-2.5 py-2 text-left text-[11px]">Description</th>
-                      <th className="px-2.5 py-2 text-left text-[11px]">
+                      <th>Role</th>
+                      <th>Role type</th>
+                      <th>Description</th>
+                      <th>
                         <span className="inline-flex items-center gap-1">
                           <ShieldCheck className="h-3.5 w-3.5" />
                           Menus
                         </span>
                       </th>
-                      <th className="px-2.5 py-2 text-left text-[11px]">
+                      <th>
                         <span className="inline-flex items-center gap-1">
                           <Users className="h-3.5 w-3.5" />
                           Users
                         </span>
                       </th>
-                      <th className="px-2.5 py-2 text-right text-[11px]">Actions</th>
+                      <th className="cx-table-cell-actions text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {roles.map((r) => (
-                      <tr key={r.id} className="group border-t border-surface-border hover:bg-white">
-                        <td className="px-2.5 py-2">
+                      <tr key={r.id}>
+                        <td>
                           <div className="flex items-center gap-2">
                             <p className="font-medium text-ink">{r.name}</p>
                             {r.isDefault ? (
@@ -835,18 +933,23 @@ export function TeamPage() {
                             ) : null}
                           </div>
                         </td>
-                        <td className="px-2.5 py-2 text-ink-muted">{r.description || 'No description'}</td>
-                        <td className="px-2.5 py-2">
+                        <td className="text-ink-muted">
+                          <span className="rounded-full border border-surface-border bg-white px-2 py-0.5 text-[11px] text-ink-muted">
+                            {labelCompanyUserRoleKind(r.userRoleKind)}
+                          </span>
+                        </td>
+                        <td className="text-ink-muted">{r.description || 'No description'}</td>
+                        <td>
                           <span className="rounded-full border border-surface-border bg-white px-2 py-0.5 text-[11px] text-ink-muted">
                             {r.menuCount || 0}
                           </span>
                         </td>
-                        <td className="px-2.5 py-2">
+                        <td>
                           <span className="rounded-full border border-surface-border bg-white px-2 py-0.5 text-[11px] text-ink-muted">
                             {r.assignedUsers || 0}
                           </span>
                         </td>
-                        <td className="px-2.5 py-2 text-right">
+                        <td className="cx-table-cell-actions text-right">
                           <div className="inline-flex gap-1 opacity-100 transition">
                             <button
                               type="button"
@@ -859,6 +962,7 @@ export function TeamPage() {
                                 setRoleForm({
                                   name: r.name,
                                   description: r.description || '',
+                                  userRoleKind: r.userRoleKind || 'custom',
                                   menuPermissions: r.menuPermissions || [],
                                 })
                                 setRoleEditDrawerOpen(true)
@@ -1049,6 +1153,7 @@ export function TeamPage() {
                 {roles.map((r) => (
                   <option key={r.id} value={r.id}>
                     {r.name}
+                    {r.userRoleKind ? ` — ${labelCompanyUserRoleKind(r.userRoleKind)}` : ''}
                   </option>
                 ))}
               </select>
@@ -1237,6 +1342,7 @@ export function TeamPage() {
                   {roles.map((r) => (
                     <option key={r.id} value={r.id}>
                       {r.name}
+                      {r.userRoleKind ? ` — ${labelCompanyUserRoleKind(r.userRoleKind)}` : ''}
                     </option>
                   ))}
                 </select>
@@ -1285,7 +1391,7 @@ export function TeamPage() {
         open={roleEditDrawerOpen}
         onClose={() => setRoleEditDrawerOpen(false)}
         title="Edit role"
-        description="Update role details and menu access."
+        description="Update role name, role type, and menu access. People still get workspaces when you invite them or edit each member."
         footer={
           <div className="flex justify-end gap-2">
             <button type="button" onClick={() => setRoleEditDrawerOpen(false)} className="h-10 rounded-xl border border-surface-border px-4 text-sm">
@@ -1296,11 +1402,13 @@ export function TeamPage() {
               disabled={patchingRoleMeta}
               onClick={async () => {
                 if (!editingRoleId) return
+                if (!roleForm.userRoleKind) return toast.error('Select a role type')
                 try {
                   await patchRole({
                     id: editingRoleId,
                     name: roleForm.name.trim(),
                     description: roleForm.description.trim() || null,
+                    userRoleKind: roleForm.userRoleKind,
                     menuPermissions: roleForm.menuPermissions.length ? roleForm.menuPermissions : undefined,
                   }).unwrap()
                   toast.success('Role updated')
@@ -1317,6 +1425,23 @@ export function TeamPage() {
         }
       >
         <div className="flex h-full min-h-0 flex-col gap-4">
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Role type</label>
+            <p className="mt-1 text-[11px] leading-snug text-ink-muted">
+              Workspace admin, Manager, or Sales — or Custom for legacy roles. Workspaces are assigned per user, not here.
+            </p>
+            <select
+              value={roleForm.userRoleKind}
+              onChange={(e) => setRoleForm((f) => ({ ...f, userRoleKind: e.target.value }))}
+              className="mt-2 h-10 w-full cursor-pointer rounded-xl border border-surface-border bg-white px-3 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/15"
+            >
+              {COMPANY_USER_ROLE_KIND_ALL_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
           <div>
             <label className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Role name</label>
             <input
@@ -1346,7 +1471,7 @@ export function TeamPage() {
         open={roleDrawerOpen}
         onClose={() => setRoleDrawerOpen(false)}
         title="Create custom role"
-        description="Define role name and choose sidebar menus this role can access."
+        description="Pick a role type, name the role, and choose sidebar menus. Assign workspaces per person when inviting or editing a member."
         footer={
           <div className="flex justify-end gap-2">
             <button type="button" onClick={() => setRoleDrawerOpen(false)} className="h-10 rounded-xl border border-surface-border px-4 text-sm">
@@ -1357,15 +1482,17 @@ export function TeamPage() {
               disabled={creatingRole}
               onClick={async () => {
                 if (!roleForm.name.trim()) return toast.error('Role name is required')
+                if (!roleForm.userRoleKind) return toast.error('Select a role type (Workspace admin, Manager, or Sales)')
                 if (!roleForm.menuPermissions.length) return toast.error('Select at least one menu permission')
                 try {
                   await createRole({
                     name: roleForm.name.trim(),
                     description: roleForm.description.trim() || null,
+                    userRoleKind: roleForm.userRoleKind,
                     menuPermissions: roleForm.menuPermissions,
                   }).unwrap()
                   toast.success('Role created')
-                  setRoleForm({ name: '', description: '', menuPermissions: [] })
+                  setRoleForm({ name: '', description: '', userRoleKind: '', menuPermissions: [] })
                   setRoleDrawerOpen(false)
                 } catch (err) {
                   toast.error(apiErrorMessage(err))
@@ -1379,6 +1506,24 @@ export function TeamPage() {
         }
       >
         <div className="flex h-full min-h-0 flex-col gap-4">
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Role type</label>
+            <p className="mt-1 text-[11px] leading-snug text-ink-muted">
+              Workspace admin, Manager, or Sales. You will assign which workspaces each person can access when you invite them or edit a member.
+            </p>
+            <select
+              value={roleForm.userRoleKind}
+              onChange={(e) => setRoleForm((f) => ({ ...f, userRoleKind: e.target.value }))}
+              className="mt-2 h-10 w-full cursor-pointer rounded-xl border border-surface-border bg-white px-3 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/15"
+            >
+              <option value="">Select role type…</option>
+              {COMPANY_USER_ROLE_KIND_CREATE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
           <div>
             <label className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Role name</label>
             <input

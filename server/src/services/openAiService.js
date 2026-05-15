@@ -133,13 +133,14 @@ Objective: ${objective || 'start a sales conversation'}.
 Tone: ${tone}.
 User instructions: ${customPrompt || 'none'}.
 
-Available merge tags (must be used with double curly braces):
-${leadFields.map((f) => `{{${f}}}`).join(', ')}.
+Available merge tags (use @field syntax, e.g. @first_name, @company):
+${leadFields.map((f) => `@${f}`).join(', ')}.
 
 Rules:
 - Return ONLY strict JSON with keys: subject, bodyHtml, suggestedTags.
 - subject max 120 chars.
-- bodyHtml should be clean HTML email body with paragraphs and bullet points where useful.
+- bodyHtml should be clean HTML email body with <p> paragraphs, line breaks, and bullet lists where useful.
+- Use @merge_tags in subject and body (not {{curly}} braces).
 - Personalize with merge tags and keep placeholders realistic.
 - Do not add markdown fences.
 `

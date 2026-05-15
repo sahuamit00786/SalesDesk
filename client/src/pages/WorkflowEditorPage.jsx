@@ -440,12 +440,12 @@ function WorkflowEditorLoaded({ wf, refetchWorkflow, teamUsers, templates, leadS
             <div className="border-t border-surface-border pt-4">
               <h3 className="text-xs font-bold uppercase tracking-wide text-ink-muted">Steps</h3>
               <div className="mt-2 overflow-x-auto rounded-xl border border-surface-border">
-                <table className="w-full min-w-[280px] text-left text-[11px]">
-                  <thead className="border-b border-surface-border bg-surface-muted/80 text-[10px] font-semibold uppercase text-ink-muted">
+                <table className="cx-table cx-table--dense min-w-[280px] text-[11px]">
+                  <thead>
                     <tr>
-                      <th className="px-2 py-2">Node</th>
-                      <th className="px-2 py-2">Status</th>
-                      <th className="px-2 py-2">Finished</th>
+                      <th>Node</th>
+                      <th>Status</th>
+                      <th>Finished</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -453,12 +453,12 @@ function WorkflowEditorLoaded({ wf, refetchWorkflow, teamUsers, templates, leadS
                       const nid = String(step.nodeId ?? step.node_id ?? '')
                       const fin = step.finishedAt ?? step.finished_at
                       return (
-                        <tr key={step.id ?? `${nid}-${step.startedAt}`} className="border-b border-surface-border/80 last:border-0">
-                          <td className="max-w-[120px] truncate px-2 py-1.5 font-mono text-ink" title={nid}>
+                        <tr key={step.id ?? `${nid}-${step.startedAt}`}>
+                          <td className="max-w-[120px] truncate font-mono text-ink" title={nid}>
                             {nid.slice(0, 10)}…
                           </td>
-                          <td className="px-2 py-1.5 font-semibold">{step.status}</td>
-                          <td className="px-2 py-1.5 text-ink-muted">
+                          <td className="font-semibold">{step.status}</td>
+                          <td className="text-ink-muted">
                             {fin ? formatDistanceToNow(new Date(fin), { addSuffix: true }) : '—'}
                           </td>
                         </tr>

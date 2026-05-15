@@ -1,6 +1,7 @@
 import { format, isSameDay, addDays } from 'date-fns'
 import { Video, CheckSquare, Phone, TrendingUp, Bell, Calendar, CheckCircle2, Clock } from 'lucide-react'
 import { cn } from '@/utils/cn'
+import { TaskAttachmentIcons } from '@/features/leads/components/TaskAttachmentIcons'
 import { getKindBgClass } from '../eventColors'
 
 const iconMap = {
@@ -171,6 +172,12 @@ export function DayNotesPanel({ selectedDate, events, onEventClick }) {
                           </p>
                         </div>
                       )}
+
+                      {event.kind === 'task' && Array.isArray(event.meta?.attachments) && event.meta.attachments.length ? (
+                        <div className="mt-2 border-t border-gray-100 pt-2">
+                          <TaskAttachmentIcons attachments={event.meta.attachments} variant="compact" />
+                        </div>
+                      ) : null}
 
                       {event.kind === 'reminder' && event.meta?.notes && (
                         <div className="mt-2 pt-2 border-t border-gray-100">

@@ -1,18 +1,27 @@
 'use strict'
 
+const { addIndexIfMissing, indexExists } = require('../migration-helpers.cjs')
+
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.addColumn('leads', 'is_opportunity', {
-      type: Sequelize.BOOLEAN,
-      allowNull: false,
-      defaultValue: false,
-    })
-    await queryInterface.addColumn('leads', 'opportunity_stage', {
-      type: Sequelize.STRING(80),
-      allowNull: true,
-    })
-    await queryInterface.addIndex('leads', ['company_id', 'is_opportunity'], {
+    const desc = await queryInterface.describeTable('leads')
+
+    if (!desc.is_opportunity) {
+      await queryInterface.addColumn('leads', 'is_opportunity', {
+        type: Sequelize.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      })
+    }
+    if (!desc.opportunity_stage) {
+      await queryInterface.addColumn('leads', 'opportunity_stage', {
+        type: Sequelize.STRING(80),
+        allowNull: true,
+      })
+    }
+
+    await addIndexIfMissing(queryInterface, 'leads', ['company_id', 'is_opportunity'], {
       name: 'leads_company_is_opportunity_idx',
     })
 
@@ -27,8 +36,11 @@ module.exports = {
   },
 
   async down(queryInterface) {
-    await queryInterface.removeIndex('leads', 'leads_company_is_opportunity_idx')
-    await queryInterface.removeColumn('leads', 'opportunity_stage')
-    await queryInterface.removeColumn('leads', 'is_opportunity')
+    const desc = await queryInterface.describeTable('leads').catch(() => ({}))
+    if (await indexExists(queryInterface, 'leads', 'leads_company_is_opportunity_idx')) {
+      await queryInterface.removeIndex('leads', 'leads_company_is_opportunity_idx')
+    }
+    if (desc.opportunity_stage) await queryInterface.removeColumn('leads', 'opportunity_stage')
+    if (desc.is_opportunity) await queryInterface.removeColumn('leads', 'is_opportunity')
   },
 }

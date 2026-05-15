@@ -162,7 +162,7 @@ export async function listRoles(req, res, next) {
     const rows = await CompanyRole.findAll({
       where: { companyId: req.user.companyId },
       order: [['name', 'ASC']],
-      attributes: ['id', 'name', 'description', 'isDefault'],
+      attributes: ['id', 'name', 'description', 'isDefault', 'userRoleKind', 'roleNo'],
       include: [
         {
           model: CompanyRoleMenu,
@@ -196,6 +196,8 @@ export async function listRoles(req, res, next) {
         name: r.name,
         description: r.description ?? null,
         isDefault: Boolean(r.isDefault),
+        userRoleKind: r.userRoleKind || 'custom',
+        roleNo: r.roleNo != null ? Number(r.roleNo) : null,
         assignedUsers: memberMap.get(r.id) || 0,
         menuCount: menuMap.get(r.id) || 0,
         menuPermissions: (r.menuLinks || []).map((m) => ({
@@ -240,6 +242,7 @@ export async function createCompanyRole(req, res, next) {
     const companyId = req.user.companyId
     const roleName = value.name.trim()
     const roleDescription = value.description?.trim() || null
+    const userRoleKind = value.userRoleKind
     const menuPermissions = normalizeRoleMenuPermissions(value.menuPermissions)
     if (!menuPermissions.length) {
       const err = new Error('Invalid menus')
@@ -266,6 +269,7 @@ export async function createCompanyRole(req, res, next) {
           companyId,
           name: roleName,
           description: roleDescription,
+          userRoleKind,
           createdBy: req.user.id,
         },
         { transaction },
@@ -282,7 +286,11 @@ export async function createCompanyRole(req, res, next) {
         { transaction },
       )
     })
-    return res.status(201).json({ success: true, data: { id: role.id, name: role.name }, meta: {} })
+    return res.status(201).json({
+      success: true,
+      data: { id: role.id, name: role.name, userRoleKind: role.userRoleKind, roleNo: role.roleNo != null ? Number(role.roleNo) : null },
+      meta: {},
+    })
   } catch (e) {
     if (e?.name === 'SequelizeUniqueConstraintError') {
       e.status = 409
@@ -318,6 +326,7 @@ export async function patchCompanyRole(req, res, next) {
       role.name = nextName
     }
     if (value.description !== undefined) role.description = value.description?.trim() || null
+    if (value.userRoleKind !== undefined) role.userRoleKind = value.userRoleKind
     await role.save()
     if (value.menuPermissions) {
       const menuPermissions = normalizeRoleMenuPermissions(value.menuPermissions)
@@ -352,7 +361,11 @@ export async function patchCompanyRole(req, res, next) {
         })),
       )
     }
-    return res.json({ success: true, data: { id: role.id, name: role.name }, meta: {} })
+    return res.json({
+      success: true,
+      data: { id: role.id, name: role.name, userRoleKind: role.userRoleKind, roleNo: role.roleNo != null ? Number(role.roleNo) : null },
+      meta: {},
+    })
   } catch (e) {
     if (e?.name === 'SequelizeUniqueConstraintError') {
       e.status = 409
@@ -447,7 +460,7 @@ export async function listInvitations(req, res, next) {
       where: { companyId, acceptedAt: null, expiresAt: { [Op.gt]: new Date() } },
       order: [['createdAt', 'DESC']],
       include: [
-        { model: CompanyRole, as: 'companyRole', attributes: ['id', 'name'] },
+        { model: CompanyRole, as: 'companyRole', attributes: ['id', 'name', 'userRoleKind', 'roleNo'] },
         { model: User, as: 'inviter', attributes: ['id', 'name', 'email'] },
       ],
     })
@@ -457,7 +470,14 @@ export async function listInvitations(req, res, next) {
         items: rows.map((i) => ({
           id: i.id,
           email: i.email,
-          companyRole: i.companyRole ? { id: i.companyRole.id, name: i.companyRole.name } : null,
+          companyRole: i.companyRole
+            ? {
+                id: i.companyRole.id,
+                name: i.companyRole.name,
+                userRoleKind: i.companyRole.userRoleKind || 'custom',
+                roleNo: i.companyRole.roleNo != null ? Number(i.companyRole.roleNo) : null,
+              }
+            : null,
           workspaceIds: uniqueIds(i.invitedWorkspaceIds),
           profilePrefill: i.profilePrefill && typeof i.profilePrefill === 'object' ? i.profilePrefill : null,
           expiresAt: i.expiresAt?.toISOString() ?? null,
@@ -742,7 +762,7 @@ export async function listCompanyUsers(req, res, next) {
     const allowedWorkspaceIds = await allowedWorkspaceIdsForUser(req.user)
     const rows = await User.findAll({
       where: { companyId },
-      include: [{ model: CompanyRole, as: 'companyRole', attributes: ['id', 'name'] }],
+      include: [{ model: CompanyRole, as: 'companyRole', attributes: ['id', 'name', 'userRoleKind', 'roleNo'] }],
       order: [['createdAt', 'ASC']],
       attributes: [
         'id',
@@ -787,7 +807,14 @@ export async function listCompanyUsers(req, res, next) {
             country: u.country ?? null,
             postalCode: u.postalCode ?? null,
             lastLoginAt: u.lastLoginAt?.toISOString() ?? null,
-            companyRole: u.companyRole ? { id: u.companyRole.id, name: u.companyRole.name } : null,
+            companyRole: u.companyRole
+              ? {
+                  id: u.companyRole.id,
+                  name: u.companyRole.name,
+                  userRoleKind: u.companyRole.userRoleKind || 'custom',
+                  roleNo: u.companyRole.roleNo != null ? Number(u.companyRole.roleNo) : null,
+                }
+              : null,
             isCompanyAdmin: false,
             workspaces:
               req.user.isCompanyAdmin
@@ -809,7 +836,7 @@ export async function getCompanyUser(req, res, next) {
     const allowedWorkspaceIds = await allowedWorkspaceIdsForUser(req.user)
     const user = await User.findOne({
       where: { id: req.params.id, companyId },
-      include: [{ model: CompanyRole, as: 'companyRole', attributes: ['id', 'name'] }],
+      include: [{ model: CompanyRole, as: 'companyRole', attributes: ['id', 'name', 'userRoleKind', 'roleNo'] }],
       attributes: [
         'id',
         'name',
@@ -862,7 +889,14 @@ export async function getCompanyUser(req, res, next) {
         country: user.country ?? null,
         postalCode: user.postalCode ?? null,
         lastLoginAt: user.lastLoginAt?.toISOString() ?? null,
-        companyRole: user.companyRole ? { id: user.companyRole.id, name: user.companyRole.name } : null,
+        companyRole: user.companyRole
+          ? {
+              id: user.companyRole.id,
+              name: user.companyRole.name,
+              userRoleKind: user.companyRole.userRoleKind || 'custom',
+              roleNo: user.companyRole.roleNo != null ? Number(user.companyRole.roleNo) : null,
+            }
+          : null,
         isCompanyAdmin: Boolean(user.isCompanyAdmin),
         workspaces,
         createdAt: user.createdAt?.toISOString() ?? null,
@@ -1111,6 +1145,41 @@ export async function deactivateUser(req, res, next) {
     await target.save()
 
     return res.json({ success: true, data: { id: target.id, isActive: false }, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function reactivateUser(req, res, next) {
+  try {
+    const targetId = req.params.id
+    const companyId = req.user.companyId
+    const target = await User.findOne({ where: { id: targetId, companyId } })
+    if (!target) {
+      const err = new Error('Not found')
+      err.status = 404
+      err.code = 'NOT_FOUND'
+      err.publicMessage = 'User not found'
+      throw err
+    }
+    if (target.isCompanyAdmin) {
+      const err = new Error('Cannot change company admin activation here')
+      err.status = 400
+      err.code = 'VALIDATION'
+      err.publicMessage = 'Company admin accounts are managed separately'
+      throw err
+    }
+    if (target.isActive !== false) {
+      const err = new Error('Already active')
+      err.status = 400
+      err.code = 'ALREADY_ACTIVE'
+      err.publicMessage = 'This member is already active'
+      throw err
+    }
+    target.isActive = true
+    target.deactivatedAt = null
+    await target.save()
+    return res.json({ success: true, data: { id: target.id, isActive: true }, meta: {} })
   } catch (e) {
     return next(e)
   }

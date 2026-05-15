@@ -57,13 +57,36 @@ function groupByStage(opportunities, stageOrder) {
   return { byStage, other }
 }
 
-function DealCardBody({ opp, interactive = false, onOpen, onEdit }) {
+function DealCardBody({ opp, interactive = false, onOpen, onOpenClient, onEdit }) {
   const accent = accentForId(opp.id)
   const hasDealName = Boolean(String(opp.dealName || '').trim())
   const headline = (hasDealName ? opp.dealName : opp.companyName || opp.fullName || 'Deal').trim()
   const companyLine = (opp.companyName || '').trim() || '—'
   const clientName = (opp.fullName || '').trim() || '—'
   const rel = shortRelative(opp.updatedAt || opp.createdAt)
+
+  const clientInner = (
+    <>
+      <p className="text-[9px] font-semibold uppercase tracking-wide text-neutral-500">Client</p>
+      <div className="mt-1 flex items-center gap-2">
+        <span
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white shadow-inner"
+          style={{ backgroundColor: accent }}
+          aria-hidden
+        >
+          {initials(clientName)}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-neutral-900">{clientName}</p>
+          {opp.email ? (
+            <p className="truncate text-[11px] text-neutral-500">{opp.email}</p>
+          ) : opp.jobTitle ? (
+            <p className="truncate text-[11px] text-neutral-500">{opp.jobTitle}</p>
+          ) : null}
+        </div>
+      </div>
+    </>
+  )
 
   return (
     <>
@@ -115,26 +138,26 @@ function DealCardBody({ opp, interactive = false, onOpen, onEdit }) {
           </div>
         )}
 
-        <div className="mt-3 rounded-md border border-neutral-100 bg-neutral-50/80 px-2.5 py-2">
-          <p className="text-[9px] font-semibold uppercase tracking-wide text-neutral-500">Client</p>
-          <div className="mt-1 flex items-center gap-2">
-            <span
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white shadow-inner"
-              style={{ backgroundColor: accent }}
-              aria-hidden
-            >
-              {initials(clientName)}
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-neutral-900">{clientName}</p>
-              {opp.email ? (
-                <p className="truncate text-[11px] text-neutral-500">{opp.email}</p>
-              ) : opp.jobTitle ? (
-                <p className="truncate text-[11px] text-neutral-500">{opp.jobTitle}</p>
-              ) : null}
-            </div>
-          </div>
-        </div>
+        {interactive ? (
+          <button
+            type="button"
+            className="mt-3 w-full cursor-pointer rounded-md border border-neutral-100 bg-neutral-50/80 px-2.5 py-2 text-left transition-colors hover:border-neutral-200 hover:bg-neutral-100/90"
+            aria-label={
+              opp.parentOpportunityLeadId
+                ? `View opportunity — ${clientName}`
+                : `View deal — ${clientName}`
+            }
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation()
+              onOpenClient?.(opp)
+            }}
+          >
+            {clientInner}
+          </button>
+        ) : (
+          <div className="mt-3 rounded-md border border-neutral-100 bg-neutral-50/80 px-2.5 py-2">{clientInner}</div>
+        )}
 
         <div className="mt-3 flex items-center justify-between gap-2">
           <span className="text-base font-bold tabular-nums text-neutral-900">
@@ -167,7 +190,7 @@ function DealCardOverlay({ opp }) {
   )
 }
 
-function DealKanbanCard({ opp, onOpen, onEdit }) {
+function DealKanbanCard({ opp, onOpen, onOpenClient, onEdit }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: opp.id,
     data: { opp },
@@ -185,12 +208,12 @@ function DealKanbanCard({ opp, onOpen, onEdit }) {
         isDragging && 'opacity-50 ring-2 ring-orange-500/40',
       )}
     >
-      <DealCardBody opp={opp} interactive onOpen={onOpen} onEdit={onEdit} />
+      <DealCardBody opp={opp} interactive onOpen={onOpen} onOpenClient={onOpenClient} onEdit={onEdit} />
     </div>
   )
 }
 
-function DealColumn({ stageName, displayLabel, opportunities, isWonColumn, onOpen, onEdit }) {
+function DealColumn({ stageName, displayLabel, opportunities, isWonColumn, onOpen, onOpenClient, onEdit }) {
   const droppableId = `stage:${stageName}`
   const { setNodeRef, isOver } = useDroppable({ id: droppableId })
   const columnSum = opportunities.reduce((acc, o) => acc + Number(o.dealValue || 0), 0)
@@ -227,14 +250,14 @@ function DealColumn({ stageName, displayLabel, opportunities, isWonColumn, onOpe
         {opportunities.length === 0 ? (
           <p className="rounded-md border border-dashed border-neutral-300/80 bg-white/50 px-3 py-8 text-center text-[11px] text-neutral-400">No deals</p>
         ) : (
-          opportunities.map((opp) => <DealKanbanCard key={opp.id} opp={opp} onOpen={onOpen} onEdit={onEdit} />)
+          opportunities.map((opp) => <DealKanbanCard key={opp.id} opp={opp} onOpen={onOpen} onOpenClient={onOpenClient} onEdit={onEdit} />)
         )}
       </div>
     </div>
   )
 }
 
-function DealOtherColumn({ displayLabel, opportunities, onOpen, onEdit }) {
+function DealOtherColumn({ displayLabel, opportunities, onOpen, onOpenClient, onEdit }) {
   return (
     <div className="flex h-full min-h-0 w-[280px] shrink-0 flex-col rounded-lg border border-amber-200 bg-amber-50/90">
       <div className="shrink-0 border-b border-amber-200 px-3 py-2.5">
@@ -243,7 +266,7 @@ function DealOtherColumn({ displayLabel, opportunities, onOpen, onEdit }) {
       </div>
       <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto p-2.5 scrollbar-subtle">
         {opportunities.map((opp) => (
-          <DealKanbanCard key={opp.id} opp={opp} onOpen={onOpen} onEdit={onEdit} />
+          <DealKanbanCard key={opp.id} opp={opp} onOpen={onOpen} onOpenClient={onOpenClient} onEdit={onEdit} />
         ))}
       </div>
     </div>
@@ -256,6 +279,11 @@ export function DealsPipelineKanban({
   isLoading,
   dealStageName = '',
   onOpenDeal,
+  /**
+   * Client block: navigate to parent opportunity when present. Override with `(dealRow) => void` for custom routing.
+   * Default: `/opportunities/:parentOpportunityLeadId` if set, else `/deals/:id`.
+   */
+  onOpenDealPage,
   onEditOpportunity,
 }) {
   const navigate = useNavigate()
@@ -264,6 +292,16 @@ export function DealsPipelineKanban({
   function openDeal(id) {
     if (onOpenDeal) onOpenDeal(id)
     else navigate(`/deals/${id}`)
+  }
+
+  function openClientFromDeal(opp) {
+    if (onOpenDealPage) {
+      onOpenDealPage(opp)
+      return
+    }
+    const parentLeadId = opp?.parentOpportunityLeadId
+    if (parentLeadId) navigate(`/opportunities/${parentLeadId}`)
+    else navigate(`/deals/${opp.id}`)
   }
   const [activeId, setActiveId] = useState(null)
 
@@ -330,6 +368,7 @@ export function DealsPipelineKanban({
               opportunities={list}
               isWonColumn={Boolean(dealStageName && name === dealStageName)}
               onOpen={openDeal}
+              onOpenClient={openClientFromDeal}
               onEdit={onEditOpportunity}
             />
           )
@@ -339,6 +378,7 @@ export function DealsPipelineKanban({
             displayLabel="Other stages"
             opportunities={other}
             onOpen={openDeal}
+            onOpenClient={openClientFromDeal}
             onEdit={onEditOpportunity}
           />
         ) : null}

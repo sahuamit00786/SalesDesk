@@ -34,7 +34,7 @@ export function PageShell({ children, fullWidth = false, flush = false, mainClas
       <div
         className={cn(
           'hidden min-h-0 shrink-0 self-stretch overflow-hidden border-r border-surface-border transition-[width] duration-200 ease-out lg:flex lg:flex-col',
-          sidebarCollapsed ? 'relative z-[60] w-[52px]' : 'w-[220px]',
+          sidebarCollapsed ? 'w-[52px]' : 'w-[220px]',
         )}
       >
         <Sidebar

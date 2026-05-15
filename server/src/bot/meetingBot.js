@@ -1,11 +1,125 @@
 import { chromium } from 'playwright'
-import { spawn, execSync } from 'child_process'
+import { spawn, execSync, execFileSync } from 'child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 /** Server root (…/SalesDesk/server) */
 const serverRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
+
+let cachedFfmpegExecutable = null
+
+function getMergedWindowsUserMachinePath() {
+  try {
+    return execFileSync(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        "[Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')",
+      ],
+      { encoding: 'utf8' },
+    ).trim()
+  } catch {
+    return ''
+  }
+}
+
+/** WinGet installs FFmpeg under %LOCALAPPDATA%\Microsoft\WinGet\Packages\Gyan.FFmpeg_* */
+function findFfmpegInWinGetPackages() {
+  const root = path.join(process.env.LOCALAPPDATA || '', 'Microsoft', 'WinGet', 'Packages')
+  if (!fs.existsSync(root)) return null
+
+  const walk = (dir, depth) => {
+    if (depth > 6) return null
+    let entries
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true })
+    } catch {
+      return null
+    }
+    for (const ent of entries) {
+      const p = path.join(dir, ent.name)
+      if (ent.isFile() && ent.name.toLowerCase() === 'ffmpeg.exe') return p
+      if (ent.isDirectory()) {
+        const found = walk(p, depth + 1)
+        if (found) return found
+      }
+    }
+    return null
+  }
+
+  try {
+    for (const name of fs.readdirSync(root)) {
+      if (!name.toLowerCase().startsWith('gyan.ffmpeg')) continue
+      const found = walk(path.join(root, name), 0)
+      if (found) return found
+    }
+  } catch {
+    /* */
+  }
+  return null
+}
+
+/**
+ * IDE-started Node often misses User-level PATH (e.g. WinGet FFmpeg). Resolve a real path.
+ */
+function resolveFfmpegExecutable() {
+  if (cachedFfmpegExecutable) return cachedFfmpegExecutable
+
+  const fromEnv = (
+    process.env.MEETING_BOT_FFMPEG_EXE ||
+    process.env.FFMPEG_PATH ||
+    ''
+  ).trim()
+  if (fromEnv) {
+    const withExe =
+      process.platform === 'win32' && !fromEnv.toLowerCase().endsWith('.exe')
+        ? `${fromEnv}.exe`
+        : fromEnv
+    if (fs.existsSync(fromEnv)) {
+      cachedFfmpegExecutable = fromEnv
+      return cachedFfmpegExecutable
+    }
+    if (fs.existsSync(withExe)) {
+      cachedFfmpegExecutable = withExe
+      return cachedFfmpegExecutable
+    }
+    // eslint-disable-next-line no-console
+    console.warn('[Meeting bot] MEETING_BOT_FFMPEG_EXE / FFMPEG_PATH not found on disk:', fromEnv)
+  }
+
+  if (process.platform === 'win32') {
+    const merged = getMergedWindowsUserMachinePath()
+    if (merged) {
+      try {
+        const out = execFileSync('where.exe', ['ffmpeg'], {
+          encoding: 'utf8',
+          env: { ...process.env, Path: merged, PATH: merged },
+        })
+        const first = out
+          .split(/\r?\n/)
+          .map((l) => l.trim())
+          .find((l) => l && fs.existsSync(l))
+        if (first) {
+          cachedFfmpegExecutable = first
+          return cachedFfmpegExecutable
+        }
+      } catch {
+        /* */
+      }
+    }
+    const winget = findFfmpegInWinGetPackages()
+    if (winget) {
+      cachedFfmpegExecutable = winget
+      return cachedFfmpegExecutable
+    }
+  }
+
+  cachedFfmpegExecutable = 'ffmpeg'
+  return cachedFfmpegExecutable
+}
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms))
@@ -52,8 +166,8 @@ function startFfmpegRecording(audioPath) {
   let args
 
   if (plat === 'win32') {
-    const input =
-      process.env.MEETING_BOT_WIN_DSHOW || 'audio=Stereo Mix'
+    let input = process.env.MEETING_BOT_WIN_DSHOW || 'audio=Stereo Mix'
+    input = String(input).trim().replace(/^["']+|["']+$/g, '')
     args = [
       '-y',
       '-f',
@@ -96,7 +210,13 @@ function startFfmpegRecording(audioPath) {
     ]
   }
 
-  const ffmpeg = spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe'] })
+  const ffmpegExe = resolveFfmpegExecutable()
+  if (process.env.MEETING_BOT_FFMPEG_DEBUG === 'true') {
+    // eslint-disable-next-line no-console
+    console.log('[Meeting bot] ffmpeg executable:', ffmpegExe)
+  }
+
+  const ffmpeg = spawn(ffmpegExe, args, { stdio: ['ignore', 'pipe', 'pipe'] })
   ffmpeg.stderr?.on('data', (chunk) => {
     if (process.env.MEETING_BOT_FFMPEG_DEBUG === 'true') {
       process.stderr.write(chunk)
@@ -169,11 +289,18 @@ export async function runMeetingBot(meeting) {
     if (ffmpeg) {
       ffmpeg.on('error', (err) => {
         console.error('[Meeting bot] ffmpeg spawn error:', err.message)
+        if (err?.code === 'ENOENT') {
+          // eslint-disable-next-line no-console
+          console.error(
+            '[Meeting bot] Hint: set MEETING_BOT_FFMPEG_EXE to the full path of ffmpeg.exe, or restart the IDE so PATH includes WinGet FFmpeg (see .env.example).',
+          )
+        }
       })
     }
 
     const headless = process.env.MEETING_BOT_HEADLESS === 'true'
-    const channel = process.env.MEETING_BOT_CHROME_CHANNEL || undefined
+    const browserExecutable = process.env.MEETING_BOT_BROWSER_EXECUTABLE?.trim() || undefined
+    const channel = process.env.MEETING_BOT_CHROME_CHANNEL?.trim() || undefined
 
     const launchArgs = [
       '--no-sandbox',
@@ -186,15 +313,18 @@ export async function runMeetingBot(meeting) {
       launchArgs.push('--disable-gpu')
     }
 
-    const browser = await chromium.launch({
-      channel,
-      headless,
-      args: launchArgs,
-    })
+    const launchOpts = { headless, args: launchArgs }
+    if (browserExecutable) {
+      launchOpts.executablePath = browserExecutable
+    } else if (channel) {
+      launchOpts.channel = channel
+    }
+
+    const browser = await chromium.launch(launchOpts)
 
     browser.on('disconnected', () => {
       console.error(
-        '[Meeting bot] Browser disconnected before finish — if MEETING_BOT_HEADLESS=false, do not close the window; try removing MEETING_BOT_CHROME_CHANNEL to use bundled Chromium.',
+        '[Meeting bot] Browser disconnected before finish — if MEETING_BOT_HEADLESS=false, do not close the window; try unsetting MEETING_BOT_BROWSER_EXECUTABLE / MEETING_BOT_CHROME_CHANNEL to use Playwright bundled Chromium.',
       )
     })
 

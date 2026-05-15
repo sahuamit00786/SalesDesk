@@ -36,12 +36,16 @@ import { exportLeads, importLeads } from '../services/importExportService.js'
 import { recalculateScore } from '../services/leadScoringService.js'
 import { leadAccessWhere } from '../services/leadVisibility.js'
 import { allowedWorkspaceIdsForUser } from '../services/userWorkspaceService.js'
+import { resolveListWorkspaceFilterId } from '../utils/resolveListWorkspaceFilter.js'
 import {
   maybePromotePendingTaskFromSubtasks,
   promotePendingTasksByDueOrStartMany,
 } from '../services/leadTaskAutoStatusService.js'
 import { createLeadSystemActivity as createSystemActivity } from '../services/leadSystemActivity.js'
+import { logLeadFieldChanges, logLeadCollaboratorsChange } from '../services/leadFieldChangeActivity.js'
 import { emitLeadWorkflowTriggers, emitLeadWorkflowTriggersBulkImport } from '../services/workflowRunner.js'
+import { htmlToText, parseGmailMessage } from '../services/gmail/gmailMessageParse.js'
+import { registerGmailWatchForTokenRow, isGmailPushConfigured } from '../services/gmail/gmailPushService.js'
 
 const LEAD_TASK_TYPES = [
   'call',
@@ -537,15 +541,6 @@ function normalizeRecipients(value) {
     .filter(Boolean)
 }
 
-function htmlToText(html) {
-  return String(html || '')
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
 function parseGoogleOAuthState(rawState) {
   try {
     const decoded = Buffer.from(String(rawState || ''), 'base64url').toString('utf8')
@@ -557,30 +552,6 @@ function parseGoogleOAuthState(rawState) {
   } catch {
     return null
   }
-}
-
-function decodeGmailBase64(data) {
-  if (!data) return ''
-  const normalized = String(data).replace(/-/g, '+').replace(/_/g, '/')
-  return Buffer.from(normalized, 'base64').toString('utf8')
-}
-
-function parseHeader(headers, name) {
-  const row = (headers || []).find((h) => String(h?.name || '').toLowerCase() === String(name).toLowerCase())
-  return row?.value || ''
-}
-
-function parseAddressList(raw) {
-  if (!raw) return []
-  return String(raw)
-    .split(',')
-    .map((chunk) => chunk.trim())
-    .filter(Boolean)
-    .map((chunk) => {
-      const m = chunk.match(/^(.*?)<(.+?)>$/)
-      if (!m) return { name: chunk, email: chunk.toLowerCase() }
-      return { name: m[1].trim().replace(/^"|"$/g, ''), email: m[2].trim().toLowerCase() }
-    })
 }
 
 function normalizeEmail(value) {
@@ -607,59 +578,6 @@ function rowBelongsToLeadConversation(row, leadEmail, mailboxEmail) {
   if (row?.direction === 'outbound') return hasLead
   if (row?.direction === 'inbound') return recipients.includes(me)
   return hasLead && recipients.includes(me)
-}
-
-function extractMimePart(payload, mimeType) {
-  if (!payload) return null
-  if (payload.mimeType === mimeType && payload.body?.data) return payload.body.data
-  for (const part of payload.parts || []) {
-    const found = extractMimePart(part, mimeType)
-    if (found) return found
-  }
-  return null
-}
-
-function extractAttachmentMeta(payload, target = []) {
-  if (!payload) return target
-  if (payload.filename && payload.body?.attachmentId) {
-    target.push({
-      id: payload.body.attachmentId,
-      fileName: payload.filename,
-      mimeType: payload.mimeType || null,
-      sizeBytes: payload.body?.size || null,
-    })
-  }
-  for (const part of payload.parts || []) extractAttachmentMeta(part, target)
-  return target
-}
-
-function parseGmailMessage(detail) {
-  const payload = detail?.payload || {}
-  const headers = payload.headers || []
-  const from = parseAddressList(parseHeader(headers, 'From'))[0] || null
-  const to = parseAddressList(parseHeader(headers, 'To'))
-  const cc = parseAddressList(parseHeader(headers, 'Cc'))
-  const subject = parseHeader(headers, 'Subject') || '(No subject)'
-  const dateHeader = parseHeader(headers, 'Date')
-  const rawHtml = extractMimePart(payload, 'text/html')
-  const rawText = extractMimePart(payload, 'text/plain')
-  const bodyHtml = decodeGmailBase64(rawHtml)
-  const bodyText = decodeGmailBase64(rawText) || htmlToText(bodyHtml) || detail?.snippet || ''
-  const sentAt = dateHeader ? new Date(dateHeader) : detail?.internalDate ? new Date(Number(detail.internalDate)) : new Date()
-  return {
-    subject,
-    from,
-    to,
-    cc,
-    bodyHtml,
-    bodyText,
-    snippet: detail?.snippet || '',
-    sentAt: Number.isNaN(sentAt.getTime()) ? new Date() : sentAt,
-    labels: detail?.labelIds || [],
-    attachments: extractAttachmentMeta(payload, []),
-    threadId: detail?.threadId || null,
-    providerMessageId: detail?.id || null,
-  }
 }
 
 function formatThreadSummary(row, mailboxEmail = '') {
@@ -887,7 +805,7 @@ export async function list(req, res, next) {
     const offset = (page - 1) * limit
 
     const accessWhere = await leadAccessWhere(req.user)
-    const selectedWorkspaceId = req.query.workspaceId || req.headers['x-workspace-id']
+    const selectedWorkspaceId = resolveListWorkspaceFilterId(req)
     const allowedWorkspaceIds = await allowedWorkspaceIdsForUser(req.user)
     if (selectedWorkspaceId) {
       if (!allowedWorkspaceIds.includes(String(selectedWorkspaceId))) {
@@ -1092,7 +1010,9 @@ export async function update(req, res, next) {
   try {
     const lead = await findCompanyLead(req, req.params.id)
     if (!lead) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Lead not found' } })
-    const { error, value } = leadSchema.fork(['title', 'source'], (x) => x.optional()).validate(req.body || {}, {
+    const rawBody = { ...(req.body || {}) }
+    if (rawBody.company == null && rawBody.companyName != null) rawBody.company = rawBody.companyName
+    const { error, value } = leadSchema.fork(['title', 'source'], (x) => x.optional()).validate(rawBody, {
       abortEarly: false,
       stripUnknown: true,
     })
@@ -1127,13 +1047,28 @@ export async function update(req, res, next) {
     }
 
     const hasTagsField = Object.prototype.hasOwnProperty.call(req.body || {}, 'tags')
+    const hasAssignedUserIdsField = Object.prototype.hasOwnProperty.call(req.body || {}, 'assignedUserIds')
     const before = lead.get({ plain: true })
+    const actorName = await resolveActorDisplayName(req.user.id, req.user.email)
+    let collaboratorIdsBefore = []
+    if (hasAssignedUserIdsField && (await hasLeadAssignmentsTable())) {
+      const asgRows = await LeadAssignment.findAll({ where: { leadId: lead.id }, attributes: ['userId'] })
+      collaboratorIdsBefore = asgRows.map((r) => String(r.userId))
+    }
     const legacy = extractLegacyProfile(value.notes || before.notes)
+    const leadScalars = { ...value }
+    delete leadScalars.tags
+    delete leadScalars.assignedUserIds
+    delete leadScalars.customFields
+    delete leadScalars.force
     const payload = {
-      ...value,
+      ...leadScalars,
       designation: value.designation ?? before.designation ?? legacy.designation ?? null,
       city: value.city ?? before.city ?? legacy.city ?? null,
       state: value.state ?? before.state ?? legacy.state ?? null,
+    }
+    if (Object.prototype.hasOwnProperty.call(rawBody, 'company') || Object.prototype.hasOwnProperty.call(rawBody, 'companyName')) {
+      payload.company = value.company == null || value.company === '' ? null : String(value.company).trim()
     }
     await lead.update(payload)
     await lead.reload()
@@ -1143,7 +1078,6 @@ export async function update(req, res, next) {
       String(value.opportunityStage || '').trim() &&
       String(before.opportunityStage || '') !== String(afterStage)
     ) {
-      const actorName = await resolveActorDisplayName(req.user.id, req.user.email)
       await Activity.create({
         type: 'status_change',
         body: `Pipeline stage changed from ${formatPipelineStageLabelForMessage(before.opportunityStage)} to ${formatPipelineStageLabelForMessage(afterStage)} by ${actorName}`,
@@ -1157,11 +1091,19 @@ export async function update(req, res, next) {
         userId: req.user.id,
       })
     }
-    if (value.assignedUserIds && (await hasLeadAssignmentsTable())) {
+    if (hasAssignedUserIdsField && (await hasLeadAssignmentsTable())) {
       await LeadAssignment.destroy({ where: { leadId: lead.id } })
       if (value.assignedUserIds.length) {
         await LeadAssignment.bulkCreate(value.assignedUserIds.map((userId) => ({ leadId: lead.id, userId })))
       }
+      const afterCollab = (value.assignedUserIds || []).map((id) => String(id))
+      await logLeadCollaboratorsChange({
+        leadId: lead.id,
+        userId: req.user.id,
+        actorName,
+        beforeUserIds: collaboratorIdsBefore,
+        afterUserIds: afterCollab,
+      })
     }
     if (hasTagsField) {
       const existingTags = await lead.getTags({ attributes: ['name'] })
@@ -1190,22 +1132,13 @@ export async function update(req, res, next) {
         })
       }
     }
-    if (before.status !== lead.status) {
-      await createSystemActivity({
-        leadId: lead.id,
-        userId: req.user.id,
-        body: `Status changed from ${before.status || 'unknown'} to ${lead.status || 'unknown'}`,
-        metadata: { action: 'status_changed', from: before.status, to: lead.status },
-      })
-    }
-    if ((before.assignedTo || null) !== (lead.assignedTo || null)) {
-      await createSystemActivity({
-        leadId: lead.id,
-        userId: req.user.id,
-        body: 'Lead owner reassigned',
-        metadata: { action: 'owner_reassigned', from: before.assignedTo || null, to: lead.assignedTo || null },
-      })
-    }
+    await logLeadFieldChanges({
+      before,
+      after: lead.get({ plain: true }),
+      leadId: lead.id,
+      userId: req.user.id,
+      actorName,
+    })
     await recalculateScore(lead.id)
     await clearLeadListCache(lead.workspaceId)
     await emitLeadWorkflowTriggers({
@@ -1337,15 +1270,16 @@ export async function patchStatus(req, res, next) {
 
     const lead = await findCompanyLead(req, req.params.id)
     if (!lead) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Lead not found' } })
-    const previousStatus = lead.status
-    await lead.update({ status, lostReason: lostReason || null, notes: notes || lead.notes })
+    const before = lead.get({ plain: true })
     const actorName = await resolveActorDisplayName(req.user.id, req.user.email)
-    await Activity.create({
-      type: 'status_change',
-      body: `Status changed from ${previousStatus} to ${status} by ${actorName}`,
-      metadata: { from: previousStatus, to: status, reason: lostReason || null, actorUserId: req.user.id, action: 'status_changed' },
+    await lead.update({ status, lostReason: lostReason || null, notes: notes || lead.notes })
+    await lead.reload()
+    await logLeadFieldChanges({
+      before,
+      after: lead.get({ plain: true }),
       leadId: lead.id,
       userId: req.user.id,
+      actorName,
     })
     await clearLeadListCache(lead.workspaceId)
     return res.json({ success: true, data: lead, meta: {} })
@@ -1373,6 +1307,24 @@ export async function bulk(req, res, next) {
     if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'ids required' } })
     const leads = await Lead.findAll({ where: { id: { [Op.in]: ids }, isDeleted: false } })
     if (!leads.length) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'No leads found' } })
+
+    const needsFieldHistory = action === 'assign' || action === 'status'
+    const beforePlainById = needsFieldHistory ? new Map(leads.map((l) => [String(l.id), l.get({ plain: true })])) : null
+
+    let bulkCollabBeforeByLeadId = null
+    if (action === 'assign' && Array.isArray(payload.assignedUserIds) && (await hasLeadAssignmentsTable())) {
+      bulkCollabBeforeByLeadId = new Map()
+      const rows = await LeadAssignment.findAll({
+        where: { leadId: { [Op.in]: ids } },
+        attributes: ['leadId', 'userId'],
+      })
+      for (const r of rows) {
+        const lid = String(r.leadId)
+        if (!bulkCollabBeforeByLeadId.has(lid)) bulkCollabBeforeByLeadId.set(lid, [])
+        bulkCollabBeforeByLeadId.get(lid).push(String(r.userId))
+      }
+    }
+
     if (action === 'assign') {
       await Lead.update({ assignedTo: payload.assignedTo || null }, { where: { id: { [Op.in]: ids } } })
       if (Array.isArray(payload.assignedUserIds) && (await hasLeadAssignmentsTable())) {
@@ -1398,9 +1350,50 @@ export async function bulk(req, res, next) {
       }
     }
     if (action === 'export') {
-      const rows = await exportLeads(leads[0].workspaceId, {}, ids)
+      const workspaceKeys = [...new Set(leads.map((l) => String(l.workspaceId || '')))]
+      let exportWorkspaceId = leads[0].workspaceId
+      let exportCompanyId = null
+      if (workspaceKeys.length > 1) {
+        if (!req.user.isCompanyAdmin) {
+          return res.status(400).json({
+            success: false,
+            error: { code: 'VALIDATION', message: 'Bulk export selection must be from a single workspace' },
+          })
+        }
+        exportWorkspaceId = null
+        exportCompanyId = req.user.companyId
+      }
+      const rows = await exportLeads(exportWorkspaceId, {}, ids, exportCompanyId)
       return res.json({ success: true, data: { rows }, meta: {} })
     }
+
+    if ((action === 'assign' || action === 'status') && beforePlainById?.size) {
+      const actorName = await resolveActorDisplayName(req.user.id, req.user.email)
+      if (action === 'assign' && bulkCollabBeforeByLeadId) {
+        const afterCollab = (payload.assignedUserIds || []).map((id) => String(id))
+        for (const lead of leads) {
+          const beforeIds = bulkCollabBeforeByLeadId.get(String(lead.id)) || []
+          await logLeadCollaboratorsChange({
+            leadId: lead.id,
+            userId: req.user.id,
+            actorName,
+            beforeUserIds: beforeIds,
+            afterUserIds: afterCollab,
+          })
+        }
+      }
+      const refreshed = await Lead.findAll({ where: { id: { [Op.in]: leads.map((l) => l.id) } } })
+      for (const row of refreshed) {
+        await logLeadFieldChanges({
+          before: beforePlainById.get(String(row.id)),
+          after: row.get({ plain: true }),
+          leadId: row.id,
+          userId: req.user.id,
+          actorName,
+        })
+      }
+    }
+
     await clearLeadListCache(leads[0].workspaceId)
     return res.json({ success: true, data: { updated: leads.length }, meta: {} })
   } catch (e) {
@@ -1703,18 +1696,57 @@ export async function deleteNote(req, res, next) {
   }
 }
 
+async function companyGoogleEmailToken(companyId) {
+  return CompanyGoogleToken.findOne({
+    where: { companyId },
+    order: [['updatedAt', 'DESC']],
+  })
+}
+
+function hasGoogleMailboxRefreshToken(tokenRow) {
+  return Boolean(tokenRow?.refreshToken)
+}
+
+/** Inbox / threads.list need read (or metadata/modify/full), not gmail.send alone. */
+function googleTokenAllowsMailboxRead(scopeStr) {
+  if (!scopeStr || typeof scopeStr !== 'string') return null
+  const s = scopeStr.toLowerCase()
+  if (
+    s.includes('gmail.readonly') ||
+    s.includes('gmail.modify') ||
+    s.includes('gmail.metadata') ||
+    s.includes('https://mail.google.com/')
+  ) {
+    return true
+  }
+  if (s.includes('gmail.')) return false
+  return null
+}
+
+function mergeGoogleOAuthScopes(existing, incoming) {
+  const set = new Set()
+  for (const part of String(existing || '').split(/[\s+,]+/)) {
+    if (part.trim()) set.add(part.trim())
+  }
+  for (const part of String(incoming || '').split(/[\s+,]+/)) {
+    if (part.trim()) set.add(part.trim())
+  }
+  return [...set].join(' ')
+}
+
 export async function getGoogleEmailAuthStatus(req, res, next) {
   try {
-    const token = await CompanyGoogleToken.findOne({
-      where: { companyId: req.user.companyId },
-      order: [['updatedAt', 'DESC']],
-    })
+    const token = await companyGoogleEmailToken(req.user.companyId)
+    const connected = hasGoogleMailboxRefreshToken(token)
+    const readMailbox = connected ? googleTokenAllowsMailboxRead(token?.scope) : null
     return res.json({
       success: true,
       data: {
-        connected: Boolean(token?.refreshToken),
+        connected,
+        readMailbox,
         email: token?.email || null,
         updatedAt: token?.updatedAt || null,
+        gmailPushConfigured: isGmailPushConfigured(),
       },
       meta: {},
     })
@@ -1728,7 +1760,8 @@ export async function getGoogleEmailConnectUrl(req, res, next) {
     const oauth2Client = getGoogleOAuthClient()
     const scopes = [
       'https://www.googleapis.com/auth/gmail.send',
-      'https://www.googleapis.com/auth/gmail.readonly',
+      /** Read + label changes (mark read, archive, etc.); readonly is insufficient for threads.modify. */
+      'https://www.googleapis.com/auth/gmail.modify',
       'https://www.googleapis.com/auth/userinfo.email',
       'openid',
     ]
@@ -1770,26 +1803,19 @@ export async function connectGoogleEmailCallback(req, res, next) {
       email,
       accessToken: tokens.access_token || existing?.accessToken || null,
       refreshToken: tokens.refresh_token || existing?.refreshToken || null,
-      scope: tokens.scope || null,
+      scope: mergeGoogleOAuthScopes(existing?.scope, tokens.scope) || tokens.scope || existing?.scope || null,
       tokenType: tokens.token_type || null,
       expiryDate: tokens.expiry_date || null,
     }
     if (existing) await existing.update(payload)
     else await CompanyGoogleToken.create(payload)
+    const row = await CompanyGoogleToken.findOne({ where: { companyId: state.companyId }, order: [['updatedAt', 'DESC']] })
+    if (row) {
+      registerGmailWatchForTokenRow(row).catch(() => {})
+    }
     const clientOrigin = process.env.CLIENT_ORIGIN || 'http://localhost:5173'
     const redirectUrl = `${clientOrigin.replace(/\/$/, '')}/integrations?tab=google&connected=1`
-    return res.send(`<!doctype html>
-<html>
-  <body style="font-family:Arial;padding:24px;">
-    <h3>Google email connected successfully.</h3>
-    <p>Redirecting you back to Integrations...</p>
-    <script>
-      setTimeout(function () {
-        window.location.href = ${JSON.stringify(redirectUrl)}
-      }, 800)
-    </script>
-  </body>
-</html>`)
+    return res.redirect(302, redirectUrl)
   } catch (e) {
     return next(e)
   }
@@ -1799,7 +1825,10 @@ export async function listLeadEmails(req, res, next) {
   try {
     const lead = await findCompanyLead(req, req.params.id)
     if (!lead) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Lead not found' } })
-    const tokenRow = await CompanyGoogleToken.findOne({ where: { companyId: req.user.companyId } })
+    const tokenRow = await companyGoogleEmailToken(req.user.companyId)
+    if (!hasGoogleMailboxRefreshToken(tokenRow)) {
+      return res.json({ success: true, data: [], meta: { googleEmailConnected: false } })
+    }
     const mailboxEmail = tokenRow?.email || req.user.email || ''
     const rows = await LeadEmail.findAll({
       where: { leadId: lead.id, companyId: req.user.companyId },
@@ -1817,7 +1846,10 @@ export async function listLeadEmailThreads(req, res, next) {
   try {
     const lead = await findCompanyLead(req, req.params.id)
     if (!lead) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Lead not found' } })
-    const tokenRow = await CompanyGoogleToken.findOne({ where: { companyId: req.user.companyId } })
+    const tokenRow = await companyGoogleEmailToken(req.user.companyId)
+    if (!hasGoogleMailboxRefreshToken(tokenRow)) {
+      return res.json({ success: true, data: [], meta: { googleEmailConnected: false } })
+    }
     const mailboxEmail = tokenRow?.email || req.user.email || ''
     const rows = await LeadEmail.findAll({
       where: { leadId: lead.id, companyId: req.user.companyId },
@@ -1850,7 +1882,10 @@ export async function getLeadEmailThread(req, res, next) {
   try {
     const lead = await findCompanyLead(req, req.params.id)
     if (!lead) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Lead not found' } })
-    const tokenRow = await CompanyGoogleToken.findOne({ where: { companyId: req.user.companyId } })
+    const tokenRow = await companyGoogleEmailToken(req.user.companyId)
+    if (!hasGoogleMailboxRefreshToken(tokenRow)) {
+      return res.json({ success: true, data: [], meta: { googleEmailConnected: false } })
+    }
     const mailboxEmail = tokenRow?.email || req.user.email || ''
     const threadId = req.params.threadId
     const where = threadId.startsWith('single:')
@@ -2000,7 +2035,15 @@ export async function listEmailThreads(req, res, next) {
   try {
     const workspaceIds = await allowedWorkspaceIdsForUser(req.user)
     if (!workspaceIds.length) return res.json({ success: true, data: [], meta: { total: 0 } })
-    const tokenRow = await CompanyGoogleToken.findOne({ where: { companyId: req.user.companyId } })
+    const tokenRow = await companyGoogleEmailToken(req.user.companyId)
+    if (!hasGoogleMailboxRefreshToken(tokenRow)) {
+      const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50))
+      return res.json({
+        success: true,
+        data: [],
+        meta: { page: 1, limit, total: 0, googleEmailConnected: false },
+      })
+    }
     const mailboxEmail = tokenRow?.email || req.user.email || ''
     const search = String(req.query.search || '').trim().toLowerCase()
     const leadId = String(req.query.leadId || '').trim()
@@ -2061,6 +2104,10 @@ export async function getEmailThread(req, res, next) {
   try {
     const workspaceIds = await allowedWorkspaceIdsForUser(req.user)
     if (!workspaceIds.length) return res.json({ success: true, data: [], meta: {} })
+    const tokenRow = await companyGoogleEmailToken(req.user.companyId)
+    if (!hasGoogleMailboxRefreshToken(tokenRow)) {
+      return res.json({ success: true, data: [], meta: { googleEmailConnected: false } })
+    }
     const threadId = String(req.params.threadId || '')
     if (!threadId) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'threadId is required' } })
     const where = threadId.startsWith('single:')
@@ -2771,10 +2818,26 @@ export async function runEmailAutoSyncJob() {
 
 export async function sourceAnalytics(req, res, next) {
   try {
-    const selectedWorkspaceId = req.query.workspaceId || req.headers['x-workspace-id']
+    const selectedWorkspaceId = resolveListWorkspaceFilterId(req)
+    const allowedWorkspaceIds = await allowedWorkspaceIdsForUser(req.user)
+    const where = { isDeleted: false, companyId: req.user.companyId }
+    if (selectedWorkspaceId) {
+      if (!allowedWorkspaceIds.includes(String(selectedWorkspaceId))) {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'You do not have access to this workspace' },
+        })
+      }
+      where.workspaceId = String(selectedWorkspaceId)
+    } else if (!req.user.isCompanyAdmin) {
+      if (!allowedWorkspaceIds.length) {
+        return res.json({ success: true, data: [], meta: {} })
+      }
+      where.workspaceId = { [Op.in]: allowedWorkspaceIds }
+    }
     const rows = await Lead.findAll({
-      attributes: ['source', [fn('COUNT', col('id')), 'count']],
-      where: { workspaceId: selectedWorkspaceId, isDeleted: false },
+      attributes: ['source', [fn('COUNT', col('Lead.id')), 'count']],
+      where,
       group: ['source'],
     })
     return res.json({ success: true, data: rows, meta: {} })
@@ -2942,8 +3005,19 @@ export async function importRows(req, res, next) {
 
 export async function exportRows(req, res, next) {
   try {
-    const workspaceId = req.headers['x-workspace-id']
-    const rows = await exportLeads(workspaceId, req.body?.filters || {}, req.body?.ids || null)
+    const bodyWs =
+      req.body?.filters?.workspaceId != null && String(req.body.filters.workspaceId).trim() !== ''
+        ? String(req.body.filters.workspaceId).trim()
+        : ''
+    const workspaceId = bodyWs || resolveListWorkspaceFilterId(req)
+    const companyScope = req.user.isCompanyAdmin && !workspaceId ? req.user.companyId : null
+    if (!workspaceId && !companyScope) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VALIDATION', message: 'workspaceId is required (select a workspace or set x-workspace-id)' },
+      })
+    }
+    const rows = await exportLeads(workspaceId, req.body?.filters || {}, req.body?.ids || null, companyScope)
     return res.json({ success: true, data: rows, meta: {} })
   } catch (e) {
     return next(e)

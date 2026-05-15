@@ -22,6 +22,8 @@ import {
   useTeamRolesQuery,
 } from '@/features/team/teamApi'
 import { cn } from '@/utils/cn'
+import { labelCompanyUserRoleKind } from '@/constants/companyUserRoleKind'
+import { IconInput, IconTextarea } from '@/components/ui/IconInput'
 
 function isoCountryForPhone(countryField) {
   const c = String(countryField || '')
@@ -60,36 +62,6 @@ function normalizeProfileDraft(draft) {
     country: draft.country?.trim() || null,
     postalCode: draft.postalCode?.trim() || null,
   }
-}
-
-function IconInput({ icon: Icon, className = '', wrapperClassName = '', ...props }) {
-  return (
-    <div className={cn('relative', wrapperClassName)}>
-      <Icon className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-faint" strokeWidth={1.75} />
-      <input
-        {...props}
-        className={cn(
-          'h-10 w-full rounded-xl border border-surface-border bg-white pl-9 pr-3 text-sm outline-none transition-shadow placeholder:text-ink-faint/80 focus:border-brand-400 focus:ring-2 focus:ring-brand-500/15',
-          className,
-        )}
-      />
-    </div>
-  )
-}
-
-function IconTextarea({ icon: Icon, className = '', wrapperClassName = '', ...props }) {
-  return (
-    <div className={cn('relative', wrapperClassName)}>
-      <Icon className="pointer-events-none absolute left-3 top-3 h-3.5 w-3.5 text-ink-faint" strokeWidth={1.75} />
-      <textarea
-        {...props}
-        className={cn(
-          'min-h-[84px] w-full resize-y rounded-xl border border-surface-border bg-white px-3 py-2.5 pl-9 text-sm outline-none transition-shadow placeholder:text-ink-faint/80 focus:border-brand-400 focus:ring-2 focus:ring-brand-500/15',
-          className,
-        )}
-      />
-    </div>
-  )
 }
 
 function ProfilePhotoPicker({ value, onChange, disabled }) {
@@ -396,6 +368,7 @@ export function TeamMemberAccessDrawer({ open, user, onClose, onSaved }) {
               {roles.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.name}
+                  {r.userRoleKind ? ` — ${labelCompanyUserRoleKind(r.userRoleKind)}` : ''}
                 </option>
               ))}
             </select>

@@ -1,5 +1,6 @@
 import { Meeting } from "../models/Meeting.js";
 import { MeetingParticipant } from "../models/MeetingParticipant.js";
+import { User } from "../models/User.js";
 import { sequelize } from "../config/db.js";
 import {
   createGoogleMeet,
@@ -157,6 +158,7 @@ export async function listMeetings(query, user, workspaceId) {
     limit = 10,
     sortField = "scheduledStart",
     sortOrder = "asc",
+    leadId,
   } = query;
 
   if (!workspaceId) {
@@ -166,6 +168,10 @@ export async function listMeetings(query, user, workspaceId) {
   const where = {
     workspaceId,
   };
+
+  if (leadId) {
+    where.leadId = leadId;
+  }
 
   // 🔍 Search
   if (search) {
@@ -194,11 +200,21 @@ export async function listMeetings(query, user, workspaceId) {
 
   const { rows, count } = await Meeting.findAndCountAll({
     where,
+    distinct: true,
+    col: "Meeting.id",
     include: [
       {
         model: MeetingParticipant,
         as: "participants",
-        attributes: ["userId", "role"],
+        attributes: ["id", "userId", "role", "meetingId"],
+        include: [
+          {
+            model: User,
+            as: "user",
+            attributes: ["id", "name", "email"],
+            required: false,
+          },
+        ],
       },
     ],
     order: [[sortField, sortOrder.toUpperCase()]],
@@ -231,6 +247,15 @@ export async function getMeetingById(id, workspaceId) {
       {
         model: MeetingParticipant,
         as: "participants",
+        attributes: ["id", "userId", "role", "meetingId"],
+        include: [
+          {
+            model: User,
+            as: "user",
+            attributes: ["id", "name", "email"],
+            required: false,
+          },
+        ],
       },
     ],
   });

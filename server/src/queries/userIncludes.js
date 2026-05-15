@@ -21,7 +21,7 @@ export const companyRoleInclude = {
   model: CompanyRole,
   as: 'companyRole',
   required: false,
-  attributes: ['id', 'name', 'description', 'isDefault'],
+  attributes: ['id', 'name', 'description', 'isDefault', 'userRoleKind', 'roleNo'],
   include: [
     {
       model: CompanyRoleMenu,

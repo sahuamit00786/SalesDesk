@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer'
+import { OTP_EXPIRY_MIN } from './otpService.js'
 
 let transporter = null
 
@@ -24,8 +25,13 @@ export function getMailTransport() {
   return transporter
 }
 
+export function appDisplayName() {
+  const n = String(process.env.APP_PUBLIC_NAME || 'SalesDesk').trim()
+  return n || 'SalesDesk'
+}
+
 function fromAddress() {
-  return process.env.SMTP_FROM || `SalesDesk <${process.env.SMTP_USER}>`
+  return process.env.SMTP_FROM || `${appDisplayName()} <${process.env.SMTP_USER}>`
 }
 
 function escapeHtml(s) {
@@ -36,71 +42,119 @@ function escapeHtml(s) {
     .replace(/"/g, '&quot;')
 }
 
-export function buildRegistrationEmailHtml({ name, companyName, email }) {
-  const safeName = escapeHtml(name)
-  const safeCompany = escapeHtml(companyName)
-  const safeEmail = escapeHtml(email)
+const MINIMAL_FONT =
+  'system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif'
+
+/** Subtle grid + base gray; degrades to flat fill where gradients are unsupported. */
+const PAGE_TD_STYLE = `padding:48px 20px;background-color:#F9F9F9;background-image:linear-gradient(rgba(0,0,0,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,.04) 1px,transparent 1px);background-size:20px 20px;`
+
+const COPY_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6B7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`
+
+function brandMarkHtml() {
+  return `<table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 20px;"><tr><td style="width:44px;height:44px;border-radius:999px;background:#F3F4F6;text-align:center;vertical-align:middle;font-size:22px;line-height:44px;">&#9889;</td></tr></table>`
+}
+
+function primaryButtonHtml(href, label) {
+  const safeHref = escapeHtml(href)
+  const safeLabel = escapeHtml(label)
+  return `<table role="presentation" cellspacing="0" cellpadding="0" style="margin:0;"><tr><td style="border-radius:999px;background:#111827;"><a href="${safeHref}" style="display:inline-block;padding:12px 24px;color:#ffffff;text-decoration:none;font-weight:600;font-size:14px;border-radius:999px;">${safeLabel}</a></td></tr></table>`
+}
+
+/**
+ * One complete HTML email: centered white card on light grid background.
+ * @param {{ innerHtml: string }} opts — HTML fragment for the card body (already escaped where needed).
+ */
+export function buildMinimalEmailDocument({ innerHtml }) {
   return `<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head>
-<body style="margin:0;background:#f4f6fb;font-family:Segoe UI,system-ui,sans-serif;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding:32px 16px;">
-    <tr><td align="center">
-      <table role="presentation" width="100%" style="max-width:560px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 8px 32px rgba(15,17,23,.08);">
-        <tr><td style="padding:28px 32px;background:linear-gradient(135deg,#2451eb 0%,#3b73f5 100%);color:#fff;">
-          <p style="margin:0;font-size:12px;letter-spacing:.12em;text-transform:uppercase;opacity:.9;">SalesDesk</p>
-          <h1 style="margin:8px 0 0;font-size:22px;font-weight:700;">Welcome aboard</h1>
-        </td></tr>
-        <tr><td style="padding:28px 32px;color:#0f1117;font-size:15px;line-height:1.6;">
-          <p style="margin:0 0 16px;">Hi ${safeName},</p>
-          <p style="margin:0 0 16px;">Your SalesDesk workspace for <strong>${safeCompany}</strong> is almost ready. We received a registration request for <strong>${safeEmail}</strong>.</p>
-          <p style="margin:0 0 8px;">Your password was set securely on our servers — we never store it in plain text and we will not repeat it in email.</p>
-          <p style="margin:16px 0 0;color:#4b5263;font-size:14px;">Use the 6-digit code in the next message (or the same thread if combined) to verify your email and start managing leads.</p>
-        </td></tr>
-      </table>
-    </td></tr>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <title></title>
+</head>
+<body style="margin:0;padding:0;${MINIMAL_FONT};">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="min-height:100%;">
+    <tr>
+      <td align="center" valign="middle" style="${PAGE_TD_STYLE}">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:520px;">
+          <tr>
+            <td style="background:#ffffff;border-radius:28px;padding:36px 32px;box-shadow:0 1px 3px rgba(0,0,0,.06);">
+              ${innerHtml}
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
   </table>
 </body>
 </html>`
 }
 
+export function buildOtpCodeRowHtml(otp) {
+  const safeOtp = escapeHtml(otp)
+  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:24px 0 0;background:#F3F4F6;border-radius:10px;">
+  <tr>
+    <td width="40" style="font-size:1px;line-height:1px;">&nbsp;</td>
+    <td align="center" style="padding:16px 8px;font-family:ui-monospace,Menlo,Consolas,'Courier New',monospace;font-size:22px;font-weight:700;letter-spacing:0.22em;color:#000000;">${safeOtp}</td>
+    <td width="44" align="center" valign="middle" style="padding:8px 12px 8px 0;">${COPY_ICON_SVG}</td>
+  </tr>
+</table>`
+}
+
+function otpDisclaimerFooterHtml(appName) {
+  const safeApp = escapeHtml(appName)
+  return `<p style="margin:28px 0 0;font-size:13px;line-height:1.55;color:#6B7280;">If you didn&apos;t request this for ${safeApp}, you can safely ignore this email. Someone else might have typed your email address by mistake.</p>`
+}
+
 export function buildOtpEmailHtml({ name, otp }) {
   const safeName = escapeHtml(name)
-  const safeOtp = escapeHtml(otp)
-  return `<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head>
-<body style="margin:0;background:#f4f6fb;font-family:Segoe UI,system-ui,sans-serif;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding:32px 16px;">
-    <tr><td align="center">
-      <table role="presentation" width="100%" style="max-width:560px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 8px 32px rgba(15,17,23,.08);">
-        <tr><td style="padding:28px 32px;background:#0f1117;color:#fff;">
-          <p style="margin:0;font-size:12px;letter-spacing:.12em;text-transform:uppercase;opacity:.85;">Verify your email</p>
-          <h1 style="margin:8px 0 0;font-size:22px;font-weight:700;">SalesDesk</h1>
-        </td></tr>
-        <tr><td style="padding:28px 32px;color:#0f1117;font-size:15px;line-height:1.6;">
-          <p style="margin:0 0 20px;">Hi ${safeName}, enter this code in the app to confirm your address:</p>
-          <p style="margin:0;font-size:36px;font-weight:800;letter-spacing:0.25em;color:#2451eb;text-align:center;">${safeOtp}</p>
-          <p style="margin:24px 0 0;color:#8b93a8;font-size:13px;">This code expires in 15 minutes. If you did not sign up, you can ignore this email.</p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`
+  const app = appDisplayName()
+  const safeApp = escapeHtml(app)
+  const inner = `${brandMarkHtml()}
+<h1 style="margin:0 0 12px;font-size:22px;font-weight:700;color:#000000;line-height:1.25;">Verify your email</h1>
+<p style="margin:0 0 4px;font-size:15px;line-height:1.55;color:#374151;">Hi ${safeName},</p>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#374151;">You started signing up for <strong>${safeApp}</strong>. Your one-time code is:</p>
+${buildOtpCodeRowHtml(otp)}
+<p style="margin:20px 0 0;font-size:15px;font-weight:700;color:#000000;line-height:1.4;">This code expires in ${OTP_EXPIRY_MIN} minutes.</p>
+${otpDisclaimerFooterHtml(app)}`
+  return buildMinimalEmailDocument({ innerHtml: inner })
+}
+
+/** Single message: welcome copy + verification code (one valid HTML document). */
+export function buildRegistrationVerificationEmailHtml({ name, companyName, email, otp }) {
+  const safeName = escapeHtml(name)
+  const safeCompany = escapeHtml(companyName)
+  const safeEmail = escapeHtml(email)
+  const app = appDisplayName()
+  const safeApp = escapeHtml(app)
+  const inner = `${brandMarkHtml()}
+<h1 style="margin:0 0 12px;font-size:22px;font-weight:700;color:#000000;line-height:1.25;">Welcome — verify your email</h1>
+<p style="margin:0 0 16px;font-size:15px;line-height:1.55;color:#374151;">Hi ${safeName},</p>
+<p style="margin:0 0 16px;font-size:15px;line-height:1.55;color:#374151;">Your workspace for <strong>${safeCompany}</strong> on <strong>${safeApp}</strong> is almost ready. We received a registration request for <strong>${safeEmail}</strong>.</p>
+<p style="margin:0 0 24px;font-size:15px;line-height:1.55;color:#374151;">Your password was set securely on our servers — we never store it in plain text and we will not repeat it in email.</p>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#374151;">Your one-time verification code is:</p>
+${buildOtpCodeRowHtml(otp)}
+<p style="margin:20px 0 0;font-size:15px;font-weight:700;color:#000000;line-height:1.4;">This code expires in ${OTP_EXPIRY_MIN} minutes.</p>
+${otpDisclaimerFooterHtml(app)}`
+  return buildMinimalEmailDocument({ innerHtml: inner })
 }
 
 export async function sendRegistrationEmails({ to, name, companyName, otpPlain }) {
   const transport = getMailTransport()
   const from = fromAddress()
-
-  const welcomeHtml = buildRegistrationEmailHtml({ name, companyName, email: to })
-  const otpHtml = buildOtpEmailHtml({ name, otp: otpPlain })
+  const app = appDisplayName()
+  const html = buildRegistrationVerificationEmailHtml({
+    name,
+    companyName,
+    email: to,
+    otp: otpPlain,
+  })
 
   if (!transport) {
     if (process.env.NODE_ENV !== 'production') {
       // eslint-disable-next-line no-console
-      console.info(`[SalesDesk mail] SMTP not configured. Verification OTP for ${to}: ${otpPlain}`)
+      console.info(`[${app} mail] SMTP not configured. Verification OTP for ${to}: ${otpPlain}`)
       return { sent: false, devOtp: otpPlain }
     }
     const err = new Error('SMTP is not configured')
@@ -113,9 +167,9 @@ export async function sendRegistrationEmails({ to, name, companyName, otpPlain }
   await transport.sendMail({
     from,
     to,
-    subject: 'Welcome to SalesDesk — verify your email',
-    html: `${welcomeHtml}<div style="height:24px"></div>${otpHtml}`,
-    text: `Hi ${name},\n\nWelcome to SalesDesk (${companyName}). Your verification code is: ${otpPlain}\n\nThis code expires in 15 minutes.\n`,
+    subject: `Welcome to ${app} — verify your email`,
+    html,
+    text: `Hi ${name},\n\nWelcome to ${app} (${companyName}). Your verification code is: ${otpPlain}\n\nThis code expires in ${OTP_EXPIRY_MIN} minutes.\n`,
   })
 
   return { sent: true }
@@ -124,12 +178,13 @@ export async function sendRegistrationEmails({ to, name, companyName, otpPlain }
 export async function sendResendOtpEmail({ to, name, otpPlain }) {
   const transport = getMailTransport()
   const from = fromAddress()
+  const app = appDisplayName()
   const html = buildOtpEmailHtml({ name, otp: otpPlain })
 
   if (!transport) {
     if (process.env.NODE_ENV !== 'production') {
       // eslint-disable-next-line no-console
-      console.info(`[SalesDesk mail] SMTP not configured. Resent OTP for ${to}: ${otpPlain}`)
+      console.info(`[${app} mail] SMTP not configured. Resent OTP for ${to}: ${otpPlain}`)
       return { sent: false, devOtp: otpPlain }
     }
     const err = new Error('SMTP is not configured')
@@ -142,9 +197,9 @@ export async function sendResendOtpEmail({ to, name, otpPlain }) {
   await transport.sendMail({
     from,
     to,
-    subject: 'SalesDesk — your new verification code',
+    subject: `${app} — your new verification code`,
     html,
-    text: `Hi ${name},\n\nYour new SalesDesk verification code is: ${otpPlain}\n\nThis code expires in 15 minutes.\n`,
+    text: `Hi ${name},\n\nYour new ${app} verification code is: ${otpPlain}\n\nThis code expires in ${OTP_EXPIRY_MIN} minutes.\n`,
   })
 
   return { sent: true }
@@ -155,51 +210,42 @@ export function buildTeamInviteEmailHtml({ name, companyName, inviteUrl, roleNam
   const safeCompany = escapeHtml(companyName)
   const safeUrl = escapeHtml(inviteUrl)
   const safeRole = escapeHtml(roleName || 'Team member')
+  const app = appDisplayName()
+  const safeApp = escapeHtml(app)
   const workspaceList = Array.isArray(workspaceNames) ? workspaceNames : []
   const workspaceHtml = workspaceList.length
     ? workspaceList
-        .map((w) => `<span style="display:inline-block;margin:0 6px 8px 0;padding:6px 10px;border-radius:999px;background:#eef2ff;color:#1e2a78;font-size:12px;">${escapeHtml(w)}</span>`)
+        .map(
+          (w) =>
+            `<span style="display:inline-block;margin:0 6px 8px 0;padding:6px 12px;border-radius:999px;background:#F3F4F6;color:#374151;font-size:12px;font-weight:500;">${escapeHtml(w)}</span>`,
+        )
         .join('')
-    : '<span style="font-size:13px;color:#60677a;">Workspace access will be configured by your admin.</span>'
-  return `<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head>
-<body style="margin:0;background:#f4f6fb;font-family:Segoe UI,system-ui,sans-serif;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding:32px 16px;">
-    <tr><td align="center">
-      <table role="presentation" width="100%" style="max-width:560px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 8px 32px rgba(15,17,23,.08);">
-        <tr><td style="padding:28px 32px;background:linear-gradient(135deg,#2451eb 0%,#3b73f5 100%);color:#fff;">
-          <p style="margin:0;font-size:12px;letter-spacing:.12em;text-transform:uppercase;opacity:.9;">SalesDesk</p>
-          <h1 style="margin:8px 0 0;font-size:22px;font-weight:700;">You are invited</h1>
-        </td></tr>
-        <tr><td style="padding:28px 32px;color:#0f1117;font-size:15px;line-height:1.6;">
-          <p style="margin:0 0 16px;">Hi ${safeName},</p>
-          <p style="margin:0 0 12px;">You have been invited to join <strong>${safeCompany}</strong> on SalesDesk.</p>
-          <p style="margin:0 0 6px;font-size:13px;color:#60677a;text-transform:uppercase;letter-spacing:.08em;">Assigned role</p>
-          <p style="margin:0 0 14px;font-weight:600;">${safeRole}</p>
-          <p style="margin:0 0 6px;font-size:13px;color:#60677a;text-transform:uppercase;letter-spacing:.08em;">Workspace access</p>
-          <div style="margin:0 0 18px;">${workspaceHtml}</div>
-          <p style="margin:0 0 20px;">This secure link expires in <strong>48 hours</strong>:</p>
-          <p style="margin:0;"><a href="${safeUrl}" style="display:inline-block;padding:12px 24px;background:#2451eb;color:#fff;text-decoration:none;border-radius:12px;font-weight:600;">Accept invitation</a></p>
-          <p style="margin:20px 0 0;color:#4b5263;font-size:13px;">For security, your password is never sent by email. You will create it when accepting the invitation.</p>
-          <p style="margin:16px 0 0;color:#8b93a8;font-size:13px;">If the button does not work, paste this URL into your browser:<br/><span style="word-break:break-all;">${safeUrl}</span></p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`
+    : '<span style="font-size:14px;color:#6B7280;">Workspace access will be configured by your admin.</span>'
+  const inner = `${brandMarkHtml()}
+<h1 style="margin:0 0 12px;font-size:22px;font-weight:700;color:#000000;line-height:1.25;">You&apos;re invited</h1>
+<p style="margin:0 0 16px;font-size:15px;line-height:1.55;color:#374151;">Hi ${safeName},</p>
+<p style="margin:0 0 20px;font-size:15px;line-height:1.55;color:#374151;">You have been invited to join <strong>${safeCompany}</strong> on <strong>${safeApp}</strong>.</p>
+<p style="margin:0 0 4px;font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#6B7280;">Assigned role</p>
+<p style="margin:0 0 16px;font-size:15px;font-weight:600;color:#111827;">${safeRole}</p>
+<p style="margin:0 0 8px;font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#6B7280;">Workspace access</p>
+<div style="margin:0 0 24px;">${workspaceHtml}</div>
+<p style="margin:0 0 16px;font-size:15px;line-height:1.55;color:#374151;">This secure link expires in <strong>48 hours</strong>.</p>
+<p style="margin:0 0 20px;">${primaryButtonHtml(inviteUrl, 'Accept invitation')}</p>
+<p style="margin:0;font-size:13px;line-height:1.55;color:#6B7280;">For security, your password is never sent by email. You will create it when accepting the invitation.</p>
+<p style="margin:16px 0 0;font-size:13px;line-height:1.55;color:#6B7280;">If the button does not work, paste this URL into your browser:<br/><span style="word-break:break-all;color:#374151;">${safeUrl}</span></p>`
+  return buildMinimalEmailDocument({ innerHtml: inner })
 }
 
 export async function sendTeamInviteEmail({ to, name, companyName, inviteUrl, roleName, workspaceNames }) {
   const transport = getMailTransport()
   const from = fromAddress()
+  const app = appDisplayName()
   const html = buildTeamInviteEmailHtml({ name, companyName, inviteUrl, roleName, workspaceNames })
 
   if (!transport) {
     if (process.env.NODE_ENV !== 'production') {
       // eslint-disable-next-line no-console
-      console.info(`[SalesDesk mail] SMTP not configured. Invite link for ${to}:\n${inviteUrl}`)
+      console.info(`[${app} mail] SMTP not configured. Invite link for ${to}:\n${inviteUrl}`)
       return { sent: false }
     }
     const err = new Error('SMTP is not configured')
@@ -212,61 +258,34 @@ export async function sendTeamInviteEmail({ to, name, companyName, inviteUrl, ro
   await transport.sendMail({
     from,
     to,
-    subject: `Invitation to ${companyName} — SalesDesk`,
+    subject: `Invitation to ${companyName} — ${app}`,
     html,
-    text: `Hi ${name},\n\nYou are invited to join ${companyName} on SalesDesk.\nRole: ${roleName || 'Team member'}\nWorkspace access: ${(workspaceNames || []).join(', ') || 'Configured by your admin'}\nAccept your invite (48h): ${inviteUrl}\n\nFor security, set your own password from the secure invite page.\n`,
+    text: `Hi ${name},\n\nYou are invited to join ${companyName} on ${app}.\nRole: ${roleName || 'Team member'}\nWorkspace access: ${(workspaceNames || []).join(', ') || 'Configured by your admin'}\nAccept your invite (48h): ${inviteUrl}\n\nFor security, set your own password from the secure invite page.\n`,
   })
 
   return { sent: true }
 }
 
-
-// ==============================
-// 📅 MEETING EMAIL
-// ==============================
-
-export function buildMeetingEmailHtml({
-  leadName,
-  meetingTitle,
-  agenda,
-  startTime,
-  meetLink,
-}) {
-  const safeName = escapeHtml(leadName || "there");
-  const safeTitle = escapeHtml(meetingTitle);
-  const safeAgenda = escapeHtml(agenda || "");
-  const safeTime = escapeHtml(startTime);
-  const safeLink = escapeHtml(meetLink || "");
-
-  return `<!DOCTYPE html>
-<html>
-<body style="font-family:Segoe UI,sans-serif;background:#f4f6fb;padding:20px;">
-  <div style="max-width:600px;margin:auto;background:#fff;border-radius:12px;padding:24px;">
-    
-    <h2 style="margin:0 0 12px;">📅 ${safeTitle}</h2>
-
-    <p>Hi ${safeName},</p>
-
-    <p>You have a scheduled meeting.</p>
-
-    <p><b>Agenda:</b> ${safeAgenda || "N/A"}</p>
-
-    <p><b>Date & Time:</b> ${safeTime}</p>
-
-    ${
-      meetLink
-        ? `<p style="margin-top:20px;">
-            <a href="${safeLink}" 
-               style="background:#2451eb;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;">
-               Join Meeting
-            </a>
-          </p>`
-        : `<p style="color:#888;">Meeting link will be shared soon.</p>`
-    }
-
-  </div>
-</body>
-</html>`;
+export function buildMeetingEmailHtml({ leadName, meetingTitle, agenda, startTime, meetLink }) {
+  const safeName = escapeHtml(leadName || 'there')
+  const safeTitle = escapeHtml(meetingTitle)
+  const safeAgenda = escapeHtml(agenda || '')
+  const safeTime = escapeHtml(startTime)
+  const inner = `${brandMarkHtml()}
+<h1 style="margin:0 0 12px;font-size:22px;font-weight:700;color:#000000;line-height:1.25;">${safeTitle}</h1>
+<p style="margin:0 0 16px;font-size:15px;line-height:1.55;color:#374151;">Hi ${safeName},</p>
+<p style="margin:0 0 20px;font-size:15px;line-height:1.55;color:#374151;">You have a scheduled meeting.</p>
+<p style="margin:0 0 6px;font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#6B7280;">Agenda</p>
+<p style="margin:0 0 16px;font-size:15px;line-height:1.55;color:#111827;">${safeAgenda || '—'}</p>
+<p style="margin:0 0 6px;font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#6B7280;">Date &amp; time</p>
+<p style="margin:0 0 24px;font-size:15px;line-height:1.55;color:#111827;">${safeTime}</p>
+${
+  meetLink
+    ? `<p style="margin:0 0 16px;">${primaryButtonHtml(meetLink, 'Join meeting')}</p>`
+    : `<p style="margin:0;font-size:14px;color:#6B7280;">Meeting link will be shared soon.</p>`
+}
+<p style="margin:24px 0 0;font-size:13px;line-height:1.55;color:#6B7280;">If you did not expect this message, you can ignore it.</p>`
+  return buildMinimalEmailDocument({ innerHtml: inner })
 }
 
 export async function sendMeetingEmail({
@@ -277,8 +296,8 @@ export async function sendMeetingEmail({
   scheduledStart,
   meetLink,
 }) {
-  const transport = getMailTransport();
-  const from = fromAddress();
+  const transport = getMailTransport()
+  const from = fromAddress()
 
   const html = buildMeetingEmailHtml({
     leadName,
@@ -286,14 +305,15 @@ export async function sendMeetingEmail({
     agenda,
     startTime: new Date(scheduledStart).toLocaleString(),
     meetLink,
-  });
+  })
 
   if (!transport) {
-    if (process.env.NODE_ENV !== "production") {
-      console.info(`[Meeting Email] Not sent. Link: ${meetLink}`);
-      return { sent: false };
+    if (process.env.NODE_ENV !== 'production') {
+      // eslint-disable-next-line no-console
+      console.info(`[Meeting Email] Not sent. Link: ${meetLink}`)
+      return { sent: false }
     }
-    throw new Error("SMTP not configured");
+    throw new Error('SMTP not configured')
   }
 
   await transport.sendMail({
@@ -301,12 +321,8 @@ export async function sendMeetingEmail({
     to,
     subject: `Meeting: ${meetingTitle}`,
     html,
-    text: `
-Meeting: ${meetingTitle}
-Date: ${new Date(scheduledStart).toLocaleString()}
-Link: ${meetLink || "Not available"}
-    `,
-  });
+    text: `Meeting: ${meetingTitle}\nDate: ${new Date(scheduledStart).toLocaleString()}\nLink: ${meetLink || 'Not available'}\n`,
+  })
 
-  return { sent: true };
+  return { sent: true }
 }

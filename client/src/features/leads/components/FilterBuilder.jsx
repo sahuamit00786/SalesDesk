@@ -1,8 +1,10 @@
 import { RightDrawer } from '@/components/ui/RightDrawer'
-import { Input } from '@/components/ui/Input'
+import { Input, inputFieldClassName } from '@/components/ui/Input'
+import { cn } from '@/utils/cn'
 import { SOURCE_OPTIONS, STATUS_OPTIONS } from '@/features/leads/constants'
 
-export function FilterBuilder({ open, onClose, filters, onChange, onApply, onReset }) {
+/** @param {{ workspaceOptions?: { id: string, name: string }[] | null }} props */
+export function FilterBuilder({ open, onClose, filters, onChange, onApply, onReset, workspaceOptions = null }) {
   return (
     <RightDrawer
       open={open}
@@ -18,6 +20,24 @@ export function FilterBuilder({ open, onClose, filters, onChange, onApply, onRes
       }
     >
       <div className="space-y-4">
+        {workspaceOptions?.length ? (
+          <div>
+            <p className="mb-2 text-xs font-semibold text-ink-muted">Workspace</p>
+            <select
+              className={cn(inputFieldClassName, 'cursor-pointer')}
+              value={filters.workspaceId || ''}
+              onChange={(e) => onChange({ workspaceId: e.target.value })}
+              aria-label="Filter by workspace"
+            >
+              <option value="">All workspaces</option>
+              {workspaceOptions.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name || w.id}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
         <Input placeholder="Search leads..." value={filters.search || ''} onChange={(e) => onChange({ search: e.target.value })} />
         <div>
           <p className="mb-2 text-xs font-semibold text-ink-muted">Status</p>

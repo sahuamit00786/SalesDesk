@@ -1,4 +1,4 @@
-import { getMailTransport } from './mailService.js'
+import { appDisplayName, buildMinimalEmailDocument, getMailTransport } from './mailService.js'
 
 function renderTemplate(template, vars) {
   let out = String(template || '')
@@ -9,7 +9,7 @@ function renderTemplate(template, vars) {
 }
 
 function htmlWrap(content) {
-  return `<!doctype html><html><body style="font-family:Segoe UI,Arial,sans-serif;color:#0f1117;background:#f7f8fc;padding:20px;"><div style="max-width:680px;margin:0 auto;background:#fff;border:1px solid #e3e7f0;border-radius:12px;padding:20px;">${content}</div></body></html>`
+  return buildMinimalEmailDocument({ innerHtml: content })
 }
 
 export async function sendWebFormEmails({ form, submissionData, lead }) {
@@ -25,7 +25,7 @@ export async function sendWebFormEmails({ form, submissionData, lead }) {
     submission_date: new Date().toLocaleString(),
   }
 
-  const from = process.env.SMTP_FROM || `SalesDesk <${process.env.SMTP_USER}>`
+  const from = process.env.SMTP_FROM || `${appDisplayName()} <${process.env.SMTP_USER}>`
 
   if (form.sendConfirmationEmail && leadEmail) {
     const subject = renderTemplate(form.confirmationSubject || `Thanks for contacting us`, vars)

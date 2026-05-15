@@ -340,29 +340,29 @@ export function CampaignDetailPage() {
                 {leadsLoading ? (
                   <p className="px-5 py-8 text-sm text-neutral-500">Loading leads…</p>
                 ) : (
-                  <table className="w-full min-w-[1100px] text-left text-sm">
-                    <thead>
-                      <tr className="border-b border-neutral-100 bg-neutral-50/90 text-[11px] font-bold uppercase tracking-wide text-neutral-500">
-                        <th className="w-10 px-3 py-3 pl-4 sm:pl-5" />
-                        <th className="px-3 py-3">Contact</th>
-                        <th className="px-3 py-3">Organization</th>
-                        <th className="px-3 py-3">Source</th>
-                        <th className="px-3 py-3">Email</th>
-                        <th className="px-3 py-3">Phone</th>
-                        <th className="px-3 py-3">Pipeline</th>
-                        <th className="px-3 py-3">Campaign stage</th>
-                        <th className="px-3 py-3">Owner</th>
-                        <th className="px-3 py-3 pr-4 sm:pr-5">Added</th>
+                  <table className="cx-table min-w-[1100px] text-sm">
+                    <thead className="cx-table-sticky-head">
+                      <tr>
+                        <th className="cx-table-cell-actions w-10" />
+                        <th>Contact</th>
+                        <th>Organization</th>
+                        <th>Source</th>
+                        <th>Email</th>
+                        <th>Phone</th>
+                        <th>Pipeline</th>
+                        <th>Campaign stage</th>
+                        <th>Owner</th>
+                        <th>Added</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-neutral-100">
+                    <tbody>
                       {rows.map((row) => {
                         const l = row.lead || {}
                         const name = (l.contactName || l.title || 'Untitled').trim()
                         const checked = selected.has(l.id)
                         return (
-                          <tr key={row.campaignLeadId} className={cn('transition hover:bg-orange-50/40', checked && 'bg-orange-50/60')}>
-                            <td className="px-3 py-3 pl-4 sm:pl-5">
+                          <tr key={row.campaignLeadId} className={cn(checked && 'bg-orange-50/60')}>
+                            <td className="cx-table-cell-actions align-middle">
                               <input
                                 type="checkbox"
                                 checked={checked}
@@ -371,7 +371,7 @@ export function CampaignDetailPage() {
                                 aria-label={`Select ${name}`}
                               />
                             </td>
-                            <td className="px-3 py-3">
+                            <td>
                               <div className="flex items-center gap-3">
                                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-orange-100 to-orange-50 text-xs font-bold text-orange-800 ring-1 ring-orange-200/60">
                                   {initials(name)}
@@ -381,7 +381,7 @@ export function CampaignDetailPage() {
                                 </Link>
                               </div>
                             </td>
-                            <td className="px-3 py-3">
+                            <td>
                               <div className="flex items-center gap-2">
                                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-neutral-100 text-xs font-bold text-neutral-600 ring-1 ring-neutral-200/80">
                                   {companyGlyph(l.company)}
@@ -389,22 +389,22 @@ export function CampaignDetailPage() {
                                 <span className="text-neutral-700">{l.company || '—'}</span>
                               </div>
                             </td>
-                            <td className="px-3 py-3">
+                            <td>
                               <LeadSourceTag source={l.source} />
                             </td>
-                            <td className="max-w-[10rem] truncate px-3 py-3 text-neutral-700" title={l.email || ''}>
+                            <td className="max-w-[10rem] truncate text-neutral-700" title={l.email || ''}>
                               {l.email || '—'}
                             </td>
-                            <td className="max-w-[8rem] truncate px-3 py-3 text-neutral-700" title={l.phone || ''}>
+                            <td className="max-w-[8rem] truncate text-neutral-700" title={l.phone || ''}>
                               {l.phone || '—'}
                             </td>
-                            <td className="px-3 py-3">
+                            <td>
                               <span className="inline-flex items-center gap-1.5 text-xs text-neutral-700">
                                 <Briefcase className="h-3.5 w-3.5 shrink-0 text-neutral-400" aria-hidden />
                                 <span className="max-w-[9rem] truncate">{l.opportunityStage || '—'}</span>
                               </span>
                             </td>
-                            <td className="px-3 py-3">
+                            <td className="align-middle">
                               <select
                                 value={row.stageKey}
                                 disabled={patching}
@@ -418,10 +418,10 @@ export function CampaignDetailPage() {
                                 ))}
                               </select>
                             </td>
-                            <td className="px-3 py-3 text-xs text-neutral-700">
+                            <td className="text-xs text-neutral-700">
                               {row.campaignAssignee?.name || row.campaignAssignee?.email || '—'}
                             </td>
-                            <td className="px-3 py-3 pr-4 text-xs tabular-nums text-neutral-600 sm:pr-5">{formatLeadDate(l.createdAt)}</td>
+                            <td className="text-xs tabular-nums text-neutral-600">{formatLeadDate(l.createdAt)}</td>
                           </tr>
                         )
                       })}

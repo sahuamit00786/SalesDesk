@@ -85,6 +85,17 @@ export const teamApi = baseApi.injectEndpoints({
       }),
       invalidatesTags: [{ type: 'Team', id: 'USERS' }],
     }),
+    reactivateUser: build.mutation({
+      query: ({ id }) => ({
+        url: `/team/users/${id}/reactivate`,
+        method: 'POST',
+        body: {},
+      }),
+      invalidatesTags: (_res, _err, { id }) => [
+        { type: 'Team', id: 'USERS' },
+        { type: 'Team', id: `USER-${id}` },
+      ],
+    }),
     createTeam: build.mutation({
       query: (body) => ({ url: '/team/teams', method: 'POST', body }),
       invalidatesTags: [{ type: 'Team', id: 'TEAMS' }],
@@ -131,6 +142,7 @@ export const {
   useDeleteRoleMutation,
   useReplaceUserWorkspacesMutation,
   useDeactivateUserMutation,
+  useReactivateUserMutation,
   useCreateTeamMutation,
   usePatchTeamMutation,
   useDeleteTeamMutation,

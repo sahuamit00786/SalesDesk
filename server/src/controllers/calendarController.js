@@ -238,6 +238,7 @@ export async function listEvents(req, res) {
             description: t.description,
             taskType: t.taskType,
             subtasks,
+            attachments: Array.isArray(t.attachments) ? t.attachments : [],
           },
         })
       }

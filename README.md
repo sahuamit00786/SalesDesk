@@ -76,18 +76,22 @@ Full variable list and comments live in `.env.example` (search for `MEETING_BOT`
 
 **Windows audio device for ffmpeg**
 
-1. Install ffmpeg and ensure it is on your `PATH`.
-2. List DirectShow audio devices:
+1. Install ffmpeg and ensure it is on your `PATH`, **or** set `MEETING_BOT_FFMPEG_EXE` in `.env` to the full path of `ffmpeg.exe`. Servers started from Cursor/VS Code often inherit an old `PATH` and log `spawn ffmpeg ENOENT` until you restart the IDE or set this variable.
+2. List DirectShow audio devices (argument order matters):
 
    ```bash
-   ffmpeg -f dshow -list_devices true -i dummy
+   ffmpeg -hide_banner -f dshow -list_devices true -i dummy
    ```
+
+   If you see a line like `Error opening input file dummy` **after** the list of cameras/mics, ignore it — FFmpeg still printed the device names above.
 
 3. Set `MEETING_BOT_WIN_DSHOW` to the **full** dshow input, including the `audio=` prefix, for example:
 
    ```bash
-   MEETING_BOT_WIN_DSHOW="audio=Stereo Mix (Realtek(R) Audio)"
+   MEETING_BOT_WIN_DSHOW=audio=Stereo Mix (Realtek(R) Audio)
    ```
+
+   In `.env` do **not** wrap the value in extra `"` quotes unless your loader requires it; nested parentheses in `Realtek(R)` can confuse some editors — you can use the **Alternative name** line from the device list (starts with `@device_cm_...`) instead of the friendly name.
 
    Use the exact name from the list (including parentheses). `Microphone Array` records the mic only; to capture meeting playback from the PC, use Stereo Mix or a virtual cable (e.g. VB-Audio) if your driver exposes it.
 

@@ -5,7 +5,11 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { NAV_SECTIONS } from '@/components/layout/navConfig'
 import { useAppSelector } from '@/app/hooks'
+import { useHrRole } from '@/features/hr/useHrRole'
+import { buildAllowedRouteSet, isMenuPathAllowed } from '@/utils/menuAccess'
 import { selectActiveWorkspaceName } from '@/features/workspace/workspaceSlice'
+import { useGetMailboxInboxBadgeQuery } from '@/features/email/emailApi'
+import { useGetGoogleEmailStatusQuery } from '@/features/leads/leadsApi'
 
 const ACTIVE_BORDER = 'border-[#534AB7]'
 const PEEK_CLOSE_MS = 200
@@ -62,13 +66,33 @@ function CollapsedItemPeek({ peek, onPeekEnter, onPeekLeave }) {
 
 export function Sidebar({ className, collapsed = false, onToggleCollapse, isMobile = false, onNavigate }) {
   const workspaceName = useAppSelector(selectActiveWorkspaceName)
+  const accessToken = useAppSelector((s) => s.auth.accessToken)
   const user = useAppSelector((s) => s.auth.user)
-  const allowedRoutes = new Set((user?.allowedMenus || []).map((m) => m.route).filter(Boolean))
+  const { data: googleEmailStatus } = useGetGoogleEmailStatusQuery(undefined, { skip: !accessToken })
+  const skipMailboxBadge = !accessToken || googleEmailStatus?.data?.readMailbox === false
+  const { data: mailboxBadgeRes } = useGetMailboxInboxBadgeQuery(undefined, {
+    skip: skipMailboxBadge,
+    pollingInterval: 45000,
+  })
+  const emailUnread = Number(mailboxBadgeRes?.data?.unread || 0)
+  const emailUnreadApprox = Boolean(mailboxBadgeRes?.data?.unreadApproximate)
+  const emailNavBadge =
+    emailUnread > 0 ? (emailUnreadApprox ? `${emailUnread}+` : String(emailUnread)) : null
+  const hrRole = useHrRole()
+  const allowedRoutes = buildAllowedRouteSet(user?.allowedMenus, {
+    isCompanyAdmin: user?.isCompanyAdmin,
+  })
   const navSections = user?.isCompanyAdmin
     ? NAV_SECTIONS
     : NAV_SECTIONS.map((section) => ({
         ...section,
-        items: section.items.filter((item) => allowedRoutes.has(item.to)),
+        items: section.items.filter((item) => {
+          if (section.label === 'HR') {
+            if (item.to === '/leave/config' && hrRole !== 'admin') return false
+            if (item.to === '/leave/approval' && hrRole !== 'admin' && hrRole !== 'manager') return false
+          }
+          return isMenuPathAllowed(item.to, allowedRoutes)
+        }),
       })).filter((section) => section.items.length > 0)
   const narrow = collapsed && !isMobile
   const [peek, setPeek] = useState(null)
@@ -185,15 +209,22 @@ export function Sidebar({ className, collapsed = false, onToggleCollapse, isMobi
               </p>
             ) : null}
             <div className="flex flex-col">
-              {section.items.map(({ to, label, icon: Icon, badge, badgeVariant, end }) =>
-                narrow ? (
+              {section.items.map(({ to, label, icon: Icon, badge, badgeVariant, end }) => {
+                const resolvedBadge = to === '/email' ? emailNavBadge || badge : badge
+                const resolvedVariant = to === '/email' && emailNavBadge ? 'default' : badgeVariant
+                return narrow ? (
                   <div
                     key={to}
                     id={`nav-peek-${to}`}
                     className="relative"
-                    onMouseEnter={(e) => openPeek(to, label, badge, badgeVariant, e.currentTarget)}
+                    onMouseEnter={(e) => openPeek(to, label, resolvedBadge, resolvedVariant, e.currentTarget)}
                     onMouseLeave={schedulePeekClose}
                   >
+                    {to === '/email' && emailUnread > 0 ? (
+                      <span className="pointer-events-none absolute right-0.5 top-0.5 z-[1] flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-white bg-red-500 px-[5px] text-[9px] font-bold leading-none text-white shadow-sm">
+                        {emailUnread > 99 ? '99+' : emailUnread}
+                      </span>
+                    ) : null}
                     <NavLink
                       to={to}
                       end={Boolean(end)}
@@ -229,12 +260,12 @@ export function Sidebar({ className, collapsed = false, onToggleCollapse, isMobi
                   >
                     <Icon className="h-4 w-4 shrink-0 opacity-60 transition-opacity" aria-hidden />
                     <span className="min-w-0 truncate">{label}</span>
-                    <NavBadge variant={badgeVariant} collapsed={false}>
-                      {badge}
+                    <NavBadge variant={resolvedVariant} collapsed={false}>
+                      {resolvedBadge}
                     </NavBadge>
                   </NavLink>
-                ),
-              )}
+                )
+              })}
             </div>
           </div>
         ))}

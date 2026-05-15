@@ -5,7 +5,9 @@ import { Activity, Deal, Lead, OpportunityStage, Tag, User } from '../models/ind
 import { serializeDealForClient } from './dealsController.js'
 import { allowedWorkspaceIdsForUser } from '../services/userWorkspaceService.js'
 import { leadAccessWhere } from '../services/leadVisibility.js'
+import { resolveListWorkspaceFilterId } from '../utils/resolveListWorkspaceFilter.js'
 import { findDuplicates } from '../services/duplicateDetectionService.js'
+import { logLeadFieldChanges } from '../services/leadFieldChangeActivity.js'
 
 function formatStageLabelForMessage(value) {
   const text = String(value || '').trim()
@@ -199,7 +201,7 @@ async function resolveInitialOpportunityStage(workspaceId, companyId, requested)
 /** Visibility + workspace scope for pipeline rows (leads marked as opportunities). */
 async function leadPipelineBaseWhere(req) {
   const accessWhere = await leadAccessWhere(req.user)
-  const selectedWorkspaceId = req.query.workspaceId || req.headers['x-workspace-id']
+  const selectedWorkspaceId = resolveListWorkspaceFilterId(req)
   const allowedWorkspaceIds = await allowedWorkspaceIdsForUser(req.user)
 
   if (selectedWorkspaceId) {
@@ -633,6 +635,7 @@ export async function update(req, res, next) {
     if (lead) {
       const hasTagsField = Object.prototype.hasOwnProperty.call(req.body || {}, 'tags')
       const previousStage = lead.opportunityStage || ''
+      const beforePlain = lead.get({ plain: true })
       const beforeTags = (await lead.getTags({ attributes: ['name'] })).map((t) => String(t.name || '').trim().toLowerCase()).filter(Boolean)
 
       const patch = {}
@@ -731,6 +734,15 @@ export async function update(req, res, next) {
           })
         }
       }
+
+      const actorForFields = await resolveActorDisplayName(req.user.id, req.user.email)
+      await logLeadFieldChanges({
+        before: beforePlain,
+        after: lead.get({ plain: true }),
+        leadId: lead.id,
+        userId: req.user.id,
+        actorName: actorForFields,
+      })
 
       return res.json({ success: true, data: serializeLeadAsOpportunity(lead), meta: {} })
     }

@@ -9,12 +9,14 @@ import {
   User,
   Briefcase,
   ListChecks,
+  Paperclip,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { cn } from '@/utils/cn'
 import { computeCalendarPopoverPosition } from '@/utils/calendarPopoverPosition'
 import { usePatchLeadTaskMutation } from '@/features/leads/leadsApi'
 import { useTeamUsersQuery } from '@/features/team/teamApi'
+import { TaskAttachmentIcons } from '@/features/leads/components/TaskAttachmentIcons'
 
 function toDatetimeLocalValue(d) {
   if (!d) return ''
@@ -78,8 +80,8 @@ export function TaskEventHoverCard({ event, anchorRect, onMouseEnter, onMouseLea
     event?.status,
     event?.ownerUserId,
     event?.meta?.description,
-    // sync subtasks when refetched calendar payload changes
     JSON.stringify(event?.meta?.subtasks || []),
+    JSON.stringify(event?.meta?.attachments || []),
   ])
 
   const patch = useCallback(
@@ -210,14 +212,8 @@ export function TaskEventHoverCard({ event, anchorRect, onMouseEnter, onMouseLea
               className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs outline-none focus:border-amber-400"
               value={dueLocal}
               onChange={(e) => setDueLocal(e.target.value)}
+              onBlur={() => void handleSaveDue()}
             />
-            <button
-              type="button"
-              onClick={handleSaveDue}
-              className="mt-1.5 w-full rounded-md bg-amber-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-amber-700"
-            >
-              Save due date
-            </button>
           </div>
           <div>
             <label className="mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
@@ -302,16 +298,20 @@ export function TaskEventHoverCard({ event, anchorRect, onMouseEnter, onMouseLea
             className="w-full resize-y rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-800 outline-none focus:border-amber-400"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
+            onBlur={() => void handleSaveDescription()}
             placeholder="Add details…"
           />
-          <button
-            type="button"
-            onClick={handleSaveDescription}
-            className="mt-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-50"
-          >
-            Save description
-          </button>
         </div>
+
+        {Array.isArray(event?.meta?.attachments) && event.meta.attachments.length ? (
+          <div>
+            <label className="mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+              <Paperclip className="h-3 w-3" aria-hidden />
+              Attachments
+            </label>
+            <TaskAttachmentIcons attachments={event.meta.attachments} variant="compact" />
+          </div>
+        ) : null}
 
         <div>
           <label className="mb-1.5 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-gray-500">

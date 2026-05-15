@@ -15,7 +15,8 @@ module.exports = {
       })
     }
 
-    await queryInterface.sequelize.query(`
+    if (desc.role) {
+      await queryInterface.sequelize.query(`
       UPDATE users SET role_master_id = CASE role
         WHEN 'admin' THEN 1
         WHEN 'manager' THEN 2
@@ -23,6 +24,12 @@ module.exports = {
       END
       WHERE role_master_id IS NULL
     `)
+    } else {
+      await queryInterface.sequelize.query(`
+      UPDATE users SET role_master_id = 3
+      WHERE role_master_id IS NULL
+    `)
+    }
 
     await queryInterface.changeColumn('users', 'role_master_id', {
       type: Sequelize.TINYINT.UNSIGNED,

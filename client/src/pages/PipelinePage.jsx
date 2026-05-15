@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  ChevronLeft,
   ChevronDown,
-  ChevronRight,
   Download,
   Filter,
   Kanban,
@@ -27,7 +25,10 @@ import { OpportunitiesKanban, formatStageLabel } from '@/features/opportunities/
 import { useCreateOpportunityMutation, usePatchOpportunityStageMutation } from '@/features/opportunities/opportunitiesApi'
 import { useCreateDealMutation } from '@/features/deals/dealsApi'
 import { useGetLeadFormMetaQuery, useGetLeadsQuery } from '@/features/leads/leadsApi'
+import { selectWorkspaceList } from '@/features/workspace/workspaceSlice'
 import { cn } from '@/utils/cn'
+import { TablePaginationBar } from '@/components/ui/TablePaginationBar'
+import { inputFieldClassName } from '@/components/ui/Input'
 import { formatAggregatedDealAmount, formatDealMoney } from '@/features/deals/dealCurrencies'
 
 const STAGE_FILTER_FALLBACK = ['Lead Inbound', 'New', 'Contacted', 'Qualified', 'Proposal', 'Won', 'Lost']
@@ -106,12 +107,16 @@ const PIPELINE_SORT_MAP = {
 
 export function PipelinePage() {
   const navigate = useNavigate()
+  const user = useSelector((s) => s.auth.user)
+  const workspaceList = useSelector(selectWorkspaceList)
+  const isCompanyAdmin = Boolean(user?.isCompanyAdmin)
 
   const [mode, setMode] = useState('list')
   const [searchInput, setSearchInput] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [selectedStages, setSelectedStages] = useState([])
   const [selectedAssignees, setSelectedAssignees] = useState([])
+  const [pipelineWorkspaceId, setPipelineWorkspaceId] = useState('')
   const [openStageDropdown, setOpenStageDropdown] = useState(false)
   const [openAssigneeDropdown, setOpenAssigneeDropdown] = useState(false)
   const [sortValue, setSortValue] = useState('updatedAt:desc')
@@ -137,9 +142,10 @@ export function PipelinePage() {
       assignedTo: selectedAssignees.length ? selectedAssignees.join(',') : undefined,
       sort: apiSort,
       order,
+      workspaceId: isCompanyAdmin && pipelineWorkspaceId ? pipelineWorkspaceId : undefined,
     }
     return Object.fromEntries(Object.entries(q).filter(([, v]) => v !== undefined && v !== ''))
-  }, [page, limit, mode, debouncedSearch, selectedStages, selectedAssignees, sort, order])
+  }, [page, limit, mode, debouncedSearch, selectedStages, selectedAssignees, sort, order, isCompanyAdmin, pipelineWorkspaceId])
 
   const { data, isLoading, isFetching } = useGetLeadsQuery(listQuery)
   const { data: formMetaData } = useGetLeadFormMetaQuery()
@@ -175,7 +181,7 @@ export function PipelinePage() {
 
   useEffect(() => {
     setPage(1)
-  }, [mode, debouncedSearch, selectedStages, selectedAssignees, sortValue, limit])
+  }, [mode, debouncedSearch, selectedStages, selectedAssignees, sortValue, limit, pipelineWorkspaceId])
 
   const pageSum = useMemo(() => rows.reduce((acc, r) => acc + Number(r.dealValue || 0), 0), [rows])
   const avgDealValue = useMemo(() => (rows.length ? pageSum / rows.length : 0), [rows.length, pageSum])
@@ -202,8 +208,9 @@ export function PipelinePage() {
     if (selectedStages.length) n += 1
     if (selectedAssignees.length) n += 1
     if (sortValue !== 'updatedAt:desc') n += 1
+    if (isCompanyAdmin && pipelineWorkspaceId) n += 1
     return n
-  }, [debouncedSearch, selectedStages, selectedAssignees, sortValue])
+  }, [debouncedSearch, selectedStages, selectedAssignees, sortValue, isCompanyAdmin, pipelineWorkspaceId])
 
   function resetFilters() {
     setSelectedStages([])
@@ -211,6 +218,7 @@ export function PipelinePage() {
     setSearchInput('')
     setDebouncedSearch('')
     setSortValue('updatedAt:desc')
+    setPipelineWorkspaceId('')
     setPage(1)
   }
 
@@ -326,6 +334,27 @@ export function PipelinePage() {
                 ) : null}
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                {isCompanyAdmin && workspaceList.length ? (
+                  <label className="inline-flex flex-col gap-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
+                    <span className="sr-only sm:not-sr-only sm:pl-0.5">Workspace</span>
+                    <select
+                      className={cn(inputFieldClassName, 'h-9 min-w-[9.5rem] cursor-pointer py-0 text-xs font-medium text-ink')}
+                      value={pipelineWorkspaceId}
+                      onChange={(e) => {
+                        setPipelineWorkspaceId(e.target.value)
+                        setPage(1)
+                      }}
+                      aria-label="Filter pipeline by workspace"
+                    >
+                      <option value="">All workspaces</option>
+                      {workspaceList.map((w) => (
+                        <option key={w.id} value={w.id}>
+                          {w.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
                 <div className="relative">
                   <button
                     type="button"
@@ -596,41 +625,20 @@ export function PipelinePage() {
                     <span className="text-ink">{total.toLocaleString()}</span> in pipeline
                   </p>
                 </div>
-                <div className="inline-flex items-center gap-1 text-xs text-ink-muted">
-                  <button
-                    type="button"
-                    className="rounded-lg p-1.5 hover:bg-surface-subtle disabled:opacity-40"
-                    disabled={page <= 1}
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </button>
-                  <span className="min-w-[72px] text-center font-semibold text-ink">
-                    {page} / {totalPages}
-                  </span>
-                  <button
-                    type="button"
-                    className="rounded-lg p-1.5 hover:bg-surface-subtle disabled:opacity-40"
-                    disabled={page >= totalPages}
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </button>
-                </div>
               </div>
               <div className="overflow-x-auto">
-                <table className="min-w-[1100px] w-full border-collapse text-left">
-                  <thead className="sticky top-0 z-[1] bg-surface-subtle/90 text-[10px] uppercase tracking-wide text-ink-muted backdrop-blur-sm">
+                <table className="cx-table min-w-[1100px] text-xs">
+                  <thead className="cx-table-sticky-head">
                     <tr>
-                      <th className="px-3 py-2.5 font-semibold">Opportunity</th>
-                      <th className="px-3 py-2.5 font-semibold">Company & role</th>
-                      <th className="px-3 py-2.5 font-semibold">Contact</th>
-                      <th className="px-3 py-2.5 font-semibold">Status</th>
-                      <th className="px-3 py-2.5 font-semibold">Value</th>
-                      <th className="px-3 py-2.5 font-semibold">Score</th>
-                      <th className="px-3 py-2.5 font-semibold">Owner</th>
-                      <th className="px-3 py-2.5 font-semibold">Last activity</th>
-                      <th className="px-3 py-2.5 font-semibold text-right">Action</th>
+                      <th>Opportunity</th>
+                      <th>Company & role</th>
+                      <th>Contact</th>
+                      <th>Status</th>
+                      <th>Value</th>
+                      <th>Score</th>
+                      <th>Owner</th>
+                      <th>Last activity</th>
+                      <th className="cx-table-cell-actions text-right">Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -644,10 +652,10 @@ export function PipelinePage() {
                       rows.map((row) => (
                         <tr
                           key={row.id}
-                          className="cursor-pointer border-t border-surface-border transition-colors hover:bg-brand-50/50"
+                          className="cursor-pointer"
                           onClick={() => navigate(`/opportunities/${row.id}`)}
                         >
-                          <td className="px-3 py-2.5">
+                          <td>
                             <p className="text-sm font-semibold text-ink">
                               {(row.dealName || '').trim() || row.fullName}
                             </p>
@@ -655,15 +663,15 @@ export function PipelinePage() {
                               {(row.dealName || '').trim() ? row.companyName || '—' : row.location || '—'}
                             </p>
                           </td>
-                          <td className="px-3 py-2.5">
+                          <td>
                             <p className="text-xs font-semibold text-ink">{row.jobTitle || '—'}</p>
                             <p className="text-[11px] text-ink-muted">{row.companyName || '—'}</p>
                           </td>
-                          <td className="px-3 py-2.5">
+                          <td>
                             <p className="text-xs text-ink">{row.email || '—'}</p>
                             <p className="text-[11px] text-ink-muted">{row.phoneNumber || row.directPhone || '—'}</p>
                           </td>
-                          <td className="px-3 py-2.5">
+                          <td>
                             <div className="relative max-w-[190px]">
                               <select
                                 className="h-8 w-full appearance-none rounded-lg border border-surface-border bg-white pl-2.5 pr-7 text-[11px] font-semibold text-ink outline-none ring-brand-500/30 focus:border-brand-400 focus:ring-2 disabled:cursor-not-allowed disabled:bg-surface-muted/30"
@@ -685,15 +693,15 @@ export function PipelinePage() {
                               <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-muted" />
                             </div>
                           </td>
-                          <td className="px-3 py-2.5 text-sm font-semibold text-ink">
+                          <td className="text-sm font-semibold text-ink">
                             {formatDealMoney(row.dealValue, row.dealCurrency)}
                           </td>
-                          <td className="px-3 py-2.5">
+                          <td>
                             <span className="inline-flex h-8 min-w-[2rem] items-center justify-center rounded-lg border border-violet-200 bg-violet-50 text-xs font-bold text-violet-900">
                               {row.leadScore ?? 0}
                             </span>
                           </td>
-                          <td className="px-3 py-2.5">
+                          <td>
                             <div className="inline-flex items-center gap-2">
                               <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-brand-100 text-[10px] font-semibold text-brand-800">
                                 {initials(row.owner?.name || row.owner?.email)}
@@ -701,13 +709,13 @@ export function PipelinePage() {
                               <span className="text-xs font-medium text-ink">{row.owner?.name || row.owner?.email || 'Unassigned'}</span>
                             </div>
                           </td>
-                          <td className="px-3 py-2.5">
+                          <td>
                             <p className="text-xs font-medium text-ink">{row.lastActivityType || '—'}</p>
                             <p className="text-[11px] text-ink-muted">
                               {row.lastActivityAt ? new Date(row.lastActivityAt).toLocaleString() : '—'}
                             </p>
                           </td>
-                          <td className="px-3 py-2.5 text-right">
+                          <td className="cx-table-cell-actions text-right">
                             <div className="inline-flex items-center justify-end gap-1.5">
                               <button
                                 type="button"
@@ -744,10 +752,19 @@ export function PipelinePage() {
                   </tbody>
                 </table>
               </div>
-              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-surface-border px-3 py-2 text-[11px] text-ink-muted">
-                <span>
-                  Showing {(page - 1) * displayLimit + 1}-{Math.min(page * displayLimit, total)} of {total}
-                </span>
+              <div className="border-t border-surface-border px-3 py-3 sm:px-4">
+                <TablePaginationBar
+                  variant="surface"
+                  page={page}
+                  totalPages={totalPages}
+                  onPageChange={setPage}
+                  subLabel={
+                    <>
+                      Showing {(page - 1) * displayLimit + 1}–{Math.min(page * displayLimit, total)} of{' '}
+                      {total.toLocaleString()}
+                    </>
+                  }
+                />
               </div>
             </>
           )}

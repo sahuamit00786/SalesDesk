@@ -17,8 +17,8 @@ export function buildMeetingBotRequirements(clientOs, serverPlatform) {
     stepsByOs: {
       windows: [
         'Install FFmpeg and add it to PATH (https://ffmpeg.org). Verify: ffmpeg -version',
-        'Install Playwright browsers: cd server && npx playwright install chromium',
-        'List audio capture devices: ffmpeg -f dshow -list_devices true -i dummy',
+        'Browser: install Chromium or Chrome, set MEETING_BOT_BROWSER_EXECUTABLE to chrome.exe (Windows), or run: cd server && npx playwright install chromium',
+        'List DirectShow devices: ffmpeg -hide_banner -f dshow -list_devices true -i dummy (harmless "dummy" error after the list is normal)',
         'Enable Stereo Mix in Windows Sound settings or install VB-Audio Virtual Cable, then set MEETING_BOT_WIN_DSHOW in server .env to your device string.',
         'Optional: MEETING_BOT_HEADLESS=false so Chromium can join Meet reliably on first try.',
       ],

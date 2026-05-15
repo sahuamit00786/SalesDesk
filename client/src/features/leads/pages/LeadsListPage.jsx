@@ -4,6 +4,7 @@ import { ListFilter, Plus } from "lucide-react";
 import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 import { PageShell } from "@/components/layout/PageShell";
+import { TablePaginationBar } from "@/components/ui/TablePaginationBar";
 import { AddLeadModal } from "@/features/leads/components/AddLeadModal";
 import { BulkActionsBar } from "@/features/leads/components/BulkActionsBar";
 import { DuplicateWarning } from "@/features/leads/components/DuplicateWarning";
@@ -21,6 +22,7 @@ import {
 } from "@/features/leads/leadsApi";
 import {
   clearSelected,
+  resetFilters,
   setFilters,
   setPagination,
   setSelected,
@@ -28,6 +30,7 @@ import {
   setTotal,
   toggleSelected,
 } from "@/features/leads/leadsSlice";
+import { selectWorkspaceList } from "@/features/workspace/workspaceSlice";
 import {
   selectLeadFilters,
   selectLeadPagination,
@@ -67,6 +70,9 @@ export function LeadsListPage({ variant = "leads" }) {
   const sort = useSelector(selectLeadSort);
   const pagination = useSelector(selectLeadPagination);
   const selected = useSelector(selectLeadSelected);
+  const user = useSelector((s) => s.auth.user);
+  const workspaceList = useSelector(selectWorkspaceList);
+  const isCompanyAdmin = Boolean(user?.isCompanyAdmin);
   const [addOpen, setAddOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
@@ -89,6 +95,7 @@ export function LeadsListPage({ variant = "leads" }) {
     limit: pagination.limit,
     isOpportunity: isOpportunities ? true : false,
   };
+  if (!query.workspaceId) delete query.workspaceId;
   const { data, isLoading, refetch } = useGetLeadsQuery(query);
   const { data: formMetaData } = useGetLeadFormMetaQuery();
   const [createLead] = useCreateLeadMutation();
@@ -178,6 +185,7 @@ export function LeadsListPage({ variant = "leads" }) {
                 exportAndDownload(isOpportunities ? "opportunities-all" : "leads-all", {
                   filters: {
                     isOpportunity: isOpportunities ? true : false,
+                    ...(filters.workspaceId ? { workspaceId: filters.workspaceId } : {}),
                   },
                 })
               }
@@ -275,33 +283,19 @@ export function LeadsListPage({ variant = "leads" }) {
                 toast.success("Lead deleted");
               }}
             />
-            <div className="flex items-center justify-between text-xs text-ink-muted">
-              <p>
-                Showing {(pagination.page - 1) * pagination.limit + 1}-
-                {Math.min(total, pagination.page * pagination.limit)} of {total}
-              </p>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  className="h-8 rounded-lg border border-surface-border bg-white px-3 disabled:opacity-50"
-                  disabled={pagination.page <= 1}
-                  onClick={() =>
-                    dispatch(setPagination({ page: pagination.page - 1 }))
-                  }
-                >
-                  Prev
-                </button>
-                <button
-                  type="button"
-                  className="h-8 rounded-lg border border-surface-border bg-white px-3 disabled:opacity-50"
-                  disabled={pagination.page >= pages}
-                  onClick={() =>
-                    dispatch(setPagination({ page: pagination.page + 1 }))
-                  }
-                >
-                  Next
-                </button>
-              </div>
+            <div className="border-t border-surface-border px-1 pt-3">
+              <TablePaginationBar
+                variant="surface"
+                page={pagination.page}
+                totalPages={pages}
+                onPageChange={(p) => dispatch(setPagination({ page: p }))}
+                subLabel={
+                  <>
+                    Showing {(pagination.page - 1) * pagination.limit + 1}-
+                    {Math.min(total, pagination.page * pagination.limit)} of {total}
+                  </>
+                }
+              />
             </div>
           </>
         )}
@@ -447,23 +441,10 @@ export function LeadsListPage({ variant = "leads" }) {
         open={filterOpen}
         onClose={() => setFilterOpen(false)}
         filters={filters}
+        workspaceOptions={isCompanyAdmin ? workspaceList : null}
         onChange={(delta) => dispatch(setFilters(delta))}
         onApply={() => setFilterOpen(false)}
-        onReset={() =>
-          dispatch(
-            setFilters({
-              search: "",
-              status: [],
-              source: [],
-              assignedTo: [],
-              tags: [],
-              scoreMin: 0,
-              scoreMax: 100,
-              valueMin: null,
-              valueMax: null,
-            }),
-          )
-        }
+        onReset={() => dispatch(resetFilters())}
       />
     </PageShell>
   );

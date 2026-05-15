@@ -1,4 +1,8 @@
 import Joi from 'joi'
+import {
+  ALL_COMPANY_USER_ROLE_KIND_VALUES,
+  COMPANY_USER_ROLE_KIND_CREATE_VALUES,
+} from '../constants/companyUserRoleKind.js'
 
 const email = Joi.string().email().required()
 const companyRoleId = Joi.string().uuid().required()
@@ -79,6 +83,12 @@ export const replaceUserWorkspacesSchema = Joi.object({
 export const createCompanyRoleSchema = Joi.object({
   name: Joi.string().min(2).max(120).required(),
   description: Joi.string().max(255).allow('', null).optional(),
+  userRoleKind: Joi.string()
+    .valid(...COMPANY_USER_ROLE_KIND_CREATE_VALUES)
+    .required()
+    .messages({
+      'any.required': 'Select a role type (Workspace admin, Manager, or Sales)',
+    }),
   menuPermissions: Joi.array()
     .items(
       Joi.object({
@@ -96,6 +106,7 @@ export const createCompanyRoleSchema = Joi.object({
 export const patchCompanyRoleSchema = Joi.object({
   name: Joi.string().min(2).max(120).optional(),
   description: Joi.string().max(255).allow('', null).optional(),
+  userRoleKind: Joi.string().valid(...ALL_COMPANY_USER_ROLE_KIND_VALUES).optional(),
   menuPermissions: Joi.array()
     .items(
       Joi.object({

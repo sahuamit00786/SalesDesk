@@ -60,10 +60,10 @@ export function LeadsTable({
   return (
     <div className="overflow-hidden rounded-xl border border-surface-border bg-white">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[1000px] text-xs">
-          <thead className="sticky top-0 z-10 bg-white">
-            <tr className="border-b border-surface-border/70">
-              <th className="w-10 px-2.5 py-2 text-left">
+        <table className="cx-table min-w-[1000px] text-xs">
+          <thead className="cx-table-sticky-head">
+            <tr>
+              <th className="w-12 align-middle">
                 <input
                   type="checkbox"
                   checked={rows.length > 0 && selected.length === rows.length}
@@ -71,14 +71,14 @@ export function LeadsTable({
                 />
               </th>
               {columns.map((col) => (
-                <th key={col.key} className="px-2.5 py-2 text-left text-[11px] font-semibold text-ink-muted">
+                <th key={col.key} className="align-middle">
                   {!col.sortable ? (
                     <span className="inline-flex items-center gap-1">{col.label}</span>
                   ) : (
                     <button
                       type="button"
                       onClick={() => onSort(col.sortField)}
-                      className="inline-flex items-center gap-1"
+                      className="inline-flex items-center gap-1 text-left text-inherit hover:text-brand-600"
                     >
                       {col.label}{' '}
                       <span className="opacity-40">
@@ -88,13 +88,13 @@ export function LeadsTable({
                   )}
                 </th>
               ))}
-              <th className="px-2.5 py-2 text-right text-[11px] font-semibold text-ink-muted">Actions</th>
+              <th className="cx-table-cell-actions text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={colCount} className="px-4 py-10 text-center">
+                <td colSpan={colCount} className="py-10 text-center align-middle">
                   <p className="text-sm font-medium text-ink">{isOpp ? 'No opportunities yet' : 'No leads yet'}</p>
                   <p className="mt-1 text-xs text-ink-muted">
                     {isOpp
@@ -105,52 +105,52 @@ export function LeadsTable({
               </tr>
             ) : (
               rows.map((lead) => (
-                <tr key={lead.id} className="group border-b border-surface-border last:border-b-0 hover:bg-brand-50">
-                  <td className="px-2.5 py-2">
+                <tr key={lead.id} className="group">
+                  <td className="align-middle">
                     <input type="checkbox" checked={selected.includes(lead.id)} onChange={() => onToggleRow(lead.id)} />
                   </td>
                   {isOpp ? (
                     <>
-                      <td className="px-2.5 py-2">
+                      <td>
                         <Link className="font-semibold text-ink hover:underline" to={`/opportunities/${lead.id}`}>
                           {lead.contactName || lead.title}
                         </Link>
-                        <p className="text-xs text-ink-muted">{lead.company || '-'}</p>
+                        <p className="mt-0.5 text-xs text-ink-muted">{lead.company || '-'}</p>
                       </td>
-                      <td className="px-2.5 py-2">
+                      <td>
                         <span className="inline-flex rounded-md border border-surface-border bg-surface-subtle px-1.5 py-0.5 text-[10px] font-semibold text-ink">
                           {formatStageLabel(lead.opportunityStage) || '—'}
                         </span>
                       </td>
-                      <td className="px-2.5 py-2">
+                      <td>
                         <LeadScorePill score={lead.score || 0} />
                       </td>
-                      <td className="px-2.5 py-2">
+                      <td>
                         <LeadSourceTag source={lead.source} />
                       </td>
-                      <td className="px-2.5 py-2 font-semibold text-ink">{formatINR(lead.value)}</td>
-                      <td className="px-2.5 py-2 text-ink-muted">{lead.assignee?.name || '-'}</td>
-                      <td className="px-2.5 py-2 text-ink-muted">{fromNow(lead.updatedAt)}</td>
+                      <td className="font-semibold text-ink">{formatINR(lead.value)}</td>
+                      <td className="text-ink-muted">{lead.assignee?.name || '-'}</td>
+                      <td className="text-ink-muted">{fromNow(lead.updatedAt)}</td>
                     </>
                   ) : (
                     <>
-                      <td className="px-2.5 py-2">
+                      <td>
                         <Link className="font-semibold text-ink hover:underline" to={`/leads/${lead.id}`}>
                           {lead.contactName || lead.title}
                         </Link>
-                        <p className="text-xs text-ink-muted">{lead.company || '-'}</p>
+                        <p className="mt-0.5 text-xs text-ink-muted">{lead.company || '-'}</p>
                       </td>
-                      <td className="px-2.5 py-2">
+                      <td>
                         <LeadStatusBadge status={lead.status} pipelineStage={lead.opportunityStage} />
                       </td>
-                      <td className="px-2.5 py-2">
+                      <td>
                         <LeadScorePill score={lead.score || 0} />
                       </td>
-                      <td className="px-2.5 py-2">
+                      <td>
                         <LeadSourceTag source={lead.source} />
                       </td>
-                      <td className="px-2.5 py-2 font-semibold text-ink">{formatINR(lead.value)}</td>
-                      <td className="px-2.5 py-2">
+                      <td className="font-semibold text-ink">{formatINR(lead.value)}</td>
+                      <td>
                         {lead.isOpportunity ? (
                           <span className="inline-flex rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900">
                             Opportunity
@@ -159,11 +159,11 @@ export function LeadsTable({
                           <span className="text-ink-muted">—</span>
                         )}
                       </td>
-                      <td className="px-2.5 py-2 text-ink-muted">{lead.assignee?.name || '-'}</td>
-                      <td className="px-2.5 py-2 text-ink-muted">{fromNow(lead.updatedAt)}</td>
+                      <td className="text-ink-muted">{lead.assignee?.name || '-'}</td>
+                      <td className="text-ink-muted">{fromNow(lead.updatedAt)}</td>
                     </>
                   )}
-                  <td className="px-2.5 py-2 text-right">
+                  <td className="cx-table-cell-actions text-right">
                     <div className="inline-flex gap-1 opacity-100 transition">
                       <button
                         type="button"

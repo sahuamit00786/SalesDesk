@@ -1,15 +1,32 @@
+/** Dashboard is available to every company user regardless of role menu matrix. */
+const DASHBOARD_ALLOWED_MENU = {
+  key: 'main.dashboard',
+  route: '/',
+  label: 'Dashboard',
+  parentId: null,
+}
+
+function withDashboardMenuAlways(allowedMenus) {
+  const base = Array.isArray(allowedMenus) ? [...allowedMenus] : []
+  if (base.some((m) => m && (m.route === '/' || m.key === 'main.dashboard'))) return base
+  return [DASHBOARD_ALLOWED_MENU, ...base]
+}
+
 export function serializeUser(user) {
   const c = user.company
   const companyRole = user.companyRole
   const memberships = Array.isArray(user.workspaceMemberships) ? user.workspaceMemberships : []
   const companyName = c?.name ?? null
   const needsOnboarding = Boolean(user.companyId && (!c || !c.onboardingCompletedAt))
-  const allowedMenus = Array.isArray(companyRole?.menuLinks)
+  let allowedMenus = Array.isArray(companyRole?.menuLinks)
     ? companyRole.menuLinks
         .map((l) => l.menu)
         .filter(Boolean)
         .map((m) => ({ key: m.key, route: m.route, label: m.label, parentId: m.parentId || null }))
     : []
+  if (user.isCompanyAdmin) {
+    allowedMenus = allowedMenus.length ? allowedMenus : [DASHBOARD_ALLOWED_MENU]
+  }
   const memberWorkspaces = memberships
     .map((m) => m.workspace)
     .filter(Boolean)
@@ -38,6 +55,8 @@ export function serializeUser(user) {
           id: companyRole.id,
           name: companyRole.name,
           description: companyRole.description ?? null,
+          userRoleKind: companyRole.userRoleKind || 'custom',
+          roleNo: companyRole.roleNo != null ? Number(companyRole.roleNo) : null,
         }
       : null,
     companyRoleId: user.companyRoleId ?? null,
@@ -73,6 +92,6 @@ export function serializeUser(user) {
     needsOnboarding,
     emailVerified: Boolean(user.emailVerified),
     isActive: user.isActive !== false,
-    allowedMenus,
+    allowedMenus: withDashboardMenuAlways(allowedMenus),
   }
 }

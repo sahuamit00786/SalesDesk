@@ -1,9 +1,16 @@
 'use strict'
 
+const { addIndexIfMissing } = require('../migration-helpers.cjs')
+
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.createTable('deal_activities', {
+    const tables = await queryInterface.showAllTables()
+    const names = tables.map((t) => (typeof t === 'string' ? t : t.tableName || t))
+    const has = names.includes('deal_activities')
+
+    if (!has) {
+      await queryInterface.createTable('deal_activities', {
       id: {
         type: Sequelize.UUID,
         allowNull: false,
@@ -43,7 +50,11 @@ module.exports = {
         defaultValue: Sequelize.fn('NOW'),
       },
     })
-    await queryInterface.addIndex('deal_activities', ['deal_id'], { name: 'deal_activities_deal_id_idx' })
+    }
+
+    await addIndexIfMissing(queryInterface, 'deal_activities', ['deal_id'], {
+      name: 'deal_activities_deal_id_idx',
+    })
   },
 
   async down(queryInterface) {

@@ -8,7 +8,16 @@
   }
 }
 
-/* 2px, very light thumb (Tailwind gray-100) — WebKit + Firefox */
+/* LeadFlow AI marketing (public landing) */
+.leadflow-landing {
+  --lf-hero-glow: rgba(147, 51, 234, 0.35);
+  --lf-cyan: rgba(56, 189, 248, 0.25);
+}
+
+.leadflow-mask-x {
+  mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
+}
+
 @layer utilities {
   .scrollbar-subtle {
     scrollbar-width: thin;
@@ -34,10 +43,97 @@
   }
 }
 
+@layer components {
+  /**
+   * Connexify data tables — horizontal rules only, tall rows, muted uppercase header.
+   * Scope all rules under .cx-table so arbitrary markdown/HTML tables stay untouched.
+   */
+  .cx-table {
+    @apply w-full border-collapse text-left text-sm text-ink;
+  }
+
+  .cx-table thead {
+    @apply border-b border-slate-200 bg-slate-50/95;
+  }
+
+  .cx-table thead.cx-table-sticky-head {
+    @apply sticky top-0 z-[1] shadow-sm backdrop-blur-sm;
+  }
+
+  .cx-table thead th {
+    @apply px-4 py-3.5 text-left align-middle text-[11px] font-semibold uppercase tracking-wide text-ink-muted;
+  }
+
+  .cx-table tbody {
+    @apply divide-y-0;
+  }
+
+  .cx-table tbody tr {
+    @apply border-b border-slate-200 transition-colors last:border-b-0;
+  }
+
+  .cx-table tbody tr:hover {
+    @apply bg-slate-50/80;
+  }
+
+  .cx-table tbody td {
+    @apply px-4 py-4 align-top;
+  }
+
+  .cx-table tbody td.cx-table-cell-actions {
+    @apply align-middle;
+  }
+
+  .cx-table--dense thead th {
+    @apply px-3 py-2;
+  }
+
+  .cx-table--dense tbody td {
+    @apply px-3 py-2.5;
+  }
+
+  /**
+   * Invoice / quotation preview: use cx-table row rhythm + borders; thead styling comes from `tc.thead` on the header row.
+   */
+  .sales-doc .cx-table.cx-table--sales-lines thead {
+    @apply border-0 bg-transparent p-0 shadow-none backdrop-blur-none;
+  }
+
+  .sales-doc .cx-table.cx-table--sales-lines thead th {
+    @apply border-0 bg-transparent px-0 py-2 text-left align-middle text-sm font-semibold normal-case tracking-wide text-inherit;
+  }
+}
+
 .template-rte:empty::before {
   content: attr(data-placeholder);
   color: #8b93a8;
   pointer-events: none;
+}
+
+.template-rte p {
+  margin: 0 0 0.85em;
+  line-height: 1.65;
+}
+
+.template-rte ul,
+.template-rte ol {
+  margin: 0 0 0.85em;
+  padding-left: 1.35em;
+}
+
+.template-email-preview p {
+  margin: 0 0 1em;
+  line-height: 1.65;
+}
+
+.template-email-preview ul,
+.template-email-preview ol {
+  margin: 0 0 1em;
+  padding-left: 1.35em;
+}
+
+.template-email-preview li {
+  margin: 0 0 0.35em;
 }
 
 /* Calendar custom styles */
@@ -244,23 +340,24 @@
   }
 }
 
-/* react-phone-number-input — Connexify field styling */
+/* react-phone-number-input — matches Input (slate border, brand focus) */
 .PhoneInput.PhoneInput--connexify {
   display: flex;
   align-items: stretch;
   gap: 0.35rem;
   border-radius: 0.75rem;
-  border: 1px solid #e3e7f0;
+  border: 1px solid #cbd5e1;
   background: #fff;
+  box-shadow: 0 1px 2px 0 rgb(15 23 42 / 0.04);
   padding: 0 0.25rem 0 0.35rem;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .PhoneInput.PhoneInput--connexify:hover {
-  border-color: #c7d2fe;
+  border-color: #94a3b8;
 }
 .PhoneInput.PhoneInput--connexify:focus-within {
-  border-color: #3b73f5;
-  box-shadow: 0 0 0 2px rgba(59, 115, 245, 0.18);
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.12);
 }
 .PhoneInput.PhoneInput--connexify .PhoneInputCountry {
   margin-right: 0;

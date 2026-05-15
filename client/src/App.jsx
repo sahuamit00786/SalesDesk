@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { RequireAuth } from '@/components/auth/RequireAuth'
 import { RequireOnboarded } from '@/components/auth/RequireOnboarded'
+import { SessionSync } from '@/components/auth/SessionSync'
 import { LoginPage } from '@/pages/LoginPage'
 import { ModulePlaceholderPage } from '@/pages/ModulePlaceholderPage'
 import { WorkspacePage } from '@/pages/WorkspacePage'
@@ -42,9 +43,15 @@ import { CampaignDetailPage } from '@/pages/CampaignDetailPage'
 import { WorkflowsListPage } from '@/pages/WorkflowsListPage'
 import { WorkflowNewPage } from '@/pages/WorkflowNewPage'
 import { WorkflowEditorPage } from '@/pages/WorkflowEditorPage'
+import { LeadFlowLandingPage } from '@/pages/LeadFlowLandingPage'
+import { AttendancePage } from '@/pages/AttendancePage'
+import { LeavePage } from '@/pages/LeavePage'
+import { LeaveRequestsPage } from '@/pages/LeaveRequestsPage'
+import { LeaveApprovalPage } from '@/pages/LeaveApprovalPage'
+import { LeaveConfigPage } from '@/pages/LeaveConfigPage'
 
 const APP_PATHS = [
-  '/',
+  '/dashboard',
   '/leads',
   '/contacts',
   '/companies',
@@ -68,6 +75,11 @@ const APP_PATHS = [
   '/lead-distribution',
   '/team',
   '/integrations',
+  '/attendance',
+  '/leave',
+  '/leave/requests',
+  '/leave/approval',
+  '/leave/config',
   '/meetings',
   '/calendar',
   '/quotations',
@@ -81,17 +93,19 @@ const APP_PATHS = [
 export default function App() {
   return (
     <Routes>
+      <Route path="/" element={<LeadFlowLandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/accept-invite" element={<AcceptInvitePage />} />
       <Route element={<RequireAuth />}>
+        <Route element={<SessionSync />}>
         <Route path="/onboarding" element={<OnboardingPage />} />
         <Route element={<RequireOnboarded />}>
-            <Route path="/" element={<DashboardPage />} />
+            <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/workspace" element={<WorkspacePage />} />
             {APP_PATHS.filter(
               (path) =>
-                path !== '/' &&
+                path !== '/dashboard' &&
                 path !== '/workspace' &&
                 path !== '/team' &&
                 path !== '/leads' &&
@@ -118,7 +132,12 @@ export default function App() {
                 path !== '/campaigns' &&
                 path !== '/campaigns/new' &&
                 path !== '/automation' &&
-                path !== '/automation/new',
+                path !== '/automation/new' &&
+                path !== '/attendance' &&
+                path !== '/leave' &&
+                path !== '/leave/requests' &&
+                path !== '/leave/approval' &&
+                path !== '/leave/config',
             ).map((path) => (
               <Route key={path} path={path} element={<ModulePlaceholderPage />} />
             ))}
@@ -152,6 +171,11 @@ export default function App() {
             <Route path="/invoices/templates" element={<InvoiceTemplatesPage />} />
             <Route path="/invoices/:id/print" element={<InvoicePrintPage />} />
             <Route path="/lead-configuration" element={<LeadConfigurationPage />} />
+            <Route path="/attendance" element={<AttendancePage />} />
+            <Route path="/leave" element={<LeavePage />} />
+            <Route path="/leave/requests" element={<LeaveRequestsPage />} />
+            <Route path="/leave/approval" element={<LeaveApprovalPage />} />
+            <Route path="/leave/config" element={<LeaveConfigPage />} />
             <Route path="/team" element={<TeamPage />} />
             <Route path="/team/:userId" element={<TeamMemberProfilePage />} />
             <Route path="/integrations" element={<IntegrationsPage />} />
@@ -160,6 +184,7 @@ export default function App() {
             <Route path="/forms/:id/builder" element={<FormBuilderPage />} />
             <Route path="/analytics" element={<Navigate to="/reports" replace />} />
             <Route path="/settings" element={<Navigate to="/workspace" replace />} />
+        </Route>
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

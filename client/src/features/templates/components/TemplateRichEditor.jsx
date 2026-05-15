@@ -1,4 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
+import { mergeTagToken } from '@/features/templates/mergeTags'
 import {
   AlignCenter,
   AlignLeft,
@@ -21,7 +22,7 @@ const TOOLBAR_BUTTON =
  *
  * Mention behavior is handled by the parent: it listens to onCaretChange to know
  * the current caret rect, watches the editor's text for `@query` patterns via
- * onTextChange, and inserts `{{field}}` via the imperative `insertMergeTag` /
+ * onTextChange, and inserts `@field` via the imperative `insertMergeTag` /
  * `replaceMentionToken` handle.
  */
 export const TemplateRichEditor = forwardRef(function TemplateRichEditor(
@@ -47,7 +48,7 @@ export const TemplateRichEditor = forwardRef(function TemplateRichEditor(
     getElement() {
       return editorRef.current
     },
-    /** Replace the `@query` token at the current selection with `{{field}}`. */
+    /** Replace the `@query` token at the current selection with `@field`. */
     replaceMentionToken(query, field) {
       const el = editorRef.current
       if (!el) return
@@ -57,7 +58,7 @@ export const TemplateRichEditor = forwardRef(function TemplateRichEditor(
       const range = sel.getRangeAt(0)
       const node = range.startContainer
       if (node.nodeType !== Node.TEXT_NODE) {
-        insertTextAtCursor(`{{${field}}}`)
+        insertTextAtCursor(mergeTagToken(field))
         emit()
         return
       }
@@ -67,7 +68,7 @@ export const TemplateRichEditor = forwardRef(function TemplateRichEditor(
       const start = Math.max(0, cursor - tokenLen)
       const before = text.slice(0, start)
       const after = text.slice(cursor)
-      const insertion = `{{${field}}}`
+      const insertion = mergeTagToken(field)
       node.textContent = `${before}${insertion}${after}`
       const newRange = document.createRange()
       newRange.setStart(node, before.length + insertion.length)

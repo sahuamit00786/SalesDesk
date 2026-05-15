@@ -20,6 +20,7 @@ import toast from 'react-hot-toast'
 import { PageShell } from '@/components/layout/PageShell'
 import { Loader } from '@/components/shared/Loader'
 import { CalendarWorkspace } from '@/features/calendar/components/CalendarWorkspace'
+import { TaskAttachmentIcons } from '@/features/leads/components/TaskAttachmentIcons'
 import { usePatchLeadTaskMutation } from '@/features/leads/leadsApi'
 import { useGetTasksQuery } from '@/features/tasks/tasksApi'
 import { cn } from '@/utils/cn'
@@ -213,11 +214,11 @@ function TaskRow({
     <>
       <tr
         className={cn(
-          'group border-b border-[#E5E7EB] bg-white transition-colors hover:bg-[#F9FAFB]',
+          'group bg-white transition-colors',
           parentCancelled && 'opacity-70',
         )}
       >
-        <td className="max-w-0 overflow-hidden px-2 py-1.5 align-middle" style={{ paddingLeft: `${8 + padLeft}px` }}>
+        <td className="max-w-0 overflow-hidden align-middle" style={{ paddingLeft: `${8 + padLeft}px` }}>
           <div className="relative flex min-w-0 items-center gap-1">
             {depth > 0 ? (
               <>
@@ -259,19 +260,20 @@ function TaskRow({
               {!isChild && task.lead?.title ? (
                 <p className="truncate text-[10px] text-gray-400">Lead: {task.lead.title}</p>
               ) : null}
+              {!isChild ? <TaskAttachmentIcons attachments={task.attachments} variant="compact" className="mt-1" /> : null}
             </div>
           </div>
         </td>
-        <td className="max-w-0 overflow-hidden px-2 py-1.5 align-middle">
+        <td className="max-w-0 overflow-hidden align-middle">
           {description ? <p className="line-clamp-2 break-words text-xs text-gray-500">{description}</p> : <span className="text-xs text-gray-400">—</span>}
         </td>
-        <td className="px-2 py-1.5 align-middle text-center">
+        <td className="align-middle text-center">
           <div className="flex justify-center">
             <AvatarStack people={assignees} />
           </div>
         </td>
-        <td className="whitespace-nowrap px-2 py-1.5 align-middle text-left text-xs text-gray-700">{dueLabel}</td>
-        <td className="whitespace-nowrap px-2 py-1.5 align-middle text-center">
+        <td className="whitespace-nowrap align-middle text-left text-xs text-gray-700">{dueLabel}</td>
+        <td className="whitespace-nowrap align-middle text-center">
           {overdue ? (
             <span className="inline-flex items-center justify-center gap-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-600">
               <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden />
@@ -281,19 +283,19 @@ function TaskRow({
             <span className="text-xs text-gray-400">—</span>
           )}
         </td>
-        <td className="whitespace-nowrap px-2 py-1.5 align-middle text-left">
+        <td className="whitespace-nowrap align-middle text-left">
           <span className="inline-flex items-center gap-1 text-xs">
             <Flag className={cn('h-3.5 w-3.5 fill-current', pri.flagClass)} strokeWidth={1.5} />
             <span className={cn('font-medium', pri.textClass)}>{pri.label}</span>
           </span>
         </td>
-        <td className="max-w-0 overflow-hidden px-2 py-1.5 align-middle text-left">
+        <td className="max-w-0 overflow-hidden align-middle text-left">
           <div className="flex min-w-0 items-center gap-1">
             <ProgressRing value={pct} size={22} />
             <span className="min-w-0 truncate text-xs text-gray-600">{label}</span>
           </div>
         </td>
-        <td className="w-11 shrink-0 px-1 py-1.5 align-middle text-right">
+        <td className="cx-table-cell-actions w-11 shrink-0 text-right">
           {!isChild && task.leadId ? (
             <Link
               to={`/leads/${task.leadId}`}
@@ -599,18 +601,18 @@ export function TasksPage() {
                     </div>
                     {openSections[section.id] ? (
                       <div className="scrollbar-subtle overflow-x-auto">
-                        <table className="w-full min-w-[960px] table-fixed border-collapse text-left">
+                        <table className="cx-table cx-table--dense min-w-[960px] table-fixed">
                           <TasksTableColGroup />
-                          <thead>
-                            <tr className="border-b border-[#E5E7EB] bg-[#FAFAFA] text-[10px] font-semibold uppercase tracking-wide text-gray-500">
-                              <th className="px-2 py-1.5 text-left">Task</th>
-                              <th className="px-2 py-1.5 text-left">Description</th>
-                              <th className="px-2 py-1.5 text-center">Assignee</th>
-                              <th className="whitespace-nowrap px-2 py-1.5 text-left">Due date</th>
-                              <th className="whitespace-nowrap px-2 py-1.5 text-center">Overdue</th>
-                              <th className="whitespace-nowrap px-2 py-1.5 text-left">Priority</th>
-                              <th className="whitespace-nowrap px-2 py-1.5 text-left">Progress</th>
-                              <th className="w-11 px-1 py-1.5 text-right" aria-label="Actions" />
+                          <thead className="cx-table-sticky-head">
+                            <tr>
+                              <th>Task</th>
+                              <th>Description</th>
+                              <th className="text-center">Assignee</th>
+                              <th className="whitespace-nowrap text-left">Due date</th>
+                              <th className="whitespace-nowrap text-center">Overdue</th>
+                              <th className="whitespace-nowrap text-left">Priority</th>
+                              <th className="whitespace-nowrap text-left">Progress</th>
+                              <th className="cx-table-cell-actions w-11 text-right" aria-label="Actions" />
                             </tr>
                           </thead>
                           <tbody>

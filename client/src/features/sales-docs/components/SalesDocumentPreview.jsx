@@ -381,25 +381,25 @@ export function SalesDocumentPreview({
 
       <div className="shrink-0 px-8 pb-6">
         <div className={cn(tc.wrap)}>
-          <table className="w-full border-collapse text-sm">
+          <table className={cn('cx-table cx-table--dense cx-table--sales-lines text-sm', tc.wrap)}>
             <thead>
               <tr className={cn('text-left', tc.thead)}>
-                <th className="py-2 pr-2">Item</th>
-                <th className="py-2 pr-2 text-right">Qty</th>
-                <th className="py-2 pr-2 text-right">Price</th>
-                <th className="py-2 text-right">Total</th>
+                <th className="pr-2">Item</th>
+                <th className="pr-2 text-right">Qty</th>
+                <th className="pr-2 text-right">Price</th>
+                <th className="text-right">Total</th>
               </tr>
             </thead>
             <tbody>
               {lines.map((row, i) => (
                 <tr key={i} className={tc.row}>
-                  <td className="py-2.5 pr-2 align-top">
+                  <td className="pr-2">
                     <span className="font-medium">{row.name}</span>
                     {row.description ? <p className="mt-0.5 text-xs text-neutral-500">{row.description}</p> : null}
                   </td>
-                  <td className="py-2.5 pr-2 text-right tabular-nums align-top">{row.quantity}</td>
-                  <td className="py-2.5 pr-2 text-right tabular-nums align-top">{fmtMoney(row.unitPrice, currency)}</td>
-                  <td className="py-2.5 text-right tabular-nums align-top font-medium">{fmtMoney(row.lineTotal, currency)}</td>
+                  <td className="pr-2 text-right tabular-nums">{row.quantity}</td>
+                  <td className="pr-2 text-right tabular-nums">{fmtMoney(row.unitPrice, currency)}</td>
+                  <td className="text-right tabular-nums font-medium">{fmtMoney(row.lineTotal, currency)}</td>
                 </tr>
               ))}
             </tbody>

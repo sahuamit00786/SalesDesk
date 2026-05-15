@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { format } from 'date-fns'
-import { Video, CheckSquare, Phone, TrendingUp, Bell } from 'lucide-react'
+import { Video, CheckSquare, Phone, TrendingUp, Bell, Paperclip } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { TaskEventHoverCard } from '@/features/calendar/components/TaskEventHoverCard'
 import { MeetingEventHoverCard } from '@/features/calendar/components/MeetingEventHoverCard'
@@ -107,6 +107,9 @@ export function EventChip({ event, onClick, view = 'week' }) {
     ? `${format(start, 'HH:mm')}${end ? ` - ${format(end, 'HH:mm')}` : ''}`
     : ''
 
+  const showTaskAttachmentGlyph =
+    event.kind === 'task' && Array.isArray(event.meta?.attachments) && event.meta.attachments.length > 0
+
   const renderMeetingStrip = () => {
     if (view === 'month') {
       return (
@@ -207,9 +210,12 @@ export function EventChip({ event, onClick, view = 'week' }) {
           : view === 'day'
           ? (
             <>
-              <div className="flex items-center gap-1.5">
-                <EventIcon className="w-3.5 h-3.5 shrink-0" />
+              <div className="flex min-w-0 items-center gap-1.5">
+                <EventIcon className="h-3.5 w-3.5 shrink-0" />
                 <span className="truncate">{event.title}</span>
+                {showTaskAttachmentGlyph ? (
+                  <Paperclip className="h-3 w-3 shrink-0 opacity-70" aria-hidden title="Has attachments" />
+                ) : null}
               </div>
               <div className="text-[10px] font-medium opacity-80">{compactTime}</div>
             </>
@@ -217,17 +223,25 @@ export function EventChip({ event, onClick, view = 'week' }) {
           : view === 'week'
           ? (
             <>
-              <EventIcon className="w-3.5 h-3.5 shrink-0 mt-0.5" />
               <div className="min-w-0">
-                <div className="truncate">{event.title}</div>
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <EventIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">{event.title}</span>
+                  {showTaskAttachmentGlyph ? (
+                    <Paperclip className="mt-0.5 h-3 w-3 shrink-0 opacity-70" aria-hidden title="Has attachments" />
+                  ) : null}
+                </div>
                 <div className="text-[10px] font-medium opacity-80">{compactTime}</div>
               </div>
             </>
           )
           : (
             <>
-              <EventIcon className="w-3 h-3 shrink-0" />
+              <EventIcon className="h-3 w-3 shrink-0" />
               <span className="truncate">{event.title}</span>
+              {showTaskAttachmentGlyph ? (
+                <Paperclip className="h-2.5 w-2.5 shrink-0 opacity-70" aria-hidden title="Has attachments" />
+              ) : null}
             </>
           )}
       </div>

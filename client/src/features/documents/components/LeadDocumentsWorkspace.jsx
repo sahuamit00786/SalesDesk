@@ -1,10 +1,9 @@
 import { useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Search, Upload, X, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react'
+import { Search, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { RightDrawer } from '@/components/ui/RightDrawer'
-import { cn } from '@/utils/cn'
 import {
   DOCUMENT_TYPES,
   useGetDocumentsQuery,
@@ -12,7 +11,7 @@ import {
   usePatchDocumentMutation,
 } from '@/features/documents/documentsApi'
 import { DocumentCard, DOC_CARD_GRID } from '@/features/documents/components/DocumentCard'
-import { formatSize, getDocumentKind, getFileUrl } from '@/features/documents/documentUtils'
+import { DocumentPreviewDialog } from '@/features/documents/components/DocumentPreviewDialog'
 
 const SORT_OPTIONS = [
   { value: 'created_desc', label: 'Newest first' },
@@ -62,7 +61,6 @@ export function LeadDocumentsWorkspace({ leadId, showUpload = true }) {
   const [sort, setSort] = useState('created_desc')
   const [selectedIds, setSelectedIds] = useState([])
   const [viewerDocument, setViewerDocument] = useState(null)
-  const [imageZoom, setImageZoom] = useState(1)
 
   const [uploadForm, setUploadForm] = useState({
     file: null,
@@ -107,12 +105,10 @@ export function LeadDocumentsWorkspace({ leadId, showUpload = true }) {
 
   const openViewer = (row) => {
     setViewerDocument(row)
-    setImageZoom(1)
   }
 
   const closeViewer = () => {
     setViewerDocument(null)
-    setImageZoom(1)
   }
 
   const openEdit = (row) => {
@@ -378,78 +374,7 @@ export function LeadDocumentsWorkspace({ leadId, showUpload = true }) {
         </div>
       </RightDrawer>
 
-      {viewerDocument ? (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
-          <button type="button" onClick={closeViewer} className="absolute inset-0 bg-ink/60 backdrop-blur-[2px]" aria-label="Close preview" />
-          <div className="relative z-[121] flex h-[90dvh] w-[min(96vw,1100px)] flex-col overflow-hidden rounded-2xl border border-surface-border bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-surface-border px-4 py-3">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-ink">{viewerDocument.name}</p>
-                <p className="text-xs text-ink-muted">
-                  {formatSize(viewerDocument.fileSize)} • {viewerDocument.uploader?.name || viewerDocument.uploader?.email || '—'}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                {getDocumentKind(viewerDocument) === 'image' ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => setImageZoom((z) => Math.max(0.5, Number((z - 0.2).toFixed(2))))}
-                      className="rounded-lg border border-surface-border p-2 hover:bg-surface-muted"
-                      aria-label="Zoom out"
-                    >
-                      <ZoomOut className="h-4 w-4 text-ink-muted" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setImageZoom(1)}
-                      className="rounded-lg border border-surface-border p-2 hover:bg-surface-muted"
-                      aria-label="Reset zoom"
-                    >
-                      <RotateCcw className="h-4 w-4 text-ink-muted" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setImageZoom((z) => Math.min(4, Number((z + 0.2).toFixed(2))))}
-                      className="rounded-lg border border-surface-border p-2 hover:bg-surface-muted"
-                      aria-label="Zoom in"
-                    >
-                      <ZoomIn className="h-4 w-4 text-ink-muted" />
-                    </button>
-                  </>
-                ) : null}
-                <a
-                  href={getFileUrl(viewerDocument.filePath)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="rounded-lg border border-surface-border px-3 py-2 text-xs font-semibold text-ink hover:bg-surface-muted"
-                >
-                  Open original
-                </a>
-                <button type="button" onClick={closeViewer} className="rounded-lg border border-surface-border p-2 hover:bg-surface-muted" aria-label="Close">
-                  <X className="h-4 w-4 text-ink-muted" />
-                </button>
-              </div>
-            </div>
-            <div className="scrollbar-subtle min-h-0 flex-1 overflow-auto bg-surface-muted p-4">
-              {getDocumentKind(viewerDocument) === 'image' ? (
-                <div className="flex min-h-full items-center justify-center">
-                  <img
-                    src={getFileUrl(viewerDocument.filePath)}
-                    alt={viewerDocument.name}
-                    className="max-h-none max-w-none rounded-lg border border-surface-border bg-white shadow-sm"
-                    style={{ transform: `scale(${imageZoom})`, transformOrigin: 'center center' }}
-                  />
-                </div>
-              ) : (
-                <div className="h-full min-h-[70vh] overflow-auto rounded-lg border border-surface-border bg-white">
-                  <iframe src={getFileUrl(viewerDocument.filePath)} title={viewerDocument.name} className="h-full min-h-[70vh] w-full" />
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <DocumentPreviewDialog document={viewerDocument} onClose={closeViewer} />
     </div>
   )
 }

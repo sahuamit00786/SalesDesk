@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import DOMPurify from 'dompurify'
 import { useSelector } from 'react-redux'
 import { File as FileIcon, FileText, Image as ImageIcon, Paperclip, Star } from 'lucide-react'
+import { fillMergeTags } from '@/features/templates/mergeTags'
 
 function formatSize(bytes) {
   const num = Number(bytes) || 0
@@ -38,8 +39,8 @@ export function EmailPreviewCard({ subject, bodyHtml, attachments = [], sampleVa
   const initials = initialsFromName(senderName || senderEmail)
   const photoUrl = authUser?.profilePhotoUrl || null
 
-  const filledSubject = useMemo(() => fillTokens(subject, sampleValues), [subject, sampleValues])
-  const filledBody = useMemo(() => fillTokens(bodyHtml, sampleValues), [bodyHtml, sampleValues])
+  const filledSubject = useMemo(() => fillMergeTags(subject, sampleValues), [subject, sampleValues])
+  const filledBody = useMemo(() => fillMergeTags(bodyHtml, sampleValues), [bodyHtml, sampleValues])
 
   const cleanBody = useMemo(
     () =>
@@ -92,7 +93,7 @@ export function EmailPreviewCard({ subject, bodyHtml, attachments = [], sampleVa
       <div className="border-t border-surface-border px-5 py-4">
         {cleanBody ? (
           <div
-            className="prose prose-sm max-w-none text-ink"
+            className="template-email-preview prose prose-sm max-w-none text-ink text-sm"
             dangerouslySetInnerHTML={{ __html: cleanBody }}
           />
         ) : (
@@ -128,8 +129,3 @@ export function EmailPreviewCard({ subject, bodyHtml, attachments = [], sampleVa
   )
 }
 
-function fillTokens(input, values) {
-  return String(input || '').replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_m, k) => {
-    return values?.[k] != null ? String(values[k]) : ''
-  })
-}

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useDispatch } from 'react-redux'
 import { useLocation, useNavigate, useParams, Link } from 'react-router-dom'
 import DOMPurify from 'dompurify'
 import toast from 'react-hot-toast'
@@ -7,7 +8,6 @@ import {
   Bell,
   Bold,
   CalendarCheck2,
-  CalendarClock,
   CheckSquare,
   ChevronRight,
   ClipboardList,
@@ -34,10 +34,15 @@ import {
   Tag,
   User,
   UserCircle2,
+  X,
 } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
+import { Select } from '@/components/ui/Select'
+import { IconInput, IconTextarea } from '@/components/ui/IconInput'
 import { AddLeadModal } from '@/features/leads/components/AddLeadModal'
+import { TaskAttachmentIcons } from '@/features/leads/components/TaskAttachmentIcons'
 import { LeadFollowupsTab } from '@/features/leads/components/LeadFollowupsTab'
+import { LeadTabEmptyState, LeadTabSectionHeader } from '@/features/leads/components/LeadTabSectionHeader'
 import { LeadRichNotesEditor } from '@/features/leads/components/LeadRichNotesEditor'
 import {
   LeadTaskDrawer,
@@ -51,6 +56,8 @@ import { LeadScorePill } from '@/features/leads/components/LeadScorePill'
 import { LeadSourceTag } from '@/features/leads/components/LeadSourceTag'
 import { LeadTagsInput } from '@/features/leads/components/LeadTagsInput'
 import { LeadDocumentsWorkspace } from '@/features/documents/components/LeadDocumentsWorkspace'
+import { getFileUrl } from '@/features/documents/documentUtils'
+import { useUploadDocumentMutation } from '@/features/documents/documentsApi'
 import {
   useCreateLeadActivityMutation,
   useCreateLeadTagMutation,
@@ -72,6 +79,7 @@ import {
   useSendLeadEmailMutation,
   useSyncLeadEmailsMutation,
   useUpdateLeadMutation,
+  leadsApi,
 } from '@/features/leads/leadsApi'
 import GmailThreadList from '@/features/gmail/GmailThreadList'
 import GmailThreadView from '@/features/gmail/GmailThreadView'
@@ -89,6 +97,7 @@ import {
   useGetMeetingsQuery,
   useDeleteMeetingMutation,
 } from '@/features/meetings/meetingsApi'
+import { CreateMeetingModal } from '@/features/meetings/components/CreateMeetingModal'
 
 const NOTE_HTML = {
   ALLOWED_TAGS: ['b', 'strong', 'i', 'em', 'u', 'br', 'p', 'div', 'span', 'ul', 'ol', 'li', 'a', 'img'],
@@ -105,6 +114,17 @@ function notePlainText(html) {
   return (div.textContent || '').trim()
 }
 
+/** True if the note has visible text or a kept image/link after sanitization */
+function noteHasRenderableContent(html) {
+  const sanitized = sanitizeNoteBody(html || '')
+  const div = document.createElement('div')
+  div.innerHTML = sanitized
+  if ((div.textContent || '').trim()) return true
+  if (div.querySelector('img[src]')) return true
+  if (div.querySelector('a[href]')) return true
+  return false
+}
+
 function noteBodyToInitialHtml(body) {
   const raw = (body || '').trim()
   if (!raw) return ''
@@ -116,6 +136,46 @@ function noteBodyToInitialHtml(body) {
       return `<p>${esc || '<br>'}</p>`
     })
     .join('')
+}
+
+/** Sanitize note HTML and fix upload paths so images/links resolve in the browser. */
+function sanitizeNoteHtmlForDisplay(raw) {
+  const clean = sanitizeNoteBody(noteBodyToInitialHtml(raw || ''))
+  const div = document.createElement('div')
+  div.innerHTML = clean
+  div.querySelectorAll('img[src]').forEach((img) => {
+    const cur = (img.getAttribute('src') || '').trim()
+    const next = getFileUrl(cur) || cur
+    if (next) img.setAttribute('src', next)
+  })
+  div.querySelectorAll('a[href]').forEach((a) => {
+    const cur = (a.getAttribute('href') || '').trim()
+    const next = getFileUrl(cur) || cur
+    if (next) a.setAttribute('href', next)
+  })
+  return div.innerHTML
+}
+
+/** Pull img / upload links from sanitized note HTML for compact attachment chips. */
+function extractNoteEmbedsFromSanitizedHtml(html) {
+  if (typeof document === 'undefined') return []
+  const div = document.createElement('div')
+  div.innerHTML = String(html || '')
+  const out = []
+  let i = 0
+  div.querySelectorAll('img[src]').forEach((img) => {
+    const src = (img.getAttribute('src') || '').trim()
+    if (!src) return
+    const name = (img.getAttribute('alt') || '').trim() || 'Image'
+    out.push({ id: `note-embed-${i++}`, name, filePath: src })
+  })
+  div.querySelectorAll('a[href]').forEach((a) => {
+    const href = (a.getAttribute('href') || '').trim()
+    if (!href.includes('/uploads/')) return
+    const name = (a.textContent || '').trim() || 'Attachment'
+    out.push({ id: `note-embed-${i++}`, name, filePath: href })
+  })
+  return out
 }
 
 function activityPlainBody(value) {
@@ -213,10 +273,27 @@ function activityPresentation(activityType) {
   return ACTIVITY_STYLE[activityType] || ACTIVITY_STYLE.system
 }
 
+/** Map `metadata.action` from system activities → timeline visual bucket (before loose text heuristics). */
+function inferStyleKeyFromSystemAction(action) {
+  const a = String(action || '').toLowerCase()
+  if (!a) return null
+  if (a.startsWith('task_')) return 'task'
+  if (a.startsWith('note_')) return 'note'
+  if (a.startsWith('followup_')) return 'follow_up'
+  return null
+}
+
 function detectActivityVisualKey(activity, headline = '', detail = '') {
-  const fromMeta = String(activity?.metadata?.activityTypeKey || '').toLowerCase()
+  const md = activity?.metadata || {}
+  const fromMeta = String(md.activityTypeKey || '').toLowerCase()
   if (fromMeta && fromMeta !== 'system' && ACTIVITY_STYLE[fromMeta]) return fromMeta
+
+  const fromAction = inferStyleKeyFromSystemAction(md.action)
+  if (fromAction) return fromAction
+
   const fromType = String(activity?.type || '').toLowerCase()
+  if (fromType && fromType !== 'system' && ACTIVITY_STYLE[fromType]) return fromType
+
   const text = `${headline} ${detail} ${activity?.body || ''}`.toLowerCase()
   if (text.includes('follow-up') || text.includes('follow up') || text.includes('reminder')) return 'follow_up'
   if (text.includes('email') || text.includes('@')) return 'email'
@@ -225,7 +302,6 @@ function detectActivityVisualKey(activity, headline = '', detail = '') {
   if (text.includes('call')) return 'call'
   if (text.includes('note')) return 'note'
   if (text.includes('meeting')) return 'meeting'
-  if (fromType && fromType !== 'system' && ACTIVITY_STYLE[fromType]) return fromType
   if (fromMeta && ACTIVITY_STYLE[fromMeta]) return fromMeta
   if (fromType && ACTIVITY_STYLE[fromType]) return fromType
   return fromMeta || fromType || 'system'
@@ -238,6 +314,14 @@ function formatTaskDueParts(value) {
   const dateLine = d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
   const timeLine = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
   return { dateLine, timeLine }
+}
+
+/** One-line completed timestamp for task meta row (lead task cards). */
+function formatTaskCompletedAtLine(value) {
+  if (!value) return null
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return null
+  return d.toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
 }
 
 function activityDayKey(value) {
@@ -311,6 +395,71 @@ function countdownLabel(targetDate) {
   return `in ${pieces.join(' ')}`
 }
 
+/** Relative to `nowMs` (updated on an interval) so task cards can show a live-ish countdown without calling Date.now during render. */
+function taskDueTimerPhrase(dueValue, taskStatus, nowMs) {
+  if (!dueValue) return null
+  const s = String(taskStatus || '').toLowerCase()
+  if (s === 'completed' || s === 'cancelled') return null
+  const d = dueValue instanceof Date ? dueValue : new Date(dueValue)
+  if (Number.isNaN(d.getTime())) return null
+  const diff = d.getTime() - nowMs
+  if (diff < 0) {
+    const ago = Math.floor(-diff / 60000)
+    const days = Math.floor(ago / (60 * 24))
+    if (days >= 1) return `${days}d overdue`
+    const hours = Math.floor(ago / 60)
+    if (hours >= 1) return `${hours}h overdue`
+    if (ago < 1) return 'Overdue now'
+    return `${ago}m overdue`
+  }
+  const mins = Math.floor(diff / 60000)
+  const days = Math.floor(mins / (60 * 24))
+  const hours = Math.floor((mins % (60 * 24)) / 60)
+  const minutes = mins % 60
+  const pieces = []
+  if (days) pieces.push(`${days}d`)
+  if (hours) pieces.push(`${hours}h`)
+  pieces.push(`${minutes}m`)
+  return `in ${pieces.join(' ')}`
+}
+
+function TaskSubtasksProgressRing({ done, total, size = 42 }) {
+  if (!total) return null
+  const stroke = 3
+  const r = (size - stroke) / 2
+  const c = 2 * Math.PI * r
+  const pct = Math.min(100, Math.max(0, (done / total) * 100))
+  const offset = c - (pct / 100) * c
+  const cx = size / 2
+  const cy = size / 2
+  return (
+    <div
+      className="relative shrink-0 text-brand-600"
+      style={{ width: size, height: size }}
+      title={`${done} of ${total} subtasks completed`}
+    >
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90" aria-hidden>
+        <circle cx={cx} cy={cy} r={r} fill="none" className="stroke-slate-200" strokeWidth={stroke} />
+        <circle
+          cx={cx}
+          cy={cy}
+          r={r}
+          fill="none"
+          className="stroke-current transition-[stroke-dashoffset] duration-300"
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={c}
+          strokeDashoffset={offset}
+        />
+      </svg>
+      <span className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center leading-none">
+        <span className="text-[11px] font-bold tabular-nums text-ink">{done}</span>
+        <span className="text-[9px] font-semibold text-ink-muted">/{total}</span>
+      </span>
+    </div>
+  )
+}
+
 function dealCardInitials(title) {
   const t = String(title || '').trim()
   if (!t) return '?'
@@ -364,6 +513,7 @@ function DealHealthRing({ score }) {
 
 export function LeadDetailPage() {
   const { id } = useParams()
+  const dispatch = useDispatch()
   const navigate = useNavigate()
   const location = useLocation()
   const isPipelineDealRoute = location.pathname.startsWith('/opportunities/')
@@ -388,21 +538,33 @@ export function LeadDetailPage() {
   const [pipelineSaving, setPipelineSaving] = useState(false)
   const [addDealDrawerOpen, setAddDealDrawerOpen] = useState(false)
   const [dealPanelOpp, setDealPanelOpp] = useState(null)
+  const [createMeetingModalOpen, setCreateMeetingModalOpen] = useState(false)
+  const [editingMeeting, setEditingMeeting] = useState(null)
+  const [callLogModalOpen, setCallLogModalOpen] = useState(false)
+  const [callLogBody, setCallLogBody] = useState('')
+  const [noteComposerOpen, setNoteComposerOpen] = useState(false)
+  /** Refreshes meeting status badges / join affordance without calling Date.now() during render. */
+  const [meetingListNow, setMeetingListNow] = useState(() => Date.now())
 
   const { data, isLoading } = useGetLeadQuery(id)
   const { data: formMetaData } = useGetLeadFormMetaQuery()
   const { data: activityData } = useGetLeadActivitiesQuery({ id, page: 1, limit: 100 }, { skip: !id })
   const { data: taskData } = useGetLeadTasksQuery(id, { skip: !id })
-  const { data: emailThreadsData } = useGetLeadEmailThreadsQuery(id, { skip: !id })
-  const { data: threadData } = useGetLeadEmailThreadQuery({ id, threadId: selectedThreadId }, { skip: !id || !selectedThreadId })
+  const { data: googleEmailStatus } = useGetGoogleEmailStatusQuery()
+  const googleEmailConnected = Boolean(googleEmailStatus?.data?.connected)
+  const { data: emailThreadsData } = useGetLeadEmailThreadsQuery(id, { skip: !id || !googleEmailConnected })
+  const { data: threadData } = useGetLeadEmailThreadQuery(
+    { id, threadId: selectedThreadId },
+    { skip: !id || !selectedThreadId || !googleEmailConnected },
+  )
   const { data: notesData } = useGetLeadNotesQuery(id, { skip: !id })
   const { data: filesData } = useGetLeadFilesQuery(id, { skip: !id })
-  const { data: googleEmailStatus } = useGetGoogleEmailStatusQuery()
 
   const [createActivity, { isLoading: creatingActivity }] = useCreateLeadActivityMutation()
   const [createNote, { isLoading: creatingNote }] = useCreateLeadNoteMutation()
   const [patchNote, { isLoading: patchingNote }] = usePatchLeadNoteMutation()
   const [deleteNote] = useDeleteLeadNoteMutation()
+  const [uploadDocumentForNote] = useUploadDocumentMutation()
   const [sendLeadEmail, { isLoading: sendingEmail }] = useSendLeadEmailMutation()
   const [syncLeadEmails, { isLoading: syncingEmails }] = useSyncLeadEmailsMutation()
   const [patchTask] = usePatchLeadTaskMutation()
@@ -415,10 +577,36 @@ export function LeadDetailPage() {
   const summary = data?.meta?.summary || {}
   const activities = activityData?.data || []
   const tasks = taskData?.data || []
+  const tasksSortedForList = useMemo(() => {
+    const list = [...tasks]
+    const isTerminal = (s) => {
+      const x = String(s || '').toLowerCase()
+      return x === 'completed' || x === 'cancelled'
+    }
+    list.sort((a, b) => {
+      const ta = isTerminal(a.status)
+      const tb = isTerminal(b.status)
+      if (ta !== tb) return ta ? 1 : -1
+      const da = a.dueAt ? new Date(a.dueAt).getTime() : Number.POSITIVE_INFINITY
+      const db = b.dueAt ? new Date(b.dueAt).getTime() : Number.POSITIVE_INFINITY
+      if (da !== db) return da - db
+      return String(a.title || '').localeCompare(String(b.title || ''), undefined, { sensitivity: 'base' })
+    })
+    return list
+  }, [tasks])
   const emailThreads = emailThreadsData?.data || []
   const selectedThread = threadData?.data || []
   const notes = notesData?.data || []
   const leadFiles = filesData?.data || []
+
+  useEffect(() => {
+    if (!googleEmailConnected) setSelectedThreadId(null)
+  }, [googleEmailConnected])
+
+  useEffect(() => {
+    const t = window.setInterval(() => setMeetingListNow(Date.now()), 30_000)
+    return () => clearInterval(t)
+  }, [])
 
   const { data: meetingsData } = useGetMeetingsQuery(
     { leadId: id },
@@ -605,35 +793,97 @@ export function LeadDetailPage() {
     setSelectedTags((lead?.tags || []).map((tag) => tag.name))
   }, [lead?.id, lead?.updatedAt, lead?.tags])
 
+  const uploadNoteAttachment = useCallback(
+    async (file) => {
+      if (!id) throw new Error('Missing lead')
+      const mime = String(file?.type || '').toLowerCase()
+      const fileType = mime.startsWith('image/') ? 'Image' : 'Other'
+      const name = String(file?.name || 'attachment').trim() || 'attachment'
+      let res
+      try {
+        res = await uploadDocumentForNote({
+          file,
+          name,
+          fileType,
+          links: [{ entityType: 'lead', entityId: id }],
+        }).unwrap()
+      } catch (e) {
+        toast.error(e?.data?.error?.message || e?.message || 'Could not attach file')
+        throw e
+      }
+      const doc = res?.data
+      const rawPath = String(doc?.filePath || doc?.file_path || doc?.fileUrl || doc?.file_url || '').trim()
+      const url = getFileUrl(rawPath) || rawPath
+      if (!url) {
+        toast.error('Upload succeeded but no file URL was returned')
+        throw new Error('Missing file URL')
+      }
+      dispatch(
+        leadsApi.util.invalidateTags([
+          { type: 'Lead', id: `${id}-files` },
+          { type: 'Lead', id },
+          { type: 'Document', id: 'LIST' },
+        ]),
+      )
+      return { url, name: doc?.name || name, mimeType: file.type || null }
+    },
+    [dispatch, id, uploadDocumentForNote],
+  )
+
   const saveLeadNoteFromEditor = useCallback(
     async ({ title, html }) => {
       const body = sanitizeNoteBody(html)
-      if (!notePlainText(html)) return
-      if (editingNoteId) {
-        await patchNote({ id, noteId: editingNoteId, title: title.trim(), body }).unwrap()
-        setEditingNoteId(null)
-      } else {
-        await createNote({ id, title: title.trim(), body }).unwrap()
+      if (!noteHasRenderableContent(html)) {
+        toast.error('Add some text or an attachment to the note before saving.')
+        return
       }
-      setNoteTitle('')
-      setDraft('')
-      setNoteEditorVersion((v) => v + 1)
+      try {
+        if (editingNoteId) {
+          await patchNote({ id, noteId: editingNoteId, title: title.trim(), body }).unwrap()
+          setEditingNoteId(null)
+        } else {
+          await createNote({ id, title: title.trim(), body }).unwrap()
+        }
+        setNoteTitle('')
+        setDraft('')
+        setNoteComposerOpen(false)
+        setNoteEditorVersion((v) => v + 1)
+      } catch (e) {
+        toast.error(e?.data?.error?.message || 'Could not save note')
+      }
     },
     [createNote, editingNoteId, id, patchNote],
+  )
+
+  const toggleLeadTaskSubtask = useCallback(
+    async (task, subIndex) => {
+      const list = Array.isArray(task.subtasks) ? task.subtasks : []
+      const next = list.map((s, i) => ({
+        title: String(s?.title || '').trim() || 'Untitled',
+        done: i === subIndex ? !Boolean(s.done) : Boolean(s.done),
+      }))
+      try {
+        await patchTask({ id, taskId: task.id, subtasks: next }).unwrap()
+      } catch (e) {
+        toast.error(e?.data?.error?.message || 'Could not update subtask')
+      }
+    },
+    [id, patchTask],
   )
 
   if (isLoading) return <PageShell fullWidth><div className="px-6 py-6">Loading lead...</div></PageShell>
   if (!lead) return <PageShell fullWidth><div className="px-6 py-6">Lead not found.</div></PageShell>
 
-  async function submitActivity(type) {
-    if (!draft.trim()) return
-    if (type === 'note') {
-      await createNote({ id, title: noteTitle.trim(), body: draft.trim() }).unwrap()
-      setNoteTitle('')
-    } else {
-      await createActivity({ id, type, body: draft.trim() }).unwrap()
+  async function submitCallLog() {
+    if (!callLogBody.trim()) return
+    try {
+      await createActivity({ id, type: 'call', body: callLogBody.trim() }).unwrap()
+      setCallLogBody('')
+      setCallLogModalOpen(false)
+      toast.success('Call logged')
+    } catch (e) {
+      toast.error(e?.data?.error?.message || 'Could not log call')
     }
-    setDraft('')
   }
 
   async function submitEmail() {
@@ -760,8 +1010,8 @@ export function LeadDetailPage() {
                     {formatPipelineStageLabel(lead.opportunityStage) || 'Not set'}
                   </span>
                 </div>
-                <select
-                  className="h-10 w-full rounded-xl border border-surface-border bg-white px-3 text-sm text-ink"
+                <Select
+                  className="h-10 rounded-xl text-sm"
                   value={lead.opportunityStage || ''}
                   disabled={pipelineSaving}
                   onChange={async (e) => {
@@ -791,7 +1041,7 @@ export function LeadDetailPage() {
                       </option>
                     ))
                   )}
-                </select>
+                </Select>
               </div>
 
             </div>
@@ -869,60 +1119,125 @@ export function LeadDetailPage() {
         </aside>
 
         <section className="rounded-2xl border border-surface-border bg-white p-4 sm:p-5">
-          <div className="flex items-center gap-2 border-b border-surface-border pb-3">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => {
-                  setActiveTab(tab.id)
-                  setEditingNoteId(null)
-                  setDraft('')
-                  setNoteTitle('')
-                  setNoteEditorVersion((v) => v + 1)
-                }}
-                className={`h-9 border-b-2 px-3 text-sm ${
-                  activeTab === tab.id
-                    ? 'border-brand-600 bg-white font-semibold text-ink'
-                    : 'border-transparent text-ink-muted hover:text-ink'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
+          <div className="flex flex-col gap-3 border-b border-surface-border pb-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+            <div className="-mx-1 flex min-w-0 flex-1 items-center gap-1 overflow-x-auto px-1">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => {
+                    setActiveTab(tab.id)
+                    setEditingNoteId(null)
+                    setDraft('')
+                    setNoteTitle('')
+                    setNoteComposerOpen(false)
+                    setNoteEditorVersion((v) => v + 1)
+                  }}
+                  className={`h-9 shrink-0 border-b-2 px-3 text-sm ${
+                    activeTab === tab.id
+                      ? 'border-brand-600 bg-white font-semibold text-ink'
+                      : 'border-transparent text-ink-muted hover:text-ink'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {activeTab === 'emails' ? (
-            <div className="mt-4 grid gap-4 lg:grid-cols-[340px_1fr]">
-              <section className="overflow-hidden rounded-xl border border-surface-border bg-white lg:h-[660px]">
-                <div className="h-full overflow-y-auto">
-                  <GmailThreadList
-                    threads={parsedThreads}
-                    selectedId={selectedThreadId}
-                    onSelect={setSelectedThreadId}
-                  />
-                </div>
-              </section>
-              <section className="overflow-hidden rounded-xl border border-surface-border bg-white">
-                <GmailThreadView
-                  thread={activeThread}
-                  onBack={() => setSelectedThreadId(null)}
-                  onSync={() => syncLeadEmails({ id })}
-                  onCreateEmail={() => setIsComposeOpen(true)}
+            googleEmailConnected ? (
+              <div className="mt-4 space-y-4">
+                <LeadTabSectionHeader
+                  title="Emails"
+                  description="Synced Gmail threads for this contact. Sync to pull the latest replies."
+                  action={
+                    <>
+                      <button
+                        type="button"
+                        className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-surface-border bg-white px-3 text-sm font-medium text-ink shadow-sm hover:bg-surface-subtle disabled:opacity-60"
+                        disabled={syncingEmails}
+                        onClick={() => syncLeadEmails({ id })}
+                      >
+                        {syncingEmails ? 'Syncing…' : 'Sync replies'}
+                      </button>
+                      <button
+                        type="button"
+                        className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-brand-700"
+                        onClick={() => setIsComposeOpen(true)}
+                      >
+                        <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                        Create email
+                      </button>
+                    </>
+                  }
                 />
-              </section>
-            </div>
+                <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
+                <section className="overflow-hidden rounded-xl border border-surface-border bg-white lg:h-[660px]">
+                  <div className="h-full overflow-y-auto">
+                    <GmailThreadList
+                      threads={parsedThreads}
+                      selectedId={selectedThreadId}
+                      onSelect={setSelectedThreadId}
+                    />
+                  </div>
+                </section>
+                <section className="overflow-hidden rounded-xl border border-surface-border bg-white">
+                  <GmailThreadView
+                    thread={activeThread}
+                    onBack={() => setSelectedThreadId(null)}
+                    onSync={() => syncLeadEmails({ id })}
+                    onCreateEmail={() => setIsComposeOpen(true)}
+                  />
+                </section>
+              </div>
+              </div>
+            ) : (
+              <div className="mt-8 rounded-2xl border border-amber-200/90 bg-amber-50 p-8 text-center sm:p-10">
+                <p className="text-base font-semibold text-amber-950">Connect Google to view synced emails</p>
+                <p className="mx-auto mt-2 max-w-lg text-sm text-amber-900/85">
+                  Threads and messages are loaded only after your company connects Gmail in Google Settings. That keeps the inbox tied to the authenticated mailbox.
+                </p>
+                <button
+                  type="button"
+                  className="mt-5 h-10 rounded-lg bg-brand-600 px-5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700"
+                  onClick={() => navigate('/integrations?tab=google')}
+                >
+                  Open Google Settings
+                </button>
+              </div>
+            )
           ) : activeTab === 'tasks' ? (
-            <div className="mt-4 space-y-3">
-              {tasks.map((task) => {
+            <div className="mt-4 space-y-4">
+              <LeadTabSectionHeader
+                title="Tasks"
+                description="Open tasks first, soonest due date at the top. Completed and cancelled sink to the bottom."
+                action={
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-700"
+                    onClick={() => {
+                      setTaskDrawerTaskId(null)
+                      setTaskDrawerOpen(true)
+                    }}
+                  >
+                    <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    Add task
+                  </button>
+                }
+              />
+              <div className="space-y-3">
+              {tasksSortedForList.map((task) => {
                 const subs = task.subtasks || []
+                const subDone = subs.filter((s) => s?.done).length
+                const subTotal = subs.length
                 const commentCount = (task.comments || []).length
                 const dueAt = task.dueAt ? new Date(task.dueAt) : null
                 const dueParts = formatTaskDueParts(task.dueAt)
                 const isOverdue = Boolean(
-                  dueAt && task.status !== 'completed' && task.status !== 'cancelled' && dueAt.getTime() < Date.now(),
+                  dueAt && task.status !== 'completed' && task.status !== 'cancelled' && dueAt.getTime() < meetingListNow,
                 )
-                const attachmentsCount = Array.isArray(task.attachments) ? task.attachments.length : task.attachmentsCount || 0
+                const dueTimer = taskDueTimerPhrase(task.dueAt, task.status, meetingListNow)
                 return (
                   <div
                     key={task.id}
@@ -943,324 +1258,361 @@ export function LeadDetailPage() {
                       isOverdue ? 'border-red-200 border-l-4 border-l-red-500' : 'border-surface-border'
                     }`}
                   >
-                    <div className="border-b border-surface-border bg-slate-50/60 px-4 py-2.5 sm:px-5">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="rounded-md bg-brand-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-brand-900">
-                            {taskTypeLabel(task.taskType)}
-                          </span>
-                          <span className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
-                            <TaskPriorityIcon priority={task.priority} />
-                            {task.priority}
-                          </span>
-                          <TaskStatusPill value={task.status} />
-                          {isOverdue ? <TaskOverdueBadge /> : null}
-                          {task.recurrenceRule ? <TaskRecurrenceIcon rule={task.recurrenceRule} /> : null}
-                          {attachmentsCount ? (
-                            <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-ink-muted">
-                              📎 {attachmentsCount}
+                    <div className="flex items-start justify-between gap-3 border-b border-surface-border px-4 py-3 sm:px-5">
+                      <div className="flex min-w-0 flex-1 items-start gap-3">
+                        {subTotal > 0 ? <TaskSubtasksProgressRing done={subDone} total={subTotal} /> : null}
+                        <div className="min-w-0 flex-1">
+                          <h3 className="text-base font-semibold leading-snug text-ink">{task.title || 'Untitled task'}</h3>
+                          <p className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] text-ink-muted">
+                            <span className="font-semibold uppercase tracking-wide text-ink-muted/90">{taskTypeLabel(task.taskType)}</span>
+                            <span aria-hidden>·</span>
+                            <span className="inline-flex items-center gap-0.5 capitalize">
+                              <TaskPriorityIcon priority={task.priority} />
+                              {task.priority}
                             </span>
-                          ) : null}
+                            <span aria-hidden>·</span>
+                            <TaskStatusPill value={task.status} />
+                            {String(task.status || '').toLowerCase() === 'completed' ? (
+                              (() => {
+                                const at = task.completedAt || task.completed_at || task.updatedAt
+                                const line = formatTaskCompletedAtLine(at)
+                                if (!line) return null
+                                return (
+                                  <>
+                                    <span aria-hidden>·</span>
+                                    <span className="font-medium text-emerald-800/90 tabular-nums" title="Marked complete at">
+                                      Completed {line}
+                                    </span>
+                                  </>
+                                )
+                              })()
+                            ) : null}
+                            {task.recurrenceRule ? (
+                              <>
+                                <span aria-hidden>·</span>
+                                <TaskRecurrenceIcon rule={task.recurrenceRule} className="max-w-[10rem] truncate !text-[9px]" />
+                              </>
+                            ) : null}
+                            {isOverdue ? (
+                              <>
+                                <span aria-hidden>·</span>
+                                <TaskOverdueBadge />
+                              </>
+                            ) : null}
+                          </p>
                         </div>
-                        <div className="flex shrink-0 items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                          {task.status !== 'completed' && task.status !== 'cancelled' ? (
-                            <button
-                              type="button"
-                              className="h-8 rounded-lg border border-brand-300 bg-white px-3 text-xs font-semibold text-brand-800 shadow-sm hover:bg-brand-50"
-                              onClick={async () => {
-                                await patchTask({ id, taskId: task.id, status: 'completed' }).unwrap()
-                              }}
-                            >
-                              Mark complete
-                            </button>
-                          ) : null}
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                        {task.status !== 'completed' && task.status !== 'cancelled' ? (
                           <button
                             type="button"
-                            className="h-8 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                            className="h-8 rounded-lg border border-brand-300 bg-white px-3 text-xs font-semibold text-brand-800 shadow-sm hover:bg-brand-50"
                             onClick={async () => {
-                              await deleteTask({ id, taskId: task.id }).unwrap()
+                              await patchTask({ id, taskId: task.id, status: 'completed' }).unwrap()
                             }}
                           >
-                            Delete
+                            Mark complete
                           </button>
-                        </div>
+                        ) : null}
+                        <button
+                          type="button"
+                          className="h-8 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                          onClick={async () => {
+                            await deleteTask({ id, taskId: task.id }).unwrap()
+                          }}
+                        >
+                          Delete
+                        </button>
                       </div>
                     </div>
+
                     <div className="space-y-3 px-4 py-4 sm:px-5">
+                      {dueAt ? (
+                        <div
+                          className={`rounded-xl border px-3 py-2.5 ${
+                            isOverdue
+                              ? 'border-red-200 bg-gradient-to-br from-red-50/90 to-white'
+                              : 'border-slate-200 bg-gradient-to-br from-slate-50 to-white'
+                          }`}
+                        >
+                          <div className="flex flex-wrap items-end justify-between gap-2">
+                            <div>
+                              <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Due</p>
+                              <p className={`mt-0.5 text-sm font-semibold ${isOverdue ? 'text-red-900' : 'text-ink'}`}>{dueParts.dateLine}</p>
+                              {dueParts.timeLine ? (
+                                <p className="mt-0.5 text-xs tabular-nums text-ink-muted">{dueParts.timeLine}</p>
+                              ) : null}
+                            </div>
+                            {dueTimer ? (
+                              <span
+                                className={`shrink-0 rounded-lg px-2 py-1 text-xs font-bold tabular-nums ${
+                                  isOverdue ? 'bg-red-100 text-red-800' : 'bg-brand-100 text-brand-900'
+                                }`}
+                              >
+                                {dueTimer}
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-ink-muted">No due date set.</p>
+                      )}
+
                       <div>
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-muted">Task</p>
-                        <p className="mt-0.5 text-base font-semibold leading-snug text-ink">{task.title}</p>
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Description</p>
+                        {task.description ? (
+                          <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-ink line-clamp-6">{task.description}</p>
+                        ) : (
+                          <p className="mt-1.5 text-sm italic text-ink-muted">No description.</p>
+                        )}
                       </div>
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="rounded-xl border border-slate-200 bg-gradient-to-b from-white to-slate-50/80 p-3 shadow-sm">
-                          <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
-                            <UserCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                            Created by
-                          </p>
-                          <p className="mt-2 text-sm font-semibold text-slate-900">{task.creator?.name || 'System'}</p>
-                          <p className="mt-0.5 text-[11px] text-ink-muted">Task owner</p>
-                        </div>
-                        <div className="rounded-xl border border-slate-200 bg-gradient-to-b from-white to-slate-50/80 p-3 shadow-sm">
-                          <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
-                            <UserCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                            Assigned to
-                          </p>
-                          <p className="mt-2 text-sm font-semibold text-slate-900">{task.assignee?.name || 'Unassigned'}</p>
-                          <p className="mt-0.5 text-[11px] text-ink-muted">Owner responsible for this task</p>
-                        </div>
-                      </div>
-                      <div
-                        className={`rounded-xl border p-3 shadow-sm ${
-                          isOverdue
-                            ? 'border-red-200 bg-gradient-to-b from-red-50/90 to-white'
-                            : 'border-slate-200 bg-gradient-to-b from-white to-slate-50/80'
-                        }`}
-                      >
-                        <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
-                          <CalendarClock className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                          Due date
-                        </p>
-                        <p className={`mt-2 text-sm font-semibold ${isOverdue ? 'text-red-800' : 'text-slate-900'}`}>{dueParts.dateLine}</p>
-                        {dueParts.timeLine ? <p className="mt-0.5 text-[11px] text-ink-muted">{dueParts.timeLine}</p> : null}
-                        {isOverdue ? <p className="mt-1.5 text-[11px] font-medium text-red-700">Overdue</p> : null}
-                      </div>
-                      {task.description ? (
-                        <div className="rounded-xl border border-surface-border bg-slate-50/40 px-3 py-2.5">
-                          <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-muted">Description</p>
-                          <p className="mt-1 line-clamp-3 text-xs leading-relaxed text-slate-700">{task.description}</p>
-                        </div>
-                      ) : null}
+
+                      <TaskAttachmentIcons attachments={task.attachments} />
+
                       {subs.length ? (
-                        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-                          <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-muted">Checklist</p>
-                          <ul className="mt-2 space-y-1.5">
-                            {subs.slice(0, 5).map((subtask, index) => (
-                              <li key={`${task.id}-sub-${index}`}>
-                                <div className="flex items-start justify-between gap-2 rounded-lg border border-slate-100 bg-white px-2 py-1.5 text-xs text-slate-700">
-                                  <label className="flex items-start gap-2">
+                        <div
+                          role="presentation"
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        >
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Subtasks</p>
+                          <ul className="mt-2 max-h-52 space-y-1.5 overflow-y-auto pr-0.5">
+                            {subs.map((subtask, index) => (
+                              <li
+                                key={`${task.id}-sub-${subtask.id || index}`}
+                                onClick={(e) => e.stopPropagation()}
+                                onKeyDown={(e) => e.stopPropagation()}
+                              >
+                                <div
+                                  className={`flex items-center justify-between gap-2 rounded-lg border px-2.5 py-2 text-xs ${
+                                    subtask.done
+                                      ? 'border-emerald-100 bg-emerald-50/50 text-ink-muted'
+                                      : 'border-slate-200 bg-white text-ink'
+                                  }`}
+                                >
+                                  <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
                                     <input
                                       type="checkbox"
                                       checked={Boolean(subtask.done)}
-                                      readOnly
-                                      className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-emerald-600"
+                                      onChange={(e) => {
+                                        e.stopPropagation()
+                                        void toggleLeadTaskSubtask(task, index)
+                                      }}
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="h-3.5 w-3.5 shrink-0 cursor-pointer rounded border-slate-300 text-emerald-600"
+                                      aria-label={subtask.done ? 'Mark subtask not done' : 'Mark subtask done'}
                                     />
-                                    <span className={subtask.done ? 'text-ink-muted line-through' : ''}>{subtask.title || 'Untitled'}</span>
+                                    <span className={`min-w-0 truncate font-medium ${subtask.done ? 'line-through' : ''}`}>
+                                      {subtask.title || 'Untitled'}
+                                    </span>
                                   </label>
                                   <span
-                                    className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
-                                      subtask.done ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                                    className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                                      subtask.done ? 'bg-emerald-200 text-emerald-900' : 'bg-amber-100 text-amber-900'
                                     }`}
                                   >
-                                    {subtask.done ? 'Done' : 'Pending'}
+                                    {subtask.done ? 'Done' : 'Open'}
                                   </span>
                                 </div>
                               </li>
                             ))}
                           </ul>
-                          {subs.length > 5 ? <p className="mt-1.5 text-[11px] text-ink-muted">+{subs.length - 5} more in task details</p> : null}
                         </div>
                       ) : null}
+
                       {commentCount > 0 ? (
                         <p className="flex items-center gap-1.5 text-[11px] text-ink-muted">
-                          <MessageSquare className="h-3.5 w-3.5" aria-hidden />
+                          <MessageSquare className="h-3.5 w-3.5 shrink-0" aria-hidden />
                           {commentCount} comment{commentCount === 1 ? '' : 's'}
                         </p>
                       ) : null}
+
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 border-t border-surface-border pt-2.5 text-[10px] leading-tight text-ink-muted">
+                        <span>
+                          By <span className="font-medium text-ink/80">{task.creator?.name || 'System'}</span>
+                        </span>
+                        <span aria-hidden className="text-ink-faint">
+                          ·
+                        </span>
+                        <span>
+                          {task.assignee?.name ? (
+                            <>
+                              Assigned <span className="font-medium text-ink/80">{task.assignee.name}</span>
+                            </>
+                          ) : (
+                            <span>Unassigned</span>
+                          )}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 )
               })}
-              {tasks.length === 0 ? <p className="text-sm text-ink-muted">No tasks yet. Use Add task to create one.</p> : null}
+              {tasks.length === 0 ? (
+                <LeadTabEmptyState
+                  icon={CheckSquare}
+                  title="No tasks yet"
+                  description="Create tasks to assign work, set due dates, and collaborate with your team on this lead."
+                  action={
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-700"
+                      onClick={() => {
+                        setTaskDrawerTaskId(null)
+                        setTaskDrawerOpen(true)
+                      }}
+                    >
+                      <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                      Add task
+                    </button>
+                  }
+                />
+              ) : null}
+              </div>
             </div>
 
-          ) : activeTab === "meetings" ? (
+          ) : activeTab === 'meetings' ? (
   <div className="mt-4 space-y-4">
+    <LeadTabSectionHeader
+      title="Meetings"
+      description="Scheduled meetings linked to this lead appear below."
+      action={
+        <button
+          type="button"
+          onClick={() => {
+            setEditingMeeting(null)
+            setCreateMeetingModalOpen(true)
+          }}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-700"
+        >
+          <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          Create meeting
+        </button>
+      }
+    />
     {meetings.length === 0 ? (
-      <div className="rounded-2xl border border-dashed border-surface-border p-8 text-center">
-        <p className="text-sm font-medium text-ink">
-          No meetings found
-        </p>
-      </div>
+      <LeadTabEmptyState
+        icon={CalendarCheck2}
+        title="No meetings yet"
+        description="Schedule a call or demo and keep Google Meet links, participants, and timing in one place."
+        action={
+          <button
+            type="button"
+            onClick={() => {
+              setEditingMeeting(null)
+              setCreateMeetingModalOpen(true)
+            }}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-700"
+          >
+            <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            Create meeting
+          </button>
+        }
+      />
     ) : (
       meetings.map((meeting) => {
-        const start = new Date(meeting.scheduledStart);
-        const end = new Date(meeting.scheduledEnd);
+        const start = new Date(meeting.scheduledStart)
+        const end = new Date(meeting.scheduledEnd)
+        const startTime = start.getTime()
+        const endTime = end.getTime()
+        const now = meetingListNow
 
-        const now = Date.now();
-
-const startTime = start.getTime();
-const endTime = end.getTime();
-
-const isUpcoming = now < startTime;
-
-const isLive =
-  now >= startTime &&
-  now <= endTime;
-
-const isCompleted =
-  now > endTime &&
-  meeting.status === "completed";
-
-const isExpired =
-  now > endTime &&
-  meeting.status !== "completed";
+        const isUpcoming = now < startTime
+        const isLive = now >= startTime && now <= endTime
+        const isCompleted = now > endTime && meeting.status === 'completed'
+        const isExpiredForJoin = now > endTime && meeting.status !== 'completed'
+        const joinDisabled = !meeting.googleMeetLink || meeting.status === 'completed' || isExpiredForJoin
 
         return (
-          <div
-            key={meeting.id}
-            className="rounded-2xl border border-surface-border bg-white p-5 shadow-sm"
-          >
+          <div key={meeting.id} className="rounded-2xl border border-surface-border bg-white p-5 shadow-sm">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              
-              {/* LEFT */}
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                  <h3 className="text-lg font-semibold text-ink">
-                    {meeting.title}
-                  </h3>
-
+                  <h3 className="text-lg font-semibold text-ink">{meeting.title}</h3>
                   <span
-  className={`rounded-full px-2 py-1 text-xs font-semibold ${
-    isLive
-      ? "bg-green-100 text-green-700"
-      : isUpcoming
-      ? "bg-blue-100 text-blue-700"
-      : isCompleted
-      ? "bg-emerald-100 text-emerald-700"
-      : "bg-red-100 text-red-700"
-  }`}
->
-  {isLive
-    ? "LIVE"
-    : isUpcoming
-    ? "UPCOMING"
-    : isCompleted
-    ? "COMPLETED"
-    : "EXPIRED"}
-</span>
+                    className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                      isLive
+                        ? 'bg-green-100 text-green-700'
+                        : isUpcoming
+                          ? 'bg-blue-100 text-blue-700'
+                          : isCompleted
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : 'bg-red-100 text-red-700'
+                    }`}
+                  >
+                    {isLive ? 'LIVE' : isUpcoming ? 'UPCOMING' : isCompleted ? 'COMPLETED' : 'EXPIRED'}
+                  </span>
                 </div>
 
-                <p className="text-sm text-ink-muted">
-                  {meeting.meetingType}
-                </p>
+                <p className="text-sm text-ink-muted">{meeting.meetingType}</p>
 
                 <p className="text-sm text-ink-muted">
-                  📅{" "}
+                  📅{' '}
                   {start.toLocaleDateString([], {
-                    day: "2-digit",
-                    month: "short",
-                    year: "numeric",
+                    day: '2-digit',
+                    month: 'short',
+                    year: 'numeric',
                   })}
                 </p>
 
                 <p className="text-sm text-ink-muted">
-                  🕒{" "}
-                  {start.toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}{" "}
-                  -{" "}
-                  {end.toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
+                  🕒{' '}
+                  {start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} -{' '}
+                  {end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </p>
 
                 {meeting.agenda ? (
-                  <div className="mt-2 rounded-xl bg-slate-50 p-3 text-sm text-slate-700">
-                    {meeting.agenda}
-                  </div>
+                  <div className="mt-2 rounded-xl bg-slate-50 p-3 text-sm text-slate-700">{meeting.agenda}</div>
                 ) : null}
               </div>
 
-              {/* RIGHT */}
               <div className="flex flex-wrap items-center gap-3">
-                
-                {/* JOIN */}
-{(() => {
-  const now = Date.now();
+                {joinDisabled ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="inline-flex cursor-not-allowed items-center gap-2 rounded-xl bg-gray-300 px-4 py-2 text-sm font-semibold text-gray-600"
+                    title={
+                      meeting.status === 'completed'
+                        ? 'Meeting completed'
+                        : isExpiredForJoin
+                          ? 'Meeting expired'
+                          : 'No meeting link'
+                    }
+                  >
+                    <Presentation className="h-4 w-4" />
+                    {meeting.status === 'completed' ? 'Completed' : isExpiredForJoin ? 'Expired' : 'No Link'}
+                  </button>
+                ) : (
+                  <a
+                    href={meeting.googleMeetLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
+                  >
+                    <Presentation className="h-4 w-4" />
+                    Join Meeting
+                  </a>
+                )}
 
-  const start = new Date(
-    meeting.scheduledStart
-  ).getTime();
-
-  const end = new Date(
-    meeting.scheduledEnd
-  ).getTime();
-
-  const isCompleted =
-    meeting.status === "completed";
-
-  const isExpired =
-    now > end &&
-    meeting.status !== "completed";
-
-  const disabled =
-    !meeting.googleMeetLink ||
-    isCompleted ||
-    isExpired;
-
-  if (disabled) {
-    return (
-      <button
-        disabled
-        className="inline-flex items-center gap-2 rounded-xl bg-gray-300 px-4 py-2 text-sm font-semibold text-gray-600 cursor-not-allowed"
-        title={
-          isCompleted
-            ? "Meeting completed"
-            : isExpired
-            ? "Meeting expired"
-            : "No meeting link"
-        }
-      >
-        <Presentation className="h-4 w-4" />
-
-        {isCompleted
-          ? "Completed"
-          : isExpired
-          ? "Expired"
-          : "No Link"}
-      </button>
-    );
-  }
-
-  return (
-    <a
-      href={meeting.googleMeetLink}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
-    >
-      <Presentation className="h-4 w-4" />
-      Join Meeting
-    </a>
-  );
-})()}
-
-                {/* EDIT */}
                 <button
                   type="button"
                   className="rounded-xl border border-surface-border px-4 py-2 text-sm font-medium hover:bg-slate-50"
                   onClick={() => {
-                    // optional later
-                    console.log("Edit", meeting);
+                    setEditingMeeting(meeting)
+                    setCreateMeetingModalOpen(true)
                   }}
                 >
                   Edit
                 </button>
 
-                {/* DELETE */}
                 <button
                   type="button"
                   className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100"
                   onClick={async () => {
-                    const ok = confirm(
-                      "Delete this meeting?"
-                    );
-
-                    if (!ok) return;
-
-                    await deleteMeeting(meeting.id);
+                    const ok = confirm('Delete this meeting?')
+                    if (!ok) return
+                    await deleteMeeting(meeting.id)
                   }}
                 >
                   Delete
@@ -1268,29 +1620,20 @@ const isExpired =
               </div>
             </div>
 
-            {/* PARTICIPANTS */}
             {!!meeting.participants?.length && (
               <div className="mt-4 border-t border-surface-border pt-4">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">
-                  Participants
-                </p>
-
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">Participants</p>
                 <div className="flex flex-wrap gap-2">
                   {meeting.participants.map((p) => (
-                    <span
-                      key={p.userId}
-                      className="rounded-full bg-brand-50 px-3 py-1 text-xs text-brand-700"
-                    >
-                      {p.user?.name ||
-                        p.user?.email ||
-                        p.userId}
+                    <span key={p.userId} className="rounded-full bg-brand-50 px-3 py-1 text-xs text-brand-700">
+                      {p.user?.name || p.user?.email || p.userId}
                     </span>
                   ))}
                 </div>
               </div>
             )}
           </div>
-        );
+        )
       })
     )}
   </div>
@@ -1299,98 +1642,151 @@ const isExpired =
             <LeadFollowupsTab leadId={id} />
           ) : activeTab === 'notes' ? (
             <div className="mt-4 space-y-8">
-              <LeadRichNotesEditor
-                key={`${editingNoteId || 'new'}-${noteEditorVersion}`}
-                editorKey={`${editingNoteId || 'new'}-${noteEditorVersion}`}
-                title={noteTitle}
-                onTitleChange={setNoteTitle}
-                initialHtml={draft}
-                isEditing={Boolean(editingNoteId)}
-                saving={creatingNote || patchingNote}
-                onSave={saveLeadNoteFromEditor}
-              />
-              <div>
-                <p className="mb-4 text-xs font-semibold uppercase tracking-wide text-ink-muted">Your notes</p>
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                  {notes.map((note) => {
-                    const noteHtml = sanitizeNoteBody(noteBodyToInitialHtml(note.body || ''))
-                    const hasRenderableBody = Boolean(notePlainText(note.body || '').trim())
-                    return (
-                      <div
-                        key={note.id}
-                        className="flex flex-col overflow-hidden rounded-2xl border border-amber-200/70 bg-gradient-to-b from-amber-50/90 to-white p-4 shadow-sm ring-1 ring-amber-100/40 transition hover:shadow-md"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="min-w-0 text-sm font-semibold text-ink line-clamp-1">{note.metadata?.title || 'Note'}</p>
-                          <p className="shrink-0 text-[11px] text-ink-muted">{new Date(note.createdAt).toLocaleDateString()}</p>
-                        </div>
-                        <p className="mt-0.5 text-[11px] text-ink-muted">By {note.user?.name || 'System'}</p>
-                        <div className="note-card-preview prose prose-sm mt-3 max-h-[200px] w-full overflow-hidden rounded-xl border border-amber-100/80 bg-white/90 p-3 text-xs leading-relaxed text-ink prose-p:my-1 prose-headings:my-1">
-                          {hasRenderableBody ? (
-                            <div dangerouslySetInnerHTML={{ __html: noteHtml }} />
-                          ) : (
-                            <span className="italic text-ink-muted">Empty note</span>
-                          )}
-                        </div>
-                        <div className="mt-3 flex justify-end gap-2 border-t border-amber-100/60 pt-3">
-                          <button
-                            type="button"
-                            className="h-8 rounded-lg border border-surface-border bg-white px-3 text-xs font-medium text-ink hover:bg-slate-50"
-                            onClick={() => {
-                              setEditingNoteId(note.id)
-                              setNoteTitle(note.metadata?.title || '')
-                              setDraft(noteBodyToInitialHtml(note.body || ''))
-                            }}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            className="h-8 rounded-lg border border-red-200 bg-red-50 px-3 text-xs font-medium text-red-700 hover:bg-red-100"
-                            onClick={async () => {
-                              await deleteNote({ id, noteId: note.id }).unwrap()
-                            }}
-                          >
-                            Delete
-                          </button>
+              {(() => {
+                const showNoteEditor = noteComposerOpen || Boolean(editingNoteId)
+                const startCreateNote = () => {
+                  setEditingNoteId(null)
+                  setNoteTitle('')
+                  setDraft('')
+                  setNoteComposerOpen(true)
+                  setNoteEditorVersion((v) => v + 1)
+                }
+                const createNoteButton = (
+                  <button
+                    type="button"
+                    onClick={startCreateNote}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-700"
+                  >
+                    <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    Create note
+                  </button>
+                )
+                return (
+                  <>
+                    <LeadTabSectionHeader
+                      title="Notes"
+                      description="Rich notes stay on this lead. Open the editor when you are ready to write or edit."
+                      action={createNoteButton}
+                    />
+                    {showNoteEditor ? (
+                      <LeadRichNotesEditor
+                        key={`${editingNoteId || 'new'}-${noteEditorVersion}`}
+                        editorKey={`${editingNoteId || 'new'}-${noteEditorVersion}`}
+                        title={noteTitle}
+                        onTitleChange={setNoteTitle}
+                        initialHtml={draft}
+                        isEditing={Boolean(editingNoteId)}
+                        saving={creatingNote || patchingNote}
+                        onSave={saveLeadNoteFromEditor}
+                        onUploadAttachment={uploadNoteAttachment}
+                      />
+                    ) : null}
+                    {notes.length > 0 ? (
+                      <div>
+                        <p className="mb-4 text-xs font-semibold uppercase tracking-wide text-ink-muted">Your notes</p>
+                        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                          {notes.map((note) => {
+                            const noteHtml = sanitizeNoteHtmlForDisplay(note.body || '')
+                            const hasRenderableBody = noteHasRenderableContent(note.body || '')
+                            const noteEmbedAttachments = extractNoteEmbedsFromSanitizedHtml(noteHtml)
+                            return (
+                              <div
+                                key={note.id}
+                                className="flex flex-col overflow-hidden rounded-2xl border border-amber-200/70 bg-gradient-to-b from-amber-50/90 to-white p-4 shadow-sm ring-1 ring-amber-100/40 transition hover:shadow-md"
+                              >
+                                <div className="flex items-start justify-between gap-2">
+                                  <p className="min-w-0 text-sm font-semibold text-ink line-clamp-1">{note.metadata?.title || 'Note'}</p>
+                                  <p className="shrink-0 text-[11px] text-ink-muted">{new Date(note.createdAt).toLocaleDateString()}</p>
+                                </div>
+                                <p className="mt-0.5 text-[11px] text-ink-muted">By {note.user?.name || 'System'}</p>
+                                <div className="note-card-preview prose prose-sm mt-3 max-h-[200px] w-full overflow-hidden rounded-xl border border-amber-100/80 bg-white/90 p-3 text-xs leading-relaxed text-ink prose-p:my-1 prose-headings:my-1">
+                                  {hasRenderableBody ? (
+                                    <div dangerouslySetInnerHTML={{ __html: noteHtml }} />
+                                  ) : (
+                                    <span className="italic text-ink-muted">Empty note</span>
+                                  )}
+                                </div>
+                                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-amber-100/60 pt-3">
+                                  <div className="min-w-0 flex-1">
+                                    {noteEmbedAttachments.length ? (
+                                      <TaskAttachmentIcons attachments={noteEmbedAttachments} variant="compact" />
+                                    ) : null}
+                                  </div>
+                                  <div className="flex shrink-0 flex-wrap justify-end gap-2">
+                                    <button
+                                      type="button"
+                                      className="h-8 rounded-lg border border-surface-border bg-white px-3 text-xs font-medium text-ink hover:bg-slate-50"
+                                      onClick={() => {
+                                        setEditingNoteId(note.id)
+                                        setNoteTitle(note.metadata?.title || '')
+                                        setDraft(noteBodyToInitialHtml(note.body || ''))
+                                        setNoteComposerOpen(true)
+                                        setNoteEditorVersion((v) => v + 1)
+                                      }}
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="h-8 rounded-lg border border-red-200 bg-red-50 px-3 text-xs font-medium text-red-700 hover:bg-red-100"
+                                      onClick={async () => {
+                                        await deleteNote({ id, noteId: note.id }).unwrap()
+                                      }}
+                                    >
+                                      Delete
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            )
+                          })}
                         </div>
                       </div>
-                    )
-                  })}
-                </div>
-                {notes.length === 0 ? (
-                  <p className="text-sm text-ink-muted">No notes yet. Use the editor above and click Add note.</p>
-                ) : null}
-              </div>
+                    ) : null}
+                    {!showNoteEditor && notes.length === 0 ? (
+                      <LeadTabEmptyState
+                        icon={NotebookPen}
+                        title="No notes yet"
+                        description="Capture context, next steps, or decisions. Your team sees the same history on this lead."
+                        action={createNoteButton}
+                      />
+                    ) : null}
+                  </>
+                )
+              })()}
             </div>
           ) : activeTab === 'documents' ? (
             <div className="mt-4 space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm text-ink-muted">Upload, preview, and edit workspace files linked to this record.</p>
-                <Link
-                  to={`/documents?leadId=${encodeURIComponent(id)}`}
-                  className="text-sm font-semibold text-brand-700 underline-offset-2 hover:underline"
-                >
-                  Open in Documents
-                </Link>
-              </div>
+              <LeadTabSectionHeader
+                title="Documents"
+                description="Upload, preview, and edit workspace files linked to this record."
+                action={
+                  <Link
+                    to={`/documents?leadId=${encodeURIComponent(id)}`}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-surface-border bg-white px-3 text-sm font-semibold text-brand-700 shadow-sm hover:bg-slate-50"
+                  >
+                    Open in Documents
+                  </Link>
+                }
+              />
               <LeadDocumentsWorkspace leadId={id} showUpload />
             </div>
           ) : activeTab === 'deal' ? (
             <div className="mt-4 space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm text-ink-muted">
-                  Deals linked to this opportunity ({childDealsForOpp.length})
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setAddDealDrawerOpen(true)}
-                  className="inline-flex h-9 items-center gap-2 rounded-lg bg-brand-600 px-3 text-xs font-semibold text-white hover:bg-brand-700"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  Add deal
-                </button>
-              </div>
+              <LeadTabSectionHeader
+                title="Deals"
+                description={`Pipeline deals linked to this opportunity (${childDealsForOpp.length}).`}
+                action={
+                  <button
+                    type="button"
+                    onClick={() => setAddDealDrawerOpen(true)}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-brand-600 px-3 text-xs font-semibold text-white shadow-sm hover:bg-brand-700"
+                  >
+                    <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    Add deal
+                  </button>
+                }
+              />
               {childDealsForOpp.length ? (
                 <div className="w-full max-w-full md:max-w-[32.5%]">
                   <ul className="space-y-4">
@@ -1480,11 +1876,41 @@ const isExpired =
                   </ul>
                 </div>
               ) : (
-                <p className="text-sm text-ink-muted">No deals yet. Add one to track it on the Deals board.</p>
+                <LeadTabEmptyState
+                  icon={ClipboardList}
+                  title="No deals yet"
+                  description="Add a deal to track value and stage on the Deals board, all linked to this opportunity."
+                  action={
+                    <button
+                      type="button"
+                      onClick={() => setAddDealDrawerOpen(true)}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-700"
+                    >
+                      <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                      Add deal
+                    </button>
+                  }
+                />
               )}
             </div>
           ) : (
-            <div className="mt-4 space-y-2">
+            <div className="mt-4 space-y-4">
+              {activeTab === 'calls' ? (
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCallLogBody('')
+                      setCallLogModalOpen(true)
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-700"
+                  >
+                    <PhoneCall className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    Log call
+                  </button>
+                </div>
+              ) : null}
+              <div className="space-y-2">
               {filteredActivities.map((activity, index) => {
                 const isNote = activity.type === 'note'
                 const metadata = activity.metadata || {}
@@ -1518,7 +1944,12 @@ const isExpired =
                 const taskDueAt = linkedTask?.dueAt || metadata.dueAt || null
                 const taskDueLabel = taskDueAt ? activityDateTimeLabel(taskDueAt) : '-'
                 const followText = `${headlineText} ${detailRaw}`.toLowerCase()
-                const isFollowUp = styleKey === 'follow_up' || styleKey === 'task' || followText.includes('follow-up') || followText.includes('follow up') || followText.includes('reminder')
+                const isFollowUp =
+                  !isTask &&
+                  (styleKey === 'follow_up' ||
+                    followText.includes('follow-up') ||
+                    followText.includes('follow up') ||
+                    followText.includes('reminder'))
                 const followUpAt = isFollowUp ? parseFollowUpTime(activity, headlineText, detailRaw) : null
                 const displayHeadline = isFollowUp && followUpAt
                   ? headlineText.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z/, activityDateTimeLabel(followUpAt))
@@ -1552,7 +1983,7 @@ const isExpired =
                         renderNoteHtml ? (
                           <div
                             className="prose prose-sm mt-1.5 max-w-none text-xs leading-relaxed text-ink prose-p:my-1 prose-headings:my-1"
-                            dangerouslySetInnerHTML={{ __html: sanitizeNoteBody(noteBodyToInitialHtml(detailRaw)) }}
+                            dangerouslySetInnerHTML={{ __html: sanitizeNoteHtmlForDisplay(detailRaw) }}
                           />
                         ) : (
                           <p className="mt-1.5 text-xs leading-relaxed text-ink-muted">{detailRaw}</p>
@@ -1561,7 +1992,7 @@ const isExpired =
                       {isNote && !detailRaw ? (
                         <div
                           className="prose prose-sm mt-1.5 max-w-none text-xs leading-relaxed text-ink prose-p:my-1 prose-headings:my-1"
-                          dangerouslySetInnerHTML={{ __html: sanitizeNoteBody(noteBodyToInitialHtml(activity.body || '')) }}
+                          dangerouslySetInnerHTML={{ __html: sanitizeNoteHtmlForDisplay(activity.body || '') }}
                         />
                       ) : null}
                       {isTask ? (
@@ -1613,81 +2044,35 @@ const isExpired =
                 )
               })}
               {filteredActivities.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-surface-border p-8 text-center">
-                  <p className="text-sm font-medium text-ink">No activity</p>
-                </div>
+                <LeadTabEmptyState
+                  icon={Sparkles}
+                  title={activeTab === 'calls' ? 'No calls logged yet' : 'No activity yet'}
+                  description={
+                    activeTab === 'calls'
+                      ? 'Log outbound or inbound conversations so your team sees the same story on this timeline.'
+                      : 'Notes, calls, meetings, and system events will show up here as they happen.'
+                  }
+                  action={
+                    activeTab === 'calls' ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCallLogBody('')
+                          setCallLogModalOpen(true)
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-700"
+                      >
+                        <PhoneCall className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                        Log call
+                      </button>
+                    ) : null
+                  }
+                />
               ) : null}
+              </div>
             </div>
           )}
 
-          {activeTab === 'notes' || activeTab === 'activity' || activeTab === 'followups' || activeTab === 'deal' || activeTab === 'documents' ? null : (
-          <div className="mt-4 rounded-xl border border-surface-border p-3">
-            {activeTab === 'tasks' ? (
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-sm text-ink-muted">Open the panel to set type, checklist, assignee, and comments.</p>
-                <button
-                  type="button"
-                  className="h-10 shrink-0 rounded-xl bg-brand-600 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700"
-                  onClick={() => {
-                    setTaskDrawerTaskId(null)
-                    setTaskDrawerOpen(true)
-                  }}
-                >
-                  Add task
-                </button>
-              </div>
-            ) : activeTab === 'emails' ? (
-              <div className="space-y-2">
-                {!googleEmailStatus?.data?.connected ? (
-                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-                    <p className="text-sm text-amber-900">Google is not connected for this company.</p>
-                    <button type="button" className="mt-2 h-9 rounded-lg bg-brand-600 px-3 text-sm font-semibold text-white" onClick={() => navigate('/integrations')}>
-                      Open Google Settings
-                    </button>
-                  </div>
-                ) : (
-                  <div className="mb-1 flex items-center justify-between text-xs text-ink-muted">
-                    <p>Connected as {googleEmailStatus?.data?.email || 'Google account'}</p>
-                    <div className="flex items-center gap-2">
-                      <button type="button" className="rounded border border-surface-border px-2 py-1" disabled={syncingEmails} onClick={() => syncLeadEmails({ id })}>
-                        {syncingEmails ? 'Syncing...' : 'Sync replies'}
-                      </button>
-                      <button type="button" className="rounded border border-brand-200 bg-brand-50 px-2 py-1 text-brand-700" onClick={() => setIsComposeOpen(true)}>
-                        Create email
-                      </button>
-                    </div>
-                  </div>
-                )}
-                <p className="text-xs text-ink-muted">Use "Create email" for compose modal with attachments.</p>
-              </div>
-            ) : (
-              <div className="flex gap-2">
-                {activeTab === 'activity' ? (
-                  <input
-                    className="h-10 w-[200px] rounded-lg border border-surface-border px-3 text-sm"
-                    placeholder="Note title"
-                    value={noteTitle}
-                    onChange={(e) => setNoteTitle(e.target.value)}
-                  />
-                ) : null}
-                <input
-                  className="h-10 flex-1 rounded-lg border border-surface-border px-3 text-sm"
-                  placeholder={activeTab === 'calls' ? 'Log call details' : activeTab === 'emails' ? 'Log email details' : 'Add note'}
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                />
-                <button
-                  type="button"
-                  className="h-10 rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white disabled:opacity-60"
-                  disabled={creatingActivity || creatingNote}
-                  onClick={() => submitActivity(activeTab === 'calls' ? 'call' : activeTab === 'emails' ? 'email' : 'note')}
-                >
-                  Add
-                </button>
-              </div>
-            )}
-          </div>
-          )}
           <LeadTaskDrawer
             open={taskDrawerOpen}
             onClose={() => {
@@ -1698,6 +2083,80 @@ const isExpired =
             task={drawerTask}
             leadTitle={fullName}
           />
+          {callLogModalOpen ? (
+            <div
+              className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/45 p-4 backdrop-blur-[2px]"
+              role="presentation"
+              onMouseDown={(e) => {
+                if (e.target === e.currentTarget) setCallLogModalOpen(false)
+              }}
+            >
+              <div
+                className="w-full max-w-lg overflow-hidden rounded-2xl border border-surface-border bg-white shadow-2xl ring-1 ring-black/5"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="call-log-title"
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <div className="border-b border-surface-border bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 px-5 py-4 text-white">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p id="call-log-title" className="text-base font-semibold tracking-tight">
+                        Log a call
+                      </p>
+                      <p className="mt-0.5 text-xs text-white/75">
+                        Summarize who you spoke with, outcome, and next steps. This appears on the lead timeline.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="rounded-lg p-1.5 text-white/80 transition hover:bg-white/10 hover:text-white"
+                      aria-label="Close"
+                      onClick={() => setCallLogModalOpen(false)}
+                    >
+                      <X className="h-4 w-4" aria-hidden />
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-4 p-5">
+                  <IconTextarea
+                    icon={PhoneCall}
+                    className="min-h-[140px] rounded-xl border-slate-300 text-sm"
+                    placeholder="e.g. Spoke with Jane — interested in enterprise tier, follow-up demo next Tuesday…"
+                    value={callLogBody}
+                    onChange={(e) => setCallLogBody(e.target.value)}
+                  />
+                  <div className="flex flex-wrap items-center justify-end gap-2 border-t border-surface-border pt-4">
+                    <button
+                      type="button"
+                      className="h-9 rounded-lg border border-surface-border bg-white px-4 text-sm font-medium text-ink hover:bg-slate-50"
+                      onClick={() => setCallLogModalOpen(false)}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!callLogBody.trim() || creatingActivity}
+                      className="h-9 rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700 disabled:opacity-50"
+                      onClick={() => void submitCallLog()}
+                    >
+                      {creatingActivity ? 'Saving…' : 'Save call'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
+          <CreateMeetingModal
+            open={createMeetingModalOpen}
+            onClose={() => {
+              setCreateMeetingModalOpen(false)
+              setEditingMeeting(null)
+            }}
+            leadId={id}
+            users={formMetaData?.data?.users || []}
+            initialData={editingMeeting}
+          />
           {isComposeOpen ? (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
               <div className="w-full min-w-0 max-w-none overflow-hidden rounded-2xl border border-surface-border bg-white shadow-2xl">
@@ -1707,12 +2166,32 @@ const isExpired =
                 </div>
                 <div className="space-y-0 p-0">
                   <div className="border-b border-surface-border px-4 py-2">
-                    <input className="h-9 w-full border-0 px-0 text-sm outline-none" placeholder="To (comma separated emails)" value={emailTo} onChange={(e) => setEmailTo(e.target.value)} />
+                    <IconInput
+                      icon={Mail}
+                      className="h-9 rounded-none border-0 bg-transparent px-0 pl-9 text-sm shadow-none hover:border-transparent focus:border-transparent focus:ring-0"
+                      placeholder="To (comma separated emails)"
+                      value={emailTo}
+                      onChange={(e) => setEmailTo(e.target.value)}
+                    />
                   </div>
                   <div className="border-b border-surface-border px-4 py-2">
-                    <input className="h-9 w-full border-0 px-0 text-sm outline-none" placeholder="Subject" value={emailSubject} onChange={(e) => setEmailSubject(e.target.value)} />
+                    <IconInput
+                      icon={MessageSquare}
+                      className="h-9 rounded-none border-0 bg-transparent px-0 pl-9 text-sm shadow-none hover:border-transparent focus:border-transparent focus:ring-0"
+                      placeholder="Subject"
+                      value={emailSubject}
+                      onChange={(e) => setEmailSubject(e.target.value)}
+                    />
                   </div>
-                  <textarea className="min-h-[220px] w-full border-0 px-4 py-3 text-sm outline-none" placeholder="Write email..." value={emailBody} onChange={(e) => setEmailBody(e.target.value)} />
+                  <div className="px-2 py-2">
+                    <IconTextarea
+                      icon={MessageSquare}
+                      className="min-h-[220px] rounded-none border-0 bg-transparent px-4 py-3 pl-9 text-sm shadow-none hover:border-transparent focus:border-transparent focus:ring-0"
+                      placeholder="Write email..."
+                      value={emailBody}
+                      onChange={(e) => setEmailBody(e.target.value)}
+                    />
+                  </div>
                   <div className="flex items-center gap-1 border-t border-surface-border px-3 py-2">
                     <button type="button" className="rounded p-1.5 text-ink-muted hover:bg-surface-subtle hover:text-ink" onClick={() => appendToBody('**bold**')}><Bold size={16} /></button>
                     <button type="button" className="rounded p-1.5 text-ink-muted hover:bg-surface-subtle hover:text-ink" onClick={() => appendToBody('_italic_')}><Italic size={16} /></button>

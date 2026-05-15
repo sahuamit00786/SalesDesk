@@ -3,7 +3,6 @@ import { Link, useParams } from 'react-router-dom'
 import {
   Bell,
   Briefcase,
-  Building2,
   CalendarClock,
   CalendarDays,
   CheckSquare,
@@ -26,8 +25,10 @@ import {
 import { PageShell } from '@/components/layout/PageShell'
 import { TeamMemberAccessDrawer } from '@/features/team/components/TeamMemberAccessDrawer'
 import { useGetTeamUserQuery } from '@/features/team/teamApi'
+import { labelCompanyUserRoleKind } from '@/constants/companyUserRoleKind'
 import { useGetActivitiesFeedQuery } from '@/features/activities/activitiesApi'
 import { useGetTasksQuery } from '@/features/tasks/tasksApi'
+import { TaskAttachmentIcons } from '@/features/leads/components/TaskAttachmentIcons'
 import { useGetMeetingsQuery } from '@/features/meetings/meetingsApi'
 import { useGetRemindersQuery } from '@/features/reminders/remindersApi'
 import { cn } from '@/utils/cn'
@@ -347,7 +348,6 @@ function TaskRow({ row }) {
       ? 'border-amber-200 bg-amber-50 text-amber-700'
       : 'border-surface-border bg-white text-ink-muted'
   const isOverdue = Boolean(row.isOverdue)
-  const attachmentsCount = Array.isArray(row.attachments) ? row.attachments.length : row.attachmentsCount || 0
   const recurrenceLabel =
     row.recurrenceLabel ||
     (row.recurrenceRule
@@ -393,11 +393,7 @@ function TaskRow({ row }) {
                 {recurrenceLabel}
               </span>
             ) : null}
-            {attachmentsCount ? (
-              <span className="rounded-full border border-surface-border bg-white px-2 py-0.5 text-[10px] font-semibold text-ink-muted">
-                📎 {attachmentsCount}
-              </span>
-            ) : null}
+            <TaskAttachmentIcons attachments={row.attachments} variant="compact" />
             {row.lead?.title ? (
               <Link
                 to={`/leads/${row.lead.id}`}
@@ -652,8 +648,19 @@ function ProfileSidebar({ user, onEdit, canEdit = true }) {
 
         <SidebarSection title="Employee details">
           <InfoLine icon={Briefcase} label="Title" value={user?.jobTitle} />
-          <InfoLine icon={Building2} label="Department" value={user?.department} />
-          <InfoLine icon={IdCard} label="Role" value={user?.companyRole?.name} />
+          <InfoLine
+            icon={IdCard}
+            label="Role"
+            value={
+              user?.companyRole?.name
+                ? `${user.companyRole.name}${
+                    user.companyRole.userRoleKind
+                      ? ` · ${labelCompanyUserRoleKind(user.companyRole.userRoleKind)}`
+                      : ''
+                  }`
+                : null
+            }
+          />
           <InfoLine
             icon={CalendarDays}
             label="Member since"

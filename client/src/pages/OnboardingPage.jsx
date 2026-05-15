@@ -124,7 +124,7 @@ export function OnboardingPage() {
       await patchMyCompany({ onboardingCompleted: true }).unwrap()
       toast.success('Welcome to SalesDesk')
       const dest = location.state?.from?.pathname
-      navigate(dest && dest !== '/onboarding' ? dest : '/', { replace: true })
+      navigate(dest && dest !== '/onboarding' ? dest : '/dashboard', { replace: true })
     } catch (err) {
       const message = err?.data?.error?.message ?? err?.data?.publicMessage ?? err?.error ?? 'Could not finish setup'
       toast.error(message)
@@ -142,7 +142,7 @@ export function OnboardingPage() {
   }
 
   if (!user?.needsOnboarding) {
-    return <Navigate to="/" replace />
+    return <Navigate to="/dashboard" replace />
   }
 
   return (

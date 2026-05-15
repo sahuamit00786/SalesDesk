@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Folder, Printer, Search } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
+import { IconInput } from '@/components/ui/IconInput'
 import { cn } from '@/utils/cn'
 import { useGetLeadQuery } from '@/features/leads/leadsApi'
 import { useGetDocumentsQuery, useGetLeadDocumentSummariesQuery } from '@/features/documents/documentsApi'
@@ -203,13 +204,13 @@ export function DocumentsPage() {
                 <div className="scrollbar-subtle flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-3 pb-3 pt-7 sm:px-4 sm:pb-4 sm:pt-9">
                   <div className="mb-4 flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <h2 className="text-sm font-semibold text-ink sm:text-base">Lead folders</h2>
-                    <div className="relative w-full shrink-0 sm:max-w-xs">
-                      <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-faint" />
-                      <input
+                    <div className="w-full shrink-0 sm:max-w-xs">
+                      <IconInput
+                        icon={Search}
                         value={folderSearch}
                         onChange={(e) => setFolderSearch(e.target.value)}
                         placeholder="Search by lead name…"
-                        className="h-10 w-full rounded-xl border border-surface-border bg-white pl-9 pr-3 text-sm text-ink placeholder:text-ink-faint focus:border-brand-500 focus:outline-none"
+                        aria-label="Search folders by lead name"
                       />
                     </div>
                   </div>

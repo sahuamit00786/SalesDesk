@@ -11,10 +11,6 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
-  ChevronLeft,
-  ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
   Download,
   Inbox,
   LayoutList,
@@ -25,6 +21,7 @@ import { cn } from '@/utils/cn'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
+import { TablePaginationBar } from '@/components/ui/TablePaginationBar'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Loader } from '@/components/shared/Loader'
 import { useOutsideClick } from '@/hooks/useOutsideClick'
@@ -106,7 +103,7 @@ function SelectAllCheckbox({ table }) {
  * @param {import('lucide-react').LucideIcon} [emptyIcon]
  * @param {(rows: any[]) => void} [onSelectionChange]
  * @param {(row: any) => string} [getRowId]
- * @param {boolean} [striped=true]
+ * @param {boolean} [striped=false]
  * @param {boolean} [compact=false]
  * @param {React.ReactNode} [toolbarRight]
  * @param {string} [csvFilename='export.csv']
@@ -128,7 +125,7 @@ export function DataGrid({
   emptyIcon: EmptyIcon = Inbox,
   onSelectionChange,
   getRowId,
-  striped = true,
+  striped = false,
   compact = false,
   toolbarRight,
   csvFilename = 'export.csv',
@@ -238,8 +235,6 @@ export function DataGrid({
   const pageSize = table.getState().pagination.pageSize
   const from = filteredCount ? pageIndex * pageSize + 1 : 0
   const to = Math.min((pageIndex + 1) * pageSize, filteredCount)
-  const cellPad = compact ? 'px-3 py-2' : 'px-4 py-3'
-  const headPad = compact ? 'px-3 py-2.5' : 'px-4 py-3'
 
   const showToolbar = searchable || showColumnToggle || showExportCsv || toolbarRight
   const hasRows = data.length > 0
@@ -395,8 +390,11 @@ export function DataGrid({
             />
           </div>
         ) : (
-          <table className="w-full min-w-[720px] border-collapse text-left text-sm" role="grid">
-            <thead className="sticky top-0 z-[1] border-b border-surface-border bg-surface-muted/95 text-ink-muted shadow-sm backdrop-blur-sm">
+          <table
+            className={cn('cx-table min-w-[720px]', compact && 'cx-table--dense')}
+            role="grid"
+          >
+            <thead className="cx-table-sticky-head">
               {table.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id} role="row">
                   {headerGroup.headers.map((header) => {
@@ -410,11 +408,7 @@ export function DataGrid({
                         aria-sort={
                           sorted === 'asc' ? 'ascending' : sorted === 'desc' ? 'descending' : 'none'
                         }
-                        className={cn(
-                          headPad,
-                          'whitespace-nowrap font-semibold text-ink',
-                          header.column.columnDef.meta?.headerClassName,
-                        )}
+                        className={cn('whitespace-nowrap', header.column.columnDef.meta?.headerClassName)}
                         style={{ minWidth: header.getSize() }}
                       >
                         {header.isPlaceholder ? null : canSort ? (
@@ -444,27 +438,22 @@ export function DataGrid({
                 </tr>
               ))}
             </thead>
-            <tbody className="divide-y divide-surface-border text-ink">
+            <tbody>
               {pageRows.map((row, idx) => (
                 <tr
                   key={row.id}
                   role="row"
                   aria-rowindex={pageIndex * pageSize + idx + 2}
                   className={cn(
-                    'transition-colors hover:bg-brand-500/[0.04]',
-                    striped && idx % 2 === 1 && 'bg-surface-muted/35',
-                    row.getIsSelected() && 'bg-brand-500/10',
+                    striped && idx % 2 === 1 && 'bg-slate-50/60',
+                    row.getIsSelected() && 'bg-brand-500/[0.08] hover:bg-brand-500/12',
                   )}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <td
                       key={cell.id}
                       role="gridcell"
-                      className={cn(
-                        cellPad,
-                        'align-middle',
-                        cell.column.columnDef.meta?.cellClassName,
-                      )}
+                      className={cn(cell.column.columnDef.meta?.cellClassName)}
                     >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>
@@ -477,88 +466,50 @@ export function DataGrid({
       </div>
 
       {!noResults && hasRows ? (
-        <div className="flex flex-col gap-3 border-t border-surface-border bg-surface-muted/30 px-4 py-3 text-sm text-ink-muted sm:flex-row sm:items-center sm:justify-between">
-          <p className="tabular-nums">
-            {filteredCount ? (
-              <>
-                Showing <span className="font-medium text-ink">{from}</span>–
-                <span className="font-medium text-ink">{to}</span> of{' '}
-                <span className="font-medium text-ink">{filteredCount}</span>
-                {selectable && Object.keys(rowSelection).length > 0 ? (
-                  <span className="ml-2 text-brand-600">
-                    ({Object.keys(rowSelection).length} selected)
-                  </span>
-                ) : null}
-              </>
-            ) : (
-              'No rows'
-            )}
-          </p>
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            <label className="flex items-center gap-2 text-xs font-medium text-ink-muted">
-              <span className="hidden sm:inline">Rows per page</span>
-              <Select
-                className="h-9 w-[4.5rem] rounded-lg text-xs"
-                value={String(pageSize)}
-                onChange={(e) => {
-                  table.setPageSize(Number(e.target.value))
-                  table.setPageIndex(0)
-                }}
-                aria-label="Rows per page"
-              >
-                {sizeChoices.map((n) => (
-                  <option key={n} value={String(n)}>
-                    {n}
-                  </option>
-                ))}
-              </Select>
-            </label>
-            <div className="flex items-center gap-1">
-              <Button
-                type="button"
-                variant="icon"
-                className="h-9 w-9"
-                aria-label="First page"
-                disabled={!table.getCanPreviousPage()}
-                onClick={() => table.setPageIndex(0)}
-              >
-                <ChevronsLeft className="h-4 w-4" />
-              </Button>
-              <Button
-                type="button"
-                variant="icon"
-                className="h-9 w-9"
-                aria-label="Previous page"
-                disabled={!table.getCanPreviousPage()}
-                onClick={() => table.previousPage()}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span className="min-w-[5.5rem] px-2 text-center text-xs font-medium tabular-nums text-ink">
-                {pageIndex + 1} / {Math.max(1, table.getPageCount())}
-              </span>
-              <Button
-                type="button"
-                variant="icon"
-                className="h-9 w-9"
-                aria-label="Next page"
-                disabled={!table.getCanNextPage()}
-                onClick={() => table.nextPage()}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-              <Button
-                type="button"
-                variant="icon"
-                className="h-9 w-9"
-                aria-label="Last page"
-                disabled={!table.getCanNextPage()}
-                onClick={() => table.setPageIndex(table.getPageCount() - 1)}
-              >
-                <ChevronsRight className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
+        <div className="flex flex-col gap-3 border-t border-surface-border bg-surface-muted/30 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+          <TablePaginationBar
+            variant="surface"
+            page={pageIndex + 1}
+            totalPages={Math.max(1, table.getPageCount())}
+            onPageChange={(p) => table.setPageIndex(p - 1)}
+            className="w-full"
+            subLabel={
+              filteredCount ? (
+                <>
+                  Showing <span className="font-medium text-ink">{from}</span>–
+                  <span className="font-medium text-ink">{to}</span> of{' '}
+                  <span className="font-medium text-ink">{filteredCount}</span>
+                  {selectable && Object.keys(rowSelection).length > 0 ? (
+                    <span className="ml-1 text-brand-600">
+                      ({Object.keys(rowSelection).length} selected)
+                    </span>
+                  ) : null}
+                </>
+              ) : (
+                'No rows'
+              )
+            }
+            beforeNav={
+              <label className="flex items-center gap-2 text-xs font-medium text-ink-muted">
+                <span className="hidden sm:inline">Rows per page</span>
+                <Select
+                  className="h-9 w-[4.5rem] rounded-lg text-xs"
+                  value={String(pageSize)}
+                  onChange={(e) => {
+                    table.setPageSize(Number(e.target.value))
+                    table.setPageIndex(0)
+                  }}
+                  aria-label="Rows per page"
+                >
+                  {sizeChoices.map((n) => (
+                    <option key={n} value={String(n)}>
+                      {n}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+            }
+          />
         </div>
       ) : null}
     </div>

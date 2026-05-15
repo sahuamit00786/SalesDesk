@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertCircle,
   BellRing,
@@ -6,6 +6,7 @@ import {
   Check,
   Clock,
   Hourglass,
+  Pencil,
   Plus,
   Timer,
   Trash2,
@@ -19,6 +20,7 @@ import {
   useGetLeadFollowupsQuery,
   usePatchLeadFollowupMutation,
 } from '@/features/leads/leadsApi'
+import { LeadTabEmptyState, LeadTabSectionHeader } from '@/features/leads/components/LeadTabSectionHeader'
 
 function pad2(n) {
   return String(n).padStart(2, '0')
@@ -56,6 +58,14 @@ function parseHm(timeStr) {
   return { h, m }
 }
 
+/** Local calendar minute (ms) for comparing schedule without second noise from APIs */
+function localMinuteMs(isoOrDate) {
+  const d = new Date(isoOrDate)
+  if (Number.isNaN(d.getTime())) return null
+  d.setSeconds(0, 0)
+  return d.getTime()
+}
+
 function formatFollowupWhen(iso) {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return '—'
@@ -88,10 +98,12 @@ const QUICK = [
 export function LeadFollowupsTab({ leadId }) {
   const { data, isLoading } = useGetLeadFollowupsQuery(leadId, { skip: !leadId })
   const [createFollowup, { isLoading: creating }] = useCreateLeadFollowupMutation()
-  const [patchFollowup] = usePatchLeadFollowupMutation()
+  const [patchFollowup, { isLoading: patching }] = usePatchLeadFollowupMutation()
   const [deleteFollowup] = useDeleteLeadFollowupMutation()
 
   const [drawerOpen, setDrawerOpen] = useState(false)
+  /** When set, drawer is editing this follow-up (pending only from UI). */
+  const [editingId, setEditingId] = useState(null)
   const [remark, setRemark] = useState('')
   const [mode, setMode] = useState('quick') // 'quick' | 'custom'
   const [quickPick, setQuickPick] = useState(5)
@@ -99,6 +111,10 @@ export function LeadFollowupsTab({ leadId }) {
   const [customTime, setCustomTime] = useState('')
   /** Monotonic-ish “now” for UI validation and overdue styling (no Date.now() during render). */
   const [clockMs, setClockMs] = useState(() => Date.now())
+
+  /** Minute-ms of schedule shown when edit drawer finished opening (avoids accidental PATCH when UI primes a new slot). */
+  const editScheduleBaselineMsRef = useRef(null)
+  const editScheduleBaselineCapturedRef = useRef(false)
 
   const followups = useMemo(() => data?.data || [], [data])
   const hasPendingFollowup = useMemo(() => followups.some((f) => f.status === 'pending'), [followups])
@@ -152,13 +168,39 @@ export function LeadFollowupsTab({ leadId }) {
     setCustomTime(toTimeInputValue(base))
   }
 
-  const openDrawer = () => {
+  function openDrawerForCreate() {
+    setEditingId(null)
+    editScheduleBaselineCapturedRef.current = false
+    editScheduleBaselineMsRef.current = null
     setRemark('')
     setMode('quick')
     setQuickPick(5)
     primeCustomFields()
     setClockMs(Date.now())
     setDrawerOpen(true)
+  }
+
+  function openDrawerForEdit(fu) {
+    if (fu.status !== 'pending') return
+    editScheduleBaselineCapturedRef.current = false
+    editScheduleBaselineMsRef.current = null
+    setEditingId(fu.id)
+    setRemark(fu.remark || '')
+    const at = new Date(fu.scheduledAt)
+    const nowMs = Date.now()
+    setMode('custom')
+    if (!Number.isNaN(at.getTime()) && at.getTime() > nowMs) {
+      setCustomDate(toDateInputValue(at))
+      setCustomTime(toTimeInputValue(at))
+    } else {
+      primeCustomFields()
+    }
+    setClockMs(Date.now())
+    setDrawerOpen(true)
+  }
+
+  const openDrawer = () => {
+    openDrawerForCreate()
   }
 
   const scheduledFromForm = useMemo(() => {
@@ -176,7 +218,52 @@ export function LeadFollowupsTab({ leadId }) {
     return scheduledFromForm.getTime() > clockMs
   }, [scheduledFromForm, clockMs])
 
+  useEffect(() => {
+    if (!drawerOpen || !editingId || editScheduleBaselineCapturedRef.current) return
+    if (mode !== 'custom') return
+    const d = scheduledFromForm
+    if (!d || Number.isNaN(d.getTime())) return
+    editScheduleBaselineMsRef.current = localMinuteMs(d)
+    editScheduleBaselineCapturedRef.current = true
+  }, [drawerOpen, editingId, mode, scheduledFromForm])
+
   async function onSubmit() {
+    if (editingId) {
+      const editing = followups.find((f) => String(f.id) === String(editingId))
+      if (!editing) {
+        toast.error('Follow-up not found.')
+        return
+      }
+      const body = {}
+      const nextRemark = remark.trim()
+      const prevRemark = String(editing.remark || '').trim()
+      if (nextRemark !== prevRemark) {
+        body.remark = nextRemark || null
+      }
+      const baseline = editScheduleBaselineMsRef.current
+      const currentMs = scheduledFromForm ? localMinuteMs(scheduledFromForm) : null
+      if (baseline != null && currentMs != null && currentMs !== baseline) {
+        if (scheduledFromForm.getTime() <= clockMs) {
+          toast.error('Pick a follow-up time after now.')
+          return
+        }
+        body.scheduledAt = scheduledFromForm.toISOString()
+      }
+      if (!Object.keys(body).length) {
+        toast.error('Change the remark or schedule to save.')
+        return
+      }
+      try {
+        await patchFollowup({ id: leadId, followupId: editingId, ...body }).unwrap()
+        toast.success('Follow-up updated')
+        setDrawerOpen(false)
+        setEditingId(null)
+      } catch (e) {
+        toast.error(e?.data?.error?.message || 'Could not update follow-up')
+      }
+      return
+    }
+
     if (!scheduledValid) {
       toast.error('Pick a follow-up time after now.')
       return
@@ -196,31 +283,34 @@ export function LeadFollowupsTab({ leadId }) {
     }
   }
 
+  const addFollowUpButton = (
+    <button
+      type="button"
+      onClick={openDrawer}
+      className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-700"
+    >
+      <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
+      Add follow-up
+    </button>
+  )
+
   return (
     <div className="mt-4 space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h3 className="text-sm font-semibold text-ink">Follow-ups</h3>
-          <p className="text-xs text-ink-muted">Remind yourself when to reach out again.</p>
-        </div>
-        <button
-          type="button"
-          onClick={openDrawer}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-2.5 py-1.5 text-xs font-medium text-white shadow-sm transition hover:bg-violet-700"
-        >
-          <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
-          Add follow-up
-        </button>
-      </div>
+      <LeadTabSectionHeader
+        title="Follow-ups"
+        description="Remind yourself when to reach out again."
+        action={addFollowUpButton}
+      />
 
       {isLoading ? (
         <p className="text-sm text-ink-muted">Loading…</p>
       ) : followups.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-surface-border bg-slate-50/60 px-6 py-12 text-center">
-          <BellRing className="mx-auto h-10 w-10 text-violet-300" aria-hidden />
-          <p className="mt-3 text-sm font-medium text-ink">No follow-ups yet</p>
-          <p className="mt-1 text-xs text-ink-muted">Schedule the next touchpoint so nothing slips.</p>
-        </div>
+        <LeadTabEmptyState
+          icon={BellRing}
+          title="No follow-ups scheduled yet"
+          description="Schedule the next touchpoint so nothing slips. Everyone on the team sees the same list once reminders are added."
+          action={addFollowUpButton}
+        />
       ) : (
         <ul className="grid w-full grid-cols-1 gap-2.5">
           {followups.map((fu) => {
@@ -299,6 +389,15 @@ export function LeadFollowupsTab({ leadId }) {
                     <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
                       {fu.status === 'pending' ? (
                         <>
+                          <button
+                            type="button"
+                            className="inline-flex h-7 items-center gap-1 rounded-md border border-violet-200 bg-white px-2 text-[11px] font-medium text-violet-800 transition hover:bg-violet-50"
+                            title="Edit remark or time"
+                            onClick={() => openDrawerForEdit(fu)}
+                          >
+                            <Pencil className="h-3.5 w-3.5 shrink-0" strokeWidth={2.25} aria-hidden />
+                            Edit
+                          </button>
                           <button
                             type="button"
                             className="inline-flex h-7 items-center gap-1 rounded-md border border-emerald-200 bg-white px-2 text-[11px] font-medium text-emerald-800 transition hover:bg-emerald-50"
@@ -396,25 +495,39 @@ export function LeadFollowupsTab({ leadId }) {
 
       <RightDrawer
         open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        title="Add follow-up"
-        description="Choose when to follow up. Times must be in the future."
+        onClose={() => {
+          setDrawerOpen(false)
+          setEditingId(null)
+          editScheduleBaselineCapturedRef.current = false
+          editScheduleBaselineMsRef.current = null
+        }}
+        title={editingId ? 'Edit follow-up' : 'Add follow-up'}
+        description={
+          editingId
+            ? 'Update the remark or pick a new time. When you change the time, it must be in the future.'
+            : 'Choose when to follow up. Times must be in the future.'
+        }
         footer={
           <div className="flex justify-end gap-2">
             <button
               type="button"
-              onClick={() => setDrawerOpen(false)}
+              onClick={() => {
+                setDrawerOpen(false)
+                setEditingId(null)
+                editScheduleBaselineCapturedRef.current = false
+                editScheduleBaselineMsRef.current = null
+              }}
               className="h-10 rounded-xl border border-surface-border px-4 text-sm font-medium text-ink-muted hover:bg-slate-50"
             >
               Close
             </button>
             <button
               type="button"
-              disabled={creating || !scheduledValid}
+              disabled={editingId ? patching : creating || !scheduledValid}
               onClick={onSubmit}
               className="h-10 rounded-xl bg-violet-600 px-5 text-sm font-semibold text-white shadow-sm hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {creating ? 'Saving…' : 'Schedule'}
+              {editingId ? (patching ? 'Saving…' : 'Save changes') : creating ? 'Saving…' : 'Schedule'}
             </button>
           </div>
         }
@@ -422,37 +535,41 @@ export function LeadFollowupsTab({ leadId }) {
         <div className="space-y-6">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">When</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setMode('quick')}
-                className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${
-                  mode === 'quick'
-                    ? 'border-violet-400 bg-violet-50 text-violet-900 shadow-sm'
-                    : 'border-surface-border text-ink-muted hover:border-violet-200 hover:text-ink'
-                }`}
-              >
-                Quick
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setMode('custom')
-                  primeCustomFields()
-                }}
-                className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-medium transition ${
-                  mode === 'custom'
-                    ? 'border-violet-400 bg-violet-50 text-violet-900 shadow-sm'
-                    : 'border-surface-border text-ink-muted hover:border-violet-200 hover:text-ink'
-                }`}
-              >
-                <CalendarDays className="h-4 w-4" aria-hidden />
-                Custom date & time
-              </button>
-            </div>
+            {editingId ? (
+              <p className="mt-2 text-xs text-ink-muted">Adjust date and time below, or leave as-is and only change the remark.</p>
+            ) : (
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setMode('quick')}
+                  className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${
+                    mode === 'quick'
+                      ? 'border-violet-400 bg-violet-50 text-violet-900 shadow-sm'
+                      : 'border-surface-border text-ink-muted hover:border-violet-200 hover:text-ink'
+                  }`}
+                >
+                  Quick
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('custom')
+                    primeCustomFields()
+                  }}
+                  className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-medium transition ${
+                    mode === 'custom'
+                      ? 'border-violet-400 bg-violet-50 text-violet-900 shadow-sm'
+                      : 'border-surface-border text-ink-muted hover:border-violet-200 hover:text-ink'
+                  }`}
+                >
+                  <CalendarDays className="h-4 w-4" aria-hidden />
+                  Custom date & time
+                </button>
+              </div>
+            )}
           </div>
 
-          {mode === 'quick' ? (
+          {!editingId && mode === 'quick' ? (
             <div>
               <p className="text-xs text-ink-muted">From the next minute, remind after:</p>
               <div className="mt-2 flex flex-wrap gap-2">

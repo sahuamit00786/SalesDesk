@@ -280,27 +280,27 @@ export function LeadConfigurationPage() {
           {activeTab === 'source' ? (
             <div className="overflow-hidden rounded-xl border border-surface-border bg-white">
               <div className="overflow-x-auto">
-                <table className="w-full min-w-full text-xs">
-                  <thead className="sticky top-0 z-10 bg-white">
-                    <tr className="border-b border-surface-border/70">
-                      <th className="px-2.5 py-2 text-left text-[11px] font-semibold text-ink-muted">Source</th>
-                      <th className="px-2.5 py-2 text-left text-[11px] font-semibold text-ink-muted">Created</th>
-                      <th className="px-2.5 py-2 text-right text-[11px] font-semibold text-ink-muted">Actions</th>
+                <table className="cx-table cx-table--dense min-w-full text-xs">
+                  <thead className="cx-table-sticky-head">
+                    <tr>
+                      <th>Source</th>
+                      <th>Created</th>
+                      <th className="cx-table-cell-actions text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {setup.sources.length === 0 ? (
                       <tr>
-                        <td colSpan={3} className="px-3 py-8 text-center text-ink-muted">
+                        <td colSpan={3} className="py-8 text-center text-ink-muted">
                           No sources found.
                         </td>
                       </tr>
                     ) : (
                       setup.sources.map((item) => (
-                        <tr key={item.id} className="group border-b border-surface-border last:border-b-0 hover:bg-brand-50">
-                          <td className="px-2.5 py-2 text-xs text-ink">{item.name}</td>
-                          <td className="px-2.5 py-2 text-xs text-ink-muted">{formatDate(item.createdAt)}</td>
-                          <td className="px-2.5 py-2 text-right">
+                        <tr key={item.id} className="group">
+                          <td className="text-xs text-ink">{item.name}</td>
+                          <td className="text-xs text-ink-muted">{formatDate(item.createdAt)}</td>
+                          <td className="cx-table-cell-actions text-right">
                             <div className="inline-flex gap-1 opacity-100 transition">
                               <button
                                 type="button"
@@ -334,34 +334,34 @@ export function LeadConfigurationPage() {
             {activeTab === 'tags' ? (
               <div className="overflow-hidden rounded-xl border border-surface-border bg-white">
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-full text-xs">
-                    <thead className="sticky top-0 z-10 bg-white">
-                      <tr className="border-b border-surface-border/70">
-                        <th className="px-2.5 py-2 text-left text-[11px] font-semibold text-ink-muted">Tag</th>
-                        <th className="px-2.5 py-2 text-left text-[11px] font-semibold text-ink-muted">Color</th>
-                        <th className="px-2.5 py-2 text-left text-[11px] font-semibold text-ink-muted">Created</th>
-                        <th className="px-2.5 py-2 text-right text-[11px] font-semibold text-ink-muted">Actions</th>
+                  <table className="cx-table cx-table--dense min-w-full text-xs">
+                    <thead className="cx-table-sticky-head">
+                      <tr>
+                        <th>Tag</th>
+                        <th>Color</th>
+                        <th>Created</th>
+                        <th className="cx-table-cell-actions text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {setup.tags.length === 0 ? (
                         <tr>
-                          <td colSpan={4} className="px-3 py-8 text-center text-ink-muted">
+                          <td colSpan={4} className="py-8 text-center text-ink-muted">
                             No tags found.
                           </td>
                         </tr>
                       ) : (
                         setup.tags.map((item) => (
-                          <tr key={item.id} className="group border-b border-surface-border last:border-b-0 hover:bg-brand-50">
-                            <td className="px-2.5 py-2 text-xs text-ink">{item.name}</td>
-                            <td className="px-2.5 py-2">
+                          <tr key={item.id} className="group">
+                            <td className="text-xs text-ink">{item.name}</td>
+                            <td>
                               <span className="inline-flex items-center gap-2 text-xs text-ink-muted">
                                 <span className="h-3.5 w-3.5 rounded-full border border-surface-border" style={{ backgroundColor: item.color || '#3b73f5' }} />
                                 {item.color || '#3b73f5'}
                               </span>
                             </td>
-                            <td className="px-2.5 py-2 text-xs text-ink-muted">{formatDate(item.createdAt)}</td>
-                            <td className="px-2.5 py-2 text-right">
+                            <td className="text-xs text-ink-muted">{formatDate(item.createdAt)}</td>
+                            <td className="cx-table-cell-actions text-right">
                               <div className="inline-flex gap-1 opacity-100 transition">
                                 <button
                                   type="button"
@@ -395,21 +395,21 @@ export function LeadConfigurationPage() {
             {activeTab === 'opportunity-stages' ? (
               <div className="overflow-hidden rounded-xl border border-surface-border bg-white">
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-full text-xs">
-                    <thead className="sticky top-0 z-10 bg-white">
-                      <tr className="border-b border-surface-border/70">
-                        <th className="w-8 px-2.5 py-2 text-left text-[11px] font-semibold text-ink-muted">Move</th>
-                        <th className="px-2.5 py-2 text-left text-[11px] font-semibold text-ink-muted">Stage</th>
-                        <th className="px-2.5 py-2 text-center text-[11px] font-semibold text-ink-muted">Initial</th>
-                        <th className="px-2.5 py-2 text-center text-[11px] font-semibold text-ink-muted">Deal status</th>
-                        <th className="px-2.5 py-2 text-left text-[11px] font-semibold text-ink-muted">Created</th>
-                        <th className="px-2.5 py-2 text-right text-[11px] font-semibold text-ink-muted">Actions</th>
+                  <table className="cx-table cx-table--dense min-w-full text-xs">
+                    <thead className="cx-table-sticky-head">
+                      <tr>
+                        <th className="cx-table-cell-actions w-8">Move</th>
+                        <th>Stage</th>
+                        <th className="text-center">Initial</th>
+                        <th className="text-center">Deal status</th>
+                        <th>Created</th>
+                        <th className="cx-table-cell-actions text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {(setup.opportunityStages || []).length === 0 ? (
                         <tr>
-                          <td colSpan={6} className="px-3 py-8 text-center text-ink-muted">
+                          <td colSpan={6} className="py-8 text-center text-ink-muted">
                             No lead statuses found.
                           </td>
                         </tr>
@@ -428,18 +428,18 @@ export function LeadConfigurationPage() {
                               setDraggingOpportunityStageId(null)
                             }}
                             className={cn(
-                              'group border-b border-surface-border last:border-b-0 hover:bg-brand-50',
+                              'group',
                               draggingOpportunityStageId === item.id ? 'opacity-50' : '',
                             )}
                           >
-                            <td className="px-2.5 py-2 text-ink-muted">
+                            <td className="cx-table-cell-actions text-ink-muted">
                               <span className="inline-flex cursor-grab items-center" title="Drag to reorder">
                                 <GripVertical className="h-3.5 w-3.5" />
                               </span>
                             </td>
-                            <td className="px-2.5 py-2 text-xs text-ink">{formatStatusName(item.name)}</td>
-                            <td className="px-2.5 py-2 text-center text-xs text-ink-muted">{item.isDefault ? 'Yes' : 'No'}</td>
-                            <td className="px-2.5 py-2 text-center">
+                            <td className="text-xs text-ink">{formatStatusName(item.name)}</td>
+                            <td className="text-center text-xs text-ink-muted">{item.isDefault ? 'Yes' : 'No'}</td>
+                            <td className="text-center align-middle">
                               <input
                                 type="checkbox"
                                 className="h-3.5 w-3.5 rounded border-surface-border text-brand-600 focus:ring-brand-500"
@@ -449,8 +449,8 @@ export function LeadConfigurationPage() {
                                 aria-label={item.isDealStatus ? 'Deal stage selected' : 'Set as deal stage'}
                               />
                             </td>
-                            <td className="px-2.5 py-2 text-xs text-ink-muted">{formatDate(item.createdAt)}</td>
-                            <td className="px-2.5 py-2 text-right">
+                            <td className="text-xs text-ink-muted">{formatDate(item.createdAt)}</td>
+                            <td className="cx-table-cell-actions text-right">
                               <div className="inline-flex gap-1 opacity-100 transition">
                                 <button
                                   type="button"
@@ -483,21 +483,21 @@ export function LeadConfigurationPage() {
             {activeTab === 'deal-statuses' ? (
               <div className="overflow-hidden rounded-xl border border-surface-border bg-white">
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-full text-xs">
-                    <thead className="sticky top-0 z-10 bg-white">
-                      <tr className="border-b border-surface-border/70">
-                        <th className="w-8 px-2.5 py-2 text-left text-[11px] font-semibold text-ink-muted">Move</th>
-                        <th className="px-2.5 py-2 text-left text-[11px] font-semibold text-ink-muted">Status name</th>
-                        <th className="px-2.5 py-2 text-center text-[11px] font-semibold text-ink-muted">Initial</th>
-                        <th className="px-2.5 py-2 text-center text-[11px] font-semibold text-ink-muted">Is deal complete status</th>
-                        <th className="px-2.5 py-2 text-left text-[11px] font-semibold text-ink-muted">Created</th>
-                        <th className="px-2.5 py-2 text-right text-[11px] font-semibold text-ink-muted">Actions</th>
+                  <table className="cx-table cx-table--dense min-w-full text-xs">
+                    <thead className="cx-table-sticky-head">
+                      <tr>
+                        <th className="cx-table-cell-actions w-8">Move</th>
+                        <th>Status name</th>
+                        <th className="text-center">Initial</th>
+                        <th className="text-center">Is deal complete status</th>
+                        <th>Created</th>
+                        <th className="cx-table-cell-actions text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {(setup.dealStatuses || []).length === 0 ? (
                         <tr>
-                          <td colSpan={6} className="px-3 py-8 text-center text-ink-muted">
+                          <td colSpan={6} className="py-8 text-center text-ink-muted">
                             No deal statuses found.
                           </td>
                         </tr>
@@ -516,20 +516,20 @@ export function LeadConfigurationPage() {
                               setDraggingDealStatusId(null)
                             }}
                             className={cn(
-                              'group border-b border-surface-border last:border-b-0 hover:bg-brand-50',
+                              'group',
                               draggingDealStatusId === item.id ? 'opacity-50' : '',
                             )}
                           >
-                            <td className="px-2.5 py-2 text-ink-muted">
+                            <td className="cx-table-cell-actions text-ink-muted">
                               <span className="inline-flex cursor-grab items-center" title="Drag to reorder">
                                 <GripVertical className="h-3.5 w-3.5" />
                               </span>
                             </td>
-                            <td className="px-2.5 py-2 text-xs text-ink">{item.name}</td>
-                            <td className="px-2.5 py-2 text-center text-xs text-ink-muted">
+                            <td className="text-xs text-ink">{item.name}</td>
+                            <td className="text-center text-xs text-ink-muted">
                               {item.isInitial ? 'Yes' : 'No'}
                             </td>
-                            <td className="px-2.5 py-2 text-center">
+                            <td className="text-center align-middle">
                               <input
                                 type="checkbox"
                                 className="h-3.5 w-3.5 rounded border-surface-border text-brand-600 focus:ring-brand-500"
@@ -539,8 +539,8 @@ export function LeadConfigurationPage() {
                                 aria-label={item.isDealCompleteStatus ? 'Deal complete status selected' : 'Set as deal complete status'}
                               />
                             </td>
-                            <td className="px-2.5 py-2 text-xs text-ink-muted">{formatDate(item.createdAt)}</td>
-                            <td className="px-2.5 py-2 text-right">
+                            <td className="text-xs text-ink-muted">{formatDate(item.createdAt)}</td>
+                            <td className="cx-table-cell-actions text-right">
                               <div className="inline-flex gap-1 opacity-100 transition">
                                 <button
                                   type="button"

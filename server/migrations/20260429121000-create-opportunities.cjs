@@ -1,52 +1,71 @@
 'use strict'
 
+const { addIndexIfMissing } = require('../migration-helpers.cjs')
+
+const userIdType = 'CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci'
+
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.createTable('opportunities', {
-      id: { type: Sequelize.UUID, primaryKey: true, defaultValue: Sequelize.literal('(UUID())') },
-      company_id: {
-        type: Sequelize.UUID,
-        allowNull: false,
-        references: { model: 'companies', key: 'id' },
-        onUpdate: 'CASCADE',
-        onDelete: 'CASCADE',
-      },
-      workspace_id: {
-        type: Sequelize.UUID,
-        allowNull: true,
-        references: { model: 'workspaces', key: 'id' },
-        onUpdate: 'CASCADE',
-        onDelete: 'SET NULL',
-      },
-      lead_id: {
-        type: Sequelize.UUID,
-        allowNull: true,
-        references: { model: 'leads', key: 'id' },
-        onUpdate: 'CASCADE',
-        onDelete: 'SET NULL',
-      },
-      owner_user_id: {
-        type: Sequelize.CHAR(36),
-        allowNull: true,
-        references: { model: 'users', key: 'id' },
-        onUpdate: 'CASCADE',
-        onDelete: 'SET NULL',
-      },
-      created_by: {
-        type: Sequelize.CHAR(36),
-        allowNull: true,
-        references: { model: 'users', key: 'id' },
-        onUpdate: 'CASCADE',
-        onDelete: 'SET NULL',
-      },
-      updated_by: {
-        type: Sequelize.CHAR(36),
-        allowNull: true,
-        references: { model: 'users', key: 'id' },
-        onUpdate: 'CASCADE',
-        onDelete: 'SET NULL',
-      },
+    const tables = await queryInterface.showAllTables()
+    if (tables.includes('opportunities')) {
+      await addIndexIfMissing(queryInterface, 'opportunities', ['company_id', 'workspace_id'], {
+        name: 'opportunities_company_workspace_idx',
+      })
+      await addIndexIfMissing(queryInterface, 'opportunities', ['company_id', 'current_stage'], {
+        name: 'opportunities_company_stage_idx',
+      })
+      await addIndexIfMissing(queryInterface, 'opportunities', ['owner_user_id'], { name: 'opportunities_owner_idx' })
+      await addIndexIfMissing(queryInterface, 'opportunities', ['lead_id'], { name: 'opportunities_lead_idx' })
+      return
+    }
+
+    await queryInterface.createTable(
+      'opportunities',
+      {
+        id: { type: Sequelize.UUID, primaryKey: true, defaultValue: Sequelize.literal('(UUID())') },
+        company_id: {
+          type: Sequelize.UUID,
+          allowNull: false,
+          references: { model: 'companies', key: 'id' },
+          onUpdate: 'CASCADE',
+          onDelete: 'CASCADE',
+        },
+        workspace_id: {
+          type: Sequelize.UUID,
+          allowNull: true,
+          references: { model: 'workspaces', key: 'id' },
+          onUpdate: 'CASCADE',
+          onDelete: 'SET NULL',
+        },
+        lead_id: {
+          type: Sequelize.UUID,
+          allowNull: true,
+          references: { model: 'leads', key: 'id' },
+          onUpdate: 'CASCADE',
+          onDelete: 'SET NULL',
+        },
+        owner_user_id: {
+          type: userIdType,
+          allowNull: true,
+          references: { model: 'users', key: 'id' },
+          onUpdate: 'CASCADE',
+          onDelete: 'SET NULL',
+        },
+        created_by: {
+          type: userIdType,
+          allowNull: true,
+          references: { model: 'users', key: 'id' },
+          onUpdate: 'CASCADE',
+          onDelete: 'SET NULL',
+        },
+        updated_by: {
+          type: userIdType,
+          allowNull: true,
+          references: { model: 'users', key: 'id' },
+          onUpdate: 'CASCADE',
+          onDelete: 'SET NULL',
+        },
 
       full_name: { type: Sequelize.STRING(255), allowNull: false },
       email: { type: Sequelize.STRING(255), allowNull: true },
@@ -80,12 +99,21 @@ module.exports = {
         defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'),
       },
       deleted_at: { type: Sequelize.DATE, allowNull: true },
-    })
+    },
+      {
+        charset: 'utf8mb4',
+        collate: 'utf8mb4_0900_ai_ci',
+      },
+    )
 
-    await queryInterface.addIndex('opportunities', ['company_id', 'workspace_id'], { name: 'opportunities_company_workspace_idx' })
-    await queryInterface.addIndex('opportunities', ['company_id', 'current_stage'], { name: 'opportunities_company_stage_idx' })
-    await queryInterface.addIndex('opportunities', ['owner_user_id'], { name: 'opportunities_owner_idx' })
-    await queryInterface.addIndex('opportunities', ['lead_id'], { name: 'opportunities_lead_idx' })
+    await addIndexIfMissing(queryInterface, 'opportunities', ['company_id', 'workspace_id'], {
+      name: 'opportunities_company_workspace_idx',
+    })
+    await addIndexIfMissing(queryInterface, 'opportunities', ['company_id', 'current_stage'], {
+      name: 'opportunities_company_stage_idx',
+    })
+    await addIndexIfMissing(queryInterface, 'opportunities', ['owner_user_id'], { name: 'opportunities_owner_idx' })
+    await addIndexIfMissing(queryInterface, 'opportunities', ['lead_id'], { name: 'opportunities_lead_idx' })
   },
 
   async down(queryInterface) {

@@ -2,6 +2,7 @@ import { useMemo, useState, useCallback, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Search } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
+import { TablePaginationBar } from '@/components/ui/TablePaginationBar'
 import { useGetLeadsQuery } from '@/features/leads/leadsApi'
 import { LeadSourceTag } from '@/features/leads/components/LeadSourceTag'
 import { useTeamUsersQuery } from '@/features/team/teamApi'
@@ -163,16 +164,16 @@ export function CampaignNewPage() {
             ) : (
               <>
                 <div className="overflow-x-auto rounded-xl border border-neutral-200 bg-white">
-                  <table className="w-full min-w-[720px] text-left text-xs">
-                    <thead className="bg-neutral-50 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+                  <table className="cx-table cx-table--dense min-w-[720px] text-xs">
+                    <thead className="cx-table-sticky-head">
                       <tr>
-                        <th className="w-10 px-3 py-2" />
-                        <th className="px-3 py-2">Lead</th>
-                        <th className="hidden px-3 py-2 sm:table-cell">Company</th>
-                        <th className="px-3 py-2">Source</th>
-                        <th className="px-3 py-2">Email</th>
-                        <th className="px-3 py-2">Phone</th>
-                        <th className="px-3 py-2">Type</th>
+                        <th className="cx-table-cell-actions w-10" />
+                        <th>Lead</th>
+                        <th className="hidden sm:table-cell">Company</th>
+                        <th>Source</th>
+                        <th>Email</th>
+                        <th>Phone</th>
+                        <th>Type</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -183,9 +184,9 @@ export function CampaignNewPage() {
                         return (
                           <tr
                             key={l.id}
-                            className={cn('border-t border-neutral-100', checked ? 'bg-orange-50/50' : 'hover:bg-neutral-50/80')}
+                            className={cn(checked && 'bg-orange-50/50')}
                           >
-                            <td className="px-3 py-2">
+                            <td className="cx-table-cell-actions align-middle">
                               <input
                                 type="checkbox"
                                 checked={checked}
@@ -193,23 +194,23 @@ export function CampaignNewPage() {
                                 className="rounded border-neutral-300 text-orange-600 focus:ring-orange-500"
                               />
                             </td>
-                            <td className="px-3 py-2">
+                            <td>
                               <button type="button" className="text-left font-semibold text-neutral-900 hover:text-orange-700" onClick={() => toggleLead(l.id)}>
                                 {l.title || l.contactName || 'Untitled'}
                               </button>
                               <div className="text-[11px] text-neutral-500 sm:hidden">{l.company || '—'}</div>
                             </td>
-                            <td className="hidden px-3 py-2 text-neutral-700 sm:table-cell">{l.company || '—'}</td>
-                            <td className="px-3 py-2">
+                            <td className="hidden text-neutral-700 sm:table-cell">{l.company || '—'}</td>
+                            <td>
                               <LeadSourceTag source={l.source} />
                             </td>
-                            <td className="max-w-[11rem] truncate px-3 py-2 text-neutral-700" title={email || undefined}>
+                            <td className="max-w-[11rem] truncate text-neutral-700" title={email || undefined}>
                               {email || '—'}
                             </td>
-                            <td className="max-w-[9rem] truncate px-3 py-2 text-neutral-700" title={phone || undefined}>
+                            <td className="max-w-[9rem] truncate text-neutral-700" title={phone || undefined}>
                               {phone || '—'}
                             </td>
-                            <td className="px-3 py-2">
+                            <td>
                               <span
                                 className={cn(
                                   'rounded-full px-2 py-0.5 text-[10px] font-semibold',
@@ -226,28 +227,14 @@ export function CampaignNewPage() {
                   </table>
                 </div>
                 {totalPages > 1 ? (
-                  <div className="mt-3 flex items-center justify-between text-xs text-neutral-600">
-                    <span>
-                      Page {page} of {totalPages} ({total} total)
-                    </span>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        disabled={page <= 1}
-                        className="rounded-lg border border-neutral-200 px-2 py-1 font-semibold disabled:opacity-40"
-                        onClick={() => setPage((p) => Math.max(1, p - 1))}
-                      >
-                        Prev
-                      </button>
-                      <button
-                        type="button"
-                        disabled={page >= totalPages}
-                        className="rounded-lg border border-neutral-200 px-2 py-1 font-semibold disabled:opacity-40"
-                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                      >
-                        Next
-                      </button>
-                    </div>
+                  <div className="mt-3">
+                    <TablePaginationBar
+                      variant="neutral"
+                      page={page}
+                      totalPages={totalPages}
+                      onPageChange={setPage}
+                      subLabel={<>{total.toLocaleString()} total leads</>}
+                    />
                   </div>
                 ) : null}
                 {isFetching && !isLoading ? <p className="mt-2 text-[11px] text-neutral-400">Updating…</p> : null}

@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import { useSearchParams } from 'react-router-dom'
-import { Archive, ArchiveRestore, Building2, CheckCircle2, IdCard, Pencil, Plus, Trash2, Users } from 'lucide-react'
+import { Archive, ArchiveRestore, AlignLeft, Building2, CheckCircle2, IdCard, Pencil, Plus, Trash2, Users } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
 import { Modal } from '@/components/ui/Modal'
 import { RightDrawer } from '@/components/ui/RightDrawer'
+import { IconInput, IconTextarea } from '@/components/ui/IconInput'
 import {
   useCreateWorkspaceMutation,
   useDeleteWorkspaceMutation,
@@ -28,10 +29,8 @@ function apiErrorMessage(err) {
 function WorkspaceTableRow({ row, busy, onEdit, onToggleArchive, onDelete }) {
   const archived = Boolean(row.archived)
   return (
-    <tr
-      className={cn('group border-b border-surface-border transition-colors last:border-b-0 hover:bg-brand-50', archived ? 'text-ink-muted' : '')}
-    >
-      <td className="max-w-[280px] px-2.5 py-2 sm:max-w-[360px]">
+    <tr className={cn('group', archived ? 'text-ink-muted' : '')}>
+      <td className="max-w-[280px] sm:max-w-[360px]">
         <div className="flex items-start gap-2">
           <span
             className={cn(
@@ -56,10 +55,10 @@ function WorkspaceTableRow({ row, busy, onEdit, onToggleArchive, onDelete }) {
           </div>
         </div>
       </td>
-      <td className={cn('px-2.5 py-2 tabular-nums', archived ? 'text-ink-faint' : 'text-ink-muted')}>
+      <td className={cn('tabular-nums', archived ? 'text-ink-faint' : 'text-ink-muted')}>
         {row.leadCount}
       </td>
-      <td className="px-2.5 py-2">
+      <td>
         <span
           className={cn(
             'inline-flex items-center gap-1.5 tabular-nums',
@@ -70,7 +69,7 @@ function WorkspaceTableRow({ row, busy, onEdit, onToggleArchive, onDelete }) {
           {row.memberCount}
         </span>
       </td>
-      <td className="px-2.5 py-2">
+      <td>
         <span
           className={cn(
             'inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium',
@@ -80,7 +79,7 @@ function WorkspaceTableRow({ row, busy, onEdit, onToggleArchive, onDelete }) {
           {archived ? 'Archived' : 'Active'}
         </span>
       </td>
-      <td className="px-2.5 py-2">
+      <td className="cx-table-cell-actions">
         <div className="flex items-center justify-end gap-1 opacity-100 transition">
           <button
             type="button"
@@ -343,14 +342,14 @@ export function WorkspacePage() {
 
         <div className="overflow-hidden rounded-xl border border-surface-border bg-white">
           <div className="scrollbar-subtle overflow-x-auto">
-            <table className="w-full min-w-[840px] border-collapse text-left text-xs">
-              <thead className="sticky top-0 z-10 bg-white">
-                <tr className="border-b border-surface-border/70">
-                  <th className="px-2.5 py-2 text-[11px] font-semibold text-ink-muted">Workspace</th>
-                  <th className="px-2.5 py-2 text-[11px] font-semibold text-ink-muted">Leads</th>
-                  <th className="px-2.5 py-2 text-[11px] font-semibold text-ink-muted">Team</th>
-                  <th className="px-2.5 py-2 text-[11px] font-semibold text-ink-muted">Status</th>
-                  <th className="px-2.5 py-2 text-right text-[11px] font-semibold text-ink-muted">Actions</th>
+            <table className="cx-table min-w-[840px] text-xs">
+              <thead className="cx-table-sticky-head">
+                <tr>
+                  <th>Workspace</th>
+                  <th>Leads</th>
+                  <th>Team</th>
+                  <th>Status</th>
+                  <th className="cx-table-cell-actions text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -418,38 +417,38 @@ export function WorkspacePage() {
         }
       >
         <form id="workspace-form" className="flex flex-col gap-5" onSubmit={handleSubmit}>
-          <div>
-            <label htmlFor="ws-name" className="text-xs font-semibold uppercase tracking-wide text-ink-faint">
+          <div className="space-y-1.5">
+            <label htmlFor="ws-name" className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
               Name
             </label>
-            <input
+            <IconInput
               id="ws-name"
+              icon={Building2}
               type="text"
               value={formName}
               onChange={(e) => setFormName(e.target.value)}
               maxLength={240}
               placeholder="e.g. Enterprise accounts"
-              className="mt-2 w-full rounded-xl border border-surface-border bg-surface-muted/40 px-4 py-3 text-sm text-ink outline-none transition placeholder:text-ink-faint focus:border-brand-400 focus:bg-white focus:ring-2 focus:ring-brand-500/15"
               autoFocus
             />
           </div>
-          <div>
+          <div className="space-y-1.5">
             <div className="flex items-baseline justify-between gap-2">
-              <label htmlFor="ws-description" className="text-xs font-semibold uppercase tracking-wide text-ink-faint">
+              <label htmlFor="ws-description" className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
                 Description
               </label>
               <span className="text-[10px] tabular-nums text-ink-faint">
                 {formDescription.length}/{DESCRIPTION_MAX}
               </span>
             </div>
-            <textarea
+            <IconTextarea
               id="ws-description"
+              icon={AlignLeft}
               value={formDescription}
               onChange={(e) => setFormDescription(e.target.value.slice(0, DESCRIPTION_MAX))}
               rows={4}
               maxLength={DESCRIPTION_MAX}
               placeholder="What this workspace is for (optional)"
-              className="mt-2 w-full resize-y rounded-xl border border-surface-border bg-surface-muted/40 px-4 py-3 text-sm text-ink outline-none transition placeholder:text-ink-faint focus:border-brand-400 focus:bg-white focus:ring-2 focus:ring-brand-500/15"
             />
           </div>
           {drawerMode === 'create' ? (

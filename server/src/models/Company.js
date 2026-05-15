@@ -61,6 +61,12 @@ export const Company = sequelize.define(
       type: DataTypes.DATE,
       allowNull: true,
     },
+    /** Days of week treated as weekly off for leave (0=Sun … 6=Sat), e.g. [0, 6]. */
+    leaveWeeklyOffDays: {
+      type: DataTypes.JSON,
+      allowNull: true,
+      field: 'leave_weekly_off_days',
+    },
   },
   {
     tableName: 'companies',

@@ -18,16 +18,6 @@ function apiBaseUrl() {
   return process.env.API_BASE_URL || `http://localhost:${process.env.PORT || 4000}/api/v1`
 }
 
-function toPublicLead(lead) {
-  return {
-    id: lead.id,
-    email: lead.email,
-    company: lead.company,
-    value: lead.value,
-    contactName: lead.contactName,
-  }
-}
-
 async function pauseForThrottle(template) {
   const throttlePerHour = Number(template.throttlePerHour || 0)
   if (!throttlePerHour || throttlePerHour <= 0) return
@@ -65,7 +55,7 @@ async function sendToLead({ template, lead, senderName }) {
       return { skipped: true, reason: 'already_sent' }
     }
 
-    const { subject, bodyHtml } = resolveMergeTags(template.subject, template.bodyHtml, toPublicLead(lead), {
+    const { subject, bodyHtml } = resolveMergeTags(template.subject, template.bodyHtml, lead, {
       senderName,
     })
     const log = existing

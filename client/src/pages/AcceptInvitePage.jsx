@@ -18,7 +18,7 @@ export function AcceptInvitePage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [acceptInvitation, { isLoading }] = useAcceptInvitationMutation()
 
-  if (token) return <Navigate to="/" replace />
+  if (token) return <Navigate to="/dashboard" replace />
 
   async function onSubmit(e) {
     e.preventDefault()

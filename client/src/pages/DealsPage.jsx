@@ -21,6 +21,7 @@ import { formatStageLabel } from '@/features/opportunities/components/Opportunit
 import { useGetDealsQuery, usePatchDealStageMutation, useCreateDealMutation } from '@/features/deals/dealsApi'
 import { useGetLeadFormMetaQuery, useGetLeadQuery } from '@/features/leads/leadsApi'
 import { cn } from '@/utils/cn'
+import { TablePaginationBar } from '@/components/ui/TablePaginationBar'
 import { formatAggregatedDealAmount, formatDealMoney } from '@/features/deals/dealCurrencies'
 
 const STAGE_FILTER_FALLBACK = ['Lead Inbound', 'New', 'Contacted', 'Qualified', 'Proposal', 'Won', 'Lost']
@@ -66,11 +67,11 @@ function ParentOpportunityLabel({ id }) {
 
 function DealsTableRow({ row, opportunityStages, updatingStage, onStageChange, onOpenSidebar, onOpenPage }) {
   return (
-    <tr className="border-t border-neutral-100 hover:bg-neutral-50/80">
-      <td className="px-4 py-3 text-xs text-neutral-700">
+    <tr>
+      <td className="text-xs text-neutral-700">
         {row.parentOpportunityLeadId ? <ParentOpportunityLabel id={row.parentOpportunityLeadId} /> : '—'}
       </td>
-      <td className="px-4 py-3">
+      <td>
         <div className="flex items-start gap-2">
           <button
             type="button"
@@ -90,7 +91,7 @@ function DealsTableRow({ row, opportunityStages, updatingStage, onStageChange, o
           </button>
         </div>
       </td>
-      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+      <td className="align-middle" onClick={(e) => e.stopPropagation()}>
         <div className="relative max-w-[200px]">
           <select
             className="h-8 w-full appearance-none rounded-md border border-neutral-300 bg-white pl-2 pr-8 text-xs font-semibold text-neutral-800"
@@ -117,11 +118,11 @@ function DealsTableRow({ row, opportunityStages, updatingStage, onStageChange, o
           <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-neutral-400" />
         </div>
       </td>
-      <td className="px-4 py-3 text-sm font-bold text-neutral-900">
+      <td className="text-sm font-bold text-neutral-900">
         {formatDealMoney(row.dealValue, row.dealCurrency)}
       </td>
-      <td className="px-4 py-3 text-xs text-neutral-700">{row.fullName}</td>
-      <td className="px-4 py-3">
+      <td className="text-xs text-neutral-700">{row.fullName}</td>
+      <td>
         <div className="flex items-center gap-2">
           <span className="flex h-7 w-7 items-center justify-center rounded-full bg-neutral-200 text-[10px] font-bold text-neutral-700">
             {initials(row.owner?.name || row.owner?.email)}
@@ -129,7 +130,7 @@ function DealsTableRow({ row, opportunityStages, updatingStage, onStageChange, o
           <span className="text-xs font-medium text-neutral-800">{row.owner?.name || row.owner?.email || '—'}</span>
         </div>
       </td>
-      <td className="px-4 py-3 text-xs text-neutral-500">{shortUpdated(row.updatedAt)}</td>
+      <td className="text-xs text-neutral-500">{shortUpdated(row.updatedAt)}</td>
     </tr>
   )
 }
@@ -552,16 +553,16 @@ export function DealsPage() {
                 </div>
               </div>
               <div className="overflow-x-auto">
-                <table className="min-w-[1020px] w-full border-collapse text-left">
-                  <thead className="border-b border-neutral-100 bg-neutral-50/80 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+                <table className="cx-table min-w-[1020px] text-sm">
+                  <thead className="cx-table-sticky-head">
                     <tr>
-                      <th className="px-4 py-3">Opportunity</th>
-                      <th className="px-4 py-3">Deal</th>
-                      <th className="px-4 py-3">Stage</th>
-                      <th className="px-4 py-3">Value</th>
-                      <th className="px-4 py-3">Contact</th>
-                      <th className="px-4 py-3">Owner</th>
-                      <th className="px-4 py-3">Updated</th>
+                      <th>Opportunity</th>
+                      <th>Deal</th>
+                      <th>Stage</th>
+                      <th>Value</th>
+                      <th>Contact</th>
+                      <th>Owner</th>
+                      <th>Updated</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -639,28 +640,13 @@ export function DealsPage() {
                   </tbody>
                 </table>
               </div>
-              <div className="flex items-center justify-between border-t border-neutral-100 px-4 py-2.5 text-xs text-neutral-500">
-                <span>
-                  Page {page} / {totalPages}
-                </span>
-                <div className="flex gap-1">
-                  <button
-                    type="button"
-                    disabled={page <= 1}
-                    className="rounded border border-neutral-200 px-2 py-1 hover:bg-neutral-50 disabled:opacity-40"
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  >
-                    Prev
-                  </button>
-                  <button
-                    type="button"
-                    disabled={page >= totalPages}
-                    className="rounded border border-neutral-200 px-2 py-1 hover:bg-neutral-50 disabled:opacity-40"
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  >
-                    Next
-                  </button>
-                </div>
+              <div className="border-t border-neutral-100 px-4 py-3">
+                <TablePaginationBar
+                  variant="neutral"
+                  page={page}
+                  totalPages={totalPages}
+                  onPageChange={setPage}
+                />
               </div>
             </div>
           )}

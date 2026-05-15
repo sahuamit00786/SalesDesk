@@ -42,7 +42,6 @@ export function MentionPopover({ open, anchor, options, onPick, onClose, query =
               className="flex w-full items-center justify-between px-3 py-1.5 text-left text-xs text-ink hover:bg-orange-50"
             >
               <span className="font-medium">@{field}</span>
-              <span className="text-[10px] text-ink-muted">{`{{${field}}}`}</span>
             </button>
           ))
         ) : (
@@ -124,7 +123,7 @@ export function popoverCoordsForSelection() {
 
 /**
  * Replace the `@query` token immediately preceding the caret in a text field
- * with `{{field}}` and restore the caret after the inserted token.
+ * with `@field` and restore the caret after the inserted token.
  */
 export function insertMergeTagInTextField(el, mentionStart, field) {
   if (!el || mentionStart == null) return el?.value || ''
@@ -132,7 +131,7 @@ export function insertMergeTagInTextField(el, mentionStart, field) {
   const cursor = el.selectionStart ?? value.length
   const before = value.slice(0, mentionStart)
   const after = value.slice(cursor)
-  const token = `{{${field}}}`
+  const token = `@${field}`
   const next = `${before}${token}${after}`
   requestAnimationFrame(() => {
     el.focus()

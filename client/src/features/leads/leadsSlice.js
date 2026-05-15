@@ -12,6 +12,8 @@ const initialState = {
     valueMax: null,
     tags: [],
     savedViewId: null,
+    /** Company admin: set to a workspace id to narrow the list; empty = all company workspaces. */
+    workspaceId: '',
   },
   sort: { field: 'createdAt', order: 'desc' },
   pagination: { page: 1, limit: 20, total: 0 },
@@ -28,7 +30,7 @@ const leadsSlice = createSlice({
       state.pagination.page = 1
     },
     resetFilters(state) {
-      state.filters = initialState.filters
+      state.filters = { ...initialState.filters }
       state.pagination.page = 1
     },
     setSort(state, action) {

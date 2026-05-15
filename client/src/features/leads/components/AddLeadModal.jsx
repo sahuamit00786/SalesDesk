@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { parsePhoneNumber } from 'libphonenumber-js/min'
 import {
   Briefcase,
   Building2,
   CircleDollarSign,
+  Download,
+  FileSpreadsheet,
   Flag,
   Hash,
   Mail,
@@ -11,15 +13,19 @@ import {
   ScanLine,
   Search,
   Tag,
+  Upload,
   User,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import * as XLSX from 'xlsx'
 import { RightDrawer } from '@/components/ui/RightDrawer'
-import { Input } from '@/components/ui/Input'
+import { Select } from '@/components/ui/Select'
+import { IconInput, IconTextarea } from '@/components/ui/IconInput'
 import { PhoneField } from '@/components/ui/PhoneField'
 import { LeadTagsInput } from '@/features/leads/components/LeadTagsInput'
 import { useCreateLeadSourceMutation, useCreateLeadTagMutation, useGetLeadFormMetaQuery } from '@/features/leads/leadsApi'
 import { mergePartsToE164 } from '@/utils/phoneNumbers'
+import { cn } from '@/utils/cn'
 
 const initialForm = {
   contactName: '',
@@ -44,30 +50,197 @@ const initialForm = {
   customFields: {},
 }
 
-const CSV_FIELD_OPTIONS = [
-  { value: 'skip', label: 'Skip' },
-  { value: 'contactName', label: 'Contact Name' },
-  { value: 'title', label: 'Lead Title' },
+/** Official bulk template — same core fields as “Add single lead” (source is chosen in the UI, not per column). */
+const BULK_IMPORT_TEMPLATE = `contact_name,company,email,phone,phone_country_code,whatsapp_number,alt_phone,alt_phone_country_code,designation,street,city,state,country,postal_code,value,value_currency,requirement,notes,tags,assigned_user_ids,is_opportunity
+Jane Doe,Acme Inc.,jane@example.com,+919876543210,+91,+919876543211,,,Sales Manager,12 MG Road,Bengaluru,Karnataka,India,560001,50000,INR,CRM rollout by Q3,Met at expo,hot,,no
+John Smith,Widgets Ltd,john@widgets.com,+919988776655,+91,,+919900000001,+91,Director,1 High Street,Mumbai,Maharashtra,India,400001,12000,INR,,,,,no
+`
+
+/** Default workspace lead sources (seeded on first load). Bulk import only offers these, not arbitrary sheet columns. */
+const SYSTEM_LEAD_SOURCE_NAMES = new Set(['web form', 'manual', 'referral'])
+
+/** Map each file column → lead field (POST /leads/import — aligned with single-lead form + server import). */
+const IMPORT_FIELD_TARGETS = [
+  { value: 'skip', label: '— Skip this column —' },
+  { value: 'contactName', label: 'Contact name' },
+  { value: 'title', label: 'Lead record title' },
   { value: 'company', label: 'Company' },
   { value: 'email', label: 'Email' },
-  { value: 'phone', label: 'Phone' },
-  { value: 'value', label: 'Value' },
-  { value: 'sourceId', label: 'Source' },
-  { value: 'requirement', label: 'Requirement' },
+  { value: 'phone', label: 'Phone (national or E.164)' },
+  { value: 'phoneCountryCode', label: 'Phone country code (e.g. +91)' },
+  { value: 'whatsappNumber', label: 'WhatsApp number' },
+  { value: 'altPhone', label: 'Alternate phone' },
+  { value: 'altPhoneCountryCode', label: 'Alternate phone country code' },
+  { value: 'designation', label: 'Designation / job title' },
+  { value: 'street', label: 'Street / address line' },
+  { value: 'city', label: 'City' },
+  { value: 'state', label: 'State / region' },
+  { value: 'country', label: 'Country' },
+  { value: 'postalCode', label: 'Postal / ZIP code' },
+  { value: 'value', label: 'Deal value (number)' },
+  { value: 'valueCurrency', label: 'Value currency (ISO, e.g. INR)' },
+  { value: 'requirement', label: 'Requirement / notes (long)' },
+  { value: 'notes', label: 'Notes' },
+  { value: 'sourceId', label: 'Lead source (UUID)' },
+  { value: 'opportunityStage', label: 'Pipeline / opportunity stage' },
+  { value: 'status', label: 'Lead status (new, contacted, …)' },
+  { value: 'isOpportunity', label: 'Is opportunity (yes/no, 1/0)' },
+  { value: 'assignedTo', label: 'Primary assignee (user UUID)' },
+  { value: 'assignedUserIds', label: 'Assignees (comma-separated user UUIDs)' },
+  { value: 'tags', label: 'Tags (comma-separated names)' },
 ]
 
-function parseCsv(text) {
-  const lines = String(text || '')
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-  if (lines.length < 2) return { headers: [], rows: [] }
-  const headers = lines[0].split(',').map((h) => h.trim())
-  const rows = lines.slice(1).map((line) => {
-    const values = line.split(',').map((v) => v.trim())
-    return Object.fromEntries(headers.map((h, idx) => [h, values[idx] ?? '']))
+const BULK_IMPORT_FIELD_TARGETS = IMPORT_FIELD_TARGETS.filter((o) => o.value !== 'sourceId')
+
+function splitCsvLine(line) {
+  const out = []
+  let cur = ''
+  let i = 0
+  let inQ = false
+  while (i < line.length) {
+    const c = line[i]
+    if (inQ) {
+      if (c === '"') {
+        if (line[i + 1] === '"') {
+          cur += '"'
+          i += 2
+          continue
+        }
+        inQ = false
+        i += 1
+        continue
+      }
+      cur += c
+      i += 1
+      continue
+    }
+    if (c === '"') {
+      inQ = true
+      i += 1
+      continue
+    }
+    if (c === ',') {
+      out.push(cur.trim())
+      cur = ''
+      i += 1
+      continue
+    }
+    cur += c
+    i += 1
+  }
+  out.push(cur.trim())
+  return out.map((s) => s.replace(/^"|"$/g, ''))
+}
+
+function normalizeColumnsFromHeaderCells(headerCells) {
+  const seen = {}
+  return headerCells.map((raw, i) => {
+    const s = String(raw ?? '').trim()
+    const base = s || `Column ${i + 1}`
+    const k = base.toLowerCase()
+    seen[k] = (seen[k] || 0) + 1
+    const n = seen[k]
+    return {
+      key: `c${i}`,
+      raw: s,
+      label: n > 1 ? `${base} (${n})` : base,
+    }
   })
-  return { headers, rows }
+}
+
+function tableFromAoA(aoa) {
+  if (!aoa?.length) return { columns: [], rows: [] }
+  const headerCells = (aoa[0] || []).map((cell) => (cell == null ? '' : cell))
+  const columns = normalizeColumnsFromHeaderCells(headerCells)
+  const rows = []
+  for (let r = 1; r < aoa.length; r++) {
+    const line = aoa[r] || []
+    const cells = line.map((c) => (c == null ? '' : String(c).trim()))
+    const row = {}
+    let any = false
+    columns.forEach((col, j) => {
+      const v = cells[j] ?? ''
+      if (v) any = true
+      row[col.key] = v
+    })
+    if (any) rows.push(row)
+  }
+  return { columns, rows }
+}
+
+function parseCsvText(text) {
+  const raw = String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+  const lines = raw.split('\n').map((l) => l.trimEnd()).filter((l) => l.length)
+  if (!lines.length) return { columns: [], rows: [] }
+  const headerCells = splitCsvLine(lines[0])
+  const columns = normalizeColumnsFromHeaderCells(headerCells)
+  const rows = []
+  for (let i = 1; i < lines.length; i++) {
+    const cells = splitCsvLine(lines[i])
+    const row = {}
+    let any = false
+    columns.forEach((col, j) => {
+      const v = String(cells[j] ?? '').trim()
+      if (v) any = true
+      row[col.key] = v
+    })
+    if (any) rows.push(row)
+  }
+  return { columns, rows }
+}
+
+function guessImportTarget(headerLabel) {
+  const s = String(headerLabel || '')
+    .toLowerCase()
+    .replace(/[_-]+/g, ' ')
+  if (/whatsapp/.test(s)) return 'whatsappNumber'
+  if (/alt|secondary|alternate|backup/.test(s) && /phone|tel|mobile/.test(s)) {
+    if (/code|country|dial/.test(s)) return 'altPhoneCountryCode'
+    return 'altPhone'
+  }
+  if (/country\s?code|dial|phone\s?cc/.test(s) && /phone|tel|mobile/.test(s)) return 'phoneCountryCode'
+  if (/e\s?mail|email\s?address/.test(s)) return 'email'
+  if (/mobile|phone|cell|tel/.test(s)) return 'phone'
+  if (/company|organisation|organization|\borg\b/.test(s)) return 'company'
+  if (/\bname\b/.test(s) && /company|org/.test(s)) return 'skip'
+  if (/lead\s*title|record\s*title/.test(s)) return 'title'
+  if (/\btitle\b|designation|position|job|role/.test(s)) return 'designation'
+  if (/full\s?name|^name$|contact|first|last/.test(s) || (/\bname\b/.test(s) && !/user|file/.test(s))) return 'contactName'
+  if (/street|address\s*1|^address$/.test(s)) return 'street'
+  if (/\bcity\b|town/.test(s)) return 'city'
+  if (/state|province|region/.test(s)) return 'state'
+  if (/country|nation/.test(s) && !/code/.test(s)) return 'country'
+  if (/postal|zip|pin\s?code/.test(s)) return 'postalCode'
+  if (/currency|curr\b/.test(s)) return 'valueCurrency'
+  if (/value|amount|deal|revenue|price|budget/.test(s)) return 'value'
+  if (/requirement|needs|brief/.test(s)) return 'requirement'
+  if (/notes?\b|comment/.test(s)) return 'notes'
+  if (/source\s?id/.test(s)) return 'skip'
+  if (/\btags?\b|labels?/.test(s)) return 'tags'
+  if (/assignees?|assigned\s*users?|team\s*members?/.test(s)) return 'assignedUserIds'
+  if (/assign|owner/.test(s)) return 'assignedTo'
+  if (/is\s*opp|sales\s*opp|opportunity\s*flag/.test(s)) return 'isOpportunity'
+  if (/stage|pipeline|funnel/.test(s)) return 'opportunityStage'
+  if (/^status$|lead\s?status/.test(s)) return 'status'
+  return 'skip'
+}
+
+function buildAutoMapping(columns) {
+  const m = {}
+  for (const col of columns) {
+    m[col.key] = guessImportTarget(col.raw || col.label)
+  }
+  return m
+}
+
+function downloadBulkTemplate() {
+  const blob = new Blob([BULK_IMPORT_TEMPLATE], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'lead-import-template.csv'
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 function toEditForm(lead) {
@@ -103,6 +276,16 @@ function toEditForm(lead) {
   }
 }
 
+/** Label + control stack so grid rows align; avoids stretched `IconInput` wrappers next to taller `PhoneField`. */
+function LeadFieldGroup({ label, children, className }) {
+  return (
+    <div className={cn('min-w-0 space-y-1.5', className)}>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-muted">{label}</p>
+      {children}
+    </div>
+  )
+}
+
 export function AddLeadModal({
   open,
   onClose,
@@ -117,6 +300,11 @@ export function AddLeadModal({
   const [createLeadTag] = useCreateLeadTagMutation()
   const formMeta = formMetaData?.data || {}
   const sources = formMeta.sources || []
+  /** Seeded defaults (Web Form, Manual, Referral). If none match (renamed), fall back to all workspace sources so import still works. */
+  const bulkImportSources = useMemo(() => {
+    const sys = sources.filter((s) => SYSTEM_LEAD_SOURCE_NAMES.has(String(s.name || '').trim().toLowerCase()))
+    return sys.length ? sys : sources
+  }, [sources])
   const opportunityStages = useMemo(() => formMeta.opportunityStages || [], [formMeta.opportunityStages])
   const users = formMeta.users || []
   const availableTags = useMemo(() => formMeta.tags || [], [formMeta.tags])
@@ -125,9 +313,15 @@ export function AddLeadModal({
   const [opportunityStage, setOpportunityStage] = useState('')
   const [busy, setBusy] = useState(false)
   const [activeTab, setActiveTab] = useState('single')
-  const [csvText, setCsvText] = useState('')
-  const parsed = useMemo(() => parseCsv(csvText), [csvText])
+  const [parsed, setParsed] = useState({ columns: [], rows: [] })
+  const [bulkFileName, setBulkFileName] = useState('')
+  const [importWorkbook, setImportWorkbook] = useState(null)
+  const [importSheetNames, setImportSheetNames] = useState([])
+  const [importActiveSheet, setImportActiveSheet] = useState('')
+  const bulkPasteSigRef = useRef('')
+  const fileInputRef = useRef(null)
   const [mapping, setMapping] = useState({})
+  const [bulkImportSourceId, setBulkImportSourceId] = useState('')
   const [addSourceOpen, setAddSourceOpen] = useState(false)
   const [newSourceName, setNewSourceName] = useState('')
   const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false)
@@ -164,6 +358,22 @@ export function AddLeadModal({
 
   useEffect(() => {
     if (!open) return
+    if (!importWorkbook || !importActiveSheet) return
+    const ws = importWorkbook.Sheets[importActiveSheet]
+    if (!ws) {
+      setParsed({ columns: [], rows: [] })
+      setMapping({})
+      return
+    }
+    const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' })
+    const table = tableFromAoA(aoa)
+    setParsed(table)
+    setMapping(buildAutoMapping(table.columns))
+    bulkPasteSigRef.current = table.columns.map((c) => `${c.key}:${c.label}`).join('|')
+  }, [open, importWorkbook, importActiveSheet])
+
+  useEffect(() => {
+    if (!open) return
     setActiveTab('single')
     setAssigneeDropdownOpen(false)
     setAssigneeSearch('')
@@ -171,7 +381,25 @@ export function AddLeadModal({
     const fromLead = Boolean(initialLead?.isOpportunity)
     setAsOpportunity(fromLead || Boolean(defaultIsOpportunity))
     setOpportunityStage(String(initialLead?.opportunityStage || '').trim())
+    setParsed({ columns: [], rows: [] })
+    setMapping({})
+    setBulkFileName('')
+    setImportWorkbook(null)
+    setImportSheetNames([])
+    setImportActiveSheet('')
+    bulkPasteSigRef.current = ''
+    setBulkImportSourceId('')
   }, [open, initialLead, defaultIsOpportunity])
+
+  useEffect(() => {
+    if (!open || activeTab !== 'bulk') return
+    if (!bulkImportSources.length) return
+    setBulkImportSourceId((prev) => {
+      if (prev && bulkImportSources.some((s) => s.id === prev)) return prev
+      const manual = bulkImportSources.find((s) => String(s.name || '').trim().toLowerCase() === 'manual')
+      return manual?.id || bulkImportSources[0]?.id || ''
+    })
+  }, [open, activeTab, bulkImportSources])
 
   const opportunityStageOptionsKey = useMemo(
     () => opportunityStages.map((s) => s.name).join('\u0001'),
@@ -229,26 +457,104 @@ export function AddLeadModal({
     }
   }
 
+  function clearBulkImport() {
+    setParsed({ columns: [], rows: [] })
+    setMapping({})
+    setBulkFileName('')
+    setImportWorkbook(null)
+    setImportSheetNames([])
+    setImportActiveSheet('')
+    bulkPasteSigRef.current = ''
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  async function handleBulkFile(ev) {
+    const file = ev.target.files?.[0]
+    if (fileInputRef.current) fileInputRef.current.value = ''
+    if (!file) return
+    setBulkFileName(file.name)
+    const lower = file.name.toLowerCase()
+    try {
+      if (lower.endsWith('.csv')) {
+        setImportWorkbook(null)
+        setImportSheetNames([])
+        setImportActiveSheet('')
+        const text = await file.text()
+        const table = parseCsvText(text)
+        setParsed(table)
+        setMapping(buildAutoMapping(table.columns))
+        bulkPasteSigRef.current = table.columns.map((c) => `${c.key}:${c.label}`).join('|')
+        return
+      }
+      if (lower.endsWith('.xlsx') || lower.endsWith('.xls')) {
+        const buf = await file.arrayBuffer()
+        const wb = XLSX.read(buf, { type: 'array' })
+        const names = wb.SheetNames || []
+        if (!names.length) {
+          toast.error('This workbook has no sheets.')
+          setBulkFileName('')
+          return
+        }
+        setImportWorkbook(wb)
+        setImportSheetNames(names)
+        setImportActiveSheet(names[0])
+        return
+      }
+      toast.error('Use a .csv, .xls, or .xlsx file.')
+      setBulkFileName('')
+    } catch (err) {
+      toast.error(err?.message || 'Could not read file')
+      setBulkFileName('')
+    }
+  }
+
   async function submitBulk() {
-    if (!parsed.rows.length) return toast.error('Paste CSV data with header + at least 1 row')
+    if (!parsed.rows.length) return toast.error('Upload a .csv or .xlsx file with a header row and at least one data row')
+    if (!bulkImportSourceId) return toast.error('Select a lead source for this import')
     const mappedRows = parsed.rows.map((row) => {
       const out = { source: 'csv_import' }
-      for (const header of parsed.headers) {
-        const targetField = mapping[header] || 'skip'
-        if (targetField === 'skip') continue
-        out[targetField] = row[header]
+      for (const col of parsed.columns) {
+        const targetField = mapping[col.key] || 'skip'
+        if (targetField === 'skip' || targetField === 'sourceId') continue
+        const raw = row[col.key]
+        if (raw === undefined || raw === null || String(raw).trim() === '') continue
+        if (targetField === 'tags') {
+          out.tags = String(raw)
+            .split(',')
+            .map((x) => x.trim())
+            .filter(Boolean)
+          continue
+        }
+        if (targetField === 'assignedUserIds') {
+          out.assignedUserIds = String(raw)
+            .split(',')
+            .map((x) => x.trim())
+            .filter(Boolean)
+          continue
+        }
+        if (targetField === 'isOpportunity') {
+          const v = String(raw).trim().toLowerCase()
+          out.isOpportunity = ['1', 'true', 'yes', 'y'].includes(v)
+          continue
+        }
+        if (targetField === 'valueCurrency') {
+          const cur = String(raw).trim().toUpperCase().slice(0, 3)
+          if (cur) out.valueCurrency = cur
+          continue
+        }
+        out[targetField] = raw
       }
       out.title = out.title || out.contactName || out.email || 'Untitled lead'
-      out.value = Number(out.value || 0)
+      out.value = Number(out.value ?? 0)
       out.source = 'csv_import'
+      out.sourceId = bulkImportSourceId
       return out
     })
     setBusy(true)
     try {
       await onBulkImport?.(mappedRows)
       toast.success(`Imported ${mappedRows.length} leads`)
-      setCsvText('')
-      setMapping({})
+      clearBulkImport()
       onClose?.()
     } finally {
       setBusy(false)
@@ -276,14 +582,18 @@ export function AddLeadModal({
       open={open}
       onClose={onClose}
       title={initialLead ? 'Edit Lead' : 'Add Lead'}
-      description={initialLead ? 'Update lead details.' : 'Create one lead or bulk upload from CSV with field mapping.'}
+      description={
+        initialLead
+          ? 'Update lead details.'
+          : 'Create one lead, or bulk-import from a CSV / Excel file: map columns to fields and choose a workspace source once for the whole file.'
+      }
       footer={
         <div className="flex justify-end gap-2">
           <button type="button" className="h-10 rounded-xl border border-surface-border px-5" onClick={onClose}>Cancel</button>
           {activeTab === 'single' ? (
             <button type="submit" form="add-lead-form" className="h-10 rounded-xl bg-brand-600 px-5 text-white" disabled={busy}>{busy ? 'Saving...' : 'Save Lead'}</button>
           ) : (
-            <button type="button" className="h-10 rounded-xl bg-brand-600 px-5 text-white" disabled={busy} onClick={submitBulk}>
+            <button type="button" className="h-10 rounded-xl bg-brand-600 px-5 text-white" disabled={busy || !parsed.rows.length || !bulkImportSourceId} onClick={submitBulk}>
               {busy ? 'Importing...' : `Import ${parsed.rows.length || 0} Leads`}
             </button>
           )}
@@ -301,14 +611,18 @@ export function AddLeadModal({
         <form id="add-lead-form" className="space-y-4" onSubmit={submit}>
           <section className="space-y-3 rounded-2xl border border-surface-border p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Contact Information</p>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="relative">
-                <User className="pointer-events-none absolute left-3 top-1/2 h-3 w-3 -translate-y-1/2 text-ink-faint" />
-                <Input className="pl-9" placeholder="Name*" value={form.contactName} onChange={(e) => setForm((f) => ({ ...f, contactName: e.target.value }))} />
-              </div>
-              <div className="min-w-0">
+            <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2">
+              <LeadFieldGroup label="Contact name*">
+                <IconInput
+                  wrapperClassName="w-full"
+                  icon={User}
+                  placeholder="Full name"
+                  value={form.contactName}
+                  onChange={(e) => setForm((f) => ({ ...f, contactName: e.target.value }))}
+                />
+              </LeadFieldGroup>
+              <LeadFieldGroup label="Phone*">
                 <PhoneField
-                  label="Phone*"
                   mode="split"
                   defaultCountry={phoneDefaultCountry}
                   countryCallingCode={form.phoneCountryCode}
@@ -317,23 +631,27 @@ export function AddLeadModal({
                     setForm((f) => ({ ...f, phoneCountryCode: countryCallingCode, phone: nationalNumber }))
                   }
                 />
-              </div>
-              <div className="relative">
-                <Mail className="pointer-events-none absolute left-3 top-1/2 h-3 w-3 -translate-y-1/2 text-ink-faint" />
-                <Input className="pl-9" placeholder="Email" type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
-              </div>
-              <div className="min-w-0">
+              </LeadFieldGroup>
+              <LeadFieldGroup label="Email">
+                <IconInput
+                  wrapperClassName="w-full"
+                  icon={Mail}
+                  placeholder="you@company.com"
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                />
+              </LeadFieldGroup>
+              <LeadFieldGroup label="WhatsApp">
                 <PhoneField
-                  label="WhatsApp"
                   mode="e164"
                   defaultCountry={phoneDefaultCountry}
                   value={form.whatsappNumber}
                   onChange={(v) => setForm((f) => ({ ...f, whatsappNumber: v || '' }))}
                 />
-              </div>
-              <div className="min-w-0 sm:col-span-2">
+              </LeadFieldGroup>
+              <LeadFieldGroup label="Alternate phone" className="sm:col-span-2">
                 <PhoneField
-                  label="Alternate phone"
                   mode="split"
                   defaultCountry={phoneDefaultCountry}
                   countryCallingCode={form.altPhoneCountryCode}
@@ -342,35 +660,70 @@ export function AddLeadModal({
                     setForm((f) => ({ ...f, altPhoneCountryCode: countryCallingCode, altPhone: nationalNumber }))
                   }
                 />
-              </div>
-              <div className="relative">
-                <Building2 className="pointer-events-none absolute left-3 top-1/2 h-3 w-3 -translate-y-1/2 text-ink-faint" />
-                <Input className="pl-9" placeholder="Company name" value={form.company} onChange={(e) => setForm((f) => ({ ...f, company: e.target.value }))} />
-              </div>
-              <div className="relative">
-                <Briefcase className="pointer-events-none absolute left-3 top-1/2 h-3 w-3 -translate-y-1/2 text-ink-faint" />
-                <Input className="pl-9" placeholder="Designation / role" value={form.designation} onChange={(e) => setForm((f) => ({ ...f, designation: e.target.value }))} />
-              </div>
-              <div className="relative">
-                <MapPin className="pointer-events-none absolute left-3 top-1/2 h-3 w-3 -translate-y-1/2 text-ink-faint" />
-                <Input className="pl-9" placeholder="Address" value={form.street} onChange={(e) => setForm((f) => ({ ...f, street: e.target.value }))} />
-              </div>
-              <div className="relative">
-                <MapPin className="pointer-events-none absolute left-3 top-1/2 h-3 w-3 -translate-y-1/2 text-ink-faint" />
-                <Input className="pl-9" placeholder="City" value={form.city} onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))} />
-              </div>
-              <div className="relative">
-                <MapPin className="pointer-events-none absolute left-3 top-1/2 h-3 w-3 -translate-y-1/2 text-ink-faint" />
-                <Input className="pl-9" placeholder="State" value={form.state} onChange={(e) => setForm((f) => ({ ...f, state: e.target.value }))} />
-              </div>
-              <div className="relative">
-                <Flag className="pointer-events-none absolute left-3 top-1/2 h-3 w-3 -translate-y-1/2 text-ink-faint" />
-                <Input className="pl-9" placeholder="Country" value={form.country} onChange={(e) => setForm((f) => ({ ...f, country: e.target.value }))} />
-              </div>
-              <div className="relative">
-                <Hash className="pointer-events-none absolute left-3 top-1/2 h-3 w-3 -translate-y-1/2 text-ink-faint" />
-                <Input className="pl-9" placeholder="Pin code" value={form.postalCode} onChange={(e) => setForm((f) => ({ ...f, postalCode: e.target.value }))} />
-              </div>
+              </LeadFieldGroup>
+              <LeadFieldGroup label="Company">
+                <IconInput
+                  wrapperClassName="w-full"
+                  icon={Building2}
+                  placeholder="Organization"
+                  value={form.company}
+                  onChange={(e) => setForm((f) => ({ ...f, company: e.target.value }))}
+                />
+              </LeadFieldGroup>
+              <LeadFieldGroup label="Designation / role">
+                <IconInput
+                  wrapperClassName="w-full"
+                  icon={Briefcase}
+                  placeholder="Job title"
+                  value={form.designation}
+                  onChange={(e) => setForm((f) => ({ ...f, designation: e.target.value }))}
+                />
+              </LeadFieldGroup>
+              <LeadFieldGroup label="Street address">
+                <IconInput
+                  wrapperClassName="w-full"
+                  icon={MapPin}
+                  placeholder="Street, building, suite"
+                  value={form.street}
+                  onChange={(e) => setForm((f) => ({ ...f, street: e.target.value }))}
+                />
+              </LeadFieldGroup>
+              <LeadFieldGroup label="City">
+                <IconInput
+                  wrapperClassName="w-full"
+                  icon={MapPin}
+                  placeholder="City"
+                  value={form.city}
+                  onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
+                />
+              </LeadFieldGroup>
+              <LeadFieldGroup label="State / region">
+                <IconInput
+                  wrapperClassName="w-full"
+                  icon={MapPin}
+                  placeholder="State"
+                  value={form.state}
+                  onChange={(e) => setForm((f) => ({ ...f, state: e.target.value }))}
+                />
+              </LeadFieldGroup>
+              <LeadFieldGroup label="Country">
+                <IconInput
+                  wrapperClassName="w-full"
+                  icon={Flag}
+                  placeholder="Country"
+                  value={form.country}
+                  onChange={(e) => setForm((f) => ({ ...f, country: e.target.value }))}
+                />
+              </LeadFieldGroup>
+              <LeadFieldGroup label="Postal code">
+                <IconInput
+                  wrapperClassName="w-full"
+                  icon={Hash}
+                  placeholder="PIN / ZIP"
+                  value={form.postalCode}
+                  onChange={(e) => setForm((f) => ({ ...f, postalCode: e.target.value }))}
+                />
+              </LeadFieldGroup>
             </div>
             {isSamePhone ? (
               <p className="col-span-2 text-xs font-medium text-danger">Phone and alternate phone cannot be the same.</p>
@@ -381,10 +734,14 @@ export function AddLeadModal({
             <p className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Lead Classification</p>
             <div className="space-y-3">
               <div className="grid grid-cols-[1fr_auto] gap-3">
-                <select className="h-10 rounded-xl border border-surface-border px-3.5 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none" value={form.sourceId} onChange={(e) => setForm((f) => ({ ...f, sourceId: e.target.value }))}>
+                <Select value={form.sourceId} onChange={(e) => setForm((f) => ({ ...f, sourceId: e.target.value }))}>
                   <option value="">Select source*</option>
-                  {sources.map((source) => <option key={source.id} value={source.id}>{source.name}</option>)}
-                </select>
+                  {sources.map((source) => (
+                    <option key={source.id} value={source.id}>
+                      {source.name}
+                    </option>
+                  ))}
+                </Select>
                 <button
                   type="button"
                   onClick={() => setAddSourceOpen(true)}
@@ -397,18 +754,14 @@ export function AddLeadModal({
               </div>
               <div>
                 <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Pipeline stage</p>
-                <select
-                  className="h-10 w-full rounded-xl border border-surface-border px-3 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none"
-                  value={opportunityStage}
-                  onChange={(e) => setOpportunityStage(e.target.value)}
-                >
+                <Select value={opportunityStage} onChange={(e) => setOpportunityStage(e.target.value)}>
                   {!opportunityStages.length ? <option value="">Default (workspace)</option> : null}
                   {opportunityStages.map((s) => (
                     <option key={s.id || s.name} value={s.name}>
                       {s.name}
                     </option>
                   ))}
-                </select>
+                </Select>
                 {!opportunityStages.length ? (
                   <p className="mt-1 text-xs text-ink-muted">Configure stages under Lead configuration → Opportunity stages.</p>
                 ) : null}
@@ -438,18 +791,30 @@ export function AddLeadModal({
 
           <section className="space-y-3 rounded-2xl border border-surface-border p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Deal & Budget</p>
-            <div className="relative">
-              <CircleDollarSign className="pointer-events-none absolute left-3 top-1/2 h-3 w-3 -translate-y-1/2 text-ink-faint" />
-              <Input className="pl-9" placeholder="Budget" type="number" value={form.value} onChange={(e) => setForm((f) => ({ ...f, value: Number(e.target.value || 0) }))} />
-            </div>
+            <LeadFieldGroup label="Budget">
+              <IconInput
+                wrapperClassName="w-full"
+                icon={CircleDollarSign}
+                placeholder="0"
+                type="number"
+                value={form.value}
+                onChange={(e) => setForm((f) => ({ ...f, value: Number(e.target.value || 0) }))}
+              />
+            </LeadFieldGroup>
           </section>
 
           <section className="space-y-3 rounded-2xl border border-surface-border p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Notes & Requirement</p>
-            <div className="relative">
-              <ScanLine className="pointer-events-none absolute left-3 top-3.5 h-3 w-3 text-ink-faint" />
-              <textarea className="min-h-24 w-full rounded-xl border border-surface-border px-3.5 py-2.5 pl-9 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none" placeholder="Requirement" value={form.requirement} onChange={(e) => setForm((f) => ({ ...f, requirement: e.target.value }))} />
-            </div>
+            <LeadFieldGroup label="Requirement">
+              <IconTextarea
+                wrapperClassName="w-full"
+                icon={ScanLine}
+                className="min-h-24"
+                placeholder="What they need, timeline, constraints…"
+                value={form.requirement}
+                onChange={(e) => setForm((f) => ({ ...f, requirement: e.target.value }))}
+              />
+            </LeadFieldGroup>
           </section>
 
           <section className="space-y-3 rounded-2xl border border-surface-border p-4">
@@ -472,15 +837,13 @@ export function AddLeadModal({
                 {assigneeDropdownOpen ? (
                   <div className="absolute z-30 mt-1 w-full overflow-hidden rounded-xl border border-surface-border bg-white shadow-xl">
                     <div className="border-b border-surface-border p-2">
-                      <div className="relative">
-                        <Search className="pointer-events-none absolute left-3 top-1/2 h-3 w-3 -translate-y-1/2 text-ink-faint" />
-                        <input
-                          value={assigneeSearch}
-                          onChange={(e) => setAssigneeSearch(e.target.value)}
-                          placeholder="Search users..."
-                          className="h-9 w-full rounded-lg border border-surface-border px-3 pl-9 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none"
-                        />
-                      </div>
+                      <IconInput
+                        icon={Search}
+                        className="h-9 min-h-0 text-sm"
+                        value={assigneeSearch}
+                        onChange={(e) => setAssigneeSearch(e.target.value)}
+                        placeholder="Search users..."
+                      />
                     </div>
                     <div className="max-h-56 overflow-y-auto">
                       {filteredUsers.map((user) => {
@@ -516,41 +879,140 @@ export function AddLeadModal({
         </form>
       ) : (
         <div className="space-y-4">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            className="sr-only"
+            onChange={handleBulkFile}
+          />
+
           <div className="rounded-2xl border border-surface-border p-4">
-            <p className="text-sm font-semibold text-ink">Step 1: Paste CSV</p>
-            <p className="mt-1 text-xs text-ink-muted">First row should contain headers. Example: Full Name, Org, Email Address, Mobile, Deal Size</p>
-            <textarea
-              className="mt-3 min-h-36 w-full rounded-xl border border-surface-border p-3 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none"
-              placeholder="Full Name,Org,Email Address,Mobile,Deal Size"
-              value={csvText}
-              onChange={(e) => setCsvText(e.target.value)}
-            />
+            <p className="text-sm font-semibold text-ink">Template & file</p>
+            <p className="mt-1 text-xs text-ink-muted">
+              Download a CSV with the same kinds of fields as <span className="font-medium text-ink">Add single lead</span> (contact, phones, address, value, notes, tags, assignees, etc.), or use your own .xlsx. Row 1 = headers; map each column below.
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={downloadBulkTemplate}
+                className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-ink shadow-sm hover:border-slate-400"
+              >
+                <Download className="h-4 w-4 shrink-0 text-ink-muted" aria-hidden />
+                Download CSV template
+              </button>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="inline-flex h-10 items-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-brand-700"
+              >
+                <Upload className="h-4 w-4 shrink-0" aria-hidden />
+                Choose file
+              </button>
+              {(bulkFileName || parsed.columns.length > 0) ? (
+                <button
+                  type="button"
+                  onClick={clearBulkImport}
+                  className="h-10 rounded-xl border border-surface-border px-4 text-sm text-ink-muted hover:text-ink"
+                >
+                  Clear
+                </button>
+              ) : null}
+            </div>
+            {bulkFileName ? (
+              <p className="mt-2 flex items-center gap-1.5 text-xs text-ink-muted">
+                <FileSpreadsheet className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                <span className="truncate font-medium text-ink">{bulkFileName}</span>
+              </p>
+            ) : null}
+            {importSheetNames.length > 1 ? (
+              <div className="mt-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-muted">Worksheet</p>
+                <Select
+                  className="mt-1.5 h-10 rounded-lg text-sm"
+                  value={importActiveSheet}
+                  onChange={(e) => setImportActiveSheet(e.target.value)}
+                >
+                  {importSheetNames.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            ) : null}
           </div>
+
           <div className="rounded-2xl border border-surface-border p-4">
-            <p className="text-sm font-semibold text-ink">Step 2: Field Mapping</p>
-            {!parsed.headers.length ? (
-              <p className="mt-2 text-xs text-ink-muted">Paste CSV data to configure mapping.</p>
+            <p className="text-sm font-semibold text-ink">Lead source</p>
+            <p className="mt-1 text-xs text-ink-muted">
+              One source for every row (defaults when unchanged: Web Form, Manual, Referral). Leads keep channel <span className="font-medium text-ink">CSV import</span>. You cannot map source from the file.
+            </p>
+            <Select
+              className="mt-3 h-10 rounded-lg text-sm"
+              value={bulkImportSourceId}
+              onChange={(e) => setBulkImportSourceId(e.target.value)}
+              disabled={!bulkImportSources.length}
+            >
+              {!bulkImportSources.length ? (
+                <option value="">Add sources under Lead configuration</option>
+              ) : (
+                bulkImportSources.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))
+              )}
+            </Select>
+          </div>
+
+          <div className="rounded-2xl border border-surface-border p-4">
+            <p className="text-sm font-semibold text-ink">Map columns → lead fields</p>
+            {!parsed.columns.length ? (
+              <p className="mt-2 text-xs text-ink-muted">Choose a .csv or .xlsx file above to load columns and map them.</p>
             ) : (
-              <div className="mt-3 space-y-3">
-                {parsed.headers.map((header) => (
-                  <div key={header} className="grid grid-cols-2 items-center gap-3">
-                    <p className="truncate text-sm text-ink">{header}</p>
-                    <select
-                      className="h-10 rounded-xl border border-surface-border px-3.5 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none"
-                      value={mapping[header] || 'skip'}
-                      onChange={(e) => setMapping((m) => ({ ...m, [header]: e.target.value }))}
-                    >
-                      {CSV_FIELD_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                    </select>
-                  </div>
-                ))}
+              <div className="mt-3 space-y-2">
+                <p className="text-xs text-ink-muted">
+                  {parsed.columns.length} column{parsed.columns.length === 1 ? '' : 's'} detected · {parsed.rows.length} data row
+                  {parsed.rows.length === 1 ? '' : 's'}
+                </p>
+                <div className="max-h-[min(420px,50vh)] space-y-2 overflow-y-auto pr-1">
+                  {parsed.columns.map((col) => (
+                    <div key={col.key} className="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-semibold text-ink">{col.label}</p>
+                          {parsed.rows[0] ? (
+                            <p className="mt-0.5 truncate text-[11px] text-ink-muted" title={parsed.rows[0][col.key]}>
+                              Sample: {parsed.rows[0][col.key] || '—'}
+                            </p>
+                          ) : null}
+                        </div>
+                        <Select
+                          className="h-10 shrink-0 rounded-lg text-sm sm:w-[min(100%,280px)]"
+                          value={mapping[col.key] || 'skip'}
+                          onChange={(e) => setMapping((m) => ({ ...m, [col.key]: e.target.value }))}
+                        >
+                          {BULK_IMPORT_FIELD_TARGETS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </Select>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
+
           {parsed.rows.length ? (
             <div className="rounded-2xl border border-surface-border p-4">
-              <p className="text-sm font-semibold text-ink">Preview</p>
-              <p className="mt-1 text-xs text-ink-muted">{parsed.rows.length} rows detected</p>
+              <p className="text-sm font-semibold text-ink">Ready to import</p>
+              <p className="mt-1 text-xs text-ink-muted">
+                {parsed.rows.length} row{parsed.rows.length === 1 ? '' : 's'} will be sent using the mapping above. Duplicate emails/phones are skipped on the server.
+              </p>
             </div>
           ) : null}
         </div>
@@ -561,11 +1023,7 @@ export function AddLeadModal({
             <p className="text-base font-semibold text-ink">Add Source</p>
             <p className="mt-1 text-xs text-ink-muted">Create a source without leaving this form.</p>
             <form className="mt-4 space-y-3" onSubmit={submitNewSource}>
-              <Input
-                placeholder="Source name"
-                value={newSourceName}
-                onChange={(e) => setNewSourceName(e.target.value)}
-              />
+              <IconInput icon={Tag} placeholder="Source name" value={newSourceName} onChange={(e) => setNewSourceName(e.target.value)} />
               <div className="flex justify-end gap-2">
                 <button
                   type="button"

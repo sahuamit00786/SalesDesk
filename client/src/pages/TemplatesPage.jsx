@@ -23,6 +23,7 @@ import {
 } from '@/features/templates/components/TemplateRichEditor'
 import { AttachmentPickerModal } from '@/features/templates/components/AttachmentPickerModal'
 import { EmailPreviewCard } from '@/features/templates/components/EmailPreviewCard'
+import { LEAD_MERGE_FIELDS, SAMPLE_PREVIEW_VALUES } from '@/features/templates/mergeTags'
 
 const MAX_ATTACHMENTS = 3
 
@@ -44,40 +45,6 @@ const EMPTY_DRAFT = {
   attachments: [],
   skipIfAlreadySent: true,
   scheduleAt: null,
-}
-
-const LEAD_MERGE_FIELDS = [
-  'first_name',
-  'last_name',
-  'contact_name',
-  'company',
-  'designation',
-  'email',
-  'phone',
-  'value',
-  'source',
-  'status',
-  'city',
-  'state',
-  'country',
-  'sender_name',
-]
-
-const SAMPLE_PREVIEW_VALUES = {
-  first_name: 'Amit',
-  last_name: 'Sahu',
-  contact_name: 'Amit Sahu',
-  company: 'Connexify Labs',
-  designation: 'Founder',
-  email: 'amit@connexify.io',
-  phone: '+91 98765 43210',
-  value: '12000',
-  source: 'cold_email',
-  status: 'qualified',
-  city: 'Bengaluru',
-  state: 'Karnataka',
-  country: 'India',
-  sender_name: 'Sales Team',
 }
 
 export default function TemplatesPage() {
@@ -299,7 +266,7 @@ export default function TemplatesPage() {
     try {
       const result = await generateTemplateContent({
         objective: aiPrompt,
-        customPrompt: `Available lead fields for merge tags: {{first_name}}, {{last_name}}, {{contact_name}}, {{company}}, {{designation}}, {{email}}, {{phone}}, {{value}}, {{source}}, {{status}}, {{city}}, {{state}}, {{country}}, {{sender_name}}.`,
+        customPrompt: `Available lead fields (use @field syntax): ${LEAD_MERGE_FIELDS.map((f) => `@${f}`).join(', ')}.`,
       }).unwrap()
       setDraft((prev) => ({
         ...prev,
@@ -543,7 +510,7 @@ export default function TemplatesPage() {
               <input
                 ref={subjectRef}
                 className="w-full rounded-lg border border-surface-border px-3 py-2 text-sm outline-none transition-colors focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
-                placeholder="e.g. Quick update on {{company}} — {{first_name}}"
+                placeholder="e.g. Quick update on @company — @first_name"
                 value={draft.subject}
                 onChange={(e) => setDraft((p) => ({ ...p, subject: e.target.value }))}
                 onInput={handleSubjectInput}

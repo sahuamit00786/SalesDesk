@@ -21,6 +21,9 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { PageShell } from '@/components/layout/PageShell'
+import { Select } from '@/components/ui/Select'
+import { Input } from '@/components/ui/Input'
+import { IconInput } from '@/components/ui/IconInput'
 import {
   useCreateActivityReminderMutation,
   useGetActivitiesFeedQuery,
@@ -403,14 +406,15 @@ export function ActivitiesPage() {
                 <p className="text-xs text-ink-muted">Calls, emails, meetings, and notes in one timeline</p>
               </div>
               <div className="flex flex-wrap items-center justify-end gap-2">
-                <input
-                  className="h-9 min-w-[220px] rounded-lg border border-surface-border px-2 text-xs"
+                <IconInput
+                  icon={Search}
+                  className="h-9 min-h-0 min-w-[220px] rounded-lg text-xs"
                   placeholder="Search title or notes"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
-                <select
-                  className="h-9 min-w-[170px] rounded-lg border border-surface-border px-2 text-xs"
+                <Select
+                  className="h-9 min-w-[170px] rounded-lg px-2 text-xs"
                   value=""
                   onChange={(e) => {
                     const v = e.target.value
@@ -418,8 +422,12 @@ export function ActivitiesPage() {
                   }}
                 >
                   <option value="">Activity type</option>
-                  {typeRows.map((type) => <option key={type.key} value={type.key}>{type.name}</option>)}
-                </select>
+                  {typeRows.map((type) => (
+                    <option key={type.key} value={type.key}>
+                      {type.name}
+                    </option>
+                  ))}
+                </Select>
                 <button
                   type="button"
                   className="relative inline-flex h-9 items-center gap-2 rounded-lg border border-surface-border bg-white px-3 text-xs font-medium text-ink hover:bg-surface-subtle"
@@ -499,23 +507,31 @@ export function ActivitiesPage() {
             </div>
             <div className="mt-4 grid gap-2">
               <label className="text-[11px] font-medium text-ink-muted">View</label>
-              <select className="h-9 rounded-lg border border-surface-border px-2 text-xs" value={scope} onChange={(e) => setScope(e.target.value)}>
+              <Select className="h-9 rounded-lg text-xs" value={scope} onChange={(e) => setScope(e.target.value)}>
                 <option value="global">Global view</option>
                 <option value="lead">Per-lead view</option>
-              </select>
+              </Select>
               <label className="mt-2 text-[11px] font-medium text-ink-muted">Lead</label>
-              <select className="h-9 rounded-lg border border-surface-border px-2 text-xs" value={leadId} onChange={(e) => setLeadId(e.target.value)} disabled={scope !== 'lead'}>
+              <Select className="h-9 rounded-lg text-xs" value={leadId} onChange={(e) => setLeadId(e.target.value)} disabled={scope !== 'lead'}>
                 <option value="">Select linked lead</option>
-                {leads.map((lead) => <option key={lead.id} value={lead.id}>{lead.title || lead.contactName || lead.email}</option>)}
-              </select>
+                {leads.map((lead) => (
+                  <option key={lead.id} value={lead.id}>
+                    {lead.title || lead.contactName || lead.email}
+                  </option>
+                ))}
+              </Select>
               <label className="mt-2 text-[11px] font-medium text-ink-muted">Date range</label>
-              <select className="h-9 rounded-lg border border-surface-border px-2 text-xs" value={datePreset} onChange={(e) => setDatePreset(e.target.value)}>
-                {PRESET_OPTIONS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
-              </select>
+              <Select className="h-9 rounded-lg text-xs" value={datePreset} onChange={(e) => setDatePreset(e.target.value)}>
+                {PRESET_OPTIONS.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.label}
+                  </option>
+                ))}
+              </Select>
               {datePreset === 'custom' ? (
                 <div className="grid gap-2 sm:grid-cols-2">
-                  <input type="datetime-local" className="h-9 rounded-lg border border-surface-border px-2 text-xs" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} />
-                  <input type="datetime-local" className="h-9 rounded-lg border border-surface-border px-2 text-xs" value={customTo} onChange={(e) => setCustomTo(e.target.value)} />
+                  <Input type="datetime-local" className="h-9 min-h-0 rounded-lg px-2 text-xs" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} />
+                  <Input type="datetime-local" className="h-9 min-h-0 rounded-lg px-2 text-xs" value={customTo} onChange={(e) => setCustomTo(e.target.value)} />
                 </div>
               ) : null}
             </div>
@@ -543,7 +559,7 @@ export function ActivitiesPage() {
           <div className="w-full max-w-md rounded-2xl border border-surface-border bg-white p-4">
             <p className="text-sm font-semibold text-ink">Set activity reminder</p>
             <div className="mt-3 space-y-2">
-              <input type="datetime-local" className="h-9 w-full rounded-lg border border-surface-border px-2 text-xs" value={reminderForm.remindAt} onChange={(e) => setReminderForm((f) => ({ ...f, remindAt: e.target.value }))} />
+              <Input type="datetime-local" className="h-9 min-h-0 w-full rounded-lg px-2 text-xs" value={reminderForm.remindAt} onChange={(e) => setReminderForm((f) => ({ ...f, remindAt: e.target.value }))} />
               <label className="flex items-center gap-2 text-xs text-ink-muted">
                 <input type="checkbox" checked={reminderForm.channelPush} onChange={(e) => setReminderForm((f) => ({ ...f, channelPush: e.target.checked }))} />
                 Push notification

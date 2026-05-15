@@ -1,5 +1,7 @@
 import { Router } from 'express'
 import multer from 'multer'
+import path from 'node:path'
+import { mkdirSync } from 'node:fs'
 import { rateLimit } from '../../middleware/rateLimit.js'
 import { requireAuth } from '../../middleware/auth.js'
 import { requireCompany } from '../../middleware/requireCompany.js'
@@ -28,18 +30,40 @@ import * as emailTrackingController from '../../controllers/emailTrackingControl
 import documentsRoutes from './documents.js'
 import webFormsRoutes from '../webFormsRoutes.js'
 import * as googleController from '../../controllers/googleController.js'
+import * as mailboxController from '../../controllers/mailboxController.js'
+import * as attendanceController from '../../controllers/attendanceController.js'
+import * as leaveController from '../../controllers/leaveController.js'
+import { handleGmailPubSubPushHttp } from '../../services/gmail/gmailPushService.js'
 import meetingRoutes from '../meetingRoutes.js'
 import transcriptionRoutes from '../transcriptionRoutes.js'
 import aiMeetingRoutes from '../aiMeetingRoutes.js'
 
 const router = Router()
-const emailUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 10 } })
+const emailUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 24 * 1024 * 1024, files: 12 } })
+
+const leaveUploadDir = path.resolve(process.cwd(), 'uploads', 'leave')
+mkdirSync(leaveUploadDir, { recursive: true })
+const leaveUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, leaveUploadDir),
+    filename: (_req, file, cb) => {
+      const safe = String(file.originalname || 'document').replace(/[^\w.\-]+/g, '_')
+      cb(null, `${Date.now()}_${safe}`)
+    },
+  }),
+  limits: { fileSize: 8 * 1024 * 1024, files: 1 },
+})
 
 const authLimiter = rateLimit({ routeKey: 'auth', windowSec: 60, max: 30 })
 const apiLimiter = rateLimit({ routeKey: 'api', windowSec: 60, max: 200 })
 
 router.get('/health', (_req, res) => {
   res.json({ success: true, data: { status: 'ok' }, meta: {} })
+})
+
+/** Gmail API → Pub/Sub push (OIDC). Configure topic + subscription in GCP; see GMAIL_PUBSUB_* env vars. */
+router.post('/webhooks/gmail-pubsub', (req, res, next) => {
+  handleGmailPubSubPushHttp(req, res).catch(next)
 })
 
 /** Browser OAuth redirect — must stay public (no Authorization header on redirect). */
@@ -365,6 +389,36 @@ router.post('/leads/:id/emails/send', requireAuth, apiLimiter, requireCompany, l
 router.post('/leads/:id/emails/sync', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'edit'), leadsController.syncLeadEmailReplies)
 router.get('/email/threads', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'view'), leadsController.listEmailThreads)
 router.get('/email/threads/:threadId', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'view'), leadsController.getEmailThread)
+router.get('/email/mailbox-badge', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'view'), mailboxController.getMailboxInboxBadge)
+router.get('/email/mailbox-threads', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'view'), mailboxController.listMailboxThreads)
+router.get('/email/mailbox-threads/:threadId', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'view'), mailboxController.getMailboxThread)
+router.post(
+  '/email/mailbox-threads/:threadId/read',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'view'),
+  mailboxController.markMailboxThreadRead,
+)
+router.get(
+  '/email/mailbox-attachments/:messageId/:attachmentId',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('leads', 'view'),
+  mailboxController.downloadMailboxAttachment,
+)
+router.post(
+  '/email/mailbox-save-attachment',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('documents', 'edit'),
+  mailboxController.saveMailboxAttachmentToLead,
+)
 router.post('/email/sync', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'edit'), leadsController.syncEmailReplies)
 router.post('/email/attachments', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'edit'), emailUpload.array('files', 10), leadsController.uploadEmailAttachments)
 router.get('/leads/:id/tasks', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'view'), leadsController.listTasks)
@@ -569,6 +623,15 @@ router.post(
   loadPermissions,
   requirePermission('team', 'admin'),
   teamController.deactivateUser,
+)
+router.post(
+  '/team/users/:id/reactivate',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('team', 'admin'),
+  teamController.reactivateUser,
 )
 router.post(
   '/team/users/:id/reassign-leads',
@@ -917,6 +980,44 @@ router.get(
   requirePermission('leads', 'view'),
   templatesController.leadEmailHistory,
 )
+
+// —— HR: Attendance ——
+router.get('/attendance/today', requireAuth, apiLimiter, requireCompany, attendanceController.getTodayStatus)
+router.post('/attendance/check-in', requireAuth, apiLimiter, requireCompany, attendanceController.checkIn)
+router.post('/attendance/check-out', requireAuth, apiLimiter, requireCompany, attendanceController.checkOut)
+router.get('/attendance/me', requireAuth, apiLimiter, requireCompany, attendanceController.getMyAttendance)
+router.get('/attendance/team', requireAuth, apiLimiter, requireCompany, attendanceController.getTeamAttendance)
+router.get('/attendance/day/:date', requireAuth, apiLimiter, requireCompany, attendanceController.getDayDetail)
+router.get('/attendance/export', requireAuth, apiLimiter, requireCompany, attendanceController.exportAttendanceCsv)
+
+// —— HR: Leave ——
+router.get('/leave/types', requireAuth, apiLimiter, requireCompany, leaveController.getLeaveTypes)
+router.post('/leave/types', requireAuth, apiLimiter, requireCompany, leaveController.createLeaveType)
+router.put('/leave/types/:id', requireAuth, apiLimiter, requireCompany, leaveController.updateLeaveType)
+router.delete('/leave/types/:id', requireAuth, apiLimiter, requireCompany, leaveController.deleteLeaveType)
+router.get('/leave/balance/me', requireAuth, apiLimiter, requireCompany, leaveController.getMyLeaveBalance)
+router.get('/leave/balance/:userId', requireAuth, apiLimiter, requireCompany, leaveController.getUserLeaveBalance)
+router.post('/leave/balance/adjust', requireAuth, apiLimiter, requireCompany, leaveController.adjustLeaveBalance)
+router.get('/leave/preview-days', requireAuth, apiLimiter, requireCompany, leaveController.previewLeaveDays)
+router.get('/leave/settings', requireAuth, apiLimiter, requireCompany, leaveController.getLeaveSettings)
+router.put('/leave/settings', requireAuth, apiLimiter, requireCompany, leaveController.updateLeaveSettings)
+router.post('/leave/requests', requireAuth, apiLimiter, requireCompany, leaveUpload.single('document'), leaveController.applyLeave)
+router.get('/leave/requests/me', requireAuth, apiLimiter, requireCompany, leaveController.getMyLeaves)
+router.get('/leave/requests/all', requireAuth, apiLimiter, requireCompany, leaveController.getAllLeaves)
+router.post('/leave/requests/bulk-approve', requireAuth, apiLimiter, requireCompany, leaveController.bulkApproveLeaves)
+router.post('/leave/requests/:id/approve', requireAuth, apiLimiter, requireCompany, leaveController.approveLeave)
+router.post('/leave/requests/:id/reject', requireAuth, apiLimiter, requireCompany, leaveController.rejectLeave)
+router.post('/leave/requests/:id/cancel', requireAuth, apiLimiter, requireCompany, leaveController.cancelLeave)
+router.get('/leave/calendar', requireAuth, apiLimiter, requireCompany, leaveController.getTeamLeaveCalendar)
+router.get('/leave/holidays', requireAuth, apiLimiter, requireCompany, leaveController.getPublicHolidays)
+router.post('/leave/holidays', requireAuth, apiLimiter, requireCompany, leaveController.createHoliday)
+router.put('/leave/holidays/:id', requireAuth, apiLimiter, requireCompany, leaveController.updateHoliday)
+router.delete('/leave/holidays/:id', requireAuth, apiLimiter, requireCompany, leaveController.deleteHoliday)
+
+// —— HR: Notifications ——
+router.get('/notifications', requireAuth, apiLimiter, requireCompany, leaveController.getNotifications)
+router.patch('/notifications/:id/read', requireAuth, apiLimiter, requireCompany, leaveController.markNotificationRead)
+router.post('/notifications/mark-all-read', requireAuth, apiLimiter, requireCompany, leaveController.markAllNotificationsRead)
 
 router.get('/track/open', emailTrackingController.trackOpen)
 router.get('/track/click', emailTrackingController.trackClick)

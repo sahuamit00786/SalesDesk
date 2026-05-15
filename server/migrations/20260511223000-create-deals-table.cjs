@@ -1,10 +1,17 @@
 'use strict'
 
+const { addIndexIfMissing } = require('../migration-helpers.cjs')
+
 /** @param {import('sequelize').QueryInterface} queryInterface */
 /** @param {import('sequelize').Sequelize} Sequelize */
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.createTable('deals', {
+    const tables = await queryInterface.showAllTables()
+    const names = tables.map((t) => (typeof t === 'string' ? t : t.tableName || t))
+    const hasDeals = names.includes('deals')
+
+    if (!hasDeals) {
+      await queryInterface.createTable('deals', {
       id: {
         type: Sequelize.UUID,
         allowNull: false,
@@ -58,9 +65,11 @@ module.exports = {
       created_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.fn('NOW') },
       updated_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.fn('NOW') },
     })
-    await queryInterface.addIndex('deals', ['workspace_id'], { name: 'deals_workspace_id_idx' })
-    await queryInterface.addIndex('deals', ['company_id'], { name: 'deals_company_id_idx' })
-    await queryInterface.addIndex('deals', ['opportunity_lead_id'], { name: 'deals_opportunity_lead_id_idx' })
+    }
+
+    await addIndexIfMissing(queryInterface, 'deals', ['workspace_id'], { name: 'deals_workspace_id_idx' })
+    await addIndexIfMissing(queryInterface, 'deals', ['company_id'], { name: 'deals_company_id_idx' })
+    await addIndexIfMissing(queryInterface, 'deals', ['opportunity_lead_id'], { name: 'deals_opportunity_lead_id_idx' })
   },
 
   async down(queryInterface) {

@@ -11,10 +11,12 @@ import {
 import app from './src/app.js'
 import { sequelize } from './src/config/db.js'
 import { runEmailAutoSyncJob } from './src/controllers/leadsController.js'
+import { renewDueGmailWatches } from './src/services/gmail/gmailPushService.js'
 import { startEmailTemplateWorker } from './src/queues/emailTemplateQueue.js'
 import { startWorkflowTriggerWorker } from './src/queues/workflowTriggerQueue.js'
 import { processWorkflowWakeups } from './src/services/workflowRunner.js'
 import { startReminderJob } from './src/jobs/reminderJob.js'
+import { startAttendanceJob } from './src/jobs/attendanceJob.js'
 
 validateEnv()
 
@@ -66,6 +68,15 @@ async function start() {
       runEmailAutoSyncJob().catch(() => {})
     }, syncIntervalMs)
   }
+  const gmailWatchRenewMs = Number(process.env.GMAIL_WATCH_RENEW_INTERVAL_MS || 43200000)
+  if (gmailWatchRenewMs > 0) {
+    setTimeout(() => {
+      renewDueGmailWatches().catch(() => {})
+    }, 15000)
+    setInterval(() => {
+      renewDueGmailWatches().catch(() => {})
+    }, gmailWatchRenewMs)
+  }
   startEmailTemplateWorker()
   startWorkflowTriggerWorker()
   setInterval(() => {
@@ -75,6 +86,7 @@ async function start() {
   if (process.env.MEETING_CRON_ENABLED !== 'false') {
     startReminderJob()
   }
+  startAttendanceJob()
   const server = http.createServer(app)
   server.listen(port, () => {
     // eslint-disable-next-line no-console

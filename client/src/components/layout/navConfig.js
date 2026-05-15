@@ -1,6 +1,7 @@
 import {
   BarChart2,
   Briefcase,
+  CalendarCheck,
   CalendarDays,
   CheckSquare,
   Banknote,
@@ -17,17 +18,19 @@ import {
   Phone,
   Puzzle,
   Receipt,
+  ScrollText,
   SlidersHorizontal,
   Settings2,
   Shuffle,
   TrendingUp,
+  Umbrella,
   Users,
   Workflow,
 } from 'lucide-react'
 
 /** Route → header title + subtitle (module overview copy). */
 export const ROUTE_META = {
-  '/': {
+  '/dashboard': {
     title: 'Dashboard',
     sub: 'Home screen — overview of all key metrics, tasks due today, and pipeline health',
   },
@@ -151,6 +154,26 @@ export const ROUTE_META = {
     title: 'Integrations & API',
     sub: 'Connect your CRM to every other tool your company uses',
   },
+  '/attendance': {
+    title: 'Attendance',
+    sub: 'Check-in, team calendar, and monthly attendance reports',
+  },
+  '/leave': {
+    title: 'Leave',
+    sub: 'Apply for leave and view your balance',
+  },
+  '/leave/requests': {
+    title: 'Leave requests',
+    sub: 'Track pending, approved, and past leave applications',
+  },
+  '/leave/approval': {
+    title: 'Leave approval',
+    sub: 'Review and approve team leave requests',
+  },
+  '/leave/config': {
+    title: 'Leave settings',
+    sub: 'Leave types, holidays, and balance adjustments',
+  },
 }
 
 const DEFAULT_META = {
@@ -159,7 +182,8 @@ const DEFAULT_META = {
 }
 
 export function getRouteMeta(pathname) {
-  if (ROUTE_META[pathname]) return ROUTE_META[pathname]
+  const key = pathname === '/' ? '/dashboard' : pathname
+  if (ROUTE_META[key]) return ROUTE_META[key]
   if (/^\/automation\/[^/]+$/.test(pathname) && pathname !== '/automation/new') {
     return {
       title: 'Workflow editor',
@@ -173,7 +197,7 @@ export const NAV_SECTIONS = [
   {
     label: 'Main',
     items: [
-      { to: '/', label: 'Dashboard', icon: LayoutGrid, end: true },
+      { to: '/dashboard', label: 'Dashboard', icon: LayoutGrid, end: true },
       { to: '/leads', label: 'Leads', icon: Users, badge: '48' },
       { to: '/lead-distribution', label: 'Lead distribution', icon: Shuffle },
       { to: '/opportunities', label: 'Opportunities', icon: Briefcase },
@@ -182,10 +206,20 @@ export const NAV_SECTIONS = [
     ],
   },
   {
+    label: 'HR',
+    items: [
+      { to: '/attendance', label: 'Attendance', icon: CalendarCheck },
+      { to: '/leave', label: 'Leave', icon: Umbrella },
+      { to: '/leave/requests', label: 'Leave requests', icon: ScrollText },
+      { to: '/leave/approval', label: 'Leave approval', icon: ClipboardList },
+      { to: '/leave/config', label: 'Leave settings', icon: SlidersHorizontal },
+    ],
+  },
+  {
     label: 'Engage',
     items: [
-      { to: '/activities', label: 'Activities', icon: CheckSquare, badge: '7', badgeVariant: 'info' },
-      { to: '/tasks', label: 'Tasks', icon: ListTodo, badge: '12' },
+      { to: '/activities', label: 'Activities', icon: CheckSquare },
+      { to: '/tasks', label: 'Tasks', icon: ListTodo },
       { to: '/calendar', label: 'Calendar & Reminders', icon: CalendarDays },
       { to: '/meetings', label: 'Calls & meetings', icon: Phone },
       { to: '/email', label: 'Email', icon: Mail },

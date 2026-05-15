@@ -180,30 +180,49 @@ module.exports = {
 
     for (const c of companies) {
       const companyId = c.companyId
-      const roleId = randomUUID()
-      await queryInterface.bulkInsert('company_roles', [
-        {
-          id: roleId,
-          company_id: companyId,
-          name: 'Member',
-          description: 'Default member role',
-          is_default: true,
-          created_by: null,
-          created_at: now,
-          updated_at: now,
-        },
-      ])
-      if (leafMenus.length) {
-        await queryInterface.bulkInsert(
-          'company_role_menus',
-          leafMenus.map((m) => ({
-            id: randomUUID(),
-            company_role_id: roleId,
-            menu_id: m.id,
+      const [existingRoleRows] = await queryInterface.sequelize.query(
+        `SELECT id FROM company_roles WHERE company_id = ? AND (is_default = 1 OR name = 'Member') LIMIT 1`,
+        { replacements: [companyId] },
+      )
+      let roleId
+      if (existingRoleRows?.length) {
+        roleId = existingRoleRows[0].id
+      } else {
+        roleId = randomUUID()
+        await queryInterface.bulkInsert('company_roles', [
+          {
+            id: roleId,
+            company_id: companyId,
+            name: 'Member',
+            description: 'Default member role',
+            is_default: true,
+            created_by: null,
             created_at: now,
             updated_at: now,
-          })),
+          },
+        ])
+      }
+      if (leafMenus.length) {
+        const [existingMenuRows] = await queryInterface.sequelize.query(
+          `SELECT menu_id FROM company_role_menus WHERE company_role_id = ?`,
+          { replacements: [roleId] },
         )
+        const haveMenu = new Set(
+          (existingMenuRows || []).map((r) => String(r.menu_id)),
+        )
+        const missingMenus = leafMenus.filter((m) => !haveMenu.has(String(m.id)))
+        if (missingMenus.length) {
+          await queryInterface.bulkInsert(
+            'company_role_menus',
+            missingMenus.map((m) => ({
+              id: randomUUID(),
+              company_role_id: roleId,
+              menu_id: m.id,
+              created_at: now,
+              updated_at: now,
+            })),
+          )
+        }
       }
       await queryInterface.sequelize.query(
         `UPDATE users

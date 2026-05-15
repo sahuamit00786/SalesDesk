@@ -39,7 +39,7 @@ export function LoginPage() {
   const user = useAppSelector((s) => s.auth.user)
   const location = useLocation()
   const navigate = useNavigate()
-  const from = location.state?.from?.pathname || '/'
+  const from = location.state?.from?.pathname || '/dashboard'
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')

@@ -101,7 +101,7 @@ export function RegisterPage() {
     confirmPassword.length > 0 && password.length > 0 && confirmPassword !== password
 
   if (token) {
-    const to = user?.needsOnboarding ? '/onboarding' : '/'
+    const to = user?.needsOnboarding ? '/onboarding' : '/dashboard'
     return <Navigate to={to} replace />
   }
 

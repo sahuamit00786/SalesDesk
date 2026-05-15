@@ -31,7 +31,32 @@ export function getDocCardPreviewMeta(row) {
 
 export function getFileUrl(filePath) {
   if (!filePath) return ''
-  if (filePath.startsWith('http://') || filePath.startsWith('https://')) return filePath
-  if (filePath.startsWith('/')) return encodeURI(filePath)
-  return encodeURI(`/${filePath}`)
+  const t = String(filePath).trim()
+  if (t.startsWith('data:') || t.startsWith('blob:')) return t
+  if (t.startsWith('http://') || t.startsWith('https://')) return t
+  let path = t.startsWith('/') ? t : `/${t}`
+  try {
+    return encodeURI(decodeURI(path))
+  } catch {
+    return encodeURI(path)
+  }
+}
+
+/** Map a task JSON attachment into a document row the preview dialog understands. */
+export function normalizeTaskAttachmentForPreview(att, index = 0) {
+  const name = String(att?.filename || att?.fileName || att?.name || 'attachment').trim() || 'attachment'
+  const filePath = att?.filePath || att?.url || att?.fileUrl || ''
+  if (!filePath) return null
+  return {
+    id: att?.id || att?.documentId || `task-att-${index}`,
+    name,
+    filePath,
+    fileSize: Number(att?.size ?? att?.sizeBytes ?? 0) || 0,
+    uploader: att?.uploader || null,
+  }
+}
+
+export function getTaskPreviewDocuments(taskLike) {
+  const raw = Array.isArray(taskLike?.attachments) ? taskLike.attachments : []
+  return raw.map((a, i) => normalizeTaskAttachmentForPreview(a, i)).filter(Boolean)
 }

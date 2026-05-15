@@ -64,43 +64,43 @@ export function WebFormsListPage() {
         </div>
         <div className="overflow-hidden rounded-xl border border-surface-border bg-white">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1100px] text-xs">
-              <thead className="sticky top-0 z-10 bg-white">
-                <tr className="border-b border-surface-border/70">
-                  <th className="px-3 py-2 text-left text-[11px] font-semibold text-ink-muted">Form</th>
-                  <th className="px-3 py-2 text-left text-[11px] font-semibold text-ink-muted">Status</th>
-                  <th className="px-3 py-2 text-left text-[11px] font-semibold text-ink-muted">Display</th>
-                  <th className="px-3 py-2 text-left text-[11px] font-semibold text-ink-muted">Views</th>
-                  <th className="px-3 py-2 text-left text-[11px] font-semibold text-ink-muted">Submissions</th>
-                  <th className="px-3 py-2 text-left text-[11px] font-semibold text-ink-muted">Conversion</th>
-                  <th className="px-3 py-2 text-left text-[11px] font-semibold text-ink-muted">Updated</th>
-                  <th className="px-3 py-2 text-right text-[11px] font-semibold text-ink-muted">Actions</th>
+            <table className="cx-table cx-table--dense min-w-[1100px] text-xs">
+              <thead className="cx-table-sticky-head">
+                <tr>
+                  <th>Form</th>
+                  <th>Status</th>
+                  <th>Display</th>
+                  <th>Views</th>
+                  <th>Submissions</th>
+                  <th>Conversion</th>
+                  <th>Updated</th>
+                  <th className="cx-table-cell-actions text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading ? (
-                  <tr><td colSpan={8} className="px-4 py-8 text-center text-sm text-ink-muted">Loading forms...</td></tr>
+                  <tr><td colSpan={8} className="py-8 text-center text-sm text-ink-muted">Loading forms...</td></tr>
                 ) : null}
                 {!isLoading && !forms.length ? (
-                  <tr><td colSpan={8} className="px-4 py-8 text-center text-sm text-ink-muted">No forms yet. Create your first form.</td></tr>
+                  <tr><td colSpan={8} className="py-8 text-center text-sm text-ink-muted">No forms yet. Create your first form.</td></tr>
                 ) : null}
                 {!isLoading && forms.map((form) => {
                   const views = Number(form.totalViews || 0)
                   const submissions = Number(form.totalSubmissions || 0)
                   const conversion = views > 0 ? ((submissions / views) * 100).toFixed(1) : '0.0'
                   return (
-                    <tr key={form.id} className="group border-b border-surface-border last:border-b-0 hover:bg-brand-50">
-                      <td className="px-3 py-2">
+                    <tr key={form.id} className="group">
+                      <td>
                         <p className="text-sm font-semibold text-ink">{form.name}</p>
                         <p className="text-xs text-ink-muted">{form.formTitle || 'Untitled display title'}</p>
                       </td>
-                      <td className="px-3 py-2"><FormStatusBadge status={form.status} /></td>
-                      <td className="px-3 py-2 capitalize text-ink-muted">{form.displayType || 'inline'}</td>
-                      <td className="px-3 py-2 text-ink-muted">{views}</td>
-                      <td className="px-3 py-2 text-ink-muted">{submissions}</td>
-                      <td className="px-3 py-2 text-ink-muted">{conversion}%</td>
-                      <td className="px-3 py-2 text-ink-muted">{new Date(form.updatedAt).toLocaleString()}</td>
-                      <td className="px-3 py-2 text-right">
+                      <td><FormStatusBadge status={form.status} /></td>
+                      <td className="capitalize text-ink-muted">{form.displayType || 'inline'}</td>
+                      <td className="text-ink-muted">{views}</td>
+                      <td className="text-ink-muted">{submissions}</td>
+                      <td className="text-ink-muted">{conversion}%</td>
+                      <td className="text-ink-muted">{new Date(form.updatedAt).toLocaleString()}</td>
+                      <td className="cx-table-cell-actions text-right">
                         <div className="inline-flex items-center gap-1">
                           {form.status !== 'active' ? (
                             <button
@@ -148,12 +148,12 @@ export function WebFormsListPage() {
         ) : (
           <div className="overflow-hidden rounded-xl border border-surface-border">
             <div className="max-h-[65vh] overflow-auto">
-              <table className="w-full min-w-[980px] text-xs">
-                <thead className="sticky top-0 bg-white">
-                  <tr className="border-b border-surface-border">
-                    <th className="px-3 py-2 text-left">Submitted At</th>
+              <table className="cx-table cx-table--dense min-w-[980px] text-xs">
+                <thead className="cx-table-sticky-head">
+                  <tr>
+                    <th>Submitted At</th>
                     {submissionColumns.map((field) => (
-                      <th key={field.id} className="px-3 py-2 text-left">
+                      <th key={field.id}>
                         {field.label || field.type || 'Field'}
                       </th>
                     ))}
@@ -161,12 +161,12 @@ export function WebFormsListPage() {
                 </thead>
                 <tbody>
                   {!selectedSubmissions.length ? (
-                    <tr><td colSpan={Math.max(2, submissionColumns.length + 1)} className="px-4 py-8 text-center text-sm text-ink-muted">No submissions for this form yet.</td></tr>
+                    <tr><td colSpan={Math.max(2, submissionColumns.length + 1)} className="py-8 text-center text-sm text-ink-muted">No submissions for this form yet.</td></tr>
                   ) : selectedSubmissions.map((sub) => (
-                    <tr key={sub.id} className="border-b border-surface-border last:border-b-0">
-                      <td className="px-3 py-2 align-top text-ink-muted">{new Date(sub.submittedAt || sub.createdAt).toLocaleString()}</td>
+                    <tr key={sub.id}>
+                      <td className="text-ink-muted">{new Date(sub.submittedAt || sub.createdAt).toLocaleString()}</td>
                       {submissionColumns.map((field) => (
-                        <td key={`${sub.id}-${field.id}`} className="px-3 py-2 align-top text-ink-muted">
+                        <td key={`${sub.id}-${field.id}`} className="text-ink-muted">
                           <span className="break-all">{String(sub.data?.[field.id] ?? '-')}</span>
                         </td>
                       ))}

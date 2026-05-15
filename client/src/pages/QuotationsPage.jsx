@@ -70,34 +70,34 @@ export function QuotationsPage() {
         </header>
 
         <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
-          <table className="min-w-full divide-y divide-neutral-200 text-sm">
-            <thead className="bg-neutral-50 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500">
+          <table className="cx-table text-sm">
+            <thead className="cx-table-sticky-head">
               <tr>
-                <th className="px-4 py-3">Number</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Total</th>
-                <th className="px-4 py-3">Preset</th>
-                <th className="px-4 py-3 text-right">Actions</th>
+                <th>Number</th>
+                <th>Status</th>
+                <th>Total</th>
+                <th>Preset</th>
+                <th className="cx-table-cell-actions text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-neutral-100">
+            <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-10 text-center text-neutral-400">
+                  <td colSpan={5} className="py-10 text-center text-neutral-400">
                     Loading…
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-10 text-center text-neutral-400">
+                  <td colSpan={5} className="py-10 text-center text-neutral-400">
                     No quotations yet. Create one from a deal or click New quotation.
                   </td>
                 </tr>
               ) : (
                 rows.map((row) => (
-                  <tr key={row.id} className="hover:bg-neutral-50/80">
-                    <td className="px-4 py-3 font-medium text-neutral-900">{row.quotationNumber}</td>
-                    <td className="px-4 py-3">
+                  <tr key={row.id}>
+                    <td className="font-medium text-neutral-900">{row.quotationNumber}</td>
+                    <td>
                       <span
                         className={cn(
                           'rounded-full px-2 py-0.5 text-xs font-medium',
@@ -111,13 +111,13 @@ export function QuotationsPage() {
                         {row.status}
                       </span>
                     </td>
-                    <td className="px-4 py-3 tabular-nums text-neutral-800">
+                    <td className="tabular-nums text-neutral-800">
                       {fmtMoney(row.grandTotal, row.currency)}
                     </td>
-                    <td className="px-4 py-3 text-xs text-neutral-600">
+                    <td className="text-xs text-neutral-600">
                       {QUOTATION_PRESET_LABELS[(Number(row.layoutPreset) || 1) - 1] || '—'}
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="cx-table-cell-actions text-right">
                       <div className="flex justify-end gap-2">
                         <Link
                           to={`/quotations/${row.id}/print`}

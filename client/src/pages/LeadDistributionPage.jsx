@@ -6,8 +6,6 @@ import {
   ArrowUp,
   Check,
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   Phone,
   Search,
   Shuffle,
@@ -16,6 +14,7 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { PageShell } from '@/components/layout/PageShell'
+import { TablePaginationBar } from '@/components/ui/TablePaginationBar'
 import { cn } from '@/utils/cn'
 import { LeadStatusBadge } from '@/features/leads/components/LeadStatusBadge'
 import { formatStageLabel } from '@/features/opportunities/components/OpportunitiesKanban'
@@ -445,10 +444,10 @@ export function LeadDistributionPage() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] border-collapse text-left text-sm">
-              <thead className="sticky top-0 z-10 border-b border-surface-border bg-surface-subtle/80 backdrop-blur">
-                <tr className="text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
-                  <th className="w-10 px-[9px] py-3 sm:px-[13px]">
+            <table className="cx-table cx-table--dense min-w-[720px] text-sm">
+              <thead className="cx-table-sticky-head">
+                <tr>
+                  <th className="cx-table-cell-actions w-10">
                     <input
                       type="checkbox"
                       checked={allPageSelected}
@@ -458,25 +457,25 @@ export function LeadDistributionPage() {
                       aria-label="Select all on page"
                     />
                   </th>
-                  <th className="min-w-[8rem] px-[5px] py-3 lg:min-w-[12rem]">Lead</th>
-                  <th className="hidden px-[5px] py-3 md:table-cell">Type</th>
-                  <th className="hidden px-[5px] py-3 lg:table-cell">Status</th>
-                  <th className="hidden px-[5px] py-3 xl:table-cell">Stage</th>
-                  <th className="hidden px-[5px] py-3 md:table-cell">Company</th>
-                  <th className="hidden px-[5px] py-3 lg:table-cell">Email</th>
-                  <th className="px-[5px] py-3">Created</th>
+                  <th className="min-w-[8rem] lg:min-w-[12rem]">Lead</th>
+                  <th className="hidden md:table-cell">Type</th>
+                  <th className="hidden lg:table-cell">Status</th>
+                  <th className="hidden xl:table-cell">Stage</th>
+                  <th className="hidden md:table-cell">Company</th>
+                  <th className="hidden lg:table-cell">Email</th>
+                  <th>Created</th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading && !rows.length ? (
                   <tr>
-                    <td colSpan={8} className="px-[13px] py-16 text-center text-sm text-ink-muted">
+                    <td colSpan={8} className="py-16 text-center text-sm text-ink-muted">
                       Loading…
                     </td>
                   </tr>
                 ) : !rows.length ? (
                   <tr>
-                    <td colSpan={8} className="px-[13px] py-16 text-center">
+                    <td colSpan={8} className="py-16 text-center">
                       <div className="mx-auto flex max-w-sm flex-col items-center gap-2">
                         <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
                           <Phone className="h-6 w-6" />
@@ -493,12 +492,9 @@ export function LeadDistributionPage() {
                     return (
                       <tr
                         key={row.id}
-                        className={cn(
-                          'border-b border-surface-border/80 transition-colors',
-                          checked ? 'bg-brand-50/60' : 'hover:bg-surface-subtle/80',
-                        )}
+                        className={cn(checked && 'bg-brand-50/60')}
                       >
-                        <td className="px-[9px] py-3 sm:px-[13px]">
+                        <td className="cx-table-cell-actions align-middle">
                           <input
                             type="checkbox"
                             checked={checked}
@@ -507,7 +503,7 @@ export function LeadDistributionPage() {
                             aria-label={`Select ${row.title}`}
                           />
                         </td>
-                        <td className="min-w-0 max-w-[40vw] px-[5px] py-3 lg:max-w-none">
+                        <td className="min-w-0 max-w-[40vw] lg:max-w-none">
                           <button
                             type="button"
                             onClick={() => navigate(detailPath)}
@@ -516,7 +512,7 @@ export function LeadDistributionPage() {
                             <span className="block truncate font-semibold text-ink hover:text-brand-700">{row.title}</span>
                           </button>
                         </td>
-                        <td className="hidden px-[5px] py-3 md:table-cell">
+                        <td className="hidden md:table-cell">
                           {row.isOpportunity ? (
                             <span className="inline-flex rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900">
                               Opportunity
@@ -525,19 +521,19 @@ export function LeadDistributionPage() {
                             <span className="text-xs text-ink-muted">Lead</span>
                           )}
                         </td>
-                        <td className="hidden px-[5px] py-3 lg:table-cell">
+                        <td className="hidden lg:table-cell">
                           <LeadStatusBadge status={row.status} pipelineStage={row.opportunityStage} />
                         </td>
-                        <td className="hidden px-[5px] py-3 text-xs text-ink-muted xl:table-cell">
+                        <td className="hidden text-xs text-ink-muted xl:table-cell">
                           {row.isOpportunity ? formatStageLabel(row.opportunityStage) || '—' : '—'}
                         </td>
-                        <td className="hidden min-w-0 max-w-[14rem] truncate px-[5px] py-3 text-xs text-ink-muted md:table-cell xl:max-w-[20rem]">
+                        <td className="hidden min-w-0 max-w-[14rem] truncate text-xs text-ink-muted md:table-cell xl:max-w-[20rem]">
                           {row.company || '—'}
                         </td>
-                        <td className="hidden min-w-0 max-w-[14rem] truncate px-[5px] py-3 text-xs text-ink-muted lg:table-cell xl:max-w-[22rem]">
+                        <td className="hidden min-w-0 max-w-[14rem] truncate text-xs text-ink-muted lg:table-cell xl:max-w-[22rem]">
                           {row.email || '—'}
                         </td>
-                        <td className="whitespace-nowrap px-[5px] py-3 text-xs text-ink-muted">
+                        <td className="whitespace-nowrap text-xs text-ink-muted">
                           {row.createdAt ? new Date(row.createdAt).toLocaleDateString() : '—'}
                         </td>
                       </tr>
@@ -548,30 +544,13 @@ export function LeadDistributionPage() {
             </table>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-surface-border px-[13px] py-3 text-xs text-ink-muted sm:px-[17px]">
-            <span>
-              Page {page} / {totalPages}
-            </span>
-            <div className="flex gap-1">
-              <button
-                type="button"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="inline-flex items-center gap-1 rounded-lg border border-surface-border bg-white px-2 py-1 font-medium hover:bg-surface-subtle disabled:opacity-40"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" />
-                Prev
-              </button>
-              <button
-                type="button"
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                className="inline-flex items-center gap-1 rounded-lg border border-surface-border bg-white px-2 py-1 font-medium hover:bg-surface-subtle disabled:opacity-40"
-              >
-                Next
-                <ChevronRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
+          <div className="border-t border-surface-border px-[13px] py-3 sm:px-[17px]">
+            <TablePaginationBar
+              variant="surface"
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+            />
           </div>
         </div>
       </div>

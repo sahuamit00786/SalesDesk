@@ -6,6 +6,7 @@ import {
   Calendar,
   ClipboardList,
   Clock,
+  ExternalLink,
   FileText,
   Flag,
   ListChecks,
@@ -19,6 +20,8 @@ import {
 } from 'lucide-react'
 import { RightDrawer } from '@/components/ui/RightDrawer'
 import { AttachmentPickerModal } from '@/features/templates/components/AttachmentPickerModal'
+import { DocumentPreviewDialog } from '@/features/documents/components/DocumentPreviewDialog'
+import { normalizeTaskAttachmentForPreview } from '@/features/documents/documentUtils'
 import {
   useCreateLeadTaskCommentMutation,
   useCreateLeadTaskMutation,
@@ -156,6 +159,7 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
   const [recurrence, setRecurrence] = useState({ freq: '', interval: 1, byweekday: [], until: '' })
   const [attachments, setAttachments] = useState([])
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [attachmentPreview, setAttachmentPreview] = useState(null)
   const [activityTab, setActivityTab] = useState('comments')
   const [commentDraft, setCommentDraft] = useState('')
   const [internalDraft, setInternalDraft] = useState('')
@@ -220,6 +224,7 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
     setActivityTab('comments')
     setCommentDraft('')
     setInternalDraft('')
+    setAttachmentPreview(null)
   }, [open, task?.id])
 
   const subPayload = useMemo(
@@ -315,6 +320,7 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
       : 'Pick a lead and capture a new task.'
 
   return (
+    <>
     <RightDrawer
       open={open}
       onClose={onClose}
@@ -620,14 +626,33 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
                   className="flex items-center gap-1.5 rounded-lg border border-orange-200 bg-orange-50 px-2.5 py-1.5 text-xs"
                 >
                   <FileText className="h-3.5 w-3.5 shrink-0 text-orange-700" />
-                  <a
-                    href={a.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="min-w-0 flex-1 truncate text-orange-900 hover:text-orange-700"
+                  <button
+                    type="button"
+                    disabled={!a.url}
+                    className="min-w-0 flex-1 truncate text-left font-medium text-orange-900 hover:text-orange-700 disabled:opacity-50"
+                    onClick={() => {
+                      const row = normalizeTaskAttachmentForPreview(
+                        { filename: a.filename, fileUrl: a.url, url: a.url, size: a.size },
+                        idx,
+                      )
+                      if (row) setAttachmentPreview(row)
+                    }}
                   >
                     {a.filename}
-                  </a>
+                  </button>
+                  {a.url ? (
+                    <a
+                      href={a.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="shrink-0 rounded-md p-1 text-orange-800/80 hover:bg-orange-100"
+                      title="Open in new tab"
+                      aria-label="Open in new tab"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  ) : null}
                   <button
                     type="button"
                     aria-label="Remove attachment"
@@ -719,6 +744,13 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
         onConfirm={(items) => setAttachments((prev) => [...prev, ...items])}
       />
     </RightDrawer>
+    <DocumentPreviewDialog
+      document={attachmentPreview}
+      onClose={() => setAttachmentPreview(null)}
+      zOverlayClass="z-[160]"
+      zPanelClass="z-[161]"
+    />
+    </>
   )
 }
 

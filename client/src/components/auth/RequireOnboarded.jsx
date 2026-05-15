@@ -1,5 +1,7 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAppSelector } from '@/app/hooks'
+import { appPathFromMenuRoute, DASHBOARD_PATH } from '@/constants/appRoutes'
+import { buildAllowedRouteSet, isMenuPathAllowed } from '@/utils/menuAccess'
 
 /**
  * Sends users with incomplete company onboarding to `/onboarding`.
@@ -14,10 +16,14 @@ export function RequireOnboarded() {
   }
 
   if (user && !user.isCompanyAdmin) {
-    const allowed = new Set((user.allowedMenus || []).map((m) => m.route).filter(Boolean))
     const pathname = location.pathname
-    if (allowed.size > 0 && !allowed.has(pathname)) {
-      const fallback = allowed.has('/') ? '/' : [...allowed][0]
+    if (pathname === DASHBOARD_PATH) {
+      return <Outlet />
+    }
+    const allowed = buildAllowedRouteSet(user.allowedMenus)
+    if (allowed && allowed.size > 0 && !isMenuPathAllowed(pathname, allowed)) {
+      const fallbackMenu = allowed.has('/') ? '/' : [...allowed][0]
+      const fallback = appPathFromMenuRoute(fallbackMenu)
       if (fallback) return <Navigate to={fallback} replace />
     }
   }
