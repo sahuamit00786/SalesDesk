@@ -23,7 +23,9 @@ import { Select } from '@/components/ui/Select'
 import { IconInput, IconTextarea } from '@/components/ui/IconInput'
 import { PhoneField } from '@/components/ui/PhoneField'
 import { LeadTagsInput } from '@/features/leads/components/LeadTagsInput'
+import { STATUS_OPTIONS } from '@/features/leads/constants'
 import { useCreateLeadSourceMutation, useCreateLeadTagMutation, useGetLeadFormMetaQuery } from '@/features/leads/leadsApi'
+import { DuplicateLeadsTab } from '@/features/leads/components/DuplicateLeadsTab'
 import { mergePartsToE164 } from '@/utils/phoneNumbers'
 import { cn } from '@/utils/cn'
 
@@ -44,17 +46,26 @@ const initialForm = {
   postalCode: '',
   value: 0,
   sourceId: '',
+  status: 'new',
   requirement: '',
   tags: [],
   assignedUserIds: [],
   customFields: {},
 }
 
-/** Official bulk template — same core fields as “Add single lead” (source is chosen in the UI, not per column). */
-const BULK_IMPORT_TEMPLATE = `contact_name,company,email,phone,phone_country_code,whatsapp_number,alt_phone,alt_phone_country_code,designation,street,city,state,country,postal_code,value,value_currency,requirement,notes,tags,assigned_user_ids,is_opportunity
-Jane Doe,Acme Inc.,jane@example.com,+919876543210,+91,+919876543211,,,Sales Manager,12 MG Road,Bengaluru,Karnataka,India,560001,50000,INR,CRM rollout by Q3,Met at expo,hot,,no
-John Smith,Widgets Ltd,john@widgets.com,+919988776655,+91,,+919900000001,+91,Director,1 High Street,Mumbai,Maharashtra,India,400001,12000,INR,,,,,no
+/** Official bulk template — same core fields as “Add single lead” (source and assignees are chosen in the UI, not per column). */
+const BULK_IMPORT_TEMPLATE = `contact_name,company,email,phone,phone_country_code,whatsapp_number,alt_phone,alt_phone_country_code,designation,street,city,state,country,postal_code,value,value_currency,requirement,notes
+Jane Doe,Acme Inc.,jane@example.com,+919876543210,+91,+919876543211,,,Sales Manager,12 MG Road,Bengaluru,Karnataka,India,560001,50000,INR,CRM rollout by Q3,Met at expo
+John Smith,Widgets Ltd,john@widgets.com,+919988776655,+91,,+919900000001,+91,Director,1 High Street,Mumbai,Maharashtra,India,400001,12000,INR,,
 `
+
+/** Column headers that are always silently skipped — removed from the import flow (handled via UI pickers instead). */
+const SKIP_COLUMN_HEADERS = new Set(['tags', 'assigned_user_ids', 'assigneduserids', 'is_opportunity', 'isopportunity'])
+
+function isDeprecatedColumn(col) {
+  const norm = String(col.raw || col.label).trim().toLowerCase().replace(/[\s-]+/g, '_')
+  return SKIP_COLUMN_HEADERS.has(norm)
+}
 
 /** Default workspace lead sources (seeded on first load). Bulk import only offers these, not arbitrary sheet columns. */
 const SYSTEM_LEAD_SOURCE_NAMES = new Set(['web form', 'manual', 'referral'])
@@ -84,13 +95,19 @@ const IMPORT_FIELD_TARGETS = [
   { value: 'sourceId', label: 'Lead source (UUID)' },
   { value: 'opportunityStage', label: 'Pipeline / opportunity stage' },
   { value: 'status', label: 'Lead status (new, contacted, …)' },
-  { value: 'isOpportunity', label: 'Is opportunity (yes/no, 1/0)' },
   { value: 'assignedTo', label: 'Primary assignee (user UUID)' },
-  { value: 'assignedUserIds', label: 'Assignees (comma-separated user UUIDs)' },
-  { value: 'tags', label: 'Tags (comma-separated names)' },
 ]
 
-const BULK_IMPORT_FIELD_TARGETS = IMPORT_FIELD_TARGETS.filter((o) => o.value !== 'sourceId')
+const BULK_IMPORT_FIELD_TARGETS = IMPORT_FIELD_TARGETS.filter((o) => {
+  if (o.value === 'sourceId' || o.value === 'status') return false
+  return true
+})
+
+function formatStatusLabel(value) {
+  const text = String(value || '').trim()
+  if (!text) return ''
+  return text.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+}
 
 function splitCsvLine(line) {
   const out = []
@@ -216,19 +233,19 @@ function guessImportTarget(headerLabel) {
   if (/requirement|needs|brief/.test(s)) return 'requirement'
   if (/notes?\b|comment/.test(s)) return 'notes'
   if (/source\s?id/.test(s)) return 'skip'
-  if (/\btags?\b|labels?/.test(s)) return 'tags'
-  if (/assignees?|assigned\s*users?|team\s*members?/.test(s)) return 'assignedUserIds'
   if (/assign|owner/.test(s)) return 'assignedTo'
-  if (/is\s*opp|sales\s*opp|opportunity\s*flag/.test(s)) return 'isOpportunity'
   if (/stage|pipeline|funnel/.test(s)) return 'opportunityStage'
   if (/^status$|lead\s?status/.test(s)) return 'status'
   return 'skip'
 }
 
-function buildAutoMapping(columns) {
+function buildAutoMapping(columns, { defaultIsOpportunity = false } = {}) {
   const m = {}
   for (const col of columns) {
-    m[col.key] = guessImportTarget(col.raw || col.label)
+    let target = guessImportTarget(col.raw || col.label)
+    if (target === 'status') target = 'skip'
+    if (!defaultIsOpportunity && target === 'opportunityStage') target = 'skip'
+    m[col.key] = target
   }
   return m
 }
@@ -269,6 +286,7 @@ function toEditForm(lead) {
     postalCode: lead.postalCode || parsedNotes.postalCode || '',
     value: Number(lead.value || 0),
     sourceId: lead.sourceId || '',
+    status: lead.status || 'new',
     requirement: lead.requirement || '',
     tags: Array.isArray(lead.tags) ? lead.tags.map((tag) => tag.name).filter(Boolean) : [],
     assignedUserIds: Array.isArray(lead.assignedUsers) ? lead.assignedUsers.map((user) => user.id) : [],
@@ -308,6 +326,14 @@ export function AddLeadModal({
   const opportunityStages = useMemo(() => formMeta.opportunityStages || [], [formMeta.opportunityStages])
   const users = formMeta.users || []
   const availableTags = useMemo(() => formMeta.tags || [], [formMeta.tags])
+  const bulkImportFieldTargets = useMemo(
+    () =>
+      BULK_IMPORT_FIELD_TARGETS.filter((opt) => {
+        if (opt.value === 'opportunityStage' && !defaultIsOpportunity) return false
+        return true
+      }),
+    [defaultIsOpportunity],
+  )
   const [form, setForm] = useState(initialForm)
   const [asOpportunity, setAsOpportunity] = useState(false)
   const [opportunityStage, setOpportunityStage] = useState('')
@@ -326,6 +352,10 @@ export function AddLeadModal({
   const [newSourceName, setNewSourceName] = useState('')
   const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false)
   const [assigneeSearch, setAssigneeSearch] = useState('')
+  const [bulkAssigneeIds, setBulkAssigneeIds] = useState([])
+  const [bulkAssigneeDropdownOpen, setBulkAssigneeDropdownOpen] = useState(false)
+  const [bulkAssigneeSearch, setBulkAssigneeSearch] = useState('')
+  const showPipelineFields = asOpportunity || defaultIsOpportunity
   const phoneDefaultCountry = useMemo(() => {
     const c = String(form.country || '')
       .trim()
@@ -356,6 +386,20 @@ export function AddLeadModal({
     return `${selectedUsers[0].name || selectedUsers[0].email} +${selectedUsers.length - 1} more`
   }, [form.assignedUserIds, users])
 
+  const filteredBulkUsers = useMemo(() => {
+    const q = bulkAssigneeSearch.trim().toLowerCase()
+    if (!q) return users
+    return users.filter((u) => `${u.name || ''} ${u.email || ''}`.toLowerCase().includes(q))
+  }, [users, bulkAssigneeSearch])
+
+  const selectedBulkAssigneeLabel = useMemo(() => {
+    if (!bulkAssigneeIds.length) return ''
+    const selected = users.filter((u) => bulkAssigneeIds.includes(u.id))
+    if (!selected.length) return ''
+    if (selected.length === 1) return selected[0].name || selected[0].email
+    return `${selected[0].name || selected[0].email} +${selected.length - 1} more`
+  }, [bulkAssigneeIds, users])
+
   useEffect(() => {
     if (!open) return
     if (!importWorkbook || !importActiveSheet) return
@@ -368,15 +412,18 @@ export function AddLeadModal({
     const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' })
     const table = tableFromAoA(aoa)
     setParsed(table)
-    setMapping(buildAutoMapping(table.columns))
+    setMapping(buildAutoMapping(table.columns, { defaultIsOpportunity }))
     bulkPasteSigRef.current = table.columns.map((c) => `${c.key}:${c.label}`).join('|')
-  }, [open, importWorkbook, importActiveSheet])
+  }, [open, importWorkbook, importActiveSheet, defaultIsOpportunity])
 
   useEffect(() => {
     if (!open) return
     setActiveTab('single')
     setAssigneeDropdownOpen(false)
     setAssigneeSearch('')
+    setBulkAssigneeIds([])
+    setBulkAssigneeDropdownOpen(false)
+    setBulkAssigneeSearch('')
     setForm(toEditForm(initialLead))
     const fromLead = Boolean(initialLead?.isOpportunity)
     setAsOpportunity(fromLead || Boolean(defaultIsOpportunity))
@@ -408,8 +455,8 @@ export function AddLeadModal({
 
   useEffect(() => {
     if (!open) return
-    if (!opportunityStages.length) {
-      setOpportunityStage('')
+    if (!showPipelineFields || !opportunityStages.length) {
+      if (!showPipelineFields) setOpportunityStage('')
       return
     }
     const fromLead = String(initialLead?.opportunityStage || '').trim()
@@ -421,7 +468,7 @@ export function AddLeadModal({
       if (prev && opportunityStages.some((s) => s.name === prev)) return prev
       return opportunityStages.find((s) => s.isDefault)?.name || opportunityStages[0]?.name || ''
     })
-  }, [open, initialLead?.id, initialLead?.opportunityStage, opportunityStageOptionsKey])
+  }, [open, showPipelineFields, initialLead?.id, initialLead?.opportunityStage, opportunityStageOptionsKey])
 
   async function submit(e) {
     e?.preventDefault()
@@ -433,7 +480,7 @@ export function AddLeadModal({
     }
     setBusy(true)
     try {
-      await onSubmit?.({
+      const payload = {
         ...form,
         title: form.contactName || initialLead?.title || '',
         source: 'manual',
@@ -443,13 +490,25 @@ export function AddLeadModal({
         state: form.state || null,
         country: form.country || null,
         postalCode: form.postalCode || null,
-        isOpportunity: asOpportunity,
-        opportunityStage: String(opportunityStage || '').trim() || null,
+        isOpportunity: showPipelineFields,
         profileMeta: {
           ...(initialLead?.profileMeta || {}),
           whatsappNumber: form.whatsappNumber || null,
         },
-      })
+      }
+      if (showPipelineFields) {
+        payload.opportunityStage = String(opportunityStage || '').trim() || null
+      } else {
+        payload.status = form.status || 'new'
+        payload.opportunityStage = null
+      }
+      const result = await onSubmit?.(payload)
+      if (result?.queued) {
+        toast('Duplicate detected — saved to review queue', { icon: '⚠️' })
+        setForm(initialForm)
+        setActiveTab('duplicates')
+        return
+      }
       setForm(initialForm)
       onClose?.()
     } finally {
@@ -482,7 +541,7 @@ export function AddLeadModal({
         const text = await file.text()
         const table = parseCsvText(text)
         setParsed(table)
-        setMapping(buildAutoMapping(table.columns))
+        setMapping(buildAutoMapping(table.columns, { defaultIsOpportunity }))
         bulkPasteSigRef.current = table.columns.map((c) => `${c.key}:${c.label}`).join('|')
         return
       }
@@ -511,32 +570,14 @@ export function AddLeadModal({
   async function submitBulk() {
     if (!parsed.rows.length) return toast.error('Upload a .csv or .xlsx file with a header row and at least one data row')
     if (!bulkImportSourceId) return toast.error('Select a lead source for this import')
-    const mappedRows = parsed.rows.map((row) => {
+    const mappedRows = parsed.rows.map((row, idx) => {
       const out = { source: 'csv_import' }
       for (const col of parsed.columns) {
+        if (isDeprecatedColumn(col)) continue
         const targetField = mapping[col.key] || 'skip'
         if (targetField === 'skip' || targetField === 'sourceId') continue
         const raw = row[col.key]
         if (raw === undefined || raw === null || String(raw).trim() === '') continue
-        if (targetField === 'tags') {
-          out.tags = String(raw)
-            .split(',')
-            .map((x) => x.trim())
-            .filter(Boolean)
-          continue
-        }
-        if (targetField === 'assignedUserIds') {
-          out.assignedUserIds = String(raw)
-            .split(',')
-            .map((x) => x.trim())
-            .filter(Boolean)
-          continue
-        }
-        if (targetField === 'isOpportunity') {
-          const v = String(raw).trim().toLowerCase()
-          out.isOpportunity = ['1', 'true', 'yes', 'y'].includes(v)
-          continue
-        }
         if (targetField === 'valueCurrency') {
           const cur = String(raw).trim().toUpperCase().slice(0, 3)
           if (cur) out.valueCurrency = cur
@@ -548,6 +589,19 @@ export function AddLeadModal({
       out.value = Number(out.value ?? 0)
       out.source = 'csv_import'
       out.sourceId = bulkImportSourceId
+      out.isOpportunity = defaultIsOpportunity
+      if (defaultIsOpportunity && !out.opportunityStage) {
+        const defaultStage =
+          opportunityStages.find((s) => s.isDefault)?.name || opportunityStages[0]?.name || null
+        if (defaultStage) out.opportunityStage = defaultStage
+      }
+      if (!defaultIsOpportunity) {
+        delete out.opportunityStage
+        delete out.status
+      }
+      if (bulkAssigneeIds.length) {
+        out.assignedTo = bulkAssigneeIds[idx % bulkAssigneeIds.length]
+      }
       return out
     })
     setBusy(true)
@@ -591,23 +645,26 @@ export function AddLeadModal({
         <div className="flex justify-end gap-2">
           <button type="button" className="h-10 rounded-xl border border-surface-border px-5" onClick={onClose}>Cancel</button>
           {activeTab === 'single' ? (
-            <button type="submit" form="add-lead-form" className="h-10 rounded-xl bg-brand-600 px-5 text-white" disabled={busy}>{busy ? 'Saving...' : 'Save Lead'}</button>
-          ) : (
-            <button type="button" className="h-10 rounded-xl bg-brand-600 px-5 text-white" disabled={busy || !parsed.rows.length || !bulkImportSourceId} onClick={submitBulk}>
+            <button type="submit" form="add-lead-form" className="h-10 rounded-xl bg-[var(--brand-primary)] px-5 text-white" disabled={busy}>{busy ? 'Saving...' : 'Save Lead'}</button>
+          ) : activeTab === 'bulk' ? (
+            <button type="button" className="h-10 rounded-xl bg-[var(--brand-primary)] px-5 text-white" disabled={busy || !parsed.rows.length || !bulkImportSourceId} onClick={submitBulk}>
               {busy ? 'Importing...' : `Import ${parsed.rows.length || 0} Leads`}
             </button>
-          )}
+          ) : null}
         </div>
       }
     >
       {!initialLead ? (
         <div className="mb-4 flex items-center gap-2 rounded-xl border border-surface-border bg-white/90 p-2">
-          <button type="button" onClick={() => setActiveTab('single')} className={`h-8 rounded-lg px-3 text-xs ${activeTab === 'single' ? 'bg-brand-600 text-white' : 'bg-surface-subtle text-ink-muted'}`}>Add Single Lead</button>
-          <button type="button" onClick={() => setActiveTab('bulk')} className={`h-8 rounded-lg px-3 text-xs ${activeTab === 'bulk' ? 'bg-brand-600 text-white' : 'bg-surface-subtle text-ink-muted'}`}>Bulk Lead Upload</button>
+          <button type="button" onClick={() => setActiveTab('single')} className={`h-8 rounded-lg px-3 text-xs ${activeTab === 'single' ? 'bg-[var(--brand-primary)] text-white' : 'bg-surface-subtle text-ink-muted'}`}>Add Single Lead</button>
+          <button type="button" onClick={() => setActiveTab('bulk')} className={`h-8 rounded-lg px-3 text-xs ${activeTab === 'bulk' ? 'bg-[var(--brand-primary)] text-white' : 'bg-surface-subtle text-ink-muted'}`}>Bulk Lead Upload</button>
+          <button type="button" onClick={() => setActiveTab('duplicates')} className={`h-8 rounded-lg px-3 text-xs ${activeTab === 'duplicates' ? 'bg-amber-500 text-white' : 'bg-surface-subtle text-ink-muted'}`}>Duplicate Leads</button>
         </div>
       ) : null}
 
-      {activeTab === 'single' ? (
+      {activeTab === 'duplicates' ? (
+        <DuplicateLeadsTab />
+      ) : activeTab === 'single' ? (
         <form id="add-lead-form" className="space-y-4" onSubmit={submit}>
           <section className="space-y-3 rounded-2xl border border-surface-border p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Contact Information</p>
@@ -745,27 +802,39 @@ export function AddLeadModal({
                 <button
                   type="button"
                   onClick={() => setAddSourceOpen(true)}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-brand-600 text-xl font-semibold text-white hover:bg-brand-700"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--brand-primary)] text-xl font-semibold text-white hover:bg-[var(--brand-primary-dark)]"
                   aria-label="Add source"
                   title="Add source"
                 >
                   +
                 </button>
               </div>
-              <div>
-                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Pipeline stage</p>
-                <Select value={opportunityStage} onChange={(e) => setOpportunityStage(e.target.value)}>
-                  {!opportunityStages.length ? <option value="">Default (workspace)</option> : null}
-                  {opportunityStages.map((s) => (
-                    <option key={s.id || s.name} value={s.name}>
-                      {s.name}
-                    </option>
-                  ))}
-                </Select>
-                {!opportunityStages.length ? (
-                  <p className="mt-1 text-xs text-ink-muted">Configure stages under Lead configuration → Opportunity stages.</p>
-                ) : null}
-              </div>
+              {showPipelineFields ? (
+                <div>
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Pipeline stage</p>
+                  <Select value={opportunityStage} onChange={(e) => setOpportunityStage(e.target.value)}>
+                    {!opportunityStages.length ? <option value="">Default (workspace)</option> : null}
+                    {opportunityStages.map((s) => (
+                      <option key={s.id || s.name} value={s.name}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </Select>
+                  {!opportunityStages.length ? (
+                    <p className="mt-1 text-xs text-ink-muted">Configure stages under Lead configuration → Lead status (pipeline).</p>
+                  ) : null}
+                </div>
+              ) : (
+                <LeadFieldGroup label="Status">
+                  <Select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}>
+                    {STATUS_OPTIONS.map((status) => (
+                      <option key={status} value={status}>
+                        {formatStatusLabel(status)}
+                      </option>
+                    ))}
+                  </Select>
+                </LeadFieldGroup>
+              )}
             </div>
             <LeadTagsInput
               value={form.tags}
@@ -773,7 +842,8 @@ export function AddLeadModal({
               onChange={(tags) => setForm((f) => ({ ...f, tags }))}
               onCreateTag={({ name, color }) => createLeadTag({ name, color }).unwrap()}
             />
-            <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-surface-border bg-brand-50/40 px-3 py-2.5">
+            {!defaultIsOpportunity ? (
+            <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-surface-border bg-slate-50 px-3 py-2.5">
               <input
                 type="checkbox"
                 className="mt-0.5 h-4 w-4 rounded border-surface-border text-brand-600 focus:ring-brand-500"
@@ -787,6 +857,7 @@ export function AddLeadModal({
                 </span>
               </span>
             </label>
+            ) : null}
           </section>
 
           <section className="space-y-3 rounded-2xl border border-surface-border p-4">
@@ -849,7 +920,7 @@ export function AddLeadModal({
                       {filteredUsers.map((user) => {
                         const checked = form.assignedUserIds.includes(user.id)
                         return (
-                          <label key={user.id} className="flex cursor-pointer items-center justify-between gap-3 px-3 py-2 hover:bg-brand-50">
+                          <label key={user.id} className="flex cursor-pointer items-center justify-between gap-3 px-3 py-2 hover:bg-slate-50">
                             <span className="min-w-0">
                               <p className="truncate text-sm text-ink">{user.name || 'Unnamed user'}</p>
                               <p className="truncate text-xs text-ink-muted">{user.email}</p>
@@ -890,7 +961,7 @@ export function AddLeadModal({
           <div className="rounded-2xl border border-surface-border p-4">
             <p className="text-sm font-semibold text-ink">Template & file</p>
             <p className="mt-1 text-xs text-ink-muted">
-              Download a CSV with the same kinds of fields as <span className="font-medium text-ink">Add single lead</span> (contact, phones, address, value, notes, tags, assignees, etc.), or use your own .xlsx. Row 1 = headers; map each column below.
+              Download a CSV with the same kinds of fields as <span className="font-medium text-ink">Add single lead</span> (contact, phones, address, value, notes, etc.), or use your own .xlsx. Row 1 = headers; map each column below. Assignees and opportunity type are set for the whole file, not per row.
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <button
@@ -904,7 +975,7 @@ export function AddLeadModal({
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="inline-flex h-10 items-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-brand-700"
+                className="inline-flex h-10 items-center gap-2 rounded-xl bg-[var(--brand-primary)] px-4 text-sm font-semibold text-white shadow-sm hover:bg-[var(--brand-primary-dark)]"
               >
                 <Upload className="h-4 w-4 shrink-0" aria-hidden />
                 Choose file
@@ -944,6 +1015,15 @@ export function AddLeadModal({
           </div>
 
           <div className="rounded-2xl border border-surface-border p-4">
+            <p className="text-sm font-semibold text-ink">Import defaults</p>
+            <p className="mt-1 text-xs text-ink-muted">
+              {defaultIsOpportunity
+                ? 'Imported opportunities use your workspace default pipeline stage unless you map a stage column. Status is not used for opportunities.'
+                : 'All imported leads start with status New. Pipeline stages apply to opportunities only and are not available in this import.'}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-surface-border p-4">
             <p className="text-sm font-semibold text-ink">Lead source</p>
             <p className="mt-1 text-xs text-ink-muted">
               One source for every row (defaults when unchanged: Web Form, Manual, Referral). Leads keep channel <span className="font-medium text-ink">CSV import</span>. You cannot map source from the file.
@@ -967,17 +1047,80 @@ export function AddLeadModal({
           </div>
 
           <div className="rounded-2xl border border-surface-border p-4">
+            <p className="text-sm font-semibold text-ink">Assign to (round-robin)</p>
+            <p className="mt-1 text-xs text-ink-muted">
+              Select one or more sales team members. Leads will be distributed evenly across them in order. Leave empty to assign to yourself.
+            </p>
+            <div className="relative mt-3">
+              <button
+                type="button"
+                onClick={() => setBulkAssigneeDropdownOpen((v) => !v)}
+                className="flex h-10 w-full items-center justify-between rounded-xl border border-surface-border bg-white px-3.5 pl-9 text-left text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+              >
+                <User className="pointer-events-none absolute left-3 top-1/2 h-3 w-3 -translate-y-1/2 text-ink-faint" />
+                <span className={selectedBulkAssigneeLabel ? 'text-ink' : 'text-ink-faint'}>
+                  {selectedBulkAssigneeLabel || 'Select sales team members'}
+                </span>
+                <span className="text-ink-faint">▾</span>
+              </button>
+              {bulkAssigneeDropdownOpen ? (
+                <div className="absolute z-30 mt-1 w-full overflow-hidden rounded-xl border border-surface-border bg-white shadow-xl">
+                  <div className="border-b border-surface-border p-2">
+                    <IconInput
+                      icon={Search}
+                      className="h-9 min-h-0 text-sm"
+                      value={bulkAssigneeSearch}
+                      onChange={(e) => setBulkAssigneeSearch(e.target.value)}
+                      placeholder="Search users..."
+                    />
+                  </div>
+                  <div className="max-h-52 overflow-y-auto">
+                    {filteredBulkUsers.map((user) => {
+                      const checked = bulkAssigneeIds.includes(user.id)
+                      return (
+                        <label key={user.id} className="flex cursor-pointer items-center justify-between gap-3 px-3 py-2 hover:bg-slate-50">
+                          <span className="min-w-0">
+                            <p className="truncate text-sm text-ink">{user.name || 'Unnamed user'}</p>
+                            <p className="truncate text-xs text-ink-muted">{user.email}</p>
+                          </span>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) =>
+                              setBulkAssigneeIds((prev) =>
+                                e.target.checked ? [...prev, user.id] : prev.filter((id) => id !== user.id),
+                              )
+                            }
+                          />
+                        </label>
+                      )
+                    })}
+                    {filteredBulkUsers.length === 0 ? <p className="px-3 py-3 text-xs text-ink-muted">No users found.</p> : null}
+                  </div>
+                  {bulkAssigneeIds.length > 0 ? (
+                    <div className="border-t border-surface-border px-3 py-2">
+                      <p className="text-[11px] text-ink-muted">
+                        {bulkAssigneeIds.length} selected · leads distributed round-robin
+                      </p>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-surface-border p-4">
             <p className="text-sm font-semibold text-ink">Map columns → lead fields</p>
             {!parsed.columns.length ? (
               <p className="mt-2 text-xs text-ink-muted">Choose a .csv or .xlsx file above to load columns and map them.</p>
             ) : (
               <div className="mt-3 space-y-2">
                 <p className="text-xs text-ink-muted">
-                  {parsed.columns.length} column{parsed.columns.length === 1 ? '' : 's'} detected · {parsed.rows.length} data row
+                  {parsed.columns.filter((c) => !isDeprecatedColumn(c)).length} column{parsed.columns.filter((c) => !isDeprecatedColumn(c)).length === 1 ? '' : 's'} detected · {parsed.rows.length} data row
                   {parsed.rows.length === 1 ? '' : 's'}
                 </p>
                 <div className="max-h-[min(420px,50vh)] space-y-2 overflow-y-auto pr-1">
-                  {parsed.columns.map((col) => (
+                  {parsed.columns.filter((col) => !isDeprecatedColumn(col)).map((col) => (
                     <div key={col.key} className="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                         <div className="min-w-0 flex-1">
@@ -993,7 +1136,7 @@ export function AddLeadModal({
                           value={mapping[col.key] || 'skip'}
                           onChange={(e) => setMapping((m) => ({ ...m, [col.key]: e.target.value }))}
                         >
-                          {BULK_IMPORT_FIELD_TARGETS.map((opt) => (
+                          {bulkImportFieldTargets.map((opt) => (
                             <option key={opt.value} value={opt.value}>
                               {opt.label}
                             </option>
@@ -1011,7 +1154,7 @@ export function AddLeadModal({
             <div className="rounded-2xl border border-surface-border p-4">
               <p className="text-sm font-semibold text-ink">Ready to import</p>
               <p className="mt-1 text-xs text-ink-muted">
-                {parsed.rows.length} row{parsed.rows.length === 1 ? '' : 's'} will be sent using the mapping above. Duplicate emails/phones are skipped on the server.
+                {parsed.rows.length} row{parsed.rows.length === 1 ? '' : 's'} will be sent using the mapping above. Duplicate emails/phones are queued for review in the Duplicate Leads tab.
               </p>
             </div>
           ) : null}
@@ -1037,7 +1180,7 @@ export function AddLeadModal({
                 </button>
                 <button
                   type="submit"
-                  className="h-9 rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white disabled:opacity-60"
+                  className="h-9 rounded-lg bg-[var(--brand-primary)] px-4 text-sm font-semibold text-white disabled:opacity-60"
                   disabled={!newSourceName.trim() || creatingSource}
                 >
                   {creatingSource ? 'Adding...' : 'Add'}

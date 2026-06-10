@@ -1,55 +1,124 @@
-import { useMemo, useState, useCallback, useEffect } from 'react'
+import { useMemo, useState, useCallback } from 'react'
+import { useSelector } from 'react-redux'
 import { Link, useNavigate } from 'react-router-dom'
-import { Search } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
+import { DataGrid } from '@/components/shared/DataGrid'
 import { TablePaginationBar } from '@/components/ui/TablePaginationBar'
-import { useGetLeadsQuery } from '@/features/leads/leadsApi'
+import { useGetLeadsQuery, useGetLeadFormMetaQuery } from '@/features/leads/leadsApi'
 import { LeadSourceTag } from '@/features/leads/components/LeadSourceTag'
+import { FilterBuilder } from '@/features/leads/components/FilterBuilder'
 import { useTeamUsersQuery } from '@/features/team/teamApi'
 import { useCreateCampaignMutation } from '@/features/campaigns/campaignsApi'
+import {
+  CAMPAIGN_TEAM_FILTER_INITIAL,
+  CampaignTeamFilterPanel,
+  countCampaignTeamFilters,
+  filterCampaignTeamUsers,
+} from '@/features/campaigns/components/CampaignTeamFilterPanel'
+import { selectWorkspaceList } from '@/features/workspace/workspaceSlice'
+import { ListSearchToolbar, buildLeadsListQueryParams, countActiveRules } from '@/features/filters'
 import { cn } from '@/utils/cn'
+
+const LEAD_PICKER_FILTERS_INITIAL = {
+  search: '',
+  status: [],
+  source: [],
+  assignedTo: [],
+  scoreMin: null,
+  scoreMax: null,
+  valueMin: null,
+  valueMax: null,
+  tags: [],
+  savedViewId: null,
+  workspaceId: '',
+  filterTree: null,
+  stage: [],
+  unassignedOnly: false,
+}
 
 export function CampaignNewPage() {
   const navigate = useNavigate()
   const [page, setPage] = useState(1)
-  const [search, setSearch] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [oppFilter, setOppFilter] = useState('') // '' | 'true' | 'false'
+  const [leadFilters, setLeadFilters] = useState(LEAD_PICKER_FILTERS_INITIAL)
+  const [leadFilterOpen, setLeadFilterOpen] = useState(false)
   const [selected, setSelected] = useState(() => new Set())
+  const [teamSearch, setTeamSearch] = useState('')
+  const [teamFilters, setTeamFilters] = useState(CAMPAIGN_TEAM_FILTER_INITIAL)
+  const [teamFilterOpen, setTeamFilterOpen] = useState(false)
+  const [teamFiltersDraft, setTeamFiltersDraft] = useState(CAMPAIGN_TEAM_FILTER_INITIAL)
+
+  const user = useSelector((s) => s.auth.user)
+  const workspaceList = useSelector(selectWorkspaceList)
+  const isCompanyAdmin = Boolean(user?.isCompanyAdmin)
+  const userRoleKind = user?.companyRole?.userRoleKind
+  const canSwitchWorkspace =
+    isCompanyAdmin || userRoleKind === 'workspace_admin' || userRoleKind === 'manager'
 
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [leadTarget, setLeadTarget] = useState('')
   const [campaignStatus, setCampaignStatus] = useState('active')
+  const [endDate, setEndDate] = useState('')
   const [teamPick, setTeamPick] = useState(() => new Set())
   const [preferExisting, setPreferExisting] = useState(true)
   const [skipLeadOwner, setSkipLeadOwner] = useState(false)
 
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search.trim()), 300)
-    return () => clearTimeout(t)
-  }, [search])
-
-  const listParams = useMemo(
-    () => ({
-      page,
-      limit: 100,
-      ...(debouncedSearch ? { search: debouncedSearch } : {}),
-      ...(oppFilter === 'true' || oppFilter === 'false' ? { isOpportunity: oppFilter } : {}),
-    }),
-    [page, debouncedSearch, oppFilter],
-  )
+  const listParams = useMemo(() => {
+    const params = buildLeadsListQueryParams({
+      filters: leadFilters,
+      sort: { field: 'createdAt', order: 'desc' },
+      pagination: { page, limit: 100 },
+      isOpportunity: oppFilter === 'true',
+    })
+    if (oppFilter === 'true') params.isOpportunity = true
+    else if (oppFilter === 'false') params.isOpportunity = false
+    else delete params.isOpportunity
+    return params
+  }, [leadFilters, page, oppFilter])
 
   const { data, isLoading, isFetching } = useGetLeadsQuery(listParams)
+  const { data: formMetaData } = useGetLeadFormMetaQuery()
   const { data: teamData } = useTeamUsersQuery()
   const [createCampaign, { isLoading: saving }] = useCreateCampaignMutation()
 
   const leads = useMemo(() => data?.data || [], [data?.data])
   const total = data?.meta?.total ?? 0
-  const teamUsers = useMemo(() => {
-    const items = teamData?.data?.items || []
-    return items.filter((u) => u.isActive !== false)
-  }, [teamData?.data?.items])
+  const formUsers = formMetaData?.data?.users || []
+  const opportunityStages = formMetaData?.data?.opportunityStages || []
+  const stageOptions = opportunityStages.map((s) => ({
+    value: s.name || s.key || s.id,
+    label: s.name || s.key || 'Stage',
+  }))
+  const isOpportunitiesPicker = oppFilter === 'true'
+  const advancedRuleCount = countActiveRules(leadFilters.filterTree)
+  const leadFilterCount =
+    advancedRuleCount +
+    (leadFilters.status?.length || 0) +
+    (leadFilters.assignedTo?.length || 0) +
+    (leadFilters.source?.length || 0) +
+    (leadFilters.stage?.length || 0) +
+    (leadFilters.workspaceId ? 1 : 0) +
+    (leadFilters.valueMin != null ? 1 : 0) +
+    (leadFilters.valueMax != null ? 1 : 0) +
+    (leadFilters.unassignedOnly ? 1 : 0)
+
+  const allTeamUsers = useMemo(() => teamData?.data?.items || [], [teamData?.data?.items])
+  const teamFilterCount = countCampaignTeamFilters(teamFilters)
+  const teamUsers = useMemo(
+    () => filterCampaignTeamUsers(allTeamUsers, { ...teamFilters, search: teamSearch }),
+    [allTeamUsers, teamFilters, teamSearch],
+  )
+
+  const resetLeadFilters = useCallback(() => {
+    setLeadFilters(LEAD_PICKER_FILTERS_INITIAL)
+    setPage(1)
+  }, [])
+
+  const patchLeadFilters = useCallback((delta) => {
+    setLeadFilters((prev) => ({ ...prev, ...delta }))
+    setPage(1)
+  }, [])
 
   const toggleLead = useCallback((id) => {
     setSelected((prev) => {
@@ -79,6 +148,77 @@ export function CampaignNewPage() {
 
   const clearSelection = useCallback(() => setSelected(new Set()), [])
 
+  const leadPickerColumns = useMemo(
+    () => [
+      {
+        field: 'select',
+        headerName: '',
+        width: 50,
+        sortable: false,
+        renderCell: ({ row: l }) => (
+          <input
+            type="checkbox"
+            checked={selected.has(l.id)}
+            onChange={() => toggleLead(l.id)}
+            onClick={(e) => e.stopPropagation()}
+            className="rounded border-neutral-300 text-brand-700 focus:ring-brand-500"
+          />
+        ),
+      },
+      {
+        field: 'title',
+        headerName: 'Lead',
+        flex: 1,
+        minWidth: 160,
+        renderCell: ({ row: l }) => (
+          <div>
+            <button
+              type="button"
+              className="text-left font-semibold text-neutral-900 hover:text-brand-700"
+              onClick={(e) => {
+                e.stopPropagation()
+                toggleLead(l.id)
+              }}
+            >
+              {l.title || l.contactName || 'Untitled'}
+            </button>
+            <div className="text-[11px] text-neutral-500 sm:hidden">{l.company || '—'}</div>
+          </div>
+        ),
+      },
+      {
+        field: 'company',
+        headerName: 'Company',
+        width: 140,
+        valueGetter: (_v, l) => l.company || '—',
+      },
+      {
+        field: 'source',
+        headerName: 'Source',
+        width: 120,
+        renderCell: ({ row: l }) => <LeadSourceTag source={l.source} />,
+      },
+      { field: 'email', headerName: 'Email', width: 140, valueGetter: (_v, l) => l.email || '—' },
+      { field: 'phone', headerName: 'Phone', width: 120, valueGetter: (_v, l) => l.phone || '—' },
+      {
+        field: 'type',
+        headerName: 'Type',
+        width: 110,
+        renderCell: ({ row: l }) => (
+          <span
+            className={cn(
+              'rounded-full px-2 py-0.5 text-[10px] font-semibold',
+              l.isOpportunity ? 'bg-slate-100 text-brand-800' : 'bg-neutral-100 text-neutral-700',
+            )}
+          >
+            {l.isOpportunity ? 'Opportunity' : 'Lead'}
+          </span>
+        ),
+      },
+    ],
+    [selected, toggleLead],
+  )
+
   const onSubmit = async (e) => {
     e.preventDefault()
     if (!name.trim()) return
@@ -99,6 +239,7 @@ export function CampaignNewPage() {
         const n = Number.parseFloat(rawTarget)
         if (Number.isFinite(n) && n >= 0) payload.leadTarget = n
       }
+      if (endDate.trim()) payload.endDate = endDate.trim()
       const res = await createCampaign(payload).unwrap()
       const id = res?.data?.id
       if (id) navigate(`/campaigns/${id}`)
@@ -122,7 +263,7 @@ export function CampaignNewPage() {
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs font-medium text-neutral-600">{selected.size} selected</span>
-                <button type="button" className="text-xs font-semibold text-orange-700 hover:underline" onClick={selectAllOnPage}>
+                <button type="button" className="text-xs font-semibold text-brand-700 hover:underline" onClick={selectAllOnPage}>
                   Add page
                 </button>
                 <button type="button" className="text-xs font-semibold text-neutral-600 hover:underline" onClick={clearSelection}>
@@ -130,31 +271,41 @@ export function CampaignNewPage() {
                 </button>
               </div>
             </div>
-            <div className="mt-3 flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
-              <div className="relative flex-1">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-neutral-400" />
-                <input
-                  value={search}
+            <div className="mt-3 w-full min-w-0">
+              <ListSearchToolbar
+                search={leadFilters.search || ''}
+                onSearchChange={(search) => patchLeadFilters({ search })}
+                searchPlaceholder="Search leads by name, company, email…"
+                filterOpen={leadFilterOpen}
+                onFilterOpenChange={setLeadFilterOpen}
+                filterCount={leadFilterCount}
+                onClearAll={resetLeadFilters}
+                filterPanel={
+                  <FilterBuilder
+                    filters={leadFilters}
+                    workspaceOptions={canSwitchWorkspace ? workspaceList : null}
+                    users={formUsers}
+                    stageOptions={stageOptions}
+                    isOpportunities={isOpportunitiesPicker}
+                    onChange={(delta) => patchLeadFilters(delta)}
+                    onReset={resetLeadFilters}
+                    onDraftApply={(tree) => patchLeadFilters({ filterTree: tree })}
+                  />
+                }
+              >
+                <select
+                  value={oppFilter}
                   onChange={(e) => {
-                    setSearch(e.target.value)
+                    setOppFilter(e.target.value)
                     setPage(1)
                   }}
-                  placeholder="Search leads…"
-                  className="w-full rounded-xl border border-neutral-200 py-2 pl-8 pr-3 text-sm outline-none focus:border-orange-400"
-                />
-              </div>
-              <select
-                value={oppFilter}
-                onChange={(e) => {
-                  setOppFilter(e.target.value)
-                  setPage(1)
-                }}
-                className="rounded-xl border border-neutral-200 px-3 py-2 text-sm font-medium text-neutral-800 outline-none focus:border-orange-400"
-              >
-                <option value="">All types</option>
-                <option value="false">Leads only</option>
-                <option value="true">Opportunities only</option>
-              </select>
+                  className="h-10 shrink-0 rounded-xl border border-surface-border bg-white px-3 text-sm font-medium text-ink outline-none focus:border-brand-500"
+                >
+                  <option value="">All types</option>
+                  <option value="false">Leads only</option>
+                  <option value="true">Opportunities only</option>
+                </select>
+              </ListSearchToolbar>
             </div>
           </div>
 
@@ -163,69 +314,19 @@ export function CampaignNewPage() {
               <p className="text-sm text-neutral-500">Loading leads…</p>
             ) : (
               <>
-                <div className="overflow-x-auto rounded-xl border border-neutral-200 bg-white">
-                  <table className="cx-table cx-table--dense min-w-[720px] text-xs">
-                    <thead className="cx-table-sticky-head">
-                      <tr>
-                        <th className="cx-table-cell-actions w-10" />
-                        <th>Lead</th>
-                        <th className="hidden sm:table-cell">Company</th>
-                        <th>Source</th>
-                        <th>Email</th>
-                        <th>Phone</th>
-                        <th>Type</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {leads.map((l) => {
-                        const checked = selected.has(l.id)
-                        const email = String(l.email || '').trim()
-                        const phone = String(l.phone || '').trim()
-                        return (
-                          <tr
-                            key={l.id}
-                            className={cn(checked && 'bg-orange-50/50')}
-                          >
-                            <td className="cx-table-cell-actions align-middle">
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={() => toggleLead(l.id)}
-                                className="rounded border-neutral-300 text-orange-600 focus:ring-orange-500"
-                              />
-                            </td>
-                            <td>
-                              <button type="button" className="text-left font-semibold text-neutral-900 hover:text-orange-700" onClick={() => toggleLead(l.id)}>
-                                {l.title || l.contactName || 'Untitled'}
-                              </button>
-                              <div className="text-[11px] text-neutral-500 sm:hidden">{l.company || '—'}</div>
-                            </td>
-                            <td className="hidden text-neutral-700 sm:table-cell">{l.company || '—'}</td>
-                            <td>
-                              <LeadSourceTag source={l.source} />
-                            </td>
-                            <td className="max-w-[11rem] truncate text-neutral-700" title={email || undefined}>
-                              {email || '—'}
-                            </td>
-                            <td className="max-w-[9rem] truncate text-neutral-700" title={phone || undefined}>
-                              {phone || '—'}
-                            </td>
-                            <td>
-                              <span
-                                className={cn(
-                                  'rounded-full px-2 py-0.5 text-[10px] font-semibold',
-                                  l.isOpportunity ? 'bg-violet-100 text-violet-800' : 'bg-neutral-100 text-neutral-700',
-                                )}
-                              >
-                                {l.isOpportunity ? 'Opportunity' : 'Lead'}
-                              </span>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                <DataGrid
+                  gridColumns
+                  columns={leadPickerColumns}
+                  data={leads}
+                  loading={isLoading || isFetching}
+                  searchable={false}
+                  showColumnToggle={false}
+                  showExportCsv={false}
+                  hideFooter
+                  getRowClassName={(params) => (selected.has(params.row.id) ? '!bg-brand-50/50' : '')}
+                  maxHeightClass="max-h-[min(55vh,480px)]"
+                  emptyTitle="No leads found"
+                />
                 {totalPages > 1 ? (
                   <div className="mt-3">
                     <TablePaginationBar
@@ -243,7 +344,7 @@ export function CampaignNewPage() {
           </div>
         </section>
 
-        <aside className="w-full shrink-0 border-t-2 border-orange-500/35 bg-white lg:w-[min(420px,40vw)] lg:border-l lg:border-t-0">
+        <aside className="w-full shrink-0 border-t-2 border-brand-600/35 bg-white lg:w-[min(420px,40vw)] lg:border-l lg:border-t-0">
           <div className="sticky top-0 flex max-h-dvh flex-col overflow-hidden lg:max-h-none">
             <header className="border-b border-neutral-200 px-4 py-3 sm:px-5">
               <h2 className="text-sm font-bold text-neutral-900">Campaign details</h2>
@@ -257,7 +358,7 @@ export function CampaignNewPage() {
                     required
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm outline-none focus:border-orange-400"
+                    className="mt-1 w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm outline-none focus:border-brand-500"
                     placeholder="e.g. Q1 nurture"
                   />
                 </label>
@@ -267,7 +368,7 @@ export function CampaignNewPage() {
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     rows={3}
-                    className="mt-1 w-full resize-none rounded-xl border border-neutral-200 px-3 py-2 text-sm outline-none focus:border-orange-400"
+                    className="mt-1 w-full resize-none rounded-xl border border-neutral-200 px-3 py-2 text-sm outline-none focus:border-brand-500"
                     placeholder="What is this campaign for?"
                   />
                 </label>
@@ -280,7 +381,7 @@ export function CampaignNewPage() {
                     inputMode="numeric"
                     value={leadTarget}
                     onChange={(e) => setLeadTarget(e.target.value.replace(/[^0-9.]/g, ''))}
-                    className="mt-1 w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm outline-none focus:border-orange-400"
+                    className="mt-1 w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm outline-none focus:border-brand-500"
                     placeholder="Optional amount goal"
                   />
                   <span className="mt-1 block text-[11px] text-neutral-500">Used on the campaign page for amount target vs. achieved amount.</span>
@@ -290,17 +391,61 @@ export function CampaignNewPage() {
                   <select
                     value={campaignStatus}
                     onChange={(e) => setCampaignStatus(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-orange-400"
+                    className="mt-1 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500"
                   >
                     <option value="active">Active</option>
                     <option value="inactive">Inactive</option>
                     <option value="draft">Draft</option>
                   </select>
                 </label>
+                <label className="block">
+                  <span className="text-xs font-semibold text-neutral-700">End date</span>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500"
+                  />
+                  <span className="mt-1 block text-[11px] text-neutral-500">Optional — when this campaign is scheduled to finish.</span>
+                </label>
 
                 <div>
                   <span className="text-xs font-semibold text-neutral-700">Assign to team members</span>
                   <p className="mt-0.5 text-[11px] text-neutral-500">Leads are distributed across checked members (round-robin).</p>
+                  <div className="mt-2">
+                    <ListSearchToolbar
+                      className="!px-0"
+                      search={teamSearch}
+                      onSearchChange={setTeamSearch}
+                      searchPlaceholder="Search users by name or email…"
+                      filterOpen={teamFilterOpen}
+                      onFilterOpenChange={(open) => {
+                        setTeamFilterOpen(open)
+                        if (open) setTeamFiltersDraft({ ...teamFilters })
+                      }}
+                      filterCount={teamFilterCount}
+                      onClearAll={() => {
+                        setTeamFilters(CAMPAIGN_TEAM_FILTER_INITIAL)
+                        setTeamFiltersDraft(CAMPAIGN_TEAM_FILTER_INITIAL)
+                        setTeamSearch('')
+                      }}
+                      filterPanel={
+                        <CampaignTeamFilterPanel
+                          users={allTeamUsers}
+                          filters={teamFiltersDraft}
+                          onChange={(delta) => setTeamFiltersDraft((prev) => ({ ...prev, ...delta }))}
+                          onApply={() => {
+                            setTeamFilters(teamFiltersDraft)
+                            setTeamFilterOpen(false)
+                          }}
+                          onReset={() => {
+                            setTeamFiltersDraft(CAMPAIGN_TEAM_FILTER_INITIAL)
+                            setTeamFilters(CAMPAIGN_TEAM_FILTER_INITIAL)
+                          }}
+                        />
+                      }
+                    />
+                  </div>
                   <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto rounded-xl border border-neutral-100 bg-neutral-50/50 p-2">
                     {teamUsers.map((u) => {
                       const id = u.id
@@ -312,13 +457,16 @@ export function CampaignNewPage() {
                               type="checkbox"
                               checked={checked}
                               onChange={() => toggleTeam(id)}
-                              className="rounded border-neutral-300 text-orange-600 focus:ring-orange-500"
+                              className="rounded border-neutral-300 text-brand-700 focus:ring-brand-500"
                             />
                             <span className="font-medium text-neutral-800">{u.name || u.email}</span>
                           </label>
                         </li>
                       )
                     })}
+                    {!teamUsers.length ? (
+                      <li className="px-2 py-3 text-center text-[11px] text-neutral-500">No users match your search or filters.</li>
+                    ) : null}
                   </ul>
                 </div>
 
@@ -327,7 +475,7 @@ export function CampaignNewPage() {
                     type="checkbox"
                     checked={preferExisting}
                     onChange={(e) => setPreferExisting(e.target.checked)}
-                    className="mt-0.5 rounded border-neutral-300 text-orange-600 focus:ring-orange-500"
+                    className="mt-0.5 rounded border-neutral-300 text-brand-700 focus:ring-brand-500"
                   />
                   <span>
                     <span className="text-xs font-semibold text-neutral-800">Prefer existing assignee</span>
@@ -342,7 +490,7 @@ export function CampaignNewPage() {
                     type="checkbox"
                     checked={skipLeadOwner}
                     onChange={(e) => setSkipLeadOwner(e.target.checked)}
-                    className="mt-0.5 rounded border-neutral-300 text-orange-600 focus:ring-orange-500"
+                    className="mt-0.5 rounded border-neutral-300 text-brand-700 focus:ring-brand-500"
                   />
                   <span>
                     <span className="text-xs font-semibold text-neutral-800">Do not update lead owner</span>
@@ -357,7 +505,7 @@ export function CampaignNewPage() {
                 <button
                   type="submit"
                   disabled={saving || selected.size < 1 || teamPick.size < 1 || !name.trim()}
-                  className="w-full rounded-xl bg-orange-600 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="w-full rounded-xl bg-[var(--brand-primary)] py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[var(--brand-primary-dark)] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {saving ? 'Creating…' : `Create campaign (${selected.size} leads)`}
                 </button>

@@ -25,7 +25,7 @@ async function pauseForThrottle(template) {
   await new Promise((resolve) => setTimeout(resolve, delayMs))
 }
 
-async function sendToLead({ template, lead, senderName }) {
+async function sendToLead({ template, lead, senderName, source = 'bulk' }) {
   const t = await sequelize.transaction()
   try {
     const suppressed = await EmailSuppression.findOne({
@@ -74,6 +74,7 @@ async function sendToLead({ template, lead, senderName }) {
             bodyHtml,
             toEmail: lead.email || null,
             status: 'drafted',
+            source,
           },
           { transaction: t },
         )
@@ -125,7 +126,7 @@ async function sendToLead({ template, lead, senderName }) {
 }
 
 async function processTemplateJob(job) {
-  const { templateId, leadIds, companyId } = job.data
+  const { templateId, leadIds, companyId, source = 'bulk' } = job.data
   const template = await EmailTemplate.findOne({
     where: { id: templateId, companyId, isArchived: false },
   })
@@ -148,7 +149,7 @@ async function processTemplateJob(job) {
       result.failed.push({ leadId: lead.id, reason: 'missing_email' })
       continue
     }
-    const sendResult = await sendToLead({ template, lead, senderName })
+    const sendResult = await sendToLead({ template, lead, senderName, source })
     if (sendResult?.skipped && sendResult.reason === 'already_sent') result.skippedAlreadySent.push(lead.id)
     else if (sendResult?.skipped && sendResult.reason === 'unsubscribed') result.skippedUnsubscribed.push(lead.id)
     else if (sendResult?.sent) result.sent.push(lead.id)
@@ -178,7 +179,8 @@ export async function enqueueTemplateSendJob(payload) {
   if (!q) throw new Error('Queue unavailable: REDIS_URL is not configured')
   const delay = payload.scheduleAt ? Math.max(new Date(payload.scheduleAt).getTime() - Date.now(), 0) : 0
   const job = await q.add('send-template-batch', payload, {
-    attempts: 2,
+    attempts: 3,
+    backoff: { type: 'exponential', delay: 3000 },
     removeOnComplete: 100,
     removeOnFail: 200,
     delay,
@@ -191,6 +193,9 @@ export function startEmailTemplateWorker() {
   const connection = bullmqConnectionFromEnv()
   if (!connection) return null
   worker = new Worker(QUEUE_NAME, processTemplateJob, { connection, concurrency: 1 })
-  worker.on('error', () => {})
+  worker.on('error', (err) => {
+    // eslint-disable-next-line no-console
+    console.error('[email-template-queue] worker error:', err?.message || err)
+  })
   return worker
 }

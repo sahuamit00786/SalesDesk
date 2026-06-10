@@ -64,7 +64,7 @@ export function ReminderEventHoverCard({ event, anchorRect, onMouseEnter, onMous
       )}
       style={{ top, left, maxHeight: maxCardHeight }}
     >
-      <div className="flex items-start justify-between gap-2 border-b border-rose-100 bg-gradient-to-r from-rose-50 to-orange-50 px-3 py-2.5">
+      <div className="flex items-start justify-between gap-2 border-b border-rose-100 bg-gradient-to-r from-rose-50 to-brand-50 px-3 py-2.5">
         <div className="min-w-0 flex-1">
           <span className="inline-flex rounded-md bg-rose-600/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-rose-900 ring-1 ring-rose-200">
             Reminder
@@ -75,7 +75,7 @@ export function ReminderEventHoverCard({ event, anchorRect, onMouseEnter, onMous
       </div>
 
       <div className="scrollbar-subtle min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
-        <div className="overflow-hidden rounded-lg border border-rose-100 bg-gradient-to-br from-rose-50/90 via-white to-orange-50/40 p-3 shadow-sm">
+        <div className="overflow-hidden rounded-lg border border-rose-100 bg-gradient-to-br from-rose-50/90 via-white to-brand-50/40 p-3 shadow-sm">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white shadow-sm ring-1 ring-rose-100">
               <Bell className="h-5 w-5 text-rose-600" aria-hidden />

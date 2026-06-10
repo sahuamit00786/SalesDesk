@@ -56,7 +56,7 @@ export function DayNotesPanel({ selectedDate, events, onEventClick }) {
   return (
     <div className="space-y-5">
       {/* Day summary card */}
-      <div className="bg-white/90 backdrop-blur rounded-2xl p-4 border border-indigo-100 shadow-sm">
+      <div className="bg-white/90 backdrop-blur rounded-2xl p-4 border border-brand-100 shadow-sm">
         <div className="flex items-start justify-between">
           <div>
             <p className="text-sm text-gray-500">{format(selectedDate, 'EEEE')}</p>
@@ -95,7 +95,7 @@ export function DayNotesPanel({ selectedDate, events, onEventClick }) {
             <p className="text-xs text-gray-500">Completed</p>
           </div>
           <div className="bg-gray-50 rounded-lg p-3">
-            <p className="text-2xl font-bold text-indigo-600">{weekStats.scheduled}</p>
+            <p className="text-2xl font-bold text-brand-600">{weekStats.scheduled}</p>
             <p className="text-xs text-gray-500">Scheduled</p>
           </div>
         </div>
@@ -123,7 +123,7 @@ export function DayNotesPanel({ selectedDate, events, onEventClick }) {
                   onClick={() => onEventClick?.(event)}
                   className={cn(
                     'bg-white border border-gray-100 rounded-lg p-3 cursor-pointer',
-                    'hover:border-indigo-200 hover:shadow-sm transition-all'
+                    'hover:border-brand-200 hover:shadow-sm transition-all'
                   )}
                 >
                   <div className="flex items-start gap-3">
@@ -144,7 +144,7 @@ export function DayNotesPanel({ selectedDate, events, onEventClick }) {
                             ? 'bg-green-100 text-green-700'
                             : event.status === 'in_progress'
                               ? 'bg-amber-100 text-amber-800'
-                              : 'bg-indigo-100 text-indigo-700'
+                              : 'bg-brand-100 text-brand-700'
                         )}>
                           {statusLabels[event.status] || event.status}
                         </span>

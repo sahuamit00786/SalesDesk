@@ -1,4 +1,4 @@
-import { EmailSuppression, LeadEmailLog } from '../models/index.js'
+import { EmailSuppression, LeadEmail, LeadEmailLog } from '../models/index.js'
 
 const PIXEL = Buffer.from(
   'R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==',
@@ -7,14 +7,17 @@ const PIXEL = Buffer.from(
 
 export async function trackOpen(req, res, next) {
   try {
-    const logId = String(req.query.log_id || '')
-    if (logId) {
+    const { id, t, log_id } = req.query
+    if (t === 'd' && id) {
+      // Direct LeadEmail: increment count, set openedAt only on first open
+      await LeadEmail.increment({ openCount: 1 }, { where: { trackingId: id } })
+      await LeadEmail.update({ openedAt: new Date() }, { where: { trackingId: id, openedAt: null } })
+    } else if (log_id) {
+      // Template/bulk LeadEmailLog
+      await LeadEmailLog.increment({ openCount: 1 }, { where: { id: log_id } })
       await LeadEmailLog.update(
-        {
-          openedAt: new Date(),
-          status: 'opened',
-        },
-        { where: { id: logId } },
+        { openedAt: new Date(), status: 'opened' },
+        { where: { id: log_id, openedAt: null } },
       )
     }
     res.setHeader('Content-Type', 'image/gif')
@@ -27,15 +30,16 @@ export async function trackOpen(req, res, next) {
 
 export async function trackClick(req, res, next) {
   try {
-    const logId = String(req.query.log_id || '')
-    const destination = String(req.query.url || '')
-    if (logId) {
+    const { id, t, log_id, url } = req.query
+    const destination = String(url || '')
+    if (t === 'd' && id) {
+      await LeadEmail.increment({ clickCount: 1 }, { where: { trackingId: id } })
+      await LeadEmail.update({ clickedAt: new Date() }, { where: { trackingId: id, clickedAt: null } })
+    } else if (log_id) {
+      await LeadEmailLog.increment({ clickCount: 1 }, { where: { id: log_id } })
       await LeadEmailLog.update(
-        {
-          clickedAt: new Date(),
-          status: 'clicked',
-        },
-        { where: { id: logId } },
+        { clickedAt: new Date(), status: 'clicked' },
+        { where: { id: log_id, clickedAt: null } },
       )
     }
     return res.redirect(destination || process.env.CLIENT_ORIGIN || '/')

@@ -1,4 +1,4 @@
-import { FileText } from 'lucide-react'
+import { FileText, Trash2 } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { formatSize, getDocCardPreviewMeta, getFileUrl } from '@/features/documents/documentUtils'
 
@@ -12,14 +12,14 @@ function previewKeyOpen(e, open) {
   }
 }
 
-export function DocumentCard({ row, selected, onToggleSelect, onOpen, onEdit, showCheckbox = true }) {
+export function DocumentCard({ row, selected, onToggleSelect, onOpen, onEdit, onDelete, showCheckbox = true }) {
   const meta = getDocCardPreviewMeta(row)
   const open = () => onOpen(row)
 
   return (
     <div
       className={cn(
-        'relative flex flex-col overflow-hidden rounded-xl border bg-white/95 shadow-sm transition hover:shadow-md sm:rounded-2xl',
+        'group relative flex flex-col overflow-hidden rounded-xl border bg-white/95 shadow-sm transition hover:shadow-md sm:rounded-2xl',
         selected ? 'border-sky-200 ring-2 ring-sky-50' : 'border-zinc-100',
       )}
     >
@@ -33,6 +33,7 @@ export function DocumentCard({ row, selected, onToggleSelect, onOpen, onEdit, sh
           aria-label={`Select ${row.name}`}
         />
       ) : null}
+
       <div className="relative w-full shrink-0 overflow-hidden bg-zinc-50">
         <div
           role="button"
@@ -50,31 +51,40 @@ export function DocumentCard({ row, selected, onToggleSelect, onOpen, onEdit, sh
             </div>
           )}
         </div>
-        {onEdit ? (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation()
-              onEdit(row)
-            }}
-            className="nodrag absolute bottom-1.5 right-1.5 z-10 rounded-md border border-surface-border bg-white/95 px-1.5 py-0.5 text-[9px] font-semibold text-ink shadow-sm hover:bg-surface-muted sm:bottom-2 sm:right-2 sm:px-2 sm:py-1 sm:text-[10px]"
-          >
-            Edit
-          </button>
-        ) : null}
+
+        {/* action buttons row — always visible */}
+        <div className="absolute bottom-1.5 right-1.5 z-10 flex items-center gap-1 sm:bottom-2 sm:right-2">
+          {onDelete ? (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onDelete(row) }}
+              className="nodrag flex h-5 w-5 items-center justify-center rounded-md border border-red-200 bg-white/95 text-red-500 shadow-sm hover:bg-red-50 sm:h-6 sm:w-6"
+              title="Delete"
+            >
+              <Trash2 size={10} strokeWidth={2} className="sm:h-3 sm:w-3" />
+            </button>
+          ) : null}
+          {onEdit ? (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onEdit(row) }}
+              className="nodrag rounded-md border border-surface-border bg-white/95 px-1.5 py-0.5 text-[9px] font-semibold text-ink shadow-sm hover:bg-surface-muted sm:px-2 sm:py-1 sm:text-[10px]"
+            >
+              Edit
+            </button>
+          ) : null}
+        </div>
       </div>
+
       <div
         role="button"
         tabIndex={0}
         onClick={open}
         onKeyDown={(e) => previewKeyOpen(e, open)}
-        className="cursor-pointer px-2 pb-2 pt-1.5 text-left outline-none focus-visible:bg-slate-50/80 sm:px-2.5 sm:pb-2 sm:pt-2"
+        className="flex h-[90px] cursor-pointer flex-col justify-start overflow-hidden px-2 pb-2 pt-1.5 text-left outline-none focus-visible:bg-slate-50/80 sm:px-2.5 sm:pb-2 sm:pt-2"
       >
         <p className="line-clamp-2 text-xs font-semibold leading-snug text-zinc-800">{row.name}</p>
-        {row.description ? (
-          <p className="mt-0.5 line-clamp-2 text-[10px] leading-snug text-zinc-500 sm:text-xs">{row.description}</p>
-        ) : null}
-        <p className="mt-0.5 text-[10px] text-zinc-400 sm:text-xs">
+        <p className="mt-0.5 line-clamp-1 text-[10px] text-zinc-400 sm:text-xs">
           {formatSize(row.fileSize)}
           {row.uploader?.name || row.uploader?.email ? ` · ${row.uploader?.name || row.uploader?.email}` : ''}
         </p>

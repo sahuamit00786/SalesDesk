@@ -117,15 +117,12 @@ export function CreateOpportunityModal({
       footer={
         <div className="flex items-center justify-end gap-2">
           <button type="button" className="h-8 min-w-[110px] rounded-md border border-surface-border px-3 text-xs font-semibold text-ink-muted hover:bg-surface-subtle" onClick={onClose}>Cancel</button>
-          <button type="button" disabled={saving} className="h-8 min-w-[130px] rounded-md bg-brand-700 px-3 text-xs font-semibold text-white hover:bg-brand-800 disabled:opacity-60" onClick={() => submit('save')}>Save Opportunity</button>
-          <button type="button" disabled={saving} className="h-8 min-w-[130px] rounded-md bg-brand-50 px-3 text-xs font-semibold text-brand-700 hover:bg-brand-100 disabled:opacity-60" onClick={() => submit('add-another')}>Save & Add Another</button>
+          <button type="button" disabled={saving} className="h-8 min-w-[130px] rounded-md bg-[var(--brand-primary)] px-3 text-xs font-semibold text-white hover:bg-[var(--brand-primary-dark)] disabled:opacity-60" onClick={() => submit('save')}>Save Opportunity</button>
+          <button type="button" disabled={saving} className="h-8 min-w-[130px] rounded-md bg-slate-100 px-3 text-xs font-semibold text-brand-700 hover:bg-slate-100 disabled:opacity-60" onClick={() => submit('add-another')}>Save & Add Another</button>
         </div>
       }
     >
       <div className="space-y-4">
-          <p className="rounded-md border border-brand-100 bg-brand-50/90 px-2.5 py-2 text-[11px] leading-relaxed text-ink">
-            Saves one row in the <strong>Leads</strong> table with <span className="font-mono text-[10px]">is_opportunity: true</span>, so it appears in Pipeline / Opportunities. Add separate <strong>deals</strong> from the opportunity or the Deals page. You can also create the same shape from <strong>Leads → Add Lead</strong> by turning on <strong>Save as sales opportunity</strong>.
-          </p>
           <section>
             <div className="mb-2 flex items-center gap-1.5">
               <UserCircle2 className="h-4 w-4 text-brand-700" />

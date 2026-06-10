@@ -1,4 +1,5 @@
-import { Document, Folder } from '../models/index.js'
+import { Document, DocumentFolderLink, DocumentLink, Folder } from '../models/index.js'
+import { Op } from 'sequelize'
 import {
   addDocumentFolders,
   addDocumentLinks,
@@ -91,6 +92,18 @@ export async function listLeadDocumentSummariesHandler(req, res, next) {
   }
 }
 
+export async function deleteDocument(req, res, next) {
+  try {
+    const workspaceId = resolveWorkspaceId(req)
+    const row = await Document.findOne({ where: { id: req.params.id, workspaceId } })
+    if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Document not found' } })
+    await row.destroy()
+    return res.json({ success: true, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
 export async function patchDocument(req, res, next) {
   try {
     const workspaceId = resolveWorkspaceId(req)
@@ -161,6 +174,44 @@ export async function linkDocument(req, res, next) {
     return res.json({ success: true, data: allLinks, meta: {} })
   } catch (error) {
     return next(error)
+  }
+}
+
+export async function removeDocumentFolder(req, res, next) {
+  try {
+    const { id, folderId } = req.params
+    await DocumentFolderLink.destroy({ where: { documentId: id, folderId } })
+    return res.json({ success: true, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+// Atomic move: add to toFolderId AND remove from fromFolderId in one request
+export async function moveDocumentFolder(req, res, next) {
+  try {
+    const workspaceId = resolveWorkspaceId(req)
+    const { id } = req.params
+    const { fromFolderId, toFolderId } = req.body || {}
+    if (!toFolderId) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'toFolderId is required' } })
+
+    const doc = await Document.findOne({ where: { id, workspaceId } })
+    if (!doc) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Document not found' } })
+
+    // Link to new folder
+    await DocumentFolderLink.findOrCreate({
+      where: { documentId: id, folderId: toFolderId },
+      defaults: { documentId: id, folderId: toFolderId },
+    })
+
+    // Unlink from old folder
+    if (fromFolderId && fromFolderId !== toFolderId) {
+      await DocumentFolderLink.destroy({ where: { documentId: id, folderId: fromFolderId } })
+    }
+
+    return res.json({ success: true, meta: {} })
+  } catch (e) {
+    return next(e)
   }
 }
 
@@ -257,4 +308,88 @@ export async function requestDocumentESign(_req, res) {
     success: false,
     error: { code: 'NOT_IMPLEMENTED', message: 'E-sign provider adapter scaffolded. Plug Digio/Leegality/SignDesk API here.' },
   })
+}
+
+// Collect a folder id + all descendant folder ids recursively
+async function collectFolderIds(rootId, workspaceId, maxDepth = 20) {
+  const all = [rootId]
+  let queue = [rootId]
+  const visited = new Set([rootId])
+  let depth = 0
+  while (queue.length && depth < maxDepth) {
+    const children = await Folder.findAll({
+      attributes: ['id'],
+      where: { parentFolderId: queue, workspaceId },
+    })
+    const childIds = children.map((f) => f.id).filter((id) => !visited.has(id))
+    childIds.forEach((id) => visited.add(id))
+    all.push(...childIds)
+    queue = childIds
+    depth++
+  }
+  return all
+}
+
+export async function getFolderInfo(req, res, next) {
+  try {
+    const workspaceId = resolveWorkspaceId(req)
+    const { id } = req.params
+    const folder = await Folder.findOne({ where: { id, workspaceId } })
+    if (!folder) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Folder not found' } })
+
+    const allFolderIds = await collectFolderIds(id, workspaceId)
+    const subfolderCount = allFolderIds.length - 1
+
+    const links = await DocumentFolderLink.findAll({ attributes: ['documentId'], where: { folderId: allFolderIds } })
+    const fileCount = new Set(links.map((l) => l.documentId)).size
+
+    return res.json({ success: true, data: { fileCount, subfolderCount }, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function deleteFolderWithContents(req, res, next) {
+  try {
+    const workspaceId = resolveWorkspaceId(req)
+    const { id } = req.params
+    const folder = await Folder.findOne({ where: { id, workspaceId } })
+    if (!folder) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Folder not found' } })
+
+    const allFolderIds = await collectFolderIds(id, workspaceId)
+
+    // Find all docs linked to these folders
+    const folderLinks = await DocumentFolderLink.findAll({ attributes: ['documentId'], where: { folderId: allFolderIds } })
+    const docIds = [...new Set(folderLinks.map((l) => l.documentId))]
+
+    let deletedDocs = 0
+    if (docIds.length) {
+      // Docs with entity links (lead, company, etc.) — keep the doc but only remove folder link
+      const entityLinked = await DocumentLink.findAll({ attributes: ['documentId'], where: { documentId: docIds } })
+      const entityLinkedSet = new Set(entityLinked.map((l) => l.documentId))
+
+      // Docs linked to folders OUTSIDE the deleted set — keep those docs too
+      const otherFolderLinks = await DocumentFolderLink.findAll({
+        attributes: ['documentId'],
+        where: { documentId: docIds, folderId: { [Op.notIn]: allFolderIds } },
+      })
+      const otherFolderSet = new Set(otherFolderLinks.map((l) => l.documentId))
+
+      const toDelete = docIds.filter((docId) => !entityLinkedSet.has(docId) && !otherFolderSet.has(docId))
+      if (toDelete.length) {
+        await Document.destroy({ where: { id: toDelete } })
+        deletedDocs = toDelete.length
+      }
+    }
+
+    // Remove folder links for surviving docs
+    await DocumentFolderLink.destroy({ where: { folderId: allFolderIds } })
+
+    // Delete subfolders first (children before parent to avoid FK issues)
+    await Folder.destroy({ where: { id: allFolderIds } })
+
+    return res.json({ success: true, data: { deletedDocuments: deletedDocs }, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
 }

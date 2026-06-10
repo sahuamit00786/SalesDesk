@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { ChevronDown, LogOut, Settings, User } from 'lucide-react'
 import { useAppDispatch, useAppSelector } from '@/app/hooks'
 import { logout } from '@/features/auth/authSlice'
+import { useLogoutMutation } from '@/features/auth/authApi'
 import { useHrRole } from '@/features/hr/useHrRole'
 
 function roleLabel(role) {
@@ -16,6 +17,7 @@ export function ProfileMenuDropdown() {
   const hrRole = useHrRole()
   const dispatch = useAppDispatch()
   const navigate = useNavigate()
+  const [logoutApi] = useLogoutMutation()
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
 
@@ -36,7 +38,7 @@ export function ProfileMenuDropdown() {
         onClick={() => setOpen((o) => !o)}
         className="flex items-center gap-2 rounded-xl border border-surface-border bg-white px-2 py-1.5 hover:bg-surface-subtle"
       >
-        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-700">
+        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-sm font-semibold text-brand-700">
           {initial}
         </span>
         <span className="hidden max-w-[120px] truncate text-left text-sm sm:block">
@@ -69,6 +71,7 @@ export function ProfileMenuDropdown() {
             type="button"
             className="flex w-full items-center gap-2 px-4 py-2 text-sm text-danger hover:bg-surface-subtle"
             onClick={() => {
+              logoutApi().catch(() => {})
               dispatch(logout())
               navigate('/login', { replace: true })
             }}

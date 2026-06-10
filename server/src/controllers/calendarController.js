@@ -1,4 +1,5 @@
 import { Op } from 'sequelize'
+import { allowedWorkspaceIdsForUser } from '../services/userWorkspaceService.js'
 import { Meeting } from '../models/Meeting.js'
 import { MeetingParticipant } from '../models/MeetingParticipant.js'
 import { LeadTask } from '../models/LeadTask.js'
@@ -73,15 +74,15 @@ function calendarSegmentWindow(at) {
 }
 
 /**
- * Treat legacy role_id=0 and company admins as superadmin scope.
+ * Returns true for roles that should see all events in their workspace
+ * (company admin, workspace_admin, manager — not sales).
  */
-function isSuperAdmin(user) {
-  const roleId = user?.roleId ?? user?.role_id ?? null
+function isAdminScope(user) {
   return (
     Boolean(user?.isCompanyAdmin) ||
-    roleId === 0 ||
-    roleId === '0' ||
     user?.role === 'company_admin' ||
+    user?.userRoleKind === 'workspace_admin' ||
+    user?.userRoleKind === 'manager' ||
     user?.role === 'superadmin'
   )
 }
@@ -107,6 +108,13 @@ export async function listEvents(req, res) {
     if (!companyId) {
       return res.status(400).json({ message: 'Company ID is required' })
     }
+    if (!workspaceId) {
+      return res.status(400).json({ message: 'x-workspace-id header is required' })
+    }
+    const allowedIds = await allowedWorkspaceIdsForUser(req.user)
+    if (!allowedIds.includes(String(workspaceId))) {
+      return res.status(403).json({ message: 'No access to this workspace' })
+    }
 
     const dateFrom = from ? new Date(from) : startOfDay(new Date())
     const dateTo = to ? new Date(to) : endOfDay(new Date())
@@ -117,7 +125,7 @@ export async function listEvents(req, res) {
           .split(',')
           .map((t) => t.trim())
           .filter(Boolean)
-    const superAdmin = isSuperAdmin(req.user)
+    const superAdmin = isAdminScope(req.user)
     const effectiveOwnerUserId = superAdmin ? null : ownerUserId || req.user?.id
     const events = []
 
@@ -439,7 +447,7 @@ export async function getDayDigest(req, res) {
     const tomorrowEnd = new Date(todayEnd)
     tomorrowEnd.setDate(tomorrowEnd.getDate() + 1)
 
-    const superAdmin = isSuperAdmin(req.user)
+    const superAdmin = isAdminScope(req.user)
     const targetOwnerId = superAdmin ? null : ownerUserId || req.user?.id
 
     // Fetch today's meetings

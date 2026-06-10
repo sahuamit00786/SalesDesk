@@ -47,7 +47,7 @@ function statusPillClass(status) {
     case 'missed':
       return 'bg-amber-50 text-amber-800 ring-amber-200'
     default:
-      return 'bg-indigo-50 text-indigo-800 ring-indigo-200'
+      return 'bg-brand-50 text-brand-800 ring-brand-200'
   }
 }
 
@@ -114,14 +114,14 @@ export function MeetingEventHoverCard({ event, anchorRect, onMouseEnter, onMouse
       )}
       style={{ top, left, maxHeight: maxCardHeight }}
     >
-      <div className="flex items-start justify-between gap-2 border-b border-indigo-100 bg-gradient-to-r from-indigo-50 to-violet-50 px-3 py-2.5">
+      <div className="flex items-start justify-between gap-2 border-b border-brand-100 bg-gradient-to-r from-indigo-50 to-violet-50 px-3 py-2.5">
         <div className="min-w-0 flex-1">
-          <span className="inline-flex rounded-md bg-indigo-600/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-indigo-800 ring-1 ring-indigo-200">
+          <span className="inline-flex rounded-md bg-[var(--brand-primary)]/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand-800 ring-1 ring-brand-200">
             Meeting
           </span>
           <p className="mt-1.5 text-sm font-semibold leading-snug text-gray-900">{event.title}</p>
         </div>
-        <Video className="h-5 w-5 shrink-0 text-indigo-600" aria-hidden />
+        <Video className="h-5 w-5 shrink-0 text-brand-600" aria-hidden />
       </div>
 
       <div className="scrollbar-subtle min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
@@ -168,7 +168,7 @@ export function MeetingEventHoverCard({ event, anchorRect, onMouseEnter, onMouse
           <span className={cn('inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ring-1', statusPillClass(event?.status))}>
             {humanizeStatus(event?.status)}
           </span>
-          <span className="rounded-md bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-800 ring-1 ring-violet-100">
+          <span className="rounded-md bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-brand-800 ring-1 ring-brand-100">
             {humanizeMeetingType(event?.meta?.meetingType)}
           </span>
           {durationLabel ? (
@@ -214,7 +214,7 @@ export function MeetingEventHoverCard({ event, anchorRect, onMouseEnter, onMouse
         {event?.leadName && leadId ? (
           <Link
             to={`/leads/${leadId}`}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-xs font-medium text-indigo-600 hover:bg-indigo-50"
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-xs font-medium text-brand-600 hover:bg-brand-50"
           >
             <Briefcase className="h-4 w-4 shrink-0" />
             Lead: {event.leadName}

@@ -41,6 +41,12 @@ export const LeaveRequest = sequelize.define(
       type: DataTypes.DECIMAL(5, 1),
       allowNull: false,
     },
+    isHalfDay: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+      field: 'is_half_day',
+    },
     reason: {
       type: DataTypes.TEXT,
       allowNull: true,

@@ -7,6 +7,8 @@ function mapItemsToAuthWorkspaces(items) {
     name: row.name,
     description: row.description ?? null,
     archived: Boolean(row.archived),
+    themeColor: row.themeColor ?? null,
+    sidebarTextColor: row.sidebarTextColor ?? null,
   }))
 }
 

@@ -188,20 +188,15 @@ export function parseStoredThread(storedThread = []) {
   const messages = (storedThread || [])
     .map((msg) => {
       const date = new Date(msg.sentAt || msg.createdAt || Date.now())
-      const inferredInboundFrom =
-        msg.from ||
-        msg.fromEmail ||
-        msg.sender ||
-        (Array.isArray(msg.toRecipients) ? msg.toRecipients[0] : '') ||
-        'Lead'
+      const senderRaw =
+        msg.direction === 'inbound'
+          ? msg.fromEmail || (Array.isArray(msg.toRecipients) ? '' : '') || 'Lead'
+          : msg.fromEmail || 'You'
       return {
         id: msg.id,
         threadId: msg.threadId,
         subject: msg.subject || '(No subject)',
-        from:
-          msg.direction === 'inbound'
-            ? parseEmailAddress(inferredInboundFrom)
-            : parseEmailAddress('You <you@fynlo.local>'),
+        from: parseEmailAddress(senderRaw),
         to: (msg.toRecipients || []).map((x) => parseEmailAddress(x)),
         cc: (msg.ccRecipients || []).map((x) => parseEmailAddress(x)),
         date,

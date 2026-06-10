@@ -5,51 +5,66 @@ import { cn } from '@/utils/cn'
 
 const FAQS = [
   {
-    q: 'How does LeadFlow AI integrate with our stack?',
-    a: 'We ship native connectors for major email, calendar, and messaging providers. Enterprise plans include private APIs and webhooks for bespoke systems.',
+    q: 'What is LeadFlow CRM?',
+    a: 'LeadFlow CRM is a lead management and sales workspace with leads, lead distribution, opportunities, pipeline, deals, email inbox, tasks, campaigns, automation workflows, quotations, invoices, documents, HR attendance, leave, and team roles.',
   },
   {
-    q: 'Is my customer data encrypted?',
-    a: 'Yes — data is encrypted in transit and at rest. Enterprise customers can bring their own keys and enforce SSO / SCIM policies.',
+    q: 'How does lead distribution work?',
+    a: 'Lead distribution fairly assigns unassigned leads to your calling team using round-robin rotation. Select leads, pick callers in order, and confirm assignment from the Lead distribution page.',
   },
   {
-    q: 'Can we start with a single team?',
-    a: 'Absolutely. Pilot with one pod, prove lift on response times and pipeline hygiene, then expand seats with zero drama.',
+    q: 'Can I send and receive email inside the CRM?',
+    a: 'Yes. The Email module lets you send, receive, and track emails without leaving the CRM — a full inbox inside the app with lead linking, reply, and templates.',
   },
   {
-    q: 'What happens after the free trial?',
-    a: 'Pick a plan or downgrade to a read-only archive. No surprise charges — we notify you before any billing event.',
+    q: 'Does LeadFlow CRM support quotations and invoices?',
+    a: 'Yes. Create structured quotations with templates and live preview, convert them to invoices, and manage deal-linked sales documents with company billing details.',
+  },
+  {
+    q: 'What about team roles and workspaces?',
+    a: 'Workspace settings let you manage multiple workspaces. Team & roles lets you invite people, assign roles, and control what each role can see and do per workspace.',
+  },
+  {
+    q: 'Is there HR and attendance built in?',
+    a: 'Yes. HR Overview, attendance check-in, leave requests, approval queue, leave settings, and HR reports are included alongside sales modules in the same workspace.',
   },
 ]
 
 export function FaqSection() {
   return (
-    <Section id="faq" className="relative overflow-hidden bg-gradient-to-b from-violet-50/80 via-white to-fuchsia-50/50">
-      <div className="pointer-events-none absolute left-0 top-1/3 h-72 w-72 rounded-full bg-cyan-300/15 blur-3xl" />
-      <div className="relative z-10 mx-auto max-w-3xl px-4 py-20 sm:px-6 lg:px-8">
-        <p className="text-center text-xs font-semibold uppercase tracking-[0.2em] text-violet-600">FAQ</p>
-        <h2 className="mt-2 bg-gradient-to-r from-violet-800 via-fuchsia-700 to-cyan-800 bg-clip-text text-center text-3xl font-semibold tracking-tight text-transparent sm:text-4xl">
-          Answers, upfront.
+    <Section id="faq" className="relative bg-[#050510] py-24">
+      {/* BG atmosphere */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{ background: 'radial-gradient(ellipse 50% 60% at 50% 100%, rgba(139,92,246,0.06), transparent 70%)' }}
+        aria-hidden
+      />
+
+      <div className="relative mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
+        <p className="text-center text-xs font-bold uppercase tracking-[0.22em] text-violet-400">FAQ</p>
+        <h2 className="mt-3 text-center font-display text-3xl font-bold tracking-[-0.02em] text-white sm:text-4xl">
+          Common questions
         </h2>
-        <Accordion.Root type="single" collapsible className="mt-10 space-y-3">
+
+        <Accordion.Root type="single" collapsible className="mt-10 space-y-2">
           {FAQS.map((item, idx) => (
             <Accordion.Item
               key={item.q}
               value={`item-${idx}`}
-              className="overflow-hidden rounded-2xl border border-violet-200/80 bg-white/90 shadow-md shadow-violet-200/20"
+              className="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02] backdrop-blur-sm transition hover:border-white/[0.1]"
             >
               <Accordion.Header>
                 <Accordion.Trigger
                   className={cn(
-                    'group flex w-full items-center justify-between gap-3 px-5 py-4 text-left text-sm font-semibold text-lf-ink transition hover:bg-lf-purple-50/50',
+                    'group flex w-full items-center justify-between gap-3 px-5 py-4 text-left text-sm font-semibold text-white/80 transition hover:text-white',
                   )}
                 >
                   {item.q}
-                  <ChevronDown className="h-4 w-4 shrink-0 text-lf-purple-600 transition group-data-[state=open]:rotate-180" />
+                  <ChevronDown className="h-4 w-4 shrink-0 text-violet-400/70 transition group-data-[state=open]:rotate-180" />
                 </Accordion.Trigger>
               </Accordion.Header>
               <Accordion.Content className="data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down overflow-hidden">
-                <div className="border-t border-lf-purple-50 px-5 pb-4 pt-2 text-sm leading-relaxed text-lf-muted">
+                <div className="border-t border-white/[0.04] px-5 pb-4 pt-3 text-sm leading-relaxed text-white/45">
                   {item.a}
                 </div>
               </Accordion.Content>

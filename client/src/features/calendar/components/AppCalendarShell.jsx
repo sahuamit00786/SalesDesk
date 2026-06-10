@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import { ChevronLeft, ChevronRight, Search, MoreHorizontal, X } from 'lucide-react'
-import { format, addDays, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isSameDay, isAfter, startOfDay } from 'date-fns'
+import { format, addDays, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isSameDay, isAfter, isBefore, startOfDay } from 'date-fns'
 import { Calendar } from 'react-big-calendar'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 import { cn } from '@/utils/cn'
@@ -40,6 +40,8 @@ export function AppCalendarShell({
   syncPeriod,
   onPeriodChange,
   onDateRangeChange,
+  highlightAttendanceStatus = false,
+  dayStatusByDate: externalDayStatusByDate = null,
   searchPlaceholder = 'Search title, lead, notes…',
 }) {
   const [currentDate, setCurrentDate] = useState(() =>
@@ -127,9 +129,11 @@ export function AppCalendarShell({
     }
     if (isAfter(selectedRange.start, pickedDate)) {
       setSelectedRange({ start: pickedDate, end: selectedRange.start })
+      setCurrentDate(pickedDate)
       return
     }
     setSelectedRange({ start: selectedRange.start, end: pickedDate })
+    setCurrentDate(selectedRange.start)
   }
 
   const clearRange = () => setSelectedRange({ start: null, end: null })
@@ -160,13 +164,50 @@ export function AppCalendarShell({
     })
   }, [normalizedEvents, calendarSearchQuery])
 
+  const hasCustomRange = Boolean(selectedRange.start && selectedRange.end)
+
+  const rangeFilteredEvents = useMemo(() => {
+    if (!hasCustomRange) return displayedEvents
+    const from = startOfDay(selectedRange.start)
+    const to = startOfDay(selectedRange.end)
+    return displayedEvents.filter((e) => {
+      const day = startOfDay(e.start instanceof Date ? e.start : new Date(e.start))
+      return !isBefore(day, from) && !isAfter(day, to)
+    })
+  }, [displayedEvents, hasCustomRange, selectedRange.start, selectedRange.end])
+
+  const attendanceStatusByDate = useMemo(() => {
+    if (externalDayStatusByDate) return externalDayStatusByDate
+    if (!highlightAttendanceStatus) return {}
+    const map = {}
+    for (const event of normalizedEvents) {
+      if (event.kind !== 'attendance' && event.kind !== 'attendance_team') continue
+      const key = format(startOfDay(event.start instanceof Date ? event.start : new Date(event.start)), 'yyyy-MM-dd')
+      const status = String(event.status || '').toLowerCase()
+      if (status === 'absent') map[key] = 'absent'
+      else if (!map[key] && status) map[key] = status
+    }
+    return map
+  }, [normalizedEvents, highlightAttendanceStatus, externalDayStatusByDate])
+
+  const isDateInSelectedRange = useCallback(
+    (date) => {
+      if (!hasCustomRange) return true
+      const day = startOfDay(date)
+      const from = startOfDay(selectedRange.start)
+      const to = startOfDay(selectedRange.end)
+      return !isBefore(day, from) && !isAfter(day, to)
+    },
+    [hasCustomRange, selectedRange.start, selectedRange.end],
+  )
+
   const allEvents = useMemo(
     () =>
-      displayedEvents.map((e) => ({
+      rangeFilteredEvents.map((e) => ({
         ...e,
         color: e.color || getEventColor(e.kind, e.status, e.meta),
       })),
-    [displayedEvents],
+    [rangeFilteredEvents],
   )
 
   const typeCounts = useMemo(() => {
@@ -268,15 +309,20 @@ export function AppCalendarShell({
   const setTypes = onTypesChange ?? setSelectedTypes
 
   return (
-    <div className={cn('flex min-h-0 overflow-hidden bg-white', className)}>
+    <div className={cn(
+      'flex min-h-0 overflow-hidden bg-white',
+      highlightAttendanceStatus && 'calendar-attendance-mode',
+      className,
+    )}>
       <div className="flex w-72 shrink-0 flex-col overflow-hidden border-r border-gray-200 bg-white">
         <div className="scrollbar-subtle space-y-6 overflow-y-auto p-4">
-          <div className="rounded-xl border border-indigo-200 bg-white p-3 shadow-sm">
+          <div className="rounded-xl border border-brand-200 bg-white p-3 shadow-sm">
             <MiniMonthPicker
               currentDate={currentDate}
               selectedDate={selectedDate}
               rangeStart={selectedRange.start}
               rangeEnd={selectedRange.end}
+              dayStatusByDate={highlightAttendanceStatus ? attendanceStatusByDate : null}
               onChange={(date) => {
                 setCurrentDate(date)
                 setSelectedDate(date)
@@ -299,7 +345,7 @@ export function AppCalendarShell({
             )
           ) : null}
 
-          <div className="space-y-6 rounded-xl border border-indigo-200 bg-white p-3">
+          <div className="space-y-6 rounded-xl border border-brand-200 bg-white p-3">
             <TodayList events={allEvents} selectedDate={selectedDate} title="Today" onEventClick={handleEventClick} />
             <TodayList
               events={allEvents}
@@ -334,6 +380,15 @@ export function AppCalendarShell({
                 ? `${format(selectedRange.start, 'd MMM')} - ${format(selectedRange.end, 'd MMM yyyy')}`
                 : getRangeLabel()}
             </h2>
+            {hasCustomRange ? (
+              <button
+                type="button"
+                onClick={clearRange}
+                className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50"
+              >
+                Clear range
+              </button>
+            ) : null}
           </div>
 
           <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2 sm:gap-3">
@@ -399,7 +454,7 @@ export function AppCalendarShell({
                 aria-label={calendarSearchOpen ? 'Hide search' : 'Search calendar'}
                 className={cn(
                   'shrink-0 rounded-lg p-2 transition-colors',
-                  calendarSearchOpen ? 'bg-indigo-100 text-indigo-700' : 'text-gray-500 hover:bg-gray-100',
+                  calendarSearchOpen ? 'bg-brand-100 text-brand-700' : 'text-gray-500 hover:bg-gray-100',
                 )}
               >
                 <Search className="h-5 w-5" />
@@ -420,7 +475,7 @@ export function AppCalendarShell({
                   className="h-8 w-8 rounded-full border border-gray-200 object-cover"
                 />
               ) : (
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-sm font-medium text-indigo-700">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-100 text-sm font-medium text-brand-700">
                   {user?.name?.[0]?.toUpperCase() || 'U'}
                 </div>
               )
@@ -431,7 +486,7 @@ export function AppCalendarShell({
         <div className="min-h-0 flex-1 overflow-auto p-4">
           <Calendar
             localizer={calendarLocalizer}
-            events={displayedEvents}
+            events={allEvents}
             startAccessor="start"
             endAccessor="end"
             views={[Views.MONTH, Views.WEEK, Views.DAY]}
@@ -454,12 +509,29 @@ export function AppCalendarShell({
             eventPropGetter={() => ({
               style: { backgroundColor: 'transparent', border: 'none', padding: 0 },
             })}
-            dayPropGetter={(date) => ({
-              style: {
-                backgroundColor: isSameDay(date, selectedDate) ? '#eef2ff' : 'transparent',
-              },
-              onClick: () => setSelectedDate(date),
-            })}
+            dayPropGetter={(date) => {
+              const dateKey = format(date, 'yyyy-MM-dd')
+              const classes = []
+              const style = {}
+              const isAbsent = highlightAttendanceStatus && attendanceStatusByDate[dateKey] === 'absent'
+              const isExcluded = hasCustomRange && !isDateInSelectedRange(date)
+
+              if (isAbsent && !isExcluded) {
+                classes.push('rbc-day-absent')
+                style.backgroundColor = '#fca5a5'
+                style.backgroundImage = 'none'
+              } else if (isExcluded) {
+                classes.push('rbc-day-excluded')
+              } else if (isSameDay(date, selectedDate)) {
+                style.backgroundColor = '#eef2ff'
+              }
+
+              return {
+                className: classes.join(' ') || undefined,
+                style,
+                onClick: () => setSelectedDate(date),
+              }
+            }}
             formats={{
               timeGutterFormat: (date, culture, loc) => loc.format(date, 'h a', culture),
               eventTimeRangeFormat: ({ start, end }, culture, loc) =>

@@ -26,9 +26,36 @@ function isDomainAllowed(originOrReferrer, allowedDomains = []) {
 function validateFields(fieldValues, fields, filesByField = {}) {
   const errors = []
   for (const field of fields || []) {
-    const raw = field.type === 'file' ? (filesByField[field.id]?.length ? '__file__' : '') : fieldValues?.[field.id]
+    if (field.type === 'file') {
+      const files = filesByField[field.id] || []
+      if (field.isRequired && !files.length) {
+        errors.push({ fieldId: field.id, message: `${field.label || 'Field'} is required` })
+        continue
+      }
+      const opts = field.options || {}
+      if (opts.maxFiles && files.length > opts.maxFiles) {
+        errors.push({ fieldId: field.id, message: `Max ${opts.maxFiles} file(s) allowed` })
+      }
+      if (opts.maxFileSizeMB) {
+        const maxBytes = opts.maxFileSizeMB * 1024 * 1024
+        for (const f of files) {
+          if (f.size > maxBytes) {
+            errors.push({ fieldId: field.id, message: `File too large — max ${opts.maxFileSizeMB} MB allowed` })
+            break
+          }
+        }
+      }
+      continue
+    }
+    const raw = fieldValues?.[field.id]
     const value = typeof raw === 'string' ? raw.trim() : raw
-    if (field.isRequired && !value) errors.push({ fieldId: field.id, message: `${field.label || 'Field'} is required` })
+    if (field.isRequired && !value) {
+      errors.push({ fieldId: field.id, message: `${field.label || 'Field'} is required` })
+      continue
+    }
+    if (field.maxLength && typeof value === 'string' && value.length > field.maxLength) {
+      errors.push({ fieldId: field.id, message: `${field.label || 'Field'} must be ${field.maxLength} characters or less` })
+    }
   }
   return errors
 }
@@ -83,6 +110,12 @@ export async function submitForm(req, res, next) {
         fieldValues = JSON.parse(fieldValues || '{}')
       } catch {
         fieldValues = {}
+      }
+    }
+    // Inject hidden field defaults so they appear in submission data
+    for (const f of form.fields || []) {
+      if (f.type === 'hidden' && f.defaultValue && fieldValues[f.id] === undefined) {
+        fieldValues[f.id] = f.defaultValue
       }
     }
     const filesByField = {}

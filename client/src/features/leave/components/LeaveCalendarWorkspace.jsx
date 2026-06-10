@@ -12,7 +12,7 @@ import { isPastDateKey } from '@/features/leave/utils/leaveDateUtils'
 
 const LEGEND = [
   { key: 'cl', label: 'Casual Leave', dotClassName: 'bg-teal-600' },
-  { key: 'sl', label: 'Sick Leave', dotClassName: 'bg-indigo-600' },
+  { key: 'sl', label: 'Sick Leave', dotClassName: 'bg-[var(--brand-primary)]' },
   { key: 'ul', label: 'Unpaid Leave', dotClassName: 'bg-rose-900' },
   { key: 'holiday', label: 'Public holiday', dotClassName: 'bg-amber-600' },
   { key: 'pending', label: 'Pending approval', dotClassName: 'bg-amber-400 ring-2 ring-amber-300' },

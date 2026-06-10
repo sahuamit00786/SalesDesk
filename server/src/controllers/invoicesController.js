@@ -7,6 +7,9 @@ import {
   InvoicePayment,
   InvoiceTemplate,
   WorkspaceBillingProfile,
+  Lead,
+  Deal,
+  Quotation,
 } from '../models/index.js'
 import { requireWorkspaceFromRequest } from '../services/workspaceScope.js'
 import { aggregateInvoiceTotals } from '../services/salesTotals.js'
@@ -14,6 +17,12 @@ import { buildInvoiceNumber } from '../services/docNumberFormat.js'
 import { buildCustomerSnapshotFromLead, mergeBillingIntoPaymentSnapshot } from '../services/salesCustomerSnapshot.js'
 import { recordInvoiceCreatedOnLead } from '../services/leadSalesDocActivity.js'
 import { resolveLeadAndDealForSalesDoc } from '../services/salesDocLeadDealResolve.js'
+import { enrichSalesDocListRow } from '../services/salesDocListSerialize.js'
+
+const listIncludes = [
+  { model: Lead, as: 'lead', attributes: ['id', 'title', 'contactName', 'company', 'email'], required: false },
+  { model: Deal, as: 'deal', attributes: ['id', 'name', 'stage'], required: false },
+]
 
 /** True unless template explicitly sets sectionSettings.showBankDetails === false */
 function invoiceTemplateShowsBank(template) {
@@ -56,6 +65,8 @@ const createSchema = Joi.object({
   customerSnapshot: Joi.object().unknown(true).allow(null),
   items: Joi.array().items(lineSchema).min(1).required(),
   currency: Joi.string().length(3).default('USD'),
+  shipping: Joi.number().default(0),
+  adjustment: Joi.number().default(0),
   roundOff: Joi.number().default(0),
   notes: Joi.string().trim().allow('', null),
   termsSnapshot: Joi.string().trim().allow('', null),
@@ -71,6 +82,7 @@ const createSchema = Joi.object({
   })
 
 const patchSchema = Joi.object({
+  dealId: Joi.string().uuid().allow(null),
   invoiceTemplateId: Joi.string().uuid().allow(null),
   ownerUserId: Joi.string().uuid().allow(null),
   issueDate: Joi.string().isoDate(),
@@ -80,6 +92,8 @@ const patchSchema = Joi.object({
   customerSnapshot: Joi.object().unknown(true).allow(null),
   items: Joi.array().items(lineSchema).min(1),
   currency: Joi.string().length(3),
+  shipping: Joi.number(),
+  adjustment: Joi.number(),
   roundOff: Joi.number(),
   notes: Joi.string().trim().allow('', null),
   termsSnapshot: Joi.string().trim().allow('', null),
@@ -135,12 +149,13 @@ export async function listInvoices(req, res, next) {
       limit,
       offset,
       order: [['createdAt', 'DESC']],
+      include: listIncludes,
     })
 
     return res.json({
       success: true,
       data: {
-        items: rows.map((r) => serializeInvoice(r)),
+        items: rows.map((r) => enrichSalesDocListRow(serializeInvoice(r), r)),
         total: count,
         page,
         limit,
@@ -207,7 +222,7 @@ export async function createInvoice(req, res, next) {
       }
     }
 
-    const totals = aggregateInvoiceTotals(value.items, { roundOff: value.roundOff })
+    const totals = aggregateInvoiceTotals(value.items, { roundOff: value.roundOff, shipping: value.shipping, adjustment: value.adjustment })
 
     const billingRow = await WorkspaceBillingProfile.findOne({ where: { workspaceId } })
     const paymentSnapshot = mergeBillingIntoPaymentSnapshot(billingRow)
@@ -275,6 +290,8 @@ export async function createInvoice(req, res, next) {
           customerSnapshot,
           subtotal: totals.subtotal,
           discountTotal: totals.discountTotal,
+          shipping: totals.shipping,
+          adjustment: totals.adjustment,
           roundOff: totals.roundOff,
           grandTotal: totals.grandTotal,
           taxFinancial: totals.taxBreakdown,
@@ -354,11 +371,32 @@ export async function patchInvoice(req, res, next) {
 
     let totals = null
     if (value.items) {
-      totals = aggregateInvoiceTotals(value.items, { roundOff: value.roundOff ?? Number(row.roundOff) })
+      totals = aggregateInvoiceTotals(value.items, {
+        roundOff: value.roundOff ?? Number(row.roundOff),
+        shipping: value.shipping ?? Number(row.shipping),
+        adjustment: value.adjustment ?? Number(row.adjustment),
+      })
+    }
+
+    let resolvedDeal = null
+    if (value.dealId) {
+      resolvedDeal = await resolveLeadAndDealForSalesDoc({
+        dealId: value.dealId,
+        companyId: req.user.companyId,
+        workspaceId,
+        user: req.user,
+      })
     }
 
     await sequelize.transaction(async (transaction) => {
       const updates = {}
+      if (resolvedDeal) {
+        updates.dealId = resolvedDeal.resolvedDealId
+        updates.leadId = resolvedDeal.resolvedLeadId
+        let snap = buildCustomerSnapshotFromLead(resolvedDeal.lead)
+        if (resolvedDeal.dealRow?.name) snap = { ...snap, dealName: String(resolvedDeal.dealRow.name).trim() }
+        updates.customerSnapshot = snap
+      }
       if (value.issueDate) updates.issueDate = value.issueDate.slice(0, 10)
       if (value.dueDate !== undefined) updates.dueDate = value.dueDate ? value.dueDate.slice(0, 10) : null
       if (value.reference !== undefined) updates.reference = value.reference || null
@@ -389,6 +427,8 @@ export async function patchInvoice(req, res, next) {
       if (totals) {
         updates.subtotal = totals.subtotal
         updates.discountTotal = totals.discountTotal
+        updates.shipping = totals.shipping
+        updates.adjustment = totals.adjustment
         updates.roundOff = totals.roundOff
         updates.grandTotal = totals.grandTotal
         updates.taxFinancial = totals.taxBreakdown
@@ -460,22 +500,24 @@ export async function recordInvoicePayment(req, res, next) {
     })
     if (!invoice) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Not found' } })
 
-    await InvoicePayment.create({
-      invoiceId: invoice.id,
-      amount: value.amount,
-      paidAt: value.paidAt,
-      mode: value.mode || null,
-      reference: value.reference || null,
-      recordedByUserId: req.user.id,
-    })
+    await sequelize.transaction(async (t) => {
+      await InvoicePayment.create({
+        invoiceId: invoice.id,
+        amount: value.amount,
+        paidAt: value.paidAt,
+        mode: value.mode || null,
+        reference: value.reference || null,
+        recordedByUserId: req.user.id,
+      }, { transaction: t })
 
-    const payments = await InvoicePayment.findAll({ where: { invoiceId: invoice.id } })
-    const sumPaid = payments.reduce((s, p) => s + Number(p.amount), 0)
-    const newStatus = deriveInvoiceStatus(sumPaid, invoice.grandTotal, invoice.status)
+      const payments = await InvoicePayment.findAll({ where: { invoiceId: invoice.id }, transaction: t })
+      const sumPaid = payments.reduce((s, p) => s + Number(p.amount), 0)
+      const newStatus = deriveInvoiceStatus(sumPaid, invoice.grandTotal, invoice.status)
 
-    await invoice.update({
-      amountPaid: sumPaid,
-      status: newStatus,
+      await invoice.update({
+        amountPaid: sumPaid,
+        status: newStatus,
+      }, { transaction: t })
     })
 
     const full = await Invoice.findByPk(invoice.id, {
@@ -490,6 +532,41 @@ export async function recordInvoicePayment(req, res, next) {
       data: serializeInvoice(full, full.items, full.payments),
       meta: {},
     })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function deleteInvoice(req, res, next) {
+  try {
+    const { workspaceId } = await requireWorkspaceFromRequest(req)
+    const row = await Invoice.findOne({
+      where: { id: req.params.id, workspaceId, companyId: req.user.companyId },
+    })
+    if (!row) {
+      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Not found' } })
+    }
+
+    await sequelize.transaction(async (transaction) => {
+      await InvoicePayment.destroy({ where: { invoiceId: row.id }, transaction })
+      await InvoiceItem.destroy({ where: { invoiceId: row.id }, transaction })
+      const linkedQuotes = await Quotation.findAll({
+        where: { convertedInvoiceId: row.id, workspaceId, companyId: req.user.companyId },
+        transaction,
+      })
+      for (const q of linkedQuotes) {
+        await q.update(
+          {
+            convertedInvoiceId: null,
+            ...(q.status === 'converted' ? { status: 'accepted' } : {}),
+          },
+          { transaction },
+        )
+      }
+      await row.destroy({ transaction })
+    })
+
+    return res.json({ success: true, data: { id: req.params.id }, meta: {} })
   } catch (e) {
     return next(e)
   }

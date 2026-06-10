@@ -30,7 +30,7 @@ export function CalendarFilters({ selectedTypes, onChange, counts = {} }) {
         <button
           type="button"
           onClick={clearAll}
-          className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-700 hover:underline"
+          className="text-[11px] font-semibold text-brand-600 hover:text-brand-700 hover:underline"
         >
           Clear all
         </button>
@@ -49,7 +49,7 @@ export function CalendarFilters({ selectedTypes, onChange, counts = {} }) {
               className={cn(
                 'w-full flex items-center gap-1.5 px-1.5 py-1 rounded-md transition-all border',
                 isSelected
-                  ? 'bg-white border-indigo-200 shadow-sm'
+                  ? 'bg-white border-brand-200 shadow-sm'
                   : 'bg-white/50 border-transparent hover:bg-white/80',
                 isSelected ? 'opacity-100' : 'opacity-70'
               )}
@@ -58,7 +58,7 @@ export function CalendarFilters({ selectedTypes, onChange, counts = {} }) {
                 type="checkbox"
                 checked={isSelected}
                 readOnly
-                className="h-3.5 w-3.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 pointer-events-none shrink-0"
+                className="h-3.5 w-3.5 rounded border-gray-300 text-brand-600 focus:ring-brand-500 pointer-events-none shrink-0"
               />
               <div
                 className="w-2 h-2 rounded-sm shrink-0"

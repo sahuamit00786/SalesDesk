@@ -267,7 +267,7 @@ export function CreateMeetingModal({ open, onClose, users = [], leadId, initialD
                             className={cn(
                               'flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition',
                               selected
-                                ? 'bg-brand-50 text-brand-900 ring-1 ring-brand-200/80'
+                                ? 'bg-slate-100 text-brand-900 ring-1 ring-brand-200/80'
                                 : 'text-ink hover:bg-white hover:shadow-sm',
                             )}
                           >
@@ -278,7 +278,7 @@ export function CreateMeetingModal({ open, onClose, users = [], leadId, initialD
                             <span
                               className={cn(
                                 'shrink-0 rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
-                                selected ? 'bg-brand-600 text-white' : 'bg-slate-200/80 text-ink-muted',
+                                selected ? 'bg-[var(--brand-primary)] text-white' : 'bg-slate-200/80 text-ink-muted',
                               )}
                             >
                               {selected ? 'Added' : 'Add'}
@@ -307,7 +307,7 @@ export function CreateMeetingModal({ open, onClose, users = [], leadId, initialD
               type="button"
               disabled={busy}
               onClick={() => void submit()}
-              className="h-10 rounded-xl bg-brand-600 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700 disabled:opacity-50"
+              className="h-10 rounded-xl bg-[var(--brand-primary)] px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--brand-primary-dark)] disabled:opacity-50"
             >
               {busy ? (isEdit ? 'Saving…' : 'Creating…') : isEdit ? 'Save changes' : 'Create meeting'}
             </button>

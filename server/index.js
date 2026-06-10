@@ -17,6 +17,11 @@ import { startWorkflowTriggerWorker } from './src/queues/workflowTriggerQueue.js
 import { processWorkflowWakeups } from './src/services/workflowRunner.js'
 import { startReminderJob } from './src/jobs/reminderJob.js'
 import { startAttendanceJob } from './src/jobs/attendanceJob.js'
+import { startTaskDigestNotificationJob } from './src/jobs/taskDigestNotificationJob.js'
+import { startMeetingBotWorker } from './src/queues/meetingBotQueue.js'
+import { startNotificationEmailWorker } from './src/queues/notificationEmailQueue.js'
+import { getRedis } from './src/config/redis.js'
+import { bullmqConnectionFromEnv } from './src/queues/connection.js'
 
 validateEnv()
 
@@ -77,8 +82,38 @@ async function start() {
       renewDueGmailWatches().catch(() => {})
     }, gmailWatchRenewMs)
   }
+  const redisUrl = process.env.REDIS_URL
+  if (redisUrl) {
+    const redis = getRedis()
+    if (redis) {
+      try {
+        await redis.ping()
+        // eslint-disable-next-line no-console
+        console.log(`Redis: connected (${redisUrl.replace(/\/\/.*@/, '//***@')})`)
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `Redis: REDIS_URL is set but connection failed — bulk email queue & workers disabled. ${err.message}`,
+        )
+        // eslint-disable-next-line no-console
+        console.warn(
+          'Start Redis: npm run redis:up (Docker) or install Redis on Windows (winget install Redis.Redis)',
+        )
+      }
+    }
+  } else {
+    // eslint-disable-next-line no-console
+    console.warn('Redis: REDIS_URL not set — email/workflow queues run inline only')
+  }
+
+  const bullConn = bullmqConnectionFromEnv()
   startEmailTemplateWorker()
+  startNotificationEmailWorker()
   startWorkflowTriggerWorker()
+  if (bullConn) {
+    // eslint-disable-next-line no-console
+    console.log('BullMQ workers: email templates, workflows, meeting bot (when enabled)')
+  }
   setInterval(() => {
     processWorkflowWakeups().catch(() => {})
   }, 30000)
@@ -86,7 +121,10 @@ async function start() {
   if (process.env.MEETING_CRON_ENABLED !== 'false') {
     startReminderJob()
   }
+  // BullMQ worker for meeting bot (gracefully no-ops when REDIS_URL is not set)
+  startMeetingBotWorker()
   startAttendanceJob()
+  startTaskDigestNotificationJob()
   const server = http.createServer(app)
   server.listen(port, () => {
     // eslint-disable-next-line no-console

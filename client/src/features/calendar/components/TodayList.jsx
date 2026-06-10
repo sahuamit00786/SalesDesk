@@ -65,7 +65,7 @@ export function TodayList({ events, title = 'Today', selectedDate, onEventClick 
                 onClick={() => onEventClick?.(event)}
                 className={cn(
                   'w-full rounded-xl border border-gray-100 bg-white p-3 transition-all text-left shadow-sm',
-                  'hover:border-indigo-200 hover:bg-indigo-50/30',
+                  'hover:border-brand-200 hover:bg-brand-50/30',
                   isPastEvent && 'opacity-60'
                 )}
               >

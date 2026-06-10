@@ -125,6 +125,22 @@ export const User = sequelize.define(
       type: DataTypes.DATE,
       allowNull: true,
     },
+    refreshTokenVersion: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+      field: 'refresh_token_version',
+    },
+    passwordResetOtpHash: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+      field: 'password_reset_otp_hash',
+    },
+    passwordResetOtpExpiresAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'password_reset_otp_expires_at',
+    },
   },
   {
     tableName: 'users',

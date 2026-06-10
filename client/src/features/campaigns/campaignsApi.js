@@ -7,11 +7,7 @@ export const campaignsApi = baseApi.injectEndpoints({
       query: (params = {}) => ({ url: '/campaigns', params }),
       providesTags: (_r, _e, arg) => [{ type: 'Campaign', id: `LIST-${arg?.status || 'all'}` }, { type: 'Campaign', id: 'LIST' }],
       async onQueryStarted(_arg, { queryFulfilled }) {
-        try {
-          await queryFulfilled
-        } catch {
-          toast.error('Could not load campaigns.')
-        }
+        try { await queryFulfilled } catch { toast.error('Could not load campaigns.') }
       },
     }),
     getCampaign: build.query({
@@ -19,40 +15,21 @@ export const campaignsApi = baseApi.injectEndpoints({
       providesTags: (_r, _e, id) => [{ type: 'Campaign', id }],
     }),
     getCampaignLeads: build.query({
-      query: ({ campaignId, ...params }) => ({
-        url: `/campaigns/${campaignId}/leads`,
-        params,
-      }),
+      query: ({ campaignId, ...params }) => ({ url: `/campaigns/${campaignId}/leads`, params }),
       providesTags: (_r, _e, arg) => [{ type: 'Campaign', id: `${arg.campaignId}-leads` }],
     }),
     createCampaign: build.mutation({
       query: (body) => ({ url: '/campaigns', method: 'POST', body }),
-      invalidatesTags: [
-        { type: 'Campaign', id: 'LIST' },
-        { type: 'Lead', id: 'LIST' },
-      ],
+      invalidatesTags: [{ type: 'Campaign', id: 'LIST' }, { type: 'Lead', id: 'LIST' }],
       async onQueryStarted(_arg, { queryFulfilled }) {
-        try {
-          await queryFulfilled
-          toast.success('Campaign created.')
-        } catch {
-          toast.error('Could not create campaign.')
-        }
+        try { await queryFulfilled; toast.success('Campaign created.') } catch { toast.error('Could not create campaign.') }
       },
     }),
     patchCampaign: build.mutation({
       query: ({ id, ...body }) => ({ url: `/campaigns/${id}`, method: 'PATCH', body }),
-      invalidatesTags: (_r, _e, arg) => [
-        { type: 'Campaign', id: 'LIST' },
-        { type: 'Campaign', id: arg.id },
-      ],
+      invalidatesTags: (_r, _e, arg) => [{ type: 'Campaign', id: 'LIST' }, { type: 'Campaign', id: arg.id }],
       async onQueryStarted(_arg, { queryFulfilled }) {
-        try {
-          await queryFulfilled
-          toast.success('Campaign updated.')
-        } catch {
-          toast.error('Could not update campaign.')
-        }
+        try { await queryFulfilled; toast.success('Campaign updated.') } catch { toast.error('Could not update campaign.') }
       },
     }),
     patchCampaignLeadStage: build.mutation({
@@ -67,12 +44,39 @@ export const campaignsApi = baseApi.injectEndpoints({
         { type: 'Campaign', id: 'LIST' },
       ],
       async onQueryStarted(_arg, { queryFulfilled }) {
-        try {
-          await queryFulfilled
-        } catch {
-          toast.error('Could not update stage.')
-        }
+        try { await queryFulfilled } catch { toast.error('Could not update stage.') }
       },
+    }),
+    addCampaignLeads: build.mutation({
+      query: ({ campaignId, ...body }) => ({ url: `/campaigns/${campaignId}/leads`, method: 'POST', body }),
+      invalidatesTags: (_r, _e, arg) => [
+        { type: 'Campaign', id: arg.campaignId },
+        { type: 'Campaign', id: `${arg.campaignId}-leads` },
+        { type: 'Campaign', id: 'LIST' },
+      ],
+    }),
+    removeCampaignLead: build.mutation({
+      query: ({ campaignId, leadId }) => ({ url: `/campaigns/${campaignId}/leads/${leadId}`, method: 'DELETE' }),
+      invalidatesTags: (_r, _e, arg) => [
+        { type: 'Campaign', id: arg.campaignId },
+        { type: 'Campaign', id: `${arg.campaignId}-leads` },
+        { type: 'Campaign', id: 'LIST' },
+      ],
+    }),
+    addCampaignMembers: build.mutation({
+      query: ({ campaignId, userIds }) => ({ url: `/campaigns/${campaignId}/members`, method: 'POST', body: { userIds } }),
+      invalidatesTags: (_r, _e, arg) => [{ type: 'Campaign', id: arg.campaignId }, { type: 'Campaign', id: 'LIST' }],
+    }),
+    removeCampaignMember: build.mutation({
+      query: ({ campaignId, userId }) => ({ url: `/campaigns/${campaignId}/members/${userId}`, method: 'DELETE' }),
+      invalidatesTags: (_r, _e, arg) => [{ type: 'Campaign', id: arg.campaignId }, { type: 'Campaign', id: 'LIST' }],
+    }),
+    distributeCampaignLeads: build.mutation({
+      query: ({ campaignId, ...body }) => ({ url: `/campaigns/${campaignId}/distribute`, method: 'POST', body }),
+      invalidatesTags: (_r, _e, arg) => [
+        { type: 'Campaign', id: arg.campaignId },
+        { type: 'Campaign', id: `${arg.campaignId}-leads` },
+      ],
     }),
   }),
 })
@@ -84,4 +88,9 @@ export const {
   useCreateCampaignMutation,
   usePatchCampaignMutation,
   usePatchCampaignLeadStageMutation,
+  useAddCampaignLeadsMutation,
+  useRemoveCampaignLeadMutation,
+  useAddCampaignMembersMutation,
+  useRemoveCampaignMemberMutation,
+  useDistributeCampaignLeadsMutation,
 } = campaignsApi

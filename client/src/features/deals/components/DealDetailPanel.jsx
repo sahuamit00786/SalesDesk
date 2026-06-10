@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import {
+  BadgeDollarSign,
   Bell,
   CalendarCheck2,
   CalendarClock,
@@ -54,11 +55,13 @@ import { formatStageLabel } from '@/features/opportunities/components/Opportunit
 import { useGetDocumentsQuery, useUploadDocumentMutation } from '@/features/documents/documentsApi'
 import { DealInvoicesPanel, DealQuotationsPanel } from '@/features/deals/components/DealSalesDocsTabs'
 import { formatDealMoney, normalizeDealCurrency } from '@/features/deals/dealCurrencies'
+import { DealPaymentsTab } from '@/features/deals/components/DealPaymentsTab'
 
 const TAB_DEFS = [
   { id: 'activity', label: 'Activity' },
   { id: 'notes', label: 'Notes' },
   { id: 'tasks', label: 'Tasks' },
+  { id: 'payments', label: 'Payments' },
   { id: 'quotations', label: 'Quotations' },
   { id: 'invoices', label: 'Invoices' },
 ]
@@ -104,17 +107,18 @@ function isSystemNoteActivity(activity) {
 }
 
 const ACTIVITY_STYLE = {
-  note: { label: 'Note', Icon: NotebookPen, iconWrap: 'bg-orange-100 text-orange-600', card: 'border-orange-200 bg-orange-50' },
-  email: { label: 'Email', Icon: Mail, iconWrap: 'bg-blue-100 text-blue-700', card: 'border-blue-200 bg-blue-50' },
+  note: { label: 'Note', Icon: NotebookPen, iconWrap: 'bg-brand-100 text-brand-700', card: 'border-brand-200 bg-brand-50' },
+  email: { label: 'Email', Icon: Mail, iconWrap: 'bg-brand-100 text-brand-700', card: 'border-brand-200 bg-brand-50' },
   call: { label: 'Call', Icon: PhoneCall, iconWrap: 'bg-emerald-100 text-emerald-700', card: 'border-emerald-200 bg-emerald-50' },
-  meeting: { label: 'Meeting', Icon: CalendarCheck2, iconWrap: 'bg-violet-100 text-violet-700', card: 'border-violet-200 bg-violet-50' },
+  meeting: { label: 'Meeting', Icon: CalendarCheck2, iconWrap: 'bg-slate-100 text-brand-700', card: 'border-brand-200 bg-slate-50' },
   follow_up: { label: 'Follow-up', Icon: Bell, iconWrap: 'bg-sky-100 text-sky-700', card: 'border-sky-200 bg-sky-50' },
   discovery: { label: 'Discovery', Icon: Search, iconWrap: 'bg-slate-100 text-slate-700', card: 'border-slate-200 bg-slate-50' },
   demo: { label: 'Demo', Icon: Presentation, iconWrap: 'bg-cyan-100 text-cyan-700', card: 'border-cyan-200 bg-cyan-50' },
   in_person_visit: { label: 'In-person', Icon: MapPin, iconWrap: 'bg-stone-100 text-stone-700', card: 'border-stone-200 bg-stone-50' },
   task: { label: 'Task', Icon: CheckSquare, iconWrap: 'bg-sky-100 text-sky-700', card: 'border-sky-200 bg-sky-50' },
-  tag: { label: 'Tag', Icon: Tag, iconWrap: 'bg-violet-100 text-violet-700', card: 'border-violet-200 bg-violet-50' },
+  tag: { label: 'Tag', Icon: Tag, iconWrap: 'bg-slate-100 text-brand-700', card: 'border-brand-200 bg-slate-50' },
   system: { label: 'Activity', Icon: Sparkles, iconWrap: 'bg-slate-100 text-slate-700', card: 'border-slate-200 bg-slate-50' },
+  payment: { label: 'Payment', Icon: BadgeDollarSign, iconWrap: 'bg-emerald-100 text-emerald-700', card: 'border-emerald-200 bg-emerald-50' },
 }
 
 function activityPresentation(activityType) {
@@ -127,6 +131,7 @@ function inferStyleKeyFromSystemAction(action) {
   if (a.startsWith('task_')) return 'task'
   if (a.startsWith('note_')) return 'note'
   if (a.startsWith('followup_')) return 'follow_up'
+  if (a === 'payment_recorded' || a === 'deal_payment_recorded') return 'payment'
   return null
 }
 
@@ -283,9 +288,9 @@ const TONE_CLASSES = {
   emerald: { active: 'bg-emerald-500 text-white', triggerActive: 'border-emerald-300 bg-emerald-50 text-emerald-800' },
   rose: { active: 'bg-rose-500 text-white', triggerActive: 'border-rose-300 bg-rose-50 text-rose-800' },
   amber: { active: 'bg-amber-500 text-white', triggerActive: 'border-amber-300 bg-amber-50 text-amber-800' },
-  violet: { active: 'bg-violet-500 text-white', triggerActive: 'border-violet-300 bg-violet-50 text-violet-800' },
-  sky: { active: 'bg-sky-500 text-white', triggerActive: 'border-sky-300 bg-sky-50 text-sky-800' },
-  indigo: { active: 'bg-indigo-500 text-white', triggerActive: 'border-indigo-300 bg-indigo-50 text-indigo-800' },
+  violet: { active: 'bg-slate-500 text-white', triggerActive: 'border-brand-300 bg-slate-50 text-brand-800' },
+  sky: { active: 'bg-[var(--brand-primary)] text-white', triggerActive: 'border-sky-300 bg-sky-50 text-sky-800' },
+  indigo: { active: 'bg-[var(--brand-primary)] text-white', triggerActive: 'border-brand-300 bg-brand-50 text-brand-800' },
 }
 
 const CONTACT_TONE = {
@@ -293,7 +298,7 @@ const CONTACT_TONE = {
   emerald: 'border-emerald-200 bg-emerald-50 text-emerald-600',
   amber: 'border-amber-200 bg-amber-50 text-amber-600',
   rose: 'border-rose-200 bg-rose-50 text-rose-600',
-  violet: 'border-violet-200 bg-violet-50 text-violet-600',
+  violet: 'border-brand-200 bg-slate-50 text-brand-600',
 }
 
 function ContactRow({ Icon, label, value, href, tone = 'violet', compact = false }) {
@@ -325,7 +330,7 @@ function ContactRow({ Icon, label, value, href, tone = 'violet', compact = false
         {href && value ? (
           <a
             href={href}
-            className={cn('block truncate text-neutral-800 hover:text-violet-700', compact ? 'text-xs' : 'text-sm')}
+            className={cn('block truncate text-neutral-800 hover:text-brand-700', compact ? 'text-xs' : 'text-sm')}
           >
             {value}
           </a>
@@ -337,9 +342,9 @@ function ContactRow({ Icon, label, value, href, tone = 'violet', compact = false
   )
 }
 
-export function DealDetailPanel({ open, onClose, opp, opportunityStages = [] }) {
+export function DealDetailPanel({ open, onClose, opp, opportunityStages = [], defaultTab = 'activity' }) {
   const navigate = useNavigate()
-  const [tab, setTab] = useState('activity')
+  const [tab, setTab] = useState(defaultTab)
   const [stageMenuOpen, setStageMenuOpen] = useState(false)
   const [noteTitle, setNoteTitle] = useState('')
   const [noteBody, setNoteBody] = useState('')
@@ -401,7 +406,9 @@ export function DealDetailPanel({ open, onClose, opp, opportunityStages = [] }) 
     [opportunityStages],
   )
 
-  const currentStage = lead?.opportunityStage || card?.currentStage || ''
+  const currentStage = isDealEntity
+    ? (card?.currentStage || '')
+    : (lead?.opportunityStage || card?.currentStage || '')
   const currentStageLabel = formatStageLabel(currentStage || '')
 
   const visibleActivities = useMemo(() => {
@@ -420,11 +427,11 @@ export function DealDetailPanel({ open, onClose, opp, opportunityStages = [] }) 
 
   useEffect(() => {
     if (!open) return
-    setTab('activity')
+    setTab(defaultTab)
     setStageMenuOpen(false)
     setNoteTitle('')
     setNoteBody('')
-  }, [open, dealId, leadApiId])
+  }, [open, dealId, leadApiId, defaultTab])
 
   useEffect(() => {
     if (!open) return undefined
@@ -602,7 +609,7 @@ export function DealDetailPanel({ open, onClose, opp, opportunityStages = [] }) 
                   return (
                     <span
                       key={`${name}-${i}`}
-                      className="rounded-md border border-violet-200/90 bg-violet-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-violet-700"
+                      className="rounded-md border border-brand-200/90 bg-slate-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-brand-700"
                     >
                       {name}
                     </span>
@@ -611,10 +618,10 @@ export function DealDetailPanel({ open, onClose, opp, opportunityStages = [] }) 
               </div>
             ) : null}
 
-            <div className="rounded-lg border border-violet-200/80 bg-violet-50/50 p-3">
+            <div className="rounded-lg border border-brand-200/80 bg-slate-50 p-3">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="text-[9px] font-semibold uppercase tracking-wide text-violet-600">
+                  <p className="text-[9px] font-semibold uppercase tracking-wide text-brand-600">
                     Deal · #{shortDealId(card)}
                   </p>
                   <h2 id="deal-detail-title" className="mt-1 text-[15px] font-semibold leading-snug text-neutral-900">
@@ -629,7 +636,7 @@ export function DealDetailPanel({ open, onClose, opp, opportunityStages = [] }) 
                 <button
                   type="button"
                   onClick={() => navigate(`/opportunities/${leadApiId}`)}
-                  className="inline-flex shrink-0 items-center gap-0.5 rounded-md border border-violet-200 bg-white px-1.5 py-1 text-[10px] font-medium text-violet-700 hover:bg-violet-50"
+                  className="inline-flex shrink-0 items-center gap-0.5 rounded-md border border-brand-200 bg-white px-1.5 py-1 text-[10px] font-medium text-brand-700 hover:bg-slate-50"
                   title="Open full record"
                 >
                   <ExternalLink className="h-3 w-3" />
@@ -637,7 +644,7 @@ export function DealDetailPanel({ open, onClose, opp, opportunityStages = [] }) 
                 </button>
               </div>
               <div className="mt-2.5 flex items-end justify-between gap-2 border-t border-violet-100 pt-2">
-                <p className="text-[9px] font-semibold uppercase tracking-wide text-violet-600">
+                <p className="text-[9px] font-semibold uppercase tracking-wide text-brand-600">
                   {currentStageLabel || 'Stage'}
                 </p>
                 <p className="text-right text-base font-semibold tabular-nums tracking-tight text-neutral-900">
@@ -646,7 +653,7 @@ export function DealDetailPanel({ open, onClose, opp, opportunityStages = [] }) 
               </div>
               {dealDescription ? (
                 <div className="mt-2 border-t border-violet-100 pt-2">
-                  <p className="text-[9px] font-semibold uppercase tracking-wide text-violet-600">Description</p>
+                  <p className="text-[9px] font-semibold uppercase tracking-wide text-brand-600">Description</p>
                   <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap text-xs leading-relaxed text-neutral-700">
                     {dealDescription}
                   </p>
@@ -655,10 +662,10 @@ export function DealDetailPanel({ open, onClose, opp, opportunityStages = [] }) 
             </div>
 
             <div className="rounded-lg border border-neutral-200 bg-neutral-50/80 p-2.5">
-              <p className="mb-1.5 text-[9px] font-semibold uppercase tracking-wide text-violet-600">Contact</p>
+              <p className="mb-1.5 text-[9px] font-semibold uppercase tracking-wide text-brand-600">Contact</p>
               <div className="space-y-1.5">
                 <div className="flex items-center gap-2 rounded-md border border-neutral-200 bg-white px-2 py-1.5">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-violet-200 bg-violet-50 text-[9px] font-semibold text-violet-700">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-brand-200 bg-slate-50 text-[9px] font-semibold text-brand-700">
                     {initials(fullName)}
                   </span>
                   <p className="truncate text-xs font-medium text-neutral-900">{fullName}</p>
@@ -684,10 +691,10 @@ export function DealDetailPanel({ open, onClose, opp, opportunityStages = [] }) 
             </div>
 
             <div className="rounded-lg border border-neutral-200 bg-neutral-50/80 p-2.5">
-              <p className="mb-1.5 text-[9px] font-semibold uppercase tracking-wide text-violet-600">Salesperson</p>
+              <p className="mb-1.5 text-[9px] font-semibold uppercase tracking-wide text-brand-600">Salesperson</p>
               {owner ? (
                 <div className="flex items-center gap-2 rounded-md border border-neutral-200 bg-white px-2 py-1.5">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-violet-200 bg-violet-50 text-[9px] font-semibold text-violet-700">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-brand-200 bg-slate-50 text-[9px] font-semibold text-brand-700">
                     {initials(owner.name || owner.email)}
                   </span>
                   <div className="min-w-0">
@@ -725,9 +732,9 @@ export function DealDetailPanel({ open, onClose, opp, opportunityStages = [] }) 
               <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-neutral-500">
                 <span
                   ref={stageMenuRef}
-                  className="inline-flex items-center gap-2 rounded-md border border-violet-200 bg-violet-50 px-2 py-1"
+                  className="inline-flex items-center gap-2 rounded-md border border-brand-200 bg-slate-50 px-2 py-1"
                 >
-                  <span className="text-xs uppercase tracking-wide text-violet-600">Stage</span>
+                  <span className="text-xs uppercase tracking-wide text-brand-600">Stage</span>
                   <span className="relative inline-block">
                     <button
                       type="button"
@@ -871,6 +878,12 @@ export function DealDetailPanel({ open, onClose, opp, opportunityStages = [] }) 
                 onComplete={handleCompleteTask}
                 onDelete={handleDeleteTask}
                 onChangeStatus={handleTaskStatusChange}
+              />
+            ) : tab === 'payments' ? (
+              <DealPaymentsTab
+                dealId={dealId}
+                dealValue={dealValue}
+                dealCurrency={dealCurrency}
               />
             ) : tab === 'quotations' ? (
               <DealQuotationsPanel
@@ -1205,7 +1218,7 @@ function TasksTab({ tasks, onCreate, onEdit, onComplete, onDelete, onChangeStatu
                     }}
                     onClick={() => onEdit(task)}
                     className={cn(
-                      'w-full cursor-pointer rounded-xl border-2 bg-white text-left shadow-md transition hover:border-orange-300 hover:shadow-lg',
+                      'w-full cursor-pointer rounded-xl border-2 bg-white text-left shadow-md transition hover:border-brand-300 hover:shadow-lg',
                       isOverdue ? 'border-rose-300 border-l-4 border-l-rose-500' : 'border-neutral-300',
                     )}
                   >
@@ -1215,7 +1228,7 @@ function TasksTab({ tasks, onCreate, onEdit, onComplete, onDelete, onChangeStatu
                     >
                       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
                         <div className="flex min-w-0 flex-wrap items-center gap-2">
-                          <span className="rounded-md bg-orange-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-orange-900">
+                          <span className="rounded-md bg-brand-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-brand-900">
                             {taskTypeLabel(task.taskType)}
                           </span>
                           <span className="inline-flex items-center gap-1 rounded-md border border-neutral-200 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-600">
@@ -1233,7 +1246,7 @@ function TasksTab({ tasks, onCreate, onEdit, onComplete, onDelete, onChangeStatu
                             <select
                               value={statusValue}
                               onChange={(e) => onChangeStatus?.(task, e.target.value)}
-                              className="h-8 min-w-[8.5rem] rounded-md border border-neutral-300 bg-white px-2 text-xs font-medium text-neutral-800 focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400/30"
+                              className="h-8 min-w-[8.5rem] rounded-md border border-neutral-300 bg-white px-2 text-xs font-medium text-neutral-800 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-400/30"
                               aria-label="Change task status"
                             >
                               {LEAD_TASK_STATUS_OPTIONS.map((o) => (

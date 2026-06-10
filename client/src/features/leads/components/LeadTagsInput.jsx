@@ -96,7 +96,7 @@ export function LeadTagsInput({ value = [], onChange, availableTags = [], onCrea
         <button
           type="button"
           onClick={() => setCreateModalOpen(true)}
-          className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-brand-600 text-xl font-semibold text-white hover:bg-brand-700"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--brand-primary)] text-xl font-semibold text-white hover:bg-[var(--brand-primary-dark)]"
           aria-label="Create tag"
           title="Create tag"
         >
@@ -144,7 +144,7 @@ export function LeadTagsInput({ value = [], onChange, availableTags = [], onCrea
             </button>
             <button
               type="button"
-              className="h-10 rounded-xl bg-brand-600 px-4 text-sm font-medium text-white disabled:opacity-60"
+              className="h-10 rounded-xl bg-[var(--brand-primary)] px-4 text-sm font-medium text-white disabled:opacity-60"
               disabled={!newTagName.trim() || creating}
               onClick={async () => {
                 await addTag(newTagName, newTagColor)

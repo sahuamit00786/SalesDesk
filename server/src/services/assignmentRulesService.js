@@ -1,5 +1,6 @@
 import { AssignmentRule, Activity } from '../models/index.js'
 import { getRedis } from '../config/redis.js'
+import { notifyLeadAssigned } from './notification/teamNotificationService.js'
 
 function matchesConditions(lead, conditions) {
   const c = conditions || {}
@@ -18,7 +19,10 @@ async function pickAssignee(rule) {
   return rule.assignees[idx]
 }
 
-export async function autoAssignLead(lead) {
+export async function autoAssignLead(lead, { suppressNotification = false } = {}) {
+  // Manual assignee wins — don't override explicit selection
+  if (lead.assignedTo) return null
+
   const rules = await AssignmentRule.findAll({
     where: { workspaceId: lead.workspaceId, isActive: true },
     order: [['priority', 'ASC']],
@@ -35,6 +39,15 @@ export async function autoAssignLead(lead) {
       body: `Assigned by rule ${rule.name}`,
       metadata: { ruleId: rule.id, userId },
     })
+    if (!suppressNotification) {
+      notifyLeadAssigned({
+        companyId: lead.companyId,
+        workspaceId: lead.workspaceId,
+        recipientUserId: userId,
+        actorUserId: null,
+        leadCount: 1,
+      }).catch(() => {})
+    }
     return userId
   }
   return null

@@ -1,6 +1,7 @@
 import {
   BarChart2,
   Briefcase,
+  Building2,
   CalendarCheck,
   CalendarDays,
   CheckSquare,
@@ -13,8 +14,8 @@ import {
   LayoutGrid,
   ListTodo,
   Mail,
+  MailOpen,
   Megaphone,
-  MessageCircle,
   Phone,
   Puzzle,
   Receipt,
@@ -22,7 +23,6 @@ import {
   SlidersHorizontal,
   Settings2,
   Shuffle,
-  TrendingUp,
   Umbrella,
   Users,
   Workflow,
@@ -42,14 +42,6 @@ export const ROUTE_META = {
     title: 'Lead distribution',
     sub: 'Fairly assign unassigned leads to your calling team using round-robin rotation',
   },
-  '/contacts': {
-    title: 'Contacts',
-    sub: 'Individual people — buyers, decision makers, influencers — linked to companies and leads',
-  },
-  '/companies': {
-    title: 'Companies',
-    sub: 'Account-level view — the organizations your team sells into',
-  },
   '/pipeline': {
     title: 'Pipeline',
     sub: 'Deals by pipeline status — list and board; stage columns reflect each opportunity’s current status',
@@ -57,6 +49,10 @@ export const ROUTE_META = {
   '/deals': {
     title: 'Deals Pipeline',
     sub: '',
+  },
+  '/deal-payments': {
+    title: 'Deal Payments',
+    sub: 'Track and filter all payments recorded against deals — by status, mode, date, and team member',
   },
   '/quotations': {
     title: 'Quotations',
@@ -102,10 +98,6 @@ export const ROUTE_META = {
     title: 'Templates',
     sub: 'Create and manage email templates with merge tags, delivery safeguards, and send history',
   },
-  '/whatsapp': {
-    title: 'WhatsApp / SMS',
-    sub: 'Reach leads on their preferred channel — messages logged just like emails',
-  },
   '/documents': {
     title: 'Documents',
     sub: 'Central file store — contracts, presentations, NDAs — all linked to leads or deals',
@@ -120,7 +112,7 @@ export const ROUTE_META = {
   },
   '/campaigns': {
     title: 'Campaigns',
-    sub: 'Coordinate multi-step outreach to segments — email, SMS, WhatsApp in one flow',
+    sub: 'Coordinate multi-step outreach to segments — assign leads and track campaign progress',
   },
   '/campaigns/new': {
     title: 'New campaign',
@@ -132,11 +124,11 @@ export const ROUTE_META = {
   },
   '/reports': {
     title: 'Reports & analytics',
-    sub: 'Pre-built and custom reports — understand where revenue comes from and where it stalls',
+    sub: 'One-stop admin analytics — leads, deals, tasks, follow-ups, payments, leave, and more',
   },
-  '/forecasting': {
-    title: 'Forecasting',
-    sub: 'Predict end-of-month and end-of-quarter revenue — data-driven, not gut-feel',
+  '/email-tracking': {
+    title: 'Email tracking',
+    sub: 'Open, click, and reply rates — now under Reports → Email Performance',
   },
   '/workspace': {
     title: 'Workspace settings',
@@ -153,6 +145,14 @@ export const ROUTE_META = {
   '/integrations': {
     title: 'Integrations & API',
     sub: 'Connect your CRM to every other tool your company uses',
+  },
+  '/hr': {
+    title: 'HR Overview',
+    sub: 'Attendance status, leave balances, and pending HR actions at a glance',
+  },
+  '/hr/reports': {
+    title: 'Leave & Attendance',
+    sub: 'Leave by employee and type — now under Reports → Leave',
   },
   '/attendance': {
     title: 'Attendance',
@@ -184,6 +184,9 @@ const DEFAULT_META = {
 export function getRouteMeta(pathname) {
   const key = pathname === '/' ? '/dashboard' : pathname
   if (ROUTE_META[key]) return ROUTE_META[key]
+  if (pathname.startsWith('/reports/')) {
+    return ROUTE_META['/reports']
+  }
   if (/^\/automation\/[^/]+$/.test(pathname) && pathname !== '/automation/new') {
     return {
       title: 'Workflow editor',
@@ -198,20 +201,22 @@ export const NAV_SECTIONS = [
     label: 'Main',
     items: [
       { to: '/dashboard', label: 'Dashboard', icon: LayoutGrid, end: true },
-      { to: '/leads', label: 'Leads', icon: Users, badge: '48' },
+      { to: '/leads', label: 'Leads', icon: Users },
       { to: '/lead-distribution', label: 'Lead distribution', icon: Shuffle },
       { to: '/opportunities', label: 'Opportunities', icon: Briefcase },
-      { to: '/pipeline', label: 'Pipeline', icon: Kanban },
+      { to: '/pipeline', label: 'Pipeline', icon: Kanban, end: true },
       { to: '/deals', label: 'Deals', icon: CircleDollarSign },
+      { to: '/deal-payments', label: 'Deal Payments', icon: Banknote },
     ],
   },
   {
     label: 'HR',
     items: [
+      { to: '/hr', label: 'HR Overview', icon: Building2, end: true },
       { to: '/attendance', label: 'Attendance', icon: CalendarCheck },
-      { to: '/leave', label: 'Leave', icon: Umbrella },
-      { to: '/leave/requests', label: 'Leave requests', icon: ScrollText },
-      { to: '/leave/approval', label: 'Leave approval', icon: ClipboardList },
+      { to: '/leave', label: 'Leave', icon: Umbrella, end: true },
+      { to: '/leave/requests', label: 'My requests', icon: ScrollText },
+      { to: '/leave/approval', label: 'Approval queue', icon: ClipboardList },
       { to: '/leave/config', label: 'Leave settings', icon: SlidersHorizontal },
     ],
   },
@@ -248,7 +253,6 @@ export const NAV_SECTIONS = [
     label: 'Insights',
     items: [
       { to: '/reports', label: 'Reports', icon: BarChart2 },
-      { to: '/forecasting', label: 'Forecasting', icon: TrendingUp },
     ],
   },
   {

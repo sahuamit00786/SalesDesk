@@ -58,7 +58,7 @@ export function LeadSetupModal({ open, onClose }) {
               value={sourceName}
               onChange={(e) => setSourceName(e.target.value)}
             />
-            <button type="button" className="h-10 rounded-xl bg-brand-600 px-4 text-white" onClick={submitCreateSource}>
+            <button type="button" className="h-10 rounded-xl bg-[var(--brand-primary)] px-4 text-white" onClick={submitCreateSource}>
               Add
             </button>
           </div>

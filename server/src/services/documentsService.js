@@ -182,6 +182,35 @@ export async function listDocuments({ workspaceId, filters }) {
     idFilter = idFilter ? intersectIds(idFilter, leadDocIds) : leadDocIds
     if (!idFilter.length) return []
   }
+  if (String(filters?.unlinked || '').toLowerCase() === 'true') {
+    const leadLinkedRows = await DocumentLink.findAll({
+      attributes: ['documentId'],
+      where: { entityType: 'lead' },
+      include: [{
+        model: Document,
+        as: 'document',
+        attributes: [],
+        where: { workspaceId },
+        required: true,
+      }],
+    })
+    const linkedIds = new Set(leadLinkedRows.map((row) => row.documentId))
+    const allInWorkspace = await Document.findAll({ attributes: ['id'], where: { workspaceId } })
+    const unlinkedIds = allInWorkspace.map((d) => d.id).filter((id) => !linkedIds.has(id))
+    if (!unlinkedIds.length) return []
+    idFilter = idFilter ? intersectIds(idFilter, unlinkedIds) : unlinkedIds
+    if (!idFilter.length) return []
+  }
+  if (filters?.companyId) {
+    const companyLinkedRows = await DocumentLink.findAll({
+      attributes: ['documentId'],
+      where: { entityType: 'company', entityId: filters.companyId },
+    })
+    const companyDocIds = [...new Set(companyLinkedRows.map((row) => row.documentId))]
+    if (!companyDocIds.length) return []
+    idFilter = idFilter ? intersectIds(idFilter, companyDocIds) : companyDocIds
+    if (!idFilter.length) return []
+  }
   if (idFilter) {
     where.id = { [Op.in]: idFilter }
   }

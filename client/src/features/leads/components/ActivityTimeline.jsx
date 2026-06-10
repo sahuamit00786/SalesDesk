@@ -21,7 +21,7 @@ export function ActivityTimeline({ leadId }) {
       </div>
       <div className="mt-4 flex gap-2">
         <input className="h-10 flex-1 rounded-xl border border-surface-border px-3.5" placeholder="Add note..." value={draft} onChange={(e) => setDraft(e.target.value)} />
-        <button type="button" className="h-10 rounded-xl bg-brand-600 px-5 text-white" onClick={async () => { if (!draft.trim()) return; await createActivity({ id: leadId, type: 'note', body: draft }).unwrap(); setDraft('') }}>Add</button>
+        <button type="button" className="h-10 rounded-xl bg-[var(--brand-primary)] px-5 text-white" onClick={async () => { if (!draft.trim()) return; await createActivity({ id: leadId, type: 'note', body: draft }).unwrap(); setDraft('') }}>Add</button>
       </div>
     </section>
   )

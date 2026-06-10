@@ -40,6 +40,16 @@ function joinFileStemAndExt(base, ext) {
   return `${b}${dot}`.slice(0, 255)
 }
 
+/** Returns current time as YYYYMMDD_HHmmss — safe for filenames */
+function generateTimestamp() {
+  const d = new Date()
+  const pad = (n) => String(n).padStart(2, '0')
+  return (
+    `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}` +
+    `_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`
+  )
+}
+
 function stripDuplicateExt(base, ext) {
   let b = String(base || '')
   const e = String(ext || '')
@@ -128,7 +138,8 @@ export function LeadDocumentsWorkspace({ leadId, showUpload = true }) {
       toast.error('Select a file')
       return
     }
-    const fullName = joinFileStemAndExt(uploadForm.nameBase, uploadForm.nameExt).trim()
+    const stampedBase = `${uploadForm.nameBase.trim()}_${generateTimestamp()}`
+    const fullName = joinFileStemAndExt(stampedBase, uploadForm.nameExt).trim()
     if (!fullName) {
       toast.error('Enter a document name')
       return
@@ -221,7 +232,7 @@ export function LeadDocumentsWorkspace({ leadId, showUpload = true }) {
           <button
             type="button"
             onClick={() => setUploadOpen(true)}
-            className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-brand-400 px-4 text-sm font-semibold text-white shadow-sm hover:bg-brand-500"
+            className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-brand-400 px-4 text-sm font-semibold text-white shadow-sm hover:bg-slate-500"
           >
             <Upload className="h-4 w-4" />
             Upload
@@ -306,6 +317,14 @@ export function LeadDocumentsWorkspace({ leadId, showUpload = true }) {
                 </span>
               ) : null}
             </div>
+            {uploadForm.nameBase.trim() ? (
+              <p className="mt-1.5 truncate text-[11px] text-ink-faint">
+                Will be saved as:{' '}
+                <span className="font-medium text-ink">
+                  {joinFileStemAndExt(`${uploadForm.nameBase.trim()}_${generateTimestamp()}`, uploadForm.nameExt)}
+                </span>
+              </p>
+            ) : null}
           </label>
           <label className="block text-sm font-medium text-ink">
             Description (optional)

@@ -1,26 +1,12 @@
 import { Op } from 'sequelize'
-import { sequelize } from '../config/db.js'
-import { Lead, OpportunityStage, Tag, User, LeadAssignment } from '../models/index.js'
-import { findDuplicates } from './duplicateDetectionService.js'
+import { Lead, OpportunityStage, User } from '../models/index.js'
+import { findDuplicates, saveDuplicateRecord } from './duplicateDetectionService.js'
 import { recalculateScore } from './leadScoringService.js'
 import { createLeadSystemActivity } from './leadSystemActivity.js'
 import { autoAssignLead } from './assignmentRulesService.js'
+import { notifyLeadAssignedBatch } from './notification/teamNotificationService.js'
 
 const LEAD_STATUS = ['new', 'contacted', 'qualified', 'proposal', 'won', 'lost', 'junk']
-
-let assignmentsTableCache = null
-
-async function leadAssignmentsTableExists() {
-  if (assignmentsTableCache !== null) return assignmentsTableCache
-  try {
-    const [rows] = await sequelize.query("SHOW TABLES LIKE 'lead_assignments'")
-    assignmentsTableCache = Array.isArray(rows) && rows.length > 0
-    return assignmentsTableCache
-  } catch {
-    assignmentsTableCache = false
-    return false
-  }
-}
 
 function parseList(val) {
   if (Array.isArray(val)) return val.map((s) => String(s).trim()).filter(Boolean)
@@ -34,14 +20,6 @@ function parseList(val) {
 function normStatus(s) {
   const t = String(s || '').trim().toLowerCase()
   return LEAD_STATUS.includes(t) ? t : 'new'
-}
-
-function parseBoolCell(v) {
-  if (v === true || v === false) return v
-  const s = String(v ?? '').trim().toLowerCase()
-  if (['yes', 'y', 'true', '1'].includes(s)) return true
-  if (['no', 'n', 'false', '0'].includes(s)) return false
-  return false
 }
 
 function uuidOrNull(s) {
@@ -91,16 +69,18 @@ function buildLeadRowPayload(row, defaultPipeline, userId, companyId, workspaceI
     assignedTo: uuidOrNull(row.assignedTo),
     companyId,
     workspaceId,
-    opportunityStage: String(row.opportunityStage ?? '').trim() || defaultPipeline,
+    opportunityStage: Boolean(row.isOpportunity)
+      ? String(row.opportunityStage ?? '').trim() || defaultPipeline
+      : null,
     requirement: row.requirement || null,
     notes: row.notes || null,
-    isOpportunity: parseBoolCell(row.isOpportunity),
+    isOpportunity: Boolean(row.isOpportunity),
     profileMeta: profileMeta && Object.keys(profileMeta).length ? profileMeta : null,
   }
 }
 
 export async function importLeads(workspaceId, companyId, userId, rows) {
-  const results = { imported: 0, skipped: 0, errors: [], createdLeadIds: [] }
+  const results = { imported: 0, skipped: 0, duplicates: 0, errors: [], createdLeadIds: [] }
   const defStage =
     (await OpportunityStage.findOne({
       where: { workspaceId, companyId, isDefault: true },
@@ -117,13 +97,21 @@ export async function importLeads(workspaceId, companyId, userId, rows) {
       ],
     }))
   const defaultPipeline = defStage?.name || 'Lead Inbound'
-  const hasAssignments = await leadAssignmentsTableExists()
+  const assignCounts = new Map()
 
   for (const [idx, row] of (rows || []).entries()) {
     try {
       const dupes = await findDuplicates(workspaceId, { email: row.email, phone: row.phone })
       if (dupes.length) {
-        results.skipped += 1
+        await saveDuplicateRecord({
+          leadData: { ...row, source: 'csv_import' },
+          dupes,
+          source: 'csv_import',
+          workspaceId,
+          companyId,
+          createdByUserId: userId,
+        })
+        results.duplicates += 1
         continue
       }
       const payload = buildLeadRowPayload(row, defaultPipeline, userId, companyId, workspaceId)
@@ -131,27 +119,18 @@ export async function importLeads(workspaceId, companyId, userId, rows) {
       await recalculateScore(lead.id)
       results.createdLeadIds.push(lead.id)
 
-      const tagNames = parseList(row.tags)
-      if (tagNames.length) {
-        const tags = await Promise.all(
-          tagNames.map(async (name) => {
-            const existing = await Tag.findOne({ where: { companyId, name } })
-            if (existing) return existing
-            return Tag.create({ name, companyId, workspaceId })
-          }),
-        )
-        await lead.setTags(tags)
+      if (payload.assignedTo) {
+        const uid = String(payload.assignedTo)
+        if (uid !== String(userId)) {
+          assignCounts.set(uid, (assignCounts.get(uid) || 0) + 1)
+        }
+      } else {
+        const assignedUserId = await autoAssignLead(lead, { suppressNotification: true })
+        if (assignedUserId && String(assignedUserId) !== String(userId)) {
+          assignCounts.set(String(assignedUserId), (assignCounts.get(String(assignedUserId)) || 0) + 1)
+        }
       }
 
-      const assigneeIds = parseList(row.assignedUserIds).map(uuidOrNull).filter(Boolean)
-      if (assigneeIds.length && hasAssignments) {
-        await LeadAssignment.bulkCreate(
-          assigneeIds.map((assignUserId) => ({ leadId: lead.id, userId: assignUserId })),
-          { ignoreDuplicates: true },
-        )
-      }
-
-      await autoAssignLead(lead)
       await createLeadSystemActivity({
         leadId: lead.id,
         userId,
@@ -163,6 +142,16 @@ export async function importLeads(workspaceId, companyId, userId, rows) {
       results.errors.push({ row: idx + 1, message: err.message })
     }
   }
+
+  if (assignCounts.size) {
+    notifyLeadAssignedBatch({
+      companyId,
+      workspaceId,
+      actorUserId: userId,
+      countByUserId: assignCounts,
+    }).catch(() => {})
+  }
+
   return results
 }
 
@@ -177,15 +166,18 @@ export async function exportLeads(workspaceId, filters = {}, ids = null, company
   }
   if (filters.status?.length) where.status = { [Op.in]: filters.status }
   if (filters.source?.length) where.source = { [Op.in]: filters.source }
+  if (filters.assignedTo?.length) where.assignedTo = { [Op.in]: filters.assignedTo }
+  if (filters.isOpportunity === true) where.isOpportunity = true
+  else if (filters.isOpportunity === false) where.isOpportunity = false
+  if (filters.search?.trim()) {
+    const like = { [Op.like]: `%${filters.search.trim()}%` }
+    where[Op.or] = [{ title: like }, { contactName: like }, { company: like }, { email: like }]
+  }
   if (ids?.length) where.id = { [Op.in]: ids }
-  const iso = String(filters.isOpportunity ?? '').toLowerCase()
-  if (iso === 'true' || iso === '1') where.isOpportunity = true
-  if (iso === 'false' || iso === '0') where.isOpportunity = false
 
   const leads = await Lead.findAll({
     where,
     include: [
-      { model: Tag, as: 'tags', through: { attributes: [] }, required: false },
       { model: User, as: 'assignee', attributes: ['name'], required: false },
     ],
     order: [['createdAt', 'DESC']],
@@ -202,7 +194,6 @@ export async function exportLeads(workspaceId, filters = {}, ids = null, company
     Score: l.score,
     Value: l.value,
     AssignedTo: l.assignee?.name || '',
-    Tags: (l.tags || []).map((t) => t.name).join(', '),
     CreatedAt: l.createdAt ? new Date(l.createdAt).toISOString() : '',
   }))
 }

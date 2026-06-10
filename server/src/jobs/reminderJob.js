@@ -1,24 +1,16 @@
 import cron from 'node-cron'
 import { Op } from 'sequelize'
 import { Meeting } from '../models/Meeting.js'
-
+import { Lead, LeadFollowup } from '../models/index.js'
 import { notifyMeetingParticipants } from '../services/notification/meetingNotificationService.js'
+import { notifyFollowupDue, notifyMeetingReminderInternal } from '../services/notification/teamNotificationService.js'
 import { runMeetingBot } from '../bot/meetingBot.js'
-import { transcribeAudio } from '../services/transcriptionService.js'
-import { generateSummary } from '../services/meetingSummaryService.js'
-import { generatePdf } from '../services/pdfService.js'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { processMeetingRecording } from '../services/meetingProcessingService.js'
+import { enqueueMeetingBot } from '../queues/meetingBotQueue.js'
 import { envTruthy } from '../utils/envTruthy.js'
 
-const serverRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
-
-function publicApiBase() {
-  const raw =
-    process.env.PUBLIC_API_URL ||
-    `http://localhost:${process.env.PORT || 4000}`
-  return String(raw).replace(/\/$/, '')
-}
+/** In-process guard: prevents the same meeting bot from being started twice when Redis is unavailable. */
+const botsInProgress = new Set()
 
 function meetingBotEnabled() {
   return envTruthy('ENABLE_MEETING_BOT', false)
@@ -27,6 +19,28 @@ function meetingBotEnabled() {
 async function sendReminder(meeting) {
   console.log(`Reminder sent for ${meeting.title}`)
   await notifyMeetingParticipants(meeting)
+
+  // Notify the lead's assigned team member (internal in-app notification)
+  if (meeting.leadId) {
+    try {
+      const lead = await Lead.findByPk(meeting.leadId, {
+        attributes: ['assignedTo', 'workspaceId', 'companyId'],
+      })
+      if (lead?.assignedTo) {
+        await notifyMeetingReminderInternal({
+          companyId: lead.companyId,
+          workspaceId: meeting.workspaceId || lead.workspaceId,
+          recipientUserId: lead.assignedTo,
+          meetingId: meeting.id,
+          meetingTitle: meeting.title,
+          scheduledStart: meeting.scheduledStart,
+          meetLink: meeting.googleMeetLink,
+        })
+      }
+    } catch (e) {
+      console.error('[cron] meeting internal notify failed:', e?.message)
+    }
+  }
 }
 
 /** Used after meeting create — hook reserved for delayed jobs */
@@ -34,72 +48,21 @@ export async function scheduleReminders(_meeting) {
   return true
 }
 
-async function processMeetingRecording(meetingInstance, audioPath) {
-  const meeting = meetingInstance
-  const base = publicApiBase()
-  const id = meeting.id
-
-  console.log(`🎙 Recording saved for ${meeting.title}`)
-
-  await meeting.update({
-    botStatus: 'processing',
-    recordingStatus: 'completed',
-    audioFilePath: `${base}/recordings/meetings/${id}.wav`,
-  })
-
-  try {
-    await meeting.update({ transcriptionStatus: 'processing' })
-    console.log(`📝 Transcribing ${meeting.title}`)
-    const transcript = await transcribeAudio(audioPath)
-
-    await meeting.update({
-      transcriptionStatus: 'completed',
-      transcriptText: transcript,
-      aiSummaryStatus: 'processing',
-    })
-
-    console.log(`🤖 Generating AI summary for ${meeting.title}`)
-    const summary = await generateSummary(transcript)
-
-    const transcriptPdfAbs = path.join(serverRoot, 'pdfs', 'transcripts', `${id}.pdf`)
-    const summaryPdfAbs = path.join(serverRoot, 'pdfs', 'summaries', `${id}.pdf`)
-
-    await generatePdf(transcriptPdfAbs, 'Meeting Transcript', transcript)
-    await generatePdf(summaryPdfAbs, 'Meeting Summary', summary)
-
-    await meeting.update({
-      summaryText: summary,
-      transcriptPdfUrl: `${base}/pdfs/transcripts/${id}.pdf`,
-      summaryPdfUrl: `${base}/pdfs/summaries/${id}.pdf`,
-      botStatus: 'completed',
-      aiSummaryStatus: 'completed',
-      status: 'completed',
-    })
-
-    console.log(`✅ AI pipeline completed for ${meeting.title}`)
-  } catch (err) {
-    console.error('❌ Transcription / summary failed:', err?.message || err)
-    await meeting.update({
-      transcriptionStatus: 'pending',
-      aiSummaryStatus: 'pending',
-      botStatus: 'failed',
-    })
-  }
-}
-
 async function tryStartBotForMeeting(meetingRow) {
   if (!meetingBotEnabled()) {
     if (envTruthy('MEETING_BOT_DEBUG', false)) {
-      console.log(
-        '[cron] bot skipped: set ENABLE_MEETING_BOT=true (or 1/yes/on) in .env',
-      )
+      console.log('[cron] bot skipped: set ENABLE_MEETING_BOT=true (or 1/yes/on) in .env')
     }
     return
   }
 
+  // In-process guard (applies when queue is unavailable)
+  if (botsInProgress.has(meetingRow.id)) return
+
   const link = meetingRow.googleMeetLink?.trim()
   if (!link) return
 
+  // Atomic DB claim — only the first cron tick wins
   const [claimedCount] = await Meeting.update(
     { botStatus: 'joining', recordingStatus: 'recording' },
     {
@@ -109,7 +72,6 @@ async function tryStartBotForMeeting(meetingRow) {
       },
     },
   )
-
   if (!claimedCount) return
 
   const meeting = await Meeting.findByPk(meetingRow.id)
@@ -117,14 +79,27 @@ async function tryStartBotForMeeting(meetingRow) {
 
   console.log(`🤖 Starting bot for ${meeting.title}`)
 
+  // Try BullMQ queue first — worker handles concurrency + retries
+  const enqueued = await enqueueMeetingBot(meeting.id).catch(() => null)
+  if (enqueued) {
+    console.log(`🤖 Bot job enqueued for ${meeting.title}`)
+    return
+  }
+
+  // Fallback: run in-process with botsInProgress guard
+  botsInProgress.add(meeting.id)
+
   runMeetingBot(meeting.get({ plain: true }))
-    .then((audioPath) => processMeetingRecording(meeting, audioPath))
+    .then((transcript) => processMeetingRecording(meeting, transcript))
     .catch(async (e) => {
       console.error('❌ BOT / pipeline failed:', e?.message || e)
       await Meeting.update(
         { botStatus: 'failed', recordingStatus: 'pending' },
         { where: { id: meeting.id } },
       )
+    })
+    .finally(() => {
+      botsInProgress.delete(meeting.id)
     })
 }
 
@@ -133,7 +108,7 @@ export function startReminderJob() {
     try {
       const now = new Date()
 
-      // --- Mark LIVE (before bot so status matches window) ---
+      // --- Mark LIVE ---
       const liveMeetings = await Meeting.findAll({
         where: {
           status: 'scheduled',
@@ -146,7 +121,7 @@ export function startReminderJob() {
         console.log(`🔴 Meeting is LIVE: ${m.title}`)
       }
 
-      // --- Bot + recording during scheduled window ---
+      // --- Bot + recording ---
       const botCandidates = await Meeting.findAll({
         where: {
           recordingBotConsent: true,
@@ -173,16 +148,38 @@ export function startReminderJob() {
       const upcomingMeetings = await Meeting.findAll({
         where: {
           status: 'scheduled',
-          scheduledStart: {
-            [Op.between]: [now, tenMinLater],
-          },
+          scheduledStart: { [Op.between]: [now, tenMinLater] },
         },
       })
       for (const meeting of upcomingMeetings) {
         await sendReminder(meeting)
       }
 
-      // --- Mark COMPLETED after end time ---
+      // --- Follow-up reminders (due in 14–15 minutes) ---
+      const fu14 = new Date(now.getTime() + 14 * 60 * 1000)
+      const fu15 = new Date(now.getTime() + 15 * 60 * 1000)
+      const dueFollowups = await LeadFollowup.findAll({
+        where: {
+          status: 'pending',
+          scheduledAt: { [Op.between]: [fu14, fu15] },
+        },
+        include: [{ model: Lead, as: 'lead', attributes: ['id', 'contactName', 'name', 'assignedTo', 'companyId', 'workspaceId'] }],
+      })
+      for (const followup of dueFollowups) {
+        const lead = followup.lead
+        if (!lead?.assignedTo) continue
+        notifyFollowupDue({
+          companyId: lead.companyId,
+          workspaceId: followup.workspaceId || lead.workspaceId,
+          recipientUserId: lead.assignedTo,
+          leadId: lead.id,
+          leadName: lead.contactName || lead.name || 'Lead',
+          scheduledAt: followup.scheduledAt,
+          remark: followup.remark,
+        }).catch(() => {})
+      }
+
+      // --- Mark COMPLETED ---
       const completedMeetings = await Meeting.findAll({
         where: {
           status: { [Op.in]: ['scheduled', 'live'] },

@@ -1,21 +1,9 @@
-import { google } from 'googleapis'
 import { Op } from 'sequelize'
 import { OAuth2Client } from 'google-auth-library'
 import { CompanyGoogleToken, Lead, LeadEmail } from '../../models/index.js'
+import { getGoogleOAuthClient } from '../google/googleEnv.js'
 import { parseGmailMessage } from './gmailMessageParse.js'
-
-function getGoogleOAuthClient() {
-  const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID
-  const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET
-  const redirectUri = process.env.GOOGLE_OAUTH_REDIRECT_URI
-  if (!clientId || !clientSecret || !redirectUri) {
-    const err = new Error('Google OAuth is not configured')
-    err.status = 500
-    err.code = 'GOOGLE_OAUTH_NOT_CONFIGURED'
-    throw err
-  }
-  return new google.auth.OAuth2(clientId, clientSecret, redirectUri)
-}
+import { notifyLeadEmailReply } from '../notification/teamNotificationService.js'
 
 function normalizeEmail(value) {
   const str = String(value || '').trim().toLowerCase()
@@ -128,7 +116,7 @@ export async function ingestGmailHistoryFromPush(tokenRow, notificationHistoryId
 
   const leads = await Lead.findAll({
     where: { companyId: fresh.companyId, isDeleted: false, email: { [Op.ne]: null } },
-    attributes: ['id', 'email', 'workspaceId', 'companyId'],
+    attributes: ['id', 'email', 'workspaceId', 'companyId', 'assignedTo', 'contactName', 'name'],
     limit: 8000,
   })
   const leadByEmail = new Map()
@@ -204,6 +192,7 @@ export async function ingestGmailHistoryFromPush(tokenRow, notificationHistoryId
       workspaceId: matchedLead.workspaceId,
       companyId: matchedLead.companyId,
       createdBy: fresh.userId,
+      fromEmail: parsed.from?.email || fromEmail || null,
       direction,
       status: 'sent',
       subject: parsed.subject,
@@ -219,6 +208,17 @@ export async function ingestGmailHistoryFromPush(tokenRow, notificationHistoryId
       sentAt: parsed.sentAt,
     })
     created += 1
+
+    if (direction === 'inbound' && matchedLead.assignedTo) {
+      notifyLeadEmailReply({
+        companyId: matchedLead.companyId,
+        workspaceId: matchedLead.workspaceId,
+        recipientUserId: matchedLead.assignedTo,
+        leadId: matchedLead.id,
+        leadName: matchedLead.contactName || matchedLead.name || 'Lead',
+        senderEmail: fromEmail,
+      }).catch(() => {})
+    }
   }
 
   await CompanyGoogleToken.update({ gmailHistoryId: latestHistoryId }, { where: { id: fresh.id } })

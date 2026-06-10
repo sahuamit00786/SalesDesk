@@ -7,6 +7,7 @@ import {
 } from '@/features/sales-docs/presetVisuals'
 import { hexWithAlpha } from '@/features/sales-docs/themeUtils'
 import { cn } from '@/utils/cn'
+import { DataGrid } from '@/components/shared/DataGrid'
 
 function fmtMoney(n, currency = 'USD') {
   const v = Number(n ?? 0)
@@ -167,7 +168,7 @@ export function SalesDocumentPreview({
   } else if (layout === 'skyBanner') {
     documentHeader = (
       <>
-        <div className={cn('h-2 w-full shrink-0 print:h-1.5', surface.stripAccent || 'bg-sky-500')} aria-hidden />
+        <div className={cn('h-2 w-full shrink-0 print:h-1.5', surface.stripAccent || 'bg-[var(--brand-primary)]')} aria-hidden />
         <header className={cn('flex flex-wrap items-start justify-between gap-4 px-8 pb-6 pt-7', headBg)} style={headerStyle}>
           {companyBlock}
           {docMetaBlock()}
@@ -305,7 +306,7 @@ export function SalesDocumentPreview({
   } else if (layout === 'invoiceFormal') {
     documentHeader = (
       <header className={cn('px-8 pb-5 pt-6', headBg)} style={headerStyle}>
-        <div className="border-b-4 border-double border-blue-900 pb-4 print:border-blue-900">
+        <div className="border-b-4 border-double border-brand-700 pb-4 print:border-brand-700">
           <div className="flex flex-wrap items-start justify-between gap-4">
             {companyBlock}
             <div className="text-right">
@@ -381,29 +382,57 @@ export function SalesDocumentPreview({
 
       <div className="shrink-0 px-8 pb-6">
         <div className={cn(tc.wrap)}>
-          <table className={cn('cx-table cx-table--dense cx-table--sales-lines text-sm', tc.wrap)}>
-            <thead>
-              <tr className={cn('text-left', tc.thead)}>
-                <th className="pr-2">Item</th>
-                <th className="pr-2 text-right">Qty</th>
-                <th className="pr-2 text-right">Price</th>
-                <th className="text-right">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {lines.map((row, i) => (
-                <tr key={i} className={tc.row}>
-                  <td className="pr-2">
+          <DataGrid
+            gridColumns
+            columns={[
+              {
+                field: 'name',
+                headerName: 'Item',
+                flex: 1,
+                minWidth: 140,
+                renderCell: ({ row }) => (
+                  <div>
                     <span className="font-medium">{row.name}</span>
-                    {row.description ? <p className="mt-0.5 text-xs text-neutral-500">{row.description}</p> : null}
-                  </td>
-                  <td className="pr-2 text-right tabular-nums">{row.quantity}</td>
-                  <td className="pr-2 text-right tabular-nums">{fmtMoney(row.unitPrice, currency)}</td>
-                  <td className="text-right tabular-nums font-medium">{fmtMoney(row.lineTotal, currency)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    {row.description ? (
+                      <p className="mt-0.5 text-xs text-neutral-500">{row.description}</p>
+                    ) : null}
+                  </div>
+                ),
+              },
+              {
+                field: 'quantity',
+                headerName: 'Qty',
+                width: 70,
+                align: 'right',
+                headerAlign: 'right',
+              },
+              {
+                field: 'unitPrice',
+                headerName: 'Price',
+                width: 100,
+                align: 'right',
+                headerAlign: 'right',
+                valueGetter: (_v, row) => fmtMoney(row.unitPrice, currency),
+              },
+              {
+                field: 'lineTotal',
+                headerName: 'Total',
+                width: 100,
+                align: 'right',
+                headerAlign: 'right',
+                renderCell: ({ row }) => (
+                  <span className="font-medium tabular-nums">{fmtMoney(row.lineTotal, currency)}</span>
+                ),
+              },
+            ]}
+            data={lines.map((row, i) => ({ ...row, id: i }))}
+            density="compact"
+            searchable={false}
+            showColumnToggle={false}
+            showExportCsv={false}
+            hideFooter
+            className={cn('border-0 shadow-none text-sm', tc.wrap)}
+          />
         </div>
       </div>
 
@@ -421,13 +450,13 @@ export function SalesDocumentPreview({
               <dd className="tabular-nums">−{fmtMoney(discountTotal, currency)}</dd>
             </div>
           ) : null}
-          {variant === 'quotation' && Number(shipping) > 0 ? (
+          {Number(shipping) > 0 ? (
             <div className="flex justify-between gap-4">
               <dt className="text-neutral-500">Shipping</dt>
               <dd className="tabular-nums">{fmtMoney(shipping, currency)}</dd>
             </div>
           ) : null}
-          {variant === 'quotation' && Number(adjustment) !== 0 ? (
+          {Number(adjustment) !== 0 ? (
             <div className="flex justify-between gap-4">
               <dt className="text-neutral-500">Adjustment</dt>
               <dd className="tabular-nums">{fmtMoney(adjustment, currency)}</dd>

@@ -18,6 +18,10 @@ export const invoicesApi = baseApi.injectEndpoints({
       query: ({ id, ...body }) => ({ url: `/invoices/${id}`, method: 'PATCH', body }),
       invalidatesTags: (_r, _e, arg) => [{ type: 'Invoice', id: arg.id }, { type: 'Invoice', id: 'LIST' }],
     }),
+    deleteInvoice: build.mutation({
+      query: (id) => ({ url: `/invoices/${id}`, method: 'DELETE' }),
+      invalidatesTags: [{ type: 'Invoice', id: 'LIST' }, { type: 'Quotation', id: 'LIST' }],
+    }),
     recordInvoicePayment: build.mutation({
       query: ({ id, ...body }) => ({ url: `/invoices/${id}/payments`, method: 'POST', body }),
       invalidatesTags: (_r, _e, arg) => [{ type: 'Invoice', id: arg.id }, { type: 'Invoice', id: 'LIST' }],
@@ -54,6 +58,7 @@ export const {
   useGetInvoiceQuery,
   useCreateInvoiceMutation,
   usePatchInvoiceMutation,
+  useDeleteInvoiceMutation,
   useRecordInvoicePaymentMutation,
   useGetInvoiceTemplatesQuery,
   useGetInvoiceTemplateQuery,

@@ -160,9 +160,9 @@ function InfoLine({ icon: Icon, label, value, valueClassName, title }) {
 
 function KpiCard({ icon: Icon, label, value, accent = 'brand' }) {
   const palette = {
-    brand: 'bg-brand-50 text-brand-700',
+    brand: 'bg-slate-100 text-brand-700',
     amber: 'bg-amber-50 text-amber-700',
-    indigo: 'bg-indigo-50 text-indigo-700',
+    indigo: 'bg-brand-50 text-brand-700',
     emerald: 'bg-emerald-50 text-emerald-700',
   }
   return (
@@ -181,7 +181,7 @@ function KpiCard({ icon: Icon, label, value, accent = 'brand' }) {
 function EmptyState({ icon: Icon, title, hint }) {
   return (
     <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-surface-border bg-white px-6 py-10 text-center">
-      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-50 text-brand-600">
+      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-brand-600">
         <Icon className="h-4 w-4" strokeWidth={2} />
       </div>
       <p className="text-sm font-medium text-ink">{title}</p>
@@ -207,7 +207,7 @@ function ListShell({ isLoading, error, emptyIcon, emptyTitle, emptyHint, childre
     return (
       <div className="space-y-2">
         {[0, 1, 2].map((i) => (
-          <div key={i} className="h-14 animate-pulse rounded-2xl border border-surface-border bg-surface-muted/40" />
+          <div key={i} className="h-14 animate-pulse rounded-2xl border border-[#C9BDE8] bg-[#F9F7FC]" />
         ))}
       </div>
     )
@@ -237,7 +237,7 @@ function ActivityRow({ row }) {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="rounded-full border border-brand-100 bg-brand-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-700">
+            <span className="rounded-full border border-brand-100 bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-700">
               {typeLabel}
             </span>
             {row.lead?.title ? (
@@ -335,7 +335,7 @@ function TaskRow({ row }) {
       : status === 'cancelled'
       ? 'border-surface-border bg-white text-ink-faint'
       : status === 'in_progress'
-      ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
+      ? 'border-brand-200 bg-brand-50 text-brand-700'
       : 'border-slate-200 bg-slate-50 text-slate-700'
   const statusLabel = status === 'in_progress' ? 'In progress' : status
   const priority = String(row.priority || '').toLowerCase()
@@ -343,7 +343,7 @@ function TaskRow({ row }) {
     priority === 'urgent'
       ? 'border-red-200 bg-red-50 text-red-700'
       : priority === 'high'
-      ? 'border-orange-200 bg-orange-50 text-orange-700'
+      ? 'border-brand-200 bg-brand-50 text-brand-700'
       : priority === 'medium'
       ? 'border-amber-200 bg-amber-50 text-amber-700'
       : 'border-surface-border bg-white text-ink-muted'
@@ -389,7 +389,7 @@ function TaskRow({ row }) {
               </span>
             ) : null}
             {recurrenceLabel ? (
-              <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-700">
+              <span className="rounded-full border border-brand-200 bg-brand-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-700">
                 {recurrenceLabel}
               </span>
             ) : null}
@@ -514,7 +514,7 @@ function MeetingRow({ row }) {
         ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
         : status === 'cancelled' || status === 'missed'
           ? 'border-amber-200 bg-amber-50 text-amber-700'
-          : 'border-indigo-200 bg-indigo-50 text-indigo-700'
+          : 'border-brand-200 bg-brand-50 text-brand-700'
   const participantCount = Array.isArray(row.participants) ? row.participants.length : 0
   const meetingType = String(row.meetingType || '').replace(/_/g, ' ') || 'meeting'
   return (
@@ -525,7 +525,7 @@ function MeetingRow({ row }) {
             <span className={cn('rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide', statusClass)}>
               {status}
             </span>
-            <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700">
+            <span className="rounded-full border border-brand-200 bg-brand-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-700">
               {meetingType}
             </span>
             {row.googleMeetLink ? (
@@ -533,7 +533,7 @@ function MeetingRow({ row }) {
                 href={row.googleMeetLink}
                 target="_blank"
                 rel="noreferrer"
-                className="rounded-full border border-brand-200 bg-brand-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-700 hover:bg-brand-100"
+                className="rounded-full border border-brand-200 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-700 hover:bg-slate-100"
               >
                 Join link
               </a>
@@ -605,12 +605,12 @@ function ProfileSidebar({ user, onEdit, canEdit = true }) {
           <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5">
             <StatusPill active={Boolean(user?.isActive)} />
             {user?.companyRole?.name ? (
-              <span className="rounded-full border border-brand-200 bg-brand-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-700">
+              <span className="rounded-full border border-brand-200 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-700">
                 {user.companyRole.name}
               </span>
             ) : null}
             {user?.isCompanyAdmin ? (
-              <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-700">
+              <span className="rounded-full border border-brand-200 bg-brand-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-700">
                 Admin
               </span>
             ) : null}
@@ -620,7 +620,7 @@ function ProfileSidebar({ user, onEdit, canEdit = true }) {
                 onClick={onEdit}
                 aria-label="Edit member"
                 title="Edit member"
-                className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-brand-200 bg-white text-brand-700 shadow-sm transition hover:border-brand-300 hover:bg-brand-50"
+                className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-brand-200 bg-white text-brand-700 shadow-sm transition hover:border-brand-300 hover:bg-slate-50"
               >
                 <Pencil className="h-3 w-3" strokeWidth={2} />
               </button>
@@ -793,14 +793,14 @@ export function TeamMemberProfilePage() {
       <div className="px-2 pb-1 pt-1 sm:px-3 sm:pb-3 sm:pt-1">
         {showLoading ? (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-[320px_1fr]">
-            <div className="h-[520px] animate-pulse rounded-2xl border border-surface-border bg-white" />
+            <div className="h-[520px] animate-pulse rounded-2xl border border-[#C9BDE8] bg-[#F9F7FC]" />
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {[0, 1, 2, 3].map((i) => (
-                  <div key={i} className="h-16 animate-pulse rounded-2xl border border-surface-border bg-white" />
+                  <div key={i} className="h-16 animate-pulse rounded-2xl border border-[#C9BDE8] bg-[#F9F7FC]" />
                 ))}
               </div>
-              <div className="h-[420px] animate-pulse rounded-2xl border border-surface-border bg-white" />
+              <div className="h-[420px] animate-pulse rounded-2xl border border-[#C9BDE8] bg-[#F9F7FC]" />
             </div>
           </div>
         ) : showError ? (
@@ -836,7 +836,7 @@ export function TeamMemberProfilePage() {
                         className={cn(
                           'inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition',
                           active
-                            ? 'bg-brand-50 text-brand-700 shadow-sm'
+                            ? 'bg-slate-100 text-brand-700 shadow-sm'
                             : 'text-ink-muted hover:bg-surface-muted hover:text-ink',
                         )}
                       >

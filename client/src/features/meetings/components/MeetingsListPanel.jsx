@@ -7,6 +7,7 @@ import {
   Clock3,
   Copy,
   ExternalLink,
+  Loader2,
   MapPin,
   Pencil,
   Phone,
@@ -15,8 +16,8 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { cn } from '@/utils/cn'
-import { Loader } from '@/components/shared/Loader'
-import { useDeleteMeetingMutation } from '@/features/meetings/meetingsApi'
+import { SkeletonCards } from '@/components/shared/SkeletonLoader'
+import { useDeleteMeetingMutation, useGetMeetingQuery } from '@/features/meetings/meetingsApi'
 
 /** Google Meet–style mark (not an official Google asset). */
 function GoogleMeetLogo({ className }) {
@@ -59,11 +60,25 @@ function statusPillClass(status) {
     case 'missed':
       return 'bg-amber-50 text-amber-800 ring-amber-200'
     default:
-      return 'bg-indigo-50 text-indigo-800 ring-indigo-200'
+      return 'bg-brand-50 text-brand-800 ring-brand-200'
   }
 }
 
-function MeetingDetailCard({ meeting, channel, onEdit, onDelete, deletingId }) {
+const PROCESSING_BOT_STATUSES = new Set(['joining', 'recording', 'processing'])
+
+function MeetingDetailCard({ meeting: meetingProp, channel, onEdit, onDelete, deletingId }) {
+  const isProcessing =
+    PROCESSING_BOT_STATUSES.has(meetingProp.botStatus) ||
+    meetingProp.transcriptionStatus === 'processing' ||
+    meetingProp.aiSummaryStatus === 'processing'
+
+  // Poll every 5s while the AI pipeline is running; stop once done
+  const { data: pollResult } = useGetMeetingQuery(meetingProp.id, {
+    pollingInterval: isProcessing ? 5000 : 0,
+    skip: !isProcessing,
+  })
+
+  const meeting = (isProcessing && pollResult?.data) ? pollResult.data : meetingProp
   const meetLink = String(meeting.googleMeetLink || '').trim()
   const deleting = deletingId === meeting.id
   const isVideo = channel === 'video'
@@ -117,7 +132,7 @@ function MeetingDetailCard({ meeting, channel, onEdit, onDelete, deletingId }) {
     <article
       className={cn(
         'flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-md',
-        isVideo ? 'ring-1 ring-indigo-100/50' : 'ring-1 ring-emerald-100/50',
+        isVideo ? 'ring-1 ring-brand-100/50' : 'ring-1 ring-emerald-100/50',
       )}
     >
       <div className="flex min-h-0 flex-1 flex-col gap-2.5 p-3">
@@ -127,7 +142,7 @@ function MeetingDetailCard({ meeting, channel, onEdit, onDelete, deletingId }) {
             <button
               type="button"
               onClick={() => onEdit?.(meeting)}
-              className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-50 hover:text-indigo-600"
+              className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-50 hover:text-brand-600"
               title="Edit"
               aria-label="Edit meeting"
             >
@@ -197,7 +212,7 @@ function MeetingDetailCard({ meeting, channel, onEdit, onDelete, deletingId }) {
           <span className={cn('inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1', statusPillClass(meeting.status))}>
             {humanizeStatus(meeting.status)}
           </span>
-          <span className="rounded-md bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-800 ring-1 ring-violet-100">
+          <span className="rounded-md bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-brand-800 ring-1 ring-brand-100">
             {humanizeMeetingType(meeting.meetingType)}
           </span>
           {durationLabel ? <span className="text-[11px] font-medium text-gray-500">{durationLabel}</span> : null}
@@ -218,15 +233,27 @@ function MeetingDetailCard({ meeting, channel, onEdit, onDelete, deletingId }) {
 
         <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-600">
           {meeting.recordingStatus ? (
-            <span>
+            <span className="flex items-center gap-1">
               Rec:{' '}
               <span className="font-medium capitalize text-gray-800">{String(meeting.recordingStatus).replace(/_/g, ' ')}</span>
             </span>
           ) : null}
           {meeting.transcriptionStatus ? (
-            <span>
+            <span className="flex items-center gap-1">
               Tx:{' '}
               <span className="font-medium capitalize text-gray-800">{String(meeting.transcriptionStatus).replace(/_/g, ' ')}</span>
+              {meeting.transcriptionStatus === 'processing' && (
+                <Loader2 className="h-3 w-3 animate-spin text-brand-500" />
+              )}
+            </span>
+          ) : null}
+          {meeting.aiSummaryStatus && meeting.aiSummaryStatus !== 'pending' ? (
+            <span className="flex items-center gap-1">
+              AI:{' '}
+              <span className="font-medium capitalize text-gray-800">{String(meeting.aiSummaryStatus).replace(/_/g, ' ')}</span>
+              {meeting.aiSummaryStatus === 'processing' && (
+                <Loader2 className="h-3 w-3 animate-spin text-brand-500" />
+              )}
             </span>
           ) : null}
         </div>
@@ -243,7 +270,7 @@ function MeetingDetailCard({ meeting, channel, onEdit, onDelete, deletingId }) {
         {leadId ? (
           <Link
             to={`/leads/${leadId}`}
-            className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-xs font-medium text-indigo-600 hover:bg-indigo-50"
+            className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-xs font-medium text-brand-600 hover:bg-brand-50"
           >
             <Briefcase className="h-3.5 w-3.5 shrink-0" />
             Open lead
@@ -290,11 +317,7 @@ export function MeetingsListPanel({ meetings, channel, isLoading, onEdit }) {
   )
 
   if (isLoading) {
-    return (
-      <div className="flex justify-center py-14">
-        <Loader label="Loading meetings" />
-      </div>
-    )
+    return <SkeletonCards count={6} cols="grid-cols-1 sm:grid-cols-2 xl:grid-cols-3" cardHeight="h-52" />
   }
 
   if (!meetings?.length) {

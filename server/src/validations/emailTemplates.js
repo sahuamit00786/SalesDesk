@@ -2,7 +2,7 @@ import Joi from 'joi'
 
 const attachmentSchema = Joi.object({
   filename: Joi.string().max(255).required(),
-  url: Joi.string().uri().max(2000).required(),
+  url: Joi.string().max(2000).required(),
   size: Joi.number().integer().min(0).required(),
 })
 

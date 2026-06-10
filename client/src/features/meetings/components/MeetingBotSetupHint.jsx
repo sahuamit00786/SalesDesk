@@ -35,8 +35,8 @@ export function MeetingBotSetupHint() {
           {data?.data?.masterEnvEnable && (
             <p className="text-ink-muted">{data.data.masterEnvEnable}</p>
           )}
-          {data?.data?.groqEnv && (
-            <p className="text-ink-muted">{data.data.groqEnv}</p>
+          {data?.data?.openaiEnv && (
+            <p className="text-ink-muted">{data.data.openaiEnv}</p>
           )}
           <ul className="list-inside list-disc space-y-1 text-ink-muted">
             {steps.map((line) => (

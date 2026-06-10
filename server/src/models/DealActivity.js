@@ -10,7 +10,7 @@ export const DealActivity = sequelize.define(
       primaryKey: true,
     },
     type: {
-      type: DataTypes.ENUM('note', 'call', 'email', 'meeting', 'task', 'status_change', 'assignment', 'system'),
+      type: DataTypes.ENUM('note', 'call', 'email', 'meeting', 'task', 'status_change', 'assignment', 'system', 'payment'),
       allowNull: false,
     },
     body: {

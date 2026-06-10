@@ -11,8 +11,21 @@ export const Campaign = sequelize.define(
     description: { type: DataTypes.TEXT, allowNull: true },
     /** Optional monetary goal for this campaign (KPI). */
     leadTarget: { type: DataTypes.DECIMAL(14, 2), allowNull: true, field: 'lead_target' },
+    endDate: { type: DataTypes.DATEONLY, allowNull: true, field: 'end_date' },
     stages: { type: DataTypes.JSON, allowNull: false },
     status: { type: DataTypes.ENUM('active', 'inactive', 'draft'), allowNull: false, defaultValue: 'active' },
+    preferExistingTeamAssignee: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+      field: 'prefer_existing_team_assignee',
+    },
+    skipUpdatingLeadAssignedTo: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+      field: 'skip_updating_lead_assigned_to',
+    },
     createdBy: { type: DataTypes.UUID, allowNull: true, field: 'created_by' },
   },
   // Rely on sequelize `define.underscored` (db.js) for created_at / updated_at — explicit

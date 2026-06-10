@@ -1,6 +1,6 @@
 import Joi from 'joi'
 import { Op, fn, col, where as sqlWhere } from 'sequelize'
-import { DealActivity, Deal, Lead, OpportunityStage, User } from '../models/index.js'
+import { DealActivity, Deal, DealStatus, Lead, OpportunityStage, User } from '../models/index.js'
 import { allowedWorkspaceIdsForUser } from '../services/userWorkspaceService.js'
 import { leadAccessWhere } from '../services/leadVisibility.js'
 
@@ -48,23 +48,17 @@ async function resolveActorDisplayName(userId, emailFallback) {
 }
 
 async function resolveInitialDealStage(workspaceId, companyId) {
-  const def = await OpportunityStage.findOne({
-    where: { workspaceId, companyId, isDefault: true },
-    order: [
-      ['sortOrder', 'ASC'],
-      ['createdAt', 'ASC'],
-    ],
+  const initial = await DealStatus.findOne({
+    where: { workspaceId, companyId, isInitial: true },
+    order: [['sort_order', 'ASC'], ['created_at', 'ASC']],
   })
-  if (def) return def.name
-  const first = await OpportunityStage.findOne({
+  if (initial) return initial.name
+  const first = await DealStatus.findOne({
     where: { workspaceId, companyId },
-    order: [
-      ['sortOrder', 'ASC'],
-      ['createdAt', 'ASC'],
-    ],
+    order: [['sort_order', 'ASC'], ['created_at', 'ASC']],
   })
   if (first) return first.name
-  return 'Lead Inbound'
+  return 'Qualification'
 }
 
 async function assertParentOpportunityLead({ leadId, companyId, workspaceId }) {
@@ -425,6 +419,31 @@ export async function createActivity(req, res, next) {
     })
     await row.reload({ include: [{ model: User, as: 'user', attributes: ['id', 'name', 'email'], required: false }] })
     return res.status(201).json({ success: true, data: row, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function remove(req, res, next) {
+  try {
+    const workspaceId = req.headers['x-workspace-id']
+    if (!workspaceId) {
+      return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'workspaceId is required' } })
+    }
+    const access = await leadAccessWhere(req.user)
+    const deal = await Deal.findOne({
+      where: {
+        ...access,
+        id: req.params.id,
+        workspaceId: String(workspaceId),
+        isDeleted: false,
+      },
+    })
+    if (!deal) {
+      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Deal not found' } })
+    }
+    await deal.update({ isDeleted: true })
+    return res.json({ success: true, data: { id: deal.id }, meta: {} })
   } catch (e) {
     return next(e)
   }

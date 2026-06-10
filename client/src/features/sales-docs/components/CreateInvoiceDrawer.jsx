@@ -297,7 +297,7 @@ export function CreateInvoiceDrawer({ open, onClose, initialLeadId = null }) {
           <button
             type="button"
             disabled={isLoading}
-            className="rounded-lg bg-[#534AB7] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#483fa3] disabled:opacity-50"
+            className="rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[var(--brand-primary-dark)] disabled:opacity-50"
             onClick={submit}
           >
             {isLoading ? 'Saving…' : 'Create invoice'}

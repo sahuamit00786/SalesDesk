@@ -4,13 +4,15 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "node --watch index.js",
+    "dev": "node --watch --watch-path=./src --watch-path=./index.js index.js",
     "start": "node index.js",
     "db:migrate": "sequelize-cli db:migrate",
     "db:migrate:undo": "sequelize-cli db:migrate:undo",
     "db:purge-draft-sales": "node scripts/deleteDraftSalesData.js",
     "db:clean-except-menus": "node scripts/cleanDatabaseExceptMenus.js",
-    "db:seed-test-dump": "node scripts/seedTestDataDump.js"
+    "db:seed-test-dump": "node scripts/seedTestDataDump.js",
+    "qa:test": "node scripts/qa/runModuleTests.js",
+    "qa:audit": "node scripts/qa/staticCodeAudit.js"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

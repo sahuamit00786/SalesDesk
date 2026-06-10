@@ -340,7 +340,7 @@ function WorkflowCanvasInner({
             <div className="flex flex-col gap-3">
               {WORKFLOW_NODE_PALETTE.map((section) => (
                 <div key={section.category}>
-                  <div className="px-1 text-[10px] font-bold uppercase tracking-wider text-violet-700 dark:text-violet-300">
+                  <div className="px-1 text-[10px] font-bold uppercase tracking-wider text-brand-700 dark:text-violet-300">
                     {section.category}
                   </div>
                   {section.description ? (
@@ -353,10 +353,10 @@ function WorkflowCanvasInner({
                         type="button"
                         title={hint || label}
                         onClick={() => addPaletteNode(type)}
-                        className="flex w-full flex-col gap-0.5 rounded-xl border border-surface-border bg-white/90 px-2.5 py-2 text-left shadow-sm hover:border-violet-200 hover:bg-violet-50/60 dark:bg-ink/80 dark:hover:border-violet-500/40 dark:hover:bg-violet-950/20"
+                        className="flex w-full flex-col gap-0.5 rounded-xl border border-surface-border bg-white/90 px-2.5 py-2 text-left shadow-sm hover:border-brand-200 hover:bg-slate-50/60 dark:bg-ink/80 dark:hover:border-violet-500/40 dark:hover:bg-violet-950/20"
                       >
                         <span className="flex items-center gap-2 text-xs font-semibold text-ink">
-                          <Plus className="h-3.5 w-3.5 shrink-0 text-violet-600" aria-hidden />
+                          <Plus className="h-3.5 w-3.5 shrink-0 text-brand-600" aria-hidden />
                           <span className="min-w-0 truncate">{label}</span>
                         </span>
                         {hint ? <span className="pl-7 text-[10px] leading-snug text-ink-muted">{hint}</span> : null}

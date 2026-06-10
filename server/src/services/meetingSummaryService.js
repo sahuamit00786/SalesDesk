@@ -1,27 +1,25 @@
-import OpenAI from "openai"
+import OpenAI from 'openai'
+import { withRetry } from '../utils/withRetry.js'
 
-const client = new OpenAI({
-  apiKey: process.env.GROQ_API_KEY,
-  baseURL: "https://api.groq.com/openai/v1",
-})
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
-const chatModel =
-  process.env.GROQ_MODEL?.trim() || "llama-3.3-70b-versatile"
-
+/**
+ * Generate a plain-text meeting summary using gpt-4o-mini.
+ * Returns a formatted string suitable for PDF and DB storage.
+ */
 export async function generateSummary(transcript) {
-  const response = await client.chat.completions.create({
-    model: chatModel,
-    messages: [
-      {
-        role: "system",
-        content: "Generate meeting summary with action items",
-      },
-      {
-        role: "user",
-        content: transcript,
-      },
-    ],
+  return withRetry(async () => {
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content:
+            'Generate a concise meeting summary covering key discussion points, decisions made, and action items.',
+        },
+        { role: 'user', content: transcript },
+      ],
+    })
+    return response.choices[0].message.content ?? ''
   })
-
-  return response.choices[0].message.content
 }

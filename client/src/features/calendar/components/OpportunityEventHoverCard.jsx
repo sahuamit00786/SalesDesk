@@ -67,27 +67,27 @@ export function OpportunityEventHoverCard({ event, anchorRect, onMouseEnter, onM
     >
       <div className="flex items-start justify-between gap-2 border-b border-violet-100 bg-gradient-to-r from-violet-50 to-fuchsia-50 px-3 py-2.5">
         <div className="min-w-0 flex-1">
-          <span className="inline-flex rounded-md bg-violet-600/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-900 ring-1 ring-violet-200">
+          <span className="inline-flex rounded-md bg-[var(--brand-primary)]/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand-900 ring-1 ring-brand-200">
             Opportunity
           </span>
           <p className="mt-1.5 text-sm font-semibold leading-snug text-gray-900">{event.title}</p>
           {event?.opportunityName ? (
-            <p className="mt-0.5 truncate text-[11px] font-medium text-violet-800/90">{event.opportunityName}</p>
+            <p className="mt-0.5 truncate text-[11px] font-medium text-brand-800/90">{event.opportunityName}</p>
           ) : null}
         </div>
-        <TrendingUp className="h-5 w-5 shrink-0 text-violet-600" aria-hidden />
+        <TrendingUp className="h-5 w-5 shrink-0 text-brand-600" aria-hidden />
       </div>
 
       <div className="scrollbar-subtle min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
         <div className="overflow-hidden rounded-lg border border-violet-100 bg-gradient-to-br from-violet-50/90 via-white to-fuchsia-50/40 p-3 shadow-sm">
           <div className="flex flex-wrap items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white shadow-sm ring-1 ring-violet-100">
-              <TrendingUp className="h-5 w-5 text-violet-600" aria-hidden />
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white shadow-sm ring-1 ring-brand-100">
+              <TrendingUp className="h-5 w-5 text-brand-600" aria-hidden />
             </div>
             <div className="min-w-0 flex-1">
               {dealLine ? (
                 <p className="flex items-center gap-1.5 text-sm font-bold text-gray-900">
-                  <DollarSign className="h-4 w-4 shrink-0 text-violet-600" aria-hidden />
+                  <DollarSign className="h-4 w-4 shrink-0 text-brand-600" aria-hidden />
                   {dealLine}
                 </p>
               ) : (
@@ -100,7 +100,7 @@ export function OpportunityEventHoverCard({ event, anchorRect, onMouseEnter, onM
 
         <div className="flex flex-wrap items-center gap-2">
           {stageLabel ? (
-            <span className="inline-flex rounded-full bg-violet-100 px-2.5 py-0.5 text-[11px] font-semibold capitalize text-violet-900 ring-1 ring-violet-200">
+            <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold capitalize text-brand-900 ring-1 ring-brand-200">
               {stageLabel}
             </span>
           ) : null}
@@ -130,7 +130,7 @@ export function OpportunityEventHoverCard({ event, anchorRect, onMouseEnter, onM
             <Link
               to={`/opportunities/${opportunityId}`}
               className={cn(
-                'inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs font-semibold text-violet-800 shadow-sm transition hover:bg-violet-50',
+                'inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-brand-200 bg-white px-3 py-2 text-xs font-semibold text-brand-800 shadow-sm transition hover:bg-slate-50',
               )}
             >
               Open deal
@@ -142,7 +142,7 @@ export function OpportunityEventHoverCard({ event, anchorRect, onMouseEnter, onM
         {event?.leadName && leadId ? (
           <Link
             to={`/leads/${leadId}`}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-xs font-medium text-violet-700 hover:bg-violet-50/50"
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-xs font-medium text-brand-700 hover:bg-slate-50"
           >
             <Briefcase className="h-4 w-4 shrink-0" />
             Lead: {event.leadName}

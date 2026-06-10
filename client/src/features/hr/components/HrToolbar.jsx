@@ -1,19 +1,24 @@
 import { cn } from '@/utils/cn'
+import { PageFilterBar } from '@/components/layout/PageFilterBar'
 
 export function HrToolbar({ children, className }) {
   return (
-    <div
-      className={cn(
-        'flex flex-wrap items-end justify-between gap-4 rounded-2xl border border-surface-border bg-white px-4 py-3.5 shadow-sm ring-1 ring-black/[0.04] sm:px-5',
-        className,
-      )}
-    >
-      {children}
-    </div>
+    <PageFilterBar className={cn('min-h-0', className)}>{children}</PageFilterBar>
   )
 }
 
-export function HrToolbarGroup({ label, children, className }) {
+export function HrToolbarGroup({ label, children, className, inline = false }) {
+  if (inline) {
+    return (
+      <div className={cn('flex min-w-0 items-center gap-2', className)}>
+        {label ? (
+          <span className="shrink-0 text-xs font-medium text-ink-muted">{label}</span>
+        ) : null}
+        {children}
+      </div>
+    )
+  }
+
   return (
     <div className={cn('flex min-w-0 flex-col gap-1.5', className)}>
       {label ? (

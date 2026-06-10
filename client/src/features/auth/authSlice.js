@@ -2,6 +2,15 @@ import { createSlice } from '@reduxjs/toolkit'
 
 export const AUTH_STORAGE_KEY = 'leadflow.auth'
 
+/** Wipe all persisted client data (auth, workspace preference, UI prefs, etc.). */
+export function clearClientStorage() {
+  try {
+    localStorage.clear()
+  } catch {
+    // ignore private mode / quota errors
+  }
+}
+
 /** Read session from localStorage (used on store init and as a fallback for API headers). */
 export function readAuthFromStorage() {
   try {
@@ -57,7 +66,7 @@ const authSlice = createSlice({
       state.accessToken = null
       state.refreshToken = null
       state.user = null
-      persistAuth(state)
+      clearClientStorage()
     },
     updateSessionUser: (state, action) => {
       if (action.payload == null) return

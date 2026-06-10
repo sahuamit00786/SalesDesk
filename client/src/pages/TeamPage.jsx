@@ -5,14 +5,10 @@ import {
   Briefcase,
   Building2,
   Camera,
-  Clock,
   Flag,
   Hash,
   Home,
-  LayoutGrid,
   Mail,
-  MapPin,
-  MessageCircle,
   PencilLine,
   ShieldCheck,
   Trash2,
@@ -28,7 +24,9 @@ import { COMPANY_USER_ROLE_KIND_ALL_OPTIONS, COMPANY_USER_ROLE_KIND_CREATE_OPTIO
 import { Modal } from '@/components/ui/Modal'
 import { RightDrawer } from '@/components/ui/RightDrawer'
 import { PhoneField } from '@/components/ui/PhoneField'
+import { useAppSelector } from '@/app/hooks'
 import { useWorkspacesQuery } from '@/features/workspace/workspaceApi'
+import { selectResolvedActiveWorkspaceId } from '@/features/workspace/workspaceSlice'
 import {
   useCancelInvitationMutation,
   useCreateRoleMutation,
@@ -47,6 +45,12 @@ import {
 } from '@/features/team/teamApi'
 import { cn } from '@/utils/cn'
 import { PageShell } from '@/components/layout/PageShell'
+import { PageStack } from '@/components/layout/PageStack'
+import { PageFilterBar } from '@/components/layout/PageFilterBar'
+import { PageContentPanel } from '@/components/layout/PageContentPanel'
+import { PageTabButton } from '@/components/layout/PageTabButton'
+import { inputFieldClassName } from '@/components/ui/Input'
+import { DataGrid } from '@/components/shared/DataGrid'
 import { IconInput, IconTextarea } from '@/components/ui/IconInput'
 
 function isoCountryForPhone(countryField) {
@@ -230,6 +234,11 @@ export function TeamPage() {
   const users = useMemo(() => usersData?.data?.items || [], [usersData])
   const invitations = useMemo(() => invitesData?.data?.items || [], [invitesData])
   const workspaces = useMemo(() => wsData?.data?.items || [], [wsData])
+  const activeWorkspaceId = useAppSelector(selectResolvedActiveWorkspaceId)
+  const inviteWorkspace = useMemo(
+    () => workspaces.find((w) => w.id === activeWorkspaceId) || workspaces[0] || null,
+    [workspaces, activeWorkspaceId],
+  )
 
   const [inviteDrawerOpen, setInviteDrawerOpen] = useState(false)
   const [roleDrawerOpen, setRoleDrawerOpen] = useState(false)
@@ -295,6 +304,356 @@ export function TeamPage() {
       return matchesSearch && matchesRole && matchesStatus
     })
   }, [users, memberSearch, memberRoleFilter, memberStatusFilter])
+
+  const memberColumns = useMemo(
+    () => [
+      {
+        field: 'name',
+        headerName: 'Name',
+        flex: 1,
+        minWidth: 180,
+        renderCell: ({ row: u }) => (
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-surface-border bg-slate-100 text-[11px] font-semibold text-brand-700">
+              {u.profilePhotoUrl ? (
+                <img src={u.profilePhotoUrl} alt={u.name || 'User'} className="h-full w-full object-cover" />
+              ) : (
+                <span>{(u.name || u.email || '?').trim().charAt(0).toUpperCase()}</span>
+              )}
+            </div>
+            <div>
+              <p className="font-medium text-ink">{u.name || 'Unnamed user'}</p>
+              <p className="text-xs text-ink-faint">{u.email}</p>
+            </div>
+          </div>
+        ),
+      },
+      { field: 'jobTitle', headerName: 'Job title', width: 120, valueGetter: (_v, u) => u.jobTitle || '—' },
+      { field: 'department', headerName: 'Department', width: 120, valueGetter: (_v, u) => u.department || '—' },
+      {
+        field: 'lastLoginAt',
+        headerName: 'Last login',
+        width: 150,
+        valueGetter: (_v, u) => (u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : 'Never'),
+      },
+      {
+        field: 'role',
+        headerName: 'Role',
+        width: 140,
+        renderCell: ({ row: u }) => (
+          <div className="flex flex-col gap-0.5">
+            <span>{u.companyRole?.name || 'No role'}</span>
+            {/* {u.companyRole?.userRoleKind ? (
+              <span className="w-fit rounded-full border border-surface-border bg-white px-2 py-0.5 text-[10px] text-ink-faint">
+                {labelCompanyUserRoleKind(u.companyRole.userRoleKind)}
+              </span>
+            ) : null} */}
+          </div>
+        ),
+      },
+      {
+        field: 'workspaces',
+        headerName: 'Workspaces',
+        flex: 1,
+        minWidth: 120,
+        sortable: false,
+        renderCell: ({ row: u }) => (
+          <WorkspacePills selectedIds={(u.workspaces || []).map((w) => w.id)} all={workspaces} />
+        ),
+      },
+      {
+        field: 'isActive',
+        headerName: 'Status',
+        width: 90,
+        renderCell: ({ row: u }) => (
+          <span
+            className={cn(
+              'rounded-full border px-2 py-0.5 text-xs',
+              u.isActive ? 'border-emerald-200 bg-white text-emerald-700' : 'border-surface-border bg-white text-ink-muted',
+            )}
+          >
+            {u.isActive ? 'Active' : 'Inactive'}
+          </span>
+        ),
+      },
+      {
+        field: 'actions',
+        headerName: 'Actions',
+        width: 100,
+        sortable: false,
+        align: 'right',
+        headerAlign: 'right',
+        renderCell: ({ row: u }) => (
+          <div className="inline-flex gap-1" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              disabled={userBusy}
+              onClick={() => openAccessDrawer(u)}
+              aria-label="Edit member access"
+              title="Edit role, workspaces, and profile"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-brand-200 bg-white text-brand-700 shadow-sm hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <PencilLine className="h-3.5 w-3.5" />
+            </button>
+            {u.isActive ? (
+              <button
+                type="button"
+                disabled={userBusy}
+                onClick={() => doDeactivate(u)}
+                aria-label="Deactivate user"
+                title="Deactivate user"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-danger hover:bg-red-100"
+              >
+                <UserMinus className="h-3.5 w-3.5" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={userBusy}
+                onClick={async () => {
+                  try {
+                    await reactivateUser({ id: u.id }).unwrap()
+                    toast.success('Member reactivated')
+                    await refetchUsers()
+                  } catch (err) {
+                    toast.error(apiErrorMessage(err))
+                  }
+                }}
+                aria-label="Reactivate user"
+                title="Restore access for this member"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
+              >
+                <UserCheck className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+        ),
+      },
+    ],
+    [workspaces, userBusy],
+  )
+
+  const inviteColumns = useMemo(
+    () => [
+      {
+        field: 'email',
+        headerName: 'Email',
+        flex: 1,
+        minWidth: 160,
+        renderCell: ({ row: inv }) => <span className="font-medium text-ink">{inv.email}</span>,
+      },
+      {
+        field: 'role',
+        headerName: 'Role',
+        width: 140,
+        valueGetter: (_v, inv) => inv.companyRole?.name || '—',
+      },
+      {
+        field: 'roleType',
+        headerName: 'Role type',
+        width: 120,
+        renderCell: ({ row: inv }) =>
+          inv.companyRole?.userRoleKind ? (
+            <span className="inline-flex rounded-full border border-surface-border bg-white px-2 py-0.5 text-[11px] text-ink-muted">
+              {labelCompanyUserRoleKind(inv.companyRole.userRoleKind)}
+            </span>
+          ) : (
+            <span className="text-ink-faint">—</span>
+          ),
+      },
+      {
+        field: 'workspaces',
+        headerName: 'Workspaces',
+        flex: 1,
+        minWidth: 120,
+        sortable: false,
+        renderCell: ({ row: inv }) => (
+          <WorkspacePills selectedIds={inv.workspaceIds || []} all={workspaces} />
+        ),
+      },
+      {
+        field: 'invitedBy',
+        headerName: 'Invited by',
+        width: 160,
+        renderCell: ({ row: inv }) =>
+          inv.invitedBy ? (
+            <div className="flex flex-col gap-0.5">
+              <span className="line-clamp-1 font-medium text-ink">{inv.invitedBy.name || '—'}</span>
+              <span className="line-clamp-1 text-[11px] text-ink-faint">{inv.invitedBy.email || ''}</span>
+            </div>
+          ) : (
+            <span className="text-ink-faint">—</span>
+          ),
+      },
+      {
+        field: 'createdAt',
+        headerName: 'Sent',
+        width: 150,
+        valueGetter: (_v, inv) => (inv.createdAt ? new Date(inv.createdAt).toLocaleString() : '—'),
+      },
+      {
+        field: 'expiresAt',
+        headerName: 'Expires',
+        width: 150,
+        valueGetter: (_v, inv) => (inv.expiresAt ? new Date(inv.expiresAt).toLocaleString() : '—'),
+      },
+      {
+        field: 'profile',
+        headerName: 'Profile',
+        width: 100,
+        renderCell: ({ row: inv }) =>
+          hasInviteProfilePrefill(inv.profilePrefill) ? (
+            <span className="inline-flex rounded-full border border-brand-200 bg-white px-2 py-0.5 text-[11px] font-medium text-brand-800">
+              Included
+            </span>
+          ) : (
+            <span className="text-ink-faint">—</span>
+          ),
+      },
+      {
+        field: 'status',
+        headerName: 'Status',
+        width: 110,
+        renderCell: ({ row: inv }) => {
+          const status = invitationStatusPill(inv)
+          return (
+            <span className={cn('inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium', status.className)}>
+              {status.label}
+            </span>
+          )
+        },
+      },
+      {
+        field: 'actions',
+        headerName: 'Actions',
+        width: 60,
+        sortable: false,
+        align: 'right',
+        headerAlign: 'right',
+        renderCell: ({ row: inv }) => (
+          <button
+            type="button"
+            disabled={cancellingInvite}
+            onClick={() => setCancelInviteDialog({ open: true, invite: inv })}
+            aria-label="Cancel invitation"
+            title="Cancel invitation"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-danger hover:bg-red-100 disabled:opacity-50"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        ),
+      },
+    ],
+    [workspaces, cancellingInvite],
+  )
+
+  const roleColumns = useMemo(
+    () => [
+      {
+        field: 'name',
+        headerName: 'Role',
+        flex: 1,
+        minWidth: 140,
+        renderCell: ({ row: r }) => (
+          <div className="flex items-center gap-2">
+            <p className="font-medium text-ink">{r.name}</p>
+            {r.isDefault ? (
+              <span className="rounded-full border border-surface-border bg-white px-2 py-0.5 text-[11px] text-ink-muted">
+                Default
+              </span>
+            ) : null}
+          </div>
+        ),
+      },
+      {
+        field: 'userRoleKind',
+        headerName: 'Role type',
+        width: 120,
+        valueGetter: (_v, r) => labelCompanyUserRoleKind(r.userRoleKind),
+      },
+      {
+        field: 'description',
+        headerName: 'Description',
+        flex: 1,
+        minWidth: 140,
+        valueGetter: (_v, r) => r.description || 'No description',
+      },
+      {
+        field: 'menuCount',
+        headerName: 'Menus',
+        width: 80,
+        renderCell: ({ row: r }) => (
+          <span className="inline-flex items-center gap-1 rounded-full border border-surface-border bg-white px-2 py-0.5 text-[11px] text-ink-muted">
+            <ShieldCheck className="h-3.5 w-3.5" />
+            {r.menuCount || 0}
+          </span>
+        ),
+      },
+      {
+        field: 'assignedUsers',
+        headerName: 'Users',
+        width: 80,
+        renderCell: ({ row: r }) => (
+          <span className="inline-flex items-center gap-1 rounded-full border border-surface-border bg-white px-2 py-0.5 text-[11px] text-ink-muted">
+            <Users className="h-3.5 w-3.5" />
+            {r.assignedUsers || 0}
+          </span>
+        ),
+      },
+      {
+        field: 'actions',
+        headerName: 'Actions',
+        width: 100,
+        sortable: false,
+        align: 'right',
+        headerAlign: 'right',
+        renderCell: ({ row: r }) => (
+          <div className="inline-flex gap-1" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              aria-label="Edit role"
+              title={r.isDefault ? 'Default role cannot be edited' : 'Edit role'}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-brand-200 bg-white text-brand-700 shadow-sm hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={r.isDefault}
+              onClick={() => {
+                setEditingRoleId(r.id)
+                setRoleForm({
+                  name: r.name,
+                  description: r.description || '',
+                  userRoleKind: r.userRoleKind || 'custom',
+                  menuPermissions: r.menuPermissions || [],
+                })
+                setRoleEditDrawerOpen(true)
+              }}
+            >
+              <PencilLine className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              aria-label="Delete role"
+              title={r.isDefault ? 'Default role cannot be deleted' : 'Delete role'}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-danger hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={deletingRole || r.isDefault}
+              onClick={() => {
+                setDeleteRoleDialog({
+                  open: true,
+                  roleId: r.id,
+                  roleName: r.name,
+                  fallbackRoleId:
+                    roles.find((x) => x.id !== r.id && !x.isDefault)?.id ||
+                    roles.find((x) => x.id !== r.id)?.id ||
+                    '',
+                })
+              }}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ),
+      },
+    ],
+    [deletingRole, roles],
+  )
 
   const menusBySection = useMemo(() => {
     const groups = new Map()
@@ -419,13 +778,14 @@ export function TeamPage() {
     e.preventDefault()
     if (!inviteForm.email.trim()) return toast.error('Enter an email')
     if (!inviteForm.companyRoleId) return toast.error('Choose a role')
-    if (!inviteForm.workspaceIds.length) return toast.error('Assign at least one workspace')
+    const wsIds = inviteWorkspace?.id ? [inviteWorkspace.id] : inviteForm.workspaceIds
+    if (!wsIds.length) return toast.error('Select a workspace in the sidebar first')
     try {
       const prof = normalizeProfileDraft(inviteForm)
       await createInvitation({
         email: inviteForm.email.trim(),
         companyRoleId: inviteForm.companyRoleId,
-        workspaceIds: inviteForm.workspaceIds,
+        workspaceIds: wsIds,
         department: prof.department ?? undefined,
         jobTitle: prof.jobTitle ?? undefined,
         businessPhone: prof.businessPhone ?? undefined,
@@ -558,27 +918,22 @@ export function TeamPage() {
 
   return (
     <PageShell fullWidth>
-      <div className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-surface-border bg-white px-3 py-2">
+      <PageStack>
+        <PageFilterBar>
           <div className="flex flex-wrap gap-1.5">
             {[
               { id: 'members', label: 'Members' },
               { id: 'invitations', label: 'Invitations' },
               { id: 'roles', label: 'Roles' },
             ].map((tab) => (
-              <button
+              <PageTabButton
                 key={tab.id}
                 type="button"
+                active={activeTab === tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={cn(
-                  'h-8 rounded-lg border px-3 text-xs font-medium transition',
-                  activeTab === tab.id
-                    ? 'border-brand-600 bg-brand-600 text-white'
-                    : 'border-surface-border bg-white text-ink-muted hover:border-surface-border hover:bg-white',
-                )}
               >
                 {tab.label}
-              </button>
+              </PageTabButton>
             ))}
           </div>
           <div className="flex gap-2">
@@ -597,7 +952,14 @@ export function TeamPage() {
             </button>
             <button
               type="button"
-              onClick={() => setInviteDrawerOpen(true)}
+              onClick={() => {
+                const wsId = inviteWorkspace?.id
+                setInviteForm({
+                  ...EMPTY_INVITE_FORM,
+                  workspaceIds: wsId ? [wsId] : [],
+                })
+                setInviteDrawerOpen(true)
+              }}
               aria-label="Add user"
               title="Add user"
               className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-brand-200 bg-white px-3 text-xs font-medium text-brand-700 shadow-sm hover:bg-white"
@@ -606,23 +968,22 @@ export function TeamPage() {
               Add user
             </button>
           </div>
-        </div>
+        </PageFilterBar>
 
         {activeTab === 'members' ? (
-          <section className="rounded-xl border border-surface-border bg-white px-4 py-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                type="text"
-                value={memberSearch}
-                onChange={(e) => setMemberSearch(e.target.value)}
-                placeholder="Search by name or email"
-                className="h-9 min-w-[220px] flex-1 rounded-lg border border-surface-border bg-white px-3 text-sm text-ink outline-none focus:border-brand-400"
-              />
-              <select
-                value={memberRoleFilter}
-                onChange={(e) => setMemberRoleFilter(e.target.value)}
-                className="h-9 rounded-lg border border-surface-border bg-white px-3 text-xs text-ink-muted"
-              >
+          <PageFilterBar className="min-h-0 py-2">
+            <input
+              type="text"
+              value={memberSearch}
+              onChange={(e) => setMemberSearch(e.target.value)}
+              placeholder="Search by name or email"
+              className={cn(inputFieldClassName, 'min-w-[220px] flex-1')}
+            />
+            <select
+              value={memberRoleFilter}
+              onChange={(e) => setMemberRoleFilter(e.target.value)}
+              className={cn(inputFieldClassName, 'w-auto min-w-[140px] text-xs')}
+            >
                 <option value="all">All roles</option>
                 {roles.map((r) => (
                   <option key={r.id} value={r.id}>
@@ -631,374 +992,65 @@ export function TeamPage() {
                   </option>
                 ))}
               </select>
-              <select
-                value={memberStatusFilter}
-                onChange={(e) => setMemberStatusFilter(e.target.value)}
-                className="h-9 rounded-lg border border-surface-border bg-white px-3 text-xs text-ink-muted"
-              >
+            <select
+              value={memberStatusFilter}
+              onChange={(e) => setMemberStatusFilter(e.target.value)}
+              className={cn(inputFieldClassName, 'w-auto min-w-[120px] text-xs')}
+            >
                 <option value="all">All status</option>
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
               </select>
-            </div>
-          </section>
+          </PageFilterBar>
         ) : null}
 
+        <PageContentPanel flush>
         {activeTab === 'members' ? (
-        <section className="overflow-hidden rounded-xl border border-surface-border bg-white">
-          <div className="overflow-x-auto">
-            <table className="cx-table min-w-[900px] text-xs">
-              <thead className="cx-table-sticky-head">
-                <tr>
-                  <th>Name</th>
-                  <th>Job title</th>
-                  <th>Department</th>
-                  <th>Last login</th>
-                  <th>Role</th>
-                  <th>Workspaces</th>
-                  <th>Status</th>
-                  <th className="cx-table-cell-actions text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {usersLoading ? (
-                  <tr><td colSpan={8} className="px-3 py-8 text-center text-ink-muted">Loading members…</td></tr>
-                ) : filteredUsers.length === 0 ? (
-                  <tr><td colSpan={8} className="px-3 py-8 text-center text-ink-muted">No members found.</td></tr>
-                ) : (
-                  filteredUsers.map((u) => {
-                    const currentWs = (u.workspaces || []).map((w) => w.id)
-                    return (
-                      <tr
-                        key={u.id}
-                        className="group cursor-pointer"
-                        onClick={() => navigate(`/team/${u.id}`)}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault()
-                            navigate(`/team/${u.id}`)
-                          }
-                        }}
-                      >
-                        <td>
-                          <div className="flex items-center gap-2">
-                            <div className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-surface-border bg-brand-50 text-[11px] font-semibold text-brand-700">
-                              {u.profilePhotoUrl ? (
-                                <img src={u.profilePhotoUrl} alt={u.name || 'User'} className="h-full w-full object-cover" />
-                              ) : (
-                                <span>{(u.name || u.email || '?').trim().charAt(0).toUpperCase()}</span>
-                              )}
-                            </div>
-                            <div>
-                              <p className="font-medium text-ink group-hover:text-brand-700">{u.name || 'Unnamed user'}</p>
-                              <p className="text-xs text-ink-faint">{u.email}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="text-ink-muted">{u.jobTitle || '—'}</td>
-                        <td className="text-ink-muted">{u.department || '—'}</td>
-                        <td className="text-ink-muted">{u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : 'Never'}</td>
-                        <td className="text-ink-muted">
-                          <div className="flex flex-col gap-0.5">
-                            <span>{u.companyRole?.name || 'No role'}</span>
-                            {u.companyRole?.userRoleKind ? (
-                              <span className="w-fit rounded-full border border-surface-border bg-white px-2 py-0.5 text-[10px] text-ink-faint">
-                                {labelCompanyUserRoleKind(u.companyRole.userRoleKind)}
-                              </span>
-                            ) : null}
-                          </div>
-                        </td>
-                        <td>
-                          <WorkspacePills selectedIds={currentWs} all={workspaces} />
-                        </td>
-                        <td>
-                          <span className={cn('rounded-full border px-2 py-0.5 text-xs', u.isActive ? 'border-emerald-200 bg-white text-emerald-700' : 'border-surface-border bg-white text-ink-muted')}>
-                            {u.isActive ? 'Active' : 'Inactive'}
-                          </span>
-                        </td>
-                        <td className="cx-table-cell-actions text-right" onClick={(e) => e.stopPropagation()}>
-                          <div className="inline-flex gap-1 opacity-100 transition">
-                            <button
-                              type="button"
-                              disabled={userBusy}
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                openAccessDrawer(u)
-                              }}
-                              aria-label="Edit member access"
-                              title="Edit role, workspaces, and profile"
-                              className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-brand-200 bg-white text-brand-700 shadow-sm hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              <PencilLine className="h-3.5 w-3.5" />
-                            </button>
-                            {u.isActive ? (
-                              <button
-                                type="button"
-                                disabled={userBusy}
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  doDeactivate(u)
-                                }}
-                                aria-label="Deactivate user"
-                                title="Deactivate user"
-                                className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-danger hover:bg-red-100"
-                              >
-                                <UserMinus className="h-3.5 w-3.5" />
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                disabled={userBusy}
-                                onClick={async (e) => {
-                                  e.stopPropagation()
-                                  try {
-                                    await reactivateUser({ id: u.id }).unwrap()
-                                    toast.success('Member reactivated')
-                                    await refetchUsers()
-                                  } catch (err) {
-                                    toast.error(apiErrorMessage(err))
-                                  }
-                                }}
-                                aria-label="Reactivate user"
-                                title="Restore access for this member"
-                                className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
-                              >
-                                <UserCheck className="h-3.5 w-3.5" />
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
+          <DataGrid
+            gridColumns
+            columns={memberColumns}
+            data={filteredUsers}
+            loading={usersLoading}
+            searchable={false}
+            showColumnToggle={false}
+            showExportCsv={false}
+            onRowClick={(params) => navigate(`/team/${params.row.id}`)}
+            emptyTitle="No members found"
+            maxHeightClass="max-h-[min(65vh,600px)]"
+            className="rounded-none border-0 shadow-none"
+          />
         ) : null}
 
         {activeTab === 'invitations' ? (
-        <section className="overflow-hidden rounded-xl border border-surface-border bg-white">
-          <div className="overflow-x-auto">
-            {invitesLoading ? (
-              <p className="px-4 py-8 text-center text-sm text-ink-muted">Loading invitations…</p>
-            ) : invitations.length === 0 ? (
-              <p className="px-4 py-8 text-center text-sm text-ink-muted">No pending invitations.</p>
-            ) : (
-              <table className="cx-table min-w-[980px] text-xs">
-                <thead className="cx-table-sticky-head">
-                  <tr>
-                    <th>Email</th>
-                    <th>Role</th>
-                    <th>Role type</th>
-                    <th>Workspaces</th>
-                    <th>Invited by</th>
-                    <th>Sent</th>
-                    <th>Expires</th>
-                    <th>Profile</th>
-                    <th>Status</th>
-                    <th className="cx-table-cell-actions text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {invitations.map((inv) => {
-                    const status = invitationStatusPill(inv)
-                    const profileExtra = hasInviteProfilePrefill(inv.profilePrefill)
-                    return (
-                      <tr key={inv.id}>
-                        <td>
-                          <span className="font-medium text-ink">{inv.email}</span>
-                        </td>
-                        <td className="max-w-[140px] text-ink-muted">
-                          <span className="line-clamp-2" title={inv.companyRole?.name || ''}>
-                            {inv.companyRole?.name || '—'}
-                          </span>
-                        </td>
-                        <td className="text-ink-muted">
-                          {inv.companyRole?.userRoleKind ? (
-                            <span className="inline-flex rounded-full border border-surface-border bg-white px-2 py-0.5 text-[11px] text-ink-muted">
-                              {labelCompanyUserRoleKind(inv.companyRole.userRoleKind)}
-                            </span>
-                          ) : (
-                            <span className="text-ink-faint">—</span>
-                          )}
-                        </td>
-                        <td className="min-w-[120px] max-w-[220px]">
-                          <WorkspacePills selectedIds={inv.workspaceIds || []} all={workspaces} />
-                        </td>
-                        <td className="max-w-[160px] text-ink-muted">
-                          {inv.invitedBy ? (
-                            <div className="flex flex-col gap-0.5">
-                              <span className="line-clamp-1 font-medium text-ink" title={inv.invitedBy.name || ''}>
-                                {inv.invitedBy.name || '—'}
-                              </span>
-                              <span className="line-clamp-1 text-[11px] text-ink-faint" title={inv.invitedBy.email || ''}>
-                                {inv.invitedBy.email || ''}
-                              </span>
-                            </div>
-                          ) : (
-                            <span className="text-ink-faint">—</span>
-                          )}
-                        </td>
-                        <td className="whitespace-nowrap text-ink-muted">
-                          {inv.createdAt ? new Date(inv.createdAt).toLocaleString() : '—'}
-                        </td>
-                        <td className="whitespace-nowrap text-ink-muted">
-                          {inv.expiresAt ? new Date(inv.expiresAt).toLocaleString() : '—'}
-                        </td>
-                        <td>
-                          {profileExtra ? (
-                            <span
-                              className="inline-flex rounded-full border border-brand-200 bg-brand-50 px-2 py-0.5 text-[11px] font-medium text-brand-800"
-                              title="Job title, address, phone, and other fields were included on the invite and apply at signup."
-                            >
-                              Included
-                            </span>
-                          ) : (
-                            <span className="text-ink-faint">—</span>
-                          )}
-                        </td>
-                        <td>
-                          <span
-                            className={cn(
-                              'inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium',
-                              status.className,
-                            )}
-                          >
-                            {status.label}
-                          </span>
-                        </td>
-                        <td className="cx-table-cell-actions text-right">
-                          <button
-                            type="button"
-                            disabled={cancellingInvite}
-                            onClick={() => setCancelInviteDialog({ open: true, invite: inv })}
-                            aria-label="Cancel invitation"
-                            title="Cancel invitation"
-                            className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-danger hover:bg-red-100 disabled:opacity-50"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </section>
+          <DataGrid
+            gridColumns
+            columns={inviteColumns}
+            data={invitations}
+            loading={invitesLoading}
+            searchable={false}
+            showColumnToggle={false}
+            showExportCsv={false}
+            emptyTitle="No pending invitations"
+            maxHeightClass="max-h-[min(65vh,600px)]"
+            className="rounded-none border-0 shadow-none"
+          />
         ) : null}
 
         {activeTab === 'roles' ? (
-        <section className="overflow-hidden rounded-xl border border-surface-border bg-white">
-            <div className="overflow-x-auto">
-              {roles.length === 0 ? (
-                <p className="px-4 py-6 text-sm text-ink-muted">No custom roles yet.</p>
-              ) : (
-                <table className="cx-table min-w-[920px] text-xs">
-                  <thead className="cx-table-sticky-head">
-                    <tr>
-                      <th>Role</th>
-                      <th>Role type</th>
-                      <th>Description</th>
-                      <th>
-                        <span className="inline-flex items-center gap-1">
-                          <ShieldCheck className="h-3.5 w-3.5" />
-                          Menus
-                        </span>
-                      </th>
-                      <th>
-                        <span className="inline-flex items-center gap-1">
-                          <Users className="h-3.5 w-3.5" />
-                          Users
-                        </span>
-                      </th>
-                      <th className="cx-table-cell-actions text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {roles.map((r) => (
-                      <tr key={r.id}>
-                        <td>
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium text-ink">{r.name}</p>
-                            {r.isDefault ? (
-                              <span className="rounded-full border border-surface-border bg-white px-2 py-0.5 text-[11px] text-ink-muted">
-                                Default
-                              </span>
-                            ) : null}
-                          </div>
-                        </td>
-                        <td className="text-ink-muted">
-                          <span className="rounded-full border border-surface-border bg-white px-2 py-0.5 text-[11px] text-ink-muted">
-                            {labelCompanyUserRoleKind(r.userRoleKind)}
-                          </span>
-                        </td>
-                        <td className="text-ink-muted">{r.description || 'No description'}</td>
-                        <td>
-                          <span className="rounded-full border border-surface-border bg-white px-2 py-0.5 text-[11px] text-ink-muted">
-                            {r.menuCount || 0}
-                          </span>
-                        </td>
-                        <td>
-                          <span className="rounded-full border border-surface-border bg-white px-2 py-0.5 text-[11px] text-ink-muted">
-                            {r.assignedUsers || 0}
-                          </span>
-                        </td>
-                        <td className="cx-table-cell-actions text-right">
-                          <div className="inline-flex gap-1 opacity-100 transition">
-                            <button
-                              type="button"
-                              aria-label="Edit role"
-                              title={r.isDefault ? 'Default role cannot be edited' : 'Edit role'}
-                              className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-brand-200 bg-white text-brand-700 shadow-sm hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
-                              disabled={r.isDefault}
-                              onClick={() => {
-                                setEditingRoleId(r.id)
-                                setRoleForm({
-                                  name: r.name,
-                                  description: r.description || '',
-                                  userRoleKind: r.userRoleKind || 'custom',
-                                  menuPermissions: r.menuPermissions || [],
-                                })
-                                setRoleEditDrawerOpen(true)
-                              }}
-                            >
-                              <PencilLine className="h-3.5 w-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              aria-label="Delete role"
-                              title={r.isDefault ? 'Default role cannot be deleted' : 'Delete role'}
-                              className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-danger hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
-                              disabled={deletingRole || r.isDefault}
-                              onClick={async () => {
-                                setDeleteRoleDialog({
-                                  open: true,
-                                  roleId: r.id,
-                                  roleName: r.name,
-                                  fallbackRoleId: roles.find((x) => x.id !== r.id && !x.isDefault)?.id || roles.find((x) => x.id !== r.id)?.id || '',
-                                })
-                              }}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-        </section>
+          <DataGrid
+            gridColumns
+            columns={roleColumns}
+            data={roles}
+            searchable={false}
+            showColumnToggle={false}
+            showExportCsv={false}
+            emptyTitle="No custom roles yet"
+            maxHeightClass="max-h-[min(65vh,600px)]"
+            className="rounded-none border-0 shadow-none"
+          />
         ) : null}
-
-      </div>
+        </PageContentPanel>
+      </PageStack>
 
       <RightDrawer
         open={accessDrawerOpen}
@@ -1023,7 +1075,7 @@ export function TeamPage() {
               type="button"
               disabled={patchingWorkspaces || patchingRole || patchingProfile}
               onClick={saveAccessChanges}
-              className="h-10 rounded-xl bg-brand-600 px-5 text-sm font-semibold text-white shadow-lg shadow-brand-600/25 transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="h-10 rounded-xl bg-slate-800 px-5 text-sm font-semibold text-white shadow-lg shadow-brand-600/25 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {patchingWorkspaces || patchingRole || patchingProfile ? 'Saving…' : 'Save changes'}
             </button>
@@ -1210,7 +1262,7 @@ export function TeamPage() {
               type="submit"
               form="invite-member-form"
               disabled={inviteBusy}
-              className="h-10 rounded-xl bg-brand-600 px-5 text-sm font-semibold text-white shadow-lg shadow-brand-600/25 transition hover:bg-brand-700 disabled:opacity-60"
+              className="h-10 rounded-xl bg-slate-800 px-5 text-sm font-semibold text-white shadow-lg shadow-brand-600/25 transition hover:bg-slate-800 disabled:opacity-60"
             >
               {inviteBusy ? 'Sending…' : 'Send invitation'}
             </button>
@@ -1361,28 +1413,17 @@ export function TeamPage() {
           </DrawerSection>
 
           <DrawerSection>
-            <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Workspaces</label>
-            <div className="flex flex-wrap gap-2">
-              {workspaces.map((w) => {
-                const active = inviteForm.workspaceIds.includes(w.id)
-                return (
-                  <button
-                    key={w.id}
-                    type="button"
-                    disabled={inviteBusy}
-                    onClick={() =>
-                      setInviteForm((f) => ({
-                        ...f,
-                        workspaceIds: active ? f.workspaceIds.filter((id) => id !== w.id) : [...f.workspaceIds, w.id],
-                      }))
-                    }
-                    className={workspaceChipClass(active, { disabled: inviteBusy })}
-                  >
-                    {w.name}
-                  </button>
-                )
-              })}
-            </div>
+            <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Workspace</label>
+            {inviteWorkspace ? (
+              <p className="mt-1.5 rounded-xl border border-surface-border bg-surface-subtle px-3.5 py-2.5 text-sm text-ink">
+                {inviteWorkspace.name}
+                <span className="mt-1 block text-xs text-ink-faint">
+                  New members are added to this workspace. Use member access to assign more workspaces later.
+                </span>
+              </p>
+            ) : (
+              <p className="mt-1.5 text-sm text-ink-faint">Select a workspace in the sidebar first.</p>
+            )}
           </DrawerSection>
         </form>
       </RightDrawer>
@@ -1417,7 +1458,7 @@ export function TeamPage() {
                   toast.error(apiErrorMessage(err))
                 }
               }}
-              className="h-10 rounded-xl bg-brand-600 px-4 text-sm font-medium text-white"
+              className="h-10 rounded-xl bg-slate-800 px-4 text-sm font-medium text-white"
             >
               {patchingRoleMeta ? 'Saving…' : 'Save changes'}
             </button>
@@ -1498,7 +1539,7 @@ export function TeamPage() {
                   toast.error(apiErrorMessage(err))
                 }
               }}
-              className="h-10 rounded-xl bg-brand-600 px-4 text-sm font-medium text-white"
+              className="h-10 rounded-xl bg-slate-800 px-4 text-sm font-medium text-white"
             >
               {creatingRole ? 'Creating…' : 'Create role'}
             </button>

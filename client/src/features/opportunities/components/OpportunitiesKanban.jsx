@@ -102,7 +102,7 @@ function KanbanCard({ opp, onOpen, canCreateDeal, onCreateDeal }) {
             </span>
           </div>
           <div className="flex items-center gap-1.5 pt-1 text-[11px] text-ink-muted">
-            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-brand-100 text-[9px] font-semibold text-brand-800">
+            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-200 text-[9px] font-semibold text-brand-800">
               {initials(opp.owner?.name || opp.owner?.email)}
             </span>
             <span className="truncate">{opp.owner?.name || opp.owner?.email || 'Unassigned'}</span>
@@ -144,7 +144,7 @@ function KanbanColumn({ stageName, displayLabel, opportunities, onOpen, dealStag
         isOver &&
           (isDealStageColumn
             ? 'ring-2 ring-emerald-500/45 ring-offset-1'
-            : 'border-brand-400 bg-brand-50/60 ring-2 ring-brand-400/30'),
+            : 'border-brand-400 bg-slate-100 ring-2 ring-brand-400/30'),
       )}
     >
       <div

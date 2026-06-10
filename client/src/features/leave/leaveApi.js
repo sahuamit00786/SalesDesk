@@ -16,7 +16,7 @@ export const leaveApi = baseApi.injectEndpoints({
     }),
     deleteLeaveType: build.mutation({
       query: (id) => ({ url: `/leave/types/${id}`, method: 'DELETE' }),
-      invalidatesTags: [{ type: 'Leave', id: 'TYPES' }],
+      invalidatesTags: [{ type: 'Leave' }],
     }),
     getMyLeaveBalance: build.query({
       query: (year) => ({ url: '/leave/balance/me', params: { year } }),

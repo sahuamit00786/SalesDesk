@@ -15,7 +15,7 @@ export default function GmailMessageCard({
       className={`overflow-hidden rounded-lg border border-surface-border bg-white shadow-sm ${!expanded ? 'cursor-pointer hover:bg-surface-muted/40' : ''}`}
     >
       <div className="flex items-start gap-2.5 px-3 py-2.5" onClick={() => setExpanded((prev) => !prev)} role="presentation">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-600 text-[11px] font-semibold text-white">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--brand-primary)] text-[11px] font-semibold text-white">
           {message.from.initials || '??'}
         </div>
         <div className="min-w-0 flex-1">

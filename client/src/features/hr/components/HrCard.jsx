@@ -11,7 +11,7 @@ export function HrCard({ title, description, icon: Icon, action, children, class
       )}
     >
       {hasHeader ? (
-        <header className="flex flex-wrap items-start justify-between gap-3 border-b border-surface-border/70 bg-gradient-to-r from-[#534AB7]/[0.06] via-brand-50/40 to-white px-5 py-4">
+        <header className="flex flex-wrap items-start justify-between gap-3 border-b border-surface-border/70 bg-gradient-to-r from-[#5B21B6]/[0.06] via-brand-50/40 to-white px-5 py-4">
           <div className="flex min-w-0 items-start gap-3">
             {Icon ? (
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-brand-200/60 bg-brand-50 text-brand-700 shadow-sm">

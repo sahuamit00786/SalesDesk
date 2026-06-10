@@ -64,6 +64,7 @@ export async function list(req, res, next) {
     })
     const ids = rows.map((r) => r.id)
     const lastByWf = new Map()
+    const countByWf = new Map()
     if (ids.length) {
       const runs = await WorkflowRun.findAll({
         where: { workflowId: { [Op.in]: ids } },
@@ -71,6 +72,7 @@ export async function list(req, res, next) {
       })
       for (const r of runs) {
         const wfId = String(r.workflowId)
+        countByWf.set(wfId, (countByWf.get(wfId) || 0) + 1)
         if (!lastByWf.has(wfId)) {
           const plain = r.get({ plain: true })
           lastByWf.set(wfId, plain)
@@ -89,7 +91,20 @@ export async function list(req, res, next) {
             triggerType: lr.triggerType,
           }
         : null
-      return { ...p, lastRun }
+      const def = p.definitionJson || {}
+      const nodes = Array.isArray(def.nodes) ? def.nodes : []
+      const triggerNode = nodes.find((n) => n.type === 'trigger' || n.data?.nodeType === 'trigger')
+      const triggerLabel = triggerNode?.data?.label || triggerNode?.data?.triggerType || null
+      const stepCount = nodes.filter((n) => n.type !== 'trigger' && n.data?.nodeType !== 'trigger').length
+      return {
+        ...p,
+        definitionJson: undefined,
+        runtimeStateJson: undefined,
+        lastRun,
+        runCount: countByWf.get(String(p.id)) || 0,
+        triggerLabel,
+        stepCount,
+      }
     })
     return res.json({ success: true, data, meta: {} })
   } catch (e) {
@@ -169,6 +184,30 @@ export async function remove(req, res, next) {
   }
 }
 
+function validateWorkflowDefinition(def) {
+  const nodes = Array.isArray(def?.nodes) ? def.nodes : []
+  const errors = []
+  const hasTrigger = nodes.some((n) => n.type === 'triggerLeadCreated' || n.type === 'triggerLeadUpdated')
+  if (!hasTrigger) errors.push('Workflow must have a trigger node')
+  for (const node of nodes) {
+    if (node.type === 'actionAssignOwner') {
+      const ids = Array.isArray(node.data?.userIds) ? node.data.userIds.filter(Boolean) : []
+      const single = String(node.data?.userId || '').trim()
+      if (!ids.length && !single) errors.push(`Node "${node.id}": Assign Owner must have at least one user selected`)
+    }
+    if (node.type === 'actionSendEmailTemplate') {
+      if (!String(node.data?.templateId || '').trim()) errors.push(`Node "${node.id}": Send Email must have a template selected`)
+    }
+    if (node.type === 'conditionField') {
+      if (!String(node.data?.field || '').trim()) errors.push(`Node "${node.id}": Condition must have a field selected`)
+    }
+    if (node.type === 'actionCreateTask') {
+      if (!String(node.data?.title || '').trim()) errors.push(`Node "${node.id}": Create Task must have a title`)
+    }
+  }
+  return errors
+}
+
 export async function publish(req, res, next) {
   try {
     const workspaceId = await assertWorkspaceAccess(req, req.headers['x-workspace-id'])
@@ -176,6 +215,10 @@ export async function publish(req, res, next) {
       where: { id: req.params.id, companyId: req.user.companyId, workspaceId },
     })
     if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Workflow not found' } })
+    const defErrors = validateWorkflowDefinition(row.definitionJson)
+    if (defErrors.length) {
+      return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: defErrors[0], details: defErrors } })
+    }
     const nextVersion = (row.publishedVersion || 1) + 1
     await WorkflowVersion.create({
       workflowId: row.id,

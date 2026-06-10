@@ -21,7 +21,7 @@ export function LeadScorePill({ score = 0, showBar = false }) {
       </div>
       {showBar ? (
         <div className="h-2 w-full overflow-hidden rounded-full bg-surface-subtle">
-          <div className="h-full rounded-full bg-brand-500" style={{ width: `${Math.min(100, Math.max(0, score))}%` }} />
+          <div className="h-full rounded-full bg-slate-1000" style={{ width: `${Math.min(100, Math.max(0, score))}%` }} />
         </div>
       ) : null}
     </div>

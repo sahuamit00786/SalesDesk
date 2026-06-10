@@ -22,12 +22,22 @@ export function sanitizeFieldInput(field, order) {
     isHidden: Boolean(field?.isHidden),
     order,
     width: field?.width === 'half' ? 'half' : 'full',
-    options: Array.isArray(field?.options)
-      ? field.options
+    options: (() => {
+      if (field?.type === 'file' && field?.options && typeof field.options === 'object' && !Array.isArray(field.options)) {
+        return {
+          accept: String(field.options.accept || ''),
+          maxFiles: Math.max(1, Number(field.options.maxFiles) || 1),
+          maxFileSizeMB: Math.max(1, Number(field.options.maxFileSizeMB) || 10),
+        }
+      }
+      if (Array.isArray(field?.options)) {
+        return field.options
           .slice(0, 50)
           .map((opt) => ({ label: stripHtml(opt?.label || ''), value: stripHtml(opt?.value || '') }))
           .filter((opt) => opt.label || opt.value)
-      : null,
+      }
+      return null
+    })(),
     showCountryCode: field?.showCountryCode !== false,
     defaultCountryCode: stripHtml(field?.defaultCountryCode || '+91') || '+91',
     minLength: Number.isFinite(field?.minLength) ? Number(field.minLength) : null,

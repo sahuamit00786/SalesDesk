@@ -28,6 +28,25 @@ export async function setCompanyWeeklyOffDays(companyId, weeklyOffDays) {
   return normalized
 }
 
+export async function getLateThreshold(companyId) {
+  const company = await Company.findByPk(companyId, {
+    attributes: ['lateThresholdHour', 'lateThresholdMinute'],
+  })
+  return {
+    hour: company?.lateThresholdHour ?? 10,
+    minute: company?.lateThresholdMinute ?? 0,
+  }
+}
+
+export async function setLateThreshold(companyId, hour, minute) {
+  const h = Math.max(0, Math.min(23, Number(hour) || 10))
+  const m = Math.max(0, Math.min(59, Number(minute) || 0))
+  const company = await Company.findByPk(companyId)
+  if (!company) return null
+  await company.update({ lateThresholdHour: h, lateThresholdMinute: m })
+  return { hour: h, minute: m }
+}
+
 function isWeeklyOff(date, weeklyOffDays) {
   return weeklyOffDays.includes(date.getDay())
 }
@@ -151,6 +170,7 @@ export async function validateLeaveRequest({
   toDate,
   companyId,
   allowPastForSick = false,
+  isHalfDay = false,
 }) {
   const fromStr = parseDateOnly(fromDate)
   const toStr = parseDateOnly(toDate)
@@ -170,13 +190,15 @@ export async function validateLeaveRequest({
     return { ok: false, message: 'Cannot apply leave for past dates (except sick leave)' }
   }
 
-  const days = await calculateLeaveDays(fromStr, toStr, companyId)
-  if (days <= 0) {
+  const calDays = await calculateLeaveDays(fromStr, toStr, companyId)
+  if (calDays <= 0) {
     return {
       ok: false,
       message: 'No working days in the selected range (weekly offs and public holidays are excluded)',
     }
   }
+
+  const days = isHalfDay ? 0.5 : calDays
 
   if (await hasOverlappingLeave(userId, fromStr, toStr)) {
     return { ok: false, message: 'Leave dates overlap with an existing request' }

@@ -135,7 +135,6 @@ module.exports = {
         ['automate.forms', 'Web forms / lead capture', '/forms', 'campaigns', 'view'],
         ['insights', 'Insights', null, null, null],
         ['insights.reports', 'Reports', '/reports', 'reports', 'view'],
-        ['insights.forecasting', 'Forecasting', '/forecasting', 'reports', 'view'],
         ['settings', 'Settings', null, null, null],
         ['settings.workspace', 'Workspace settings', '/workspace', 'settings', 'view'],
         ['settings.team', 'Team & roles', '/team', 'team', 'view'],

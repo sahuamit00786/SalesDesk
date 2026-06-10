@@ -42,6 +42,7 @@ import { WebFormField } from './WebFormField.js'
 import { WebFormSubmission } from './WebFormSubmission.js'
 import { WebFormEmailTemplate } from './WebFormEmailTemplate.js'
 import { OpportunityStage } from './OpportunityStage.js'
+import { OpportunityStatus } from './OpportunityStatus.js'
 import { DealStatus } from './DealStatus.js'
 import { Meeting } from './Meeting.js'
 import { CallLog } from './CallLog.js'
@@ -71,11 +72,15 @@ import { WorkflowVersion } from './WorkflowVersion.js'
 import { WorkflowRun } from './WorkflowRun.js'
 import { WorkflowRunStep } from './WorkflowRunStep.js'
 import { AttendanceLog } from './AttendanceLog.js'
+import { AttendanceSession } from './AttendanceSession.js'
+import { DuplicateLead } from './DuplicateLead.js'
 import { LeaveType } from './LeaveType.js'
 import { LeaveBalance } from './LeaveBalance.js'
 import { LeaveRequest } from './LeaveRequest.js'
 import { PublicHoliday } from './PublicHoliday.js'
 import { Notification } from './Notification.js'
+import { NotificationDeliveryLog } from './NotificationDeliveryLog.js'
+import { DealPayment } from './DealPayment.js'
 
 User.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
 Company.hasMany(User, { foreignKey: 'companyId', as: 'users' })
@@ -117,10 +122,12 @@ Lead.belongsTo(User, { foreignKey: 'ownerUserId', as: 'owner' })
 Lead.belongsTo(User, { foreignKey: 'assignedTo', as: 'assignee' })
 Lead.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
 Lead.belongsTo(LeadSource, { foreignKey: 'sourceId', as: 'leadSource' })
+Lead.belongsTo(OpportunityStatus, { foreignKey: 'opportunityStatus', as: 'oppStatus' })
+OpportunityStatus.hasMany(Lead, { foreignKey: 'opportunityStatus', as: 'leads' })
 Company.hasMany(Lead, { foreignKey: 'companyId', as: 'leads' })
 Workspace.hasMany(Lead, { foreignKey: 'workspaceId', as: 'leads' })
 LeadSource.hasMany(Lead, { foreignKey: 'sourceId', as: 'leads' })
-Lead.hasMany(Activity, { foreignKey: 'leadId', as: 'activities' })
+Lead.hasMany(Activity, { foreignKey: 'leadId', as: 'activities', onDelete: 'CASCADE' })
 Activity.belongsTo(Lead, { foreignKey: 'leadId', as: 'lead' })
 Activity.belongsTo(User, { foreignKey: 'userId', as: 'user' })
 Activity.hasMany(ActivityReminder, { foreignKey: 'activityId', as: 'reminders' })
@@ -160,9 +167,9 @@ LeadTask.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' })
 LeadTask.belongsTo(User, { foreignKey: 'assignedTo', as: 'assignee' })
 User.hasMany(LeadTask, { foreignKey: 'createdBy', as: 'createdLeadTasks' })
 User.hasMany(LeadTask, { foreignKey: 'assignedTo', as: 'assignedLeadTasks' })
-LeadTask.hasMany(LeadTaskSubtask, { foreignKey: 'leadTaskId', as: 'subtasks' })
+LeadTask.hasMany(LeadTaskSubtask, { foreignKey: 'leadTaskId', as: 'subtasks', onDelete: 'CASCADE' })
 LeadTaskSubtask.belongsTo(LeadTask, { foreignKey: 'leadTaskId', as: 'task' })
-LeadTask.hasMany(LeadTaskComment, { foreignKey: 'leadTaskId', as: 'comments' })
+LeadTask.hasMany(LeadTaskComment, { foreignKey: 'leadTaskId', as: 'comments', onDelete: 'CASCADE' })
 LeadTaskComment.belongsTo(LeadTask, { foreignKey: 'leadTaskId', as: 'task' })
 LeadTaskComment.belongsTo(User, { foreignKey: 'userId', as: 'author' })
 User.hasMany(LeadTaskComment, { foreignKey: 'userId', as: 'leadTaskComments' })
@@ -186,6 +193,11 @@ User.hasMany(Deal, { foreignKey: 'assignedTo', as: 'assignedDeals' })
 User.hasMany(Deal, { foreignKey: 'ownerUserId', as: 'ownedDeals' })
 Deal.hasMany(DealActivity, { foreignKey: 'dealId', as: 'dealActivities' })
 DealActivity.belongsTo(Deal, { foreignKey: 'dealId', as: 'deal' })
+
+Deal.hasMany(DealPayment, { foreignKey: 'dealId', as: 'payments' })
+DealPayment.belongsTo(Deal, { foreignKey: 'dealId', as: 'deal' })
+DealPayment.belongsTo(User, { foreignKey: 'createdByUserId', as: 'createdBy' })
+User.hasMany(DealPayment, { foreignKey: 'createdByUserId', as: 'dealPayments' })
 DealActivity.belongsTo(User, { foreignKey: 'userId', as: 'user' })
 User.belongsToMany(Lead, { through: LeadAssignment, foreignKey: 'userId', otherKey: 'leadId', as: 'assignedLeads' })
 Document.belongsTo(User, { foreignKey: 'uploadedBy', as: 'uploader' })
@@ -236,25 +248,18 @@ foreignKey:'lead_id'
 // foreignKey:'meeting_id'
 // })
 
-Meeting.hasMany(MeetingTranscript,{
-foreignKey:'meeting_id'
-})
+Meeting.hasMany(MeetingTranscript, { foreignKey: 'meeting_id', onDelete: 'CASCADE' })
 
-Meeting.hasOne(MeetingRecording,{
-foreignKey:'meeting_id'
-})
+Meeting.hasOne(MeetingRecording, { foreignKey: 'meeting_id', onDelete: 'CASCADE' })
 
-Meeting.hasOne(AiMeetingSummary,{
-foreignKey:'meeting_id'
-})
+Meeting.hasOne(AiMeetingSummary, { foreignKey: 'meeting_id', onDelete: 'CASCADE' })
 
-Meeting.hasMany(ActionItem,{
-foreignKey:'meeting_id'
-})
+Meeting.hasMany(ActionItem, { foreignKey: 'meeting_id', onDelete: 'CASCADE' })
 
 Meeting.hasMany(MeetingParticipant, {
-  foreignKey: "meetingId",
-  as: "participants",
+  foreignKey: 'meetingId',
+  as: 'participants',
+  onDelete: 'CASCADE',
 });
 
 MeetingParticipant.belongsTo(Meeting, {
@@ -317,7 +322,9 @@ Quotation.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
 Workspace.hasMany(Quotation, { foreignKey: 'workspaceId', as: 'quotations' })
 Quotation.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
 Quotation.belongsTo(Lead, { foreignKey: 'leadId', as: 'lead' })
+Quotation.belongsTo(Deal, { foreignKey: 'dealId', as: 'deal' })
 Lead.hasMany(Quotation, { foreignKey: 'leadId', as: 'quotations' })
+Deal.hasMany(Quotation, { foreignKey: 'dealId', as: 'quotations' })
 Quotation.belongsTo(QuotationTemplate, { foreignKey: 'quotationTemplateId', as: 'template' })
 Quotation.belongsTo(User, { foreignKey: 'ownerUserId', as: 'owner' })
 Quotation.belongsTo(Invoice, { foreignKey: 'convertedInvoiceId', as: 'convertedInvoice' })
@@ -332,7 +339,9 @@ Invoice.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
 Workspace.hasMany(Invoice, { foreignKey: 'workspaceId', as: 'invoices' })
 Invoice.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
 Invoice.belongsTo(Lead, { foreignKey: 'leadId', as: 'lead' })
+Invoice.belongsTo(Deal, { foreignKey: 'dealId', as: 'deal' })
 Lead.hasMany(Invoice, { foreignKey: 'leadId', as: 'invoices' })
+Deal.hasMany(Invoice, { foreignKey: 'dealId', as: 'invoices' })
 Invoice.belongsTo(InvoiceTemplate, { foreignKey: 'invoiceTemplateId', as: 'template' })
 Invoice.belongsTo(Quotation, { foreignKey: 'quotationId', as: 'quotation' })
 Quotation.hasMany(Invoice, { foreignKey: 'quotationId', as: 'invoicesFromQuote' })
@@ -388,6 +397,12 @@ User.hasMany(LeaveRequest, { foreignKey: 'userId', as: 'leaveRequests' })
 User.hasMany(Notification, { foreignKey: 'userId', as: 'notifications' })
 AttendanceLog.belongsTo(User, { foreignKey: 'userId', as: 'user' })
 AttendanceLog.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
+AttendanceLog.hasMany(AttendanceSession, { foreignKey: 'logId', as: 'sessions' })
+
+AttendanceSession.belongsTo(AttendanceLog, { foreignKey: 'logId', as: 'log' })
+AttendanceSession.belongsTo(User, { foreignKey: 'userId', as: 'user' })
+AttendanceSession.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
+User.hasMany(AttendanceSession, { foreignKey: 'userId', as: 'attendanceSessions' })
 
 LeaveType.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
 LeaveType.hasMany(LeaveBalance, { foreignKey: 'leaveTypeId', as: 'balances' })
@@ -405,6 +420,18 @@ PublicHoliday.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
 Notification.belongsTo(User, { foreignKey: 'userId', as: 'user' })
 Notification.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
 
+NotificationDeliveryLog.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
+NotificationDeliveryLog.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
+NotificationDeliveryLog.belongsTo(User, { foreignKey: 'recipientUserId', as: 'recipient' })
+NotificationDeliveryLog.belongsTo(User, { foreignKey: 'actorUserId', as: 'actor' })
+Company.hasMany(NotificationDeliveryLog, { foreignKey: 'companyId', as: 'notificationDeliveryLogs' })
+User.hasMany(NotificationDeliveryLog, { foreignKey: 'recipientUserId', as: 'notificationDeliveries' })
+
+DuplicateLead.belongsTo(Lead, { foreignKey: 'matchedLeadId', as: 'matchedLead' })
+DuplicateLead.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
+DuplicateLead.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
+DuplicateLead.belongsTo(User, { foreignKey: 'createdByUserId', as: 'createdBy' })
+
 export {
   sequelize,
   User,
@@ -420,6 +447,7 @@ export {
   Lead,
   Deal,
   DealActivity,
+  DealPayment,
   Activity,
   Tag,
   LeadTag,
@@ -450,6 +478,7 @@ export {
   WebFormSubmission,
   WebFormEmailTemplate,
   OpportunityStage,
+  OpportunityStatus,
   DealStatus,
   Meeting,
   MeetingParticipant,
@@ -478,9 +507,12 @@ export {
   WorkflowRun,
   WorkflowRunStep,
   AttendanceLog,
+  AttendanceSession,
   LeaveType,
   LeaveBalance,
   LeaveRequest,
   PublicHoliday,
   Notification,
+  NotificationDeliveryLog,
+  DuplicateLead,
 }

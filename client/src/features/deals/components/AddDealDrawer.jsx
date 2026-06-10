@@ -123,7 +123,7 @@ export function AddDealDrawer({
             </label>
             <select
               id="add-deal-opp-select"
-              className="mt-1 w-full min-w-0 rounded-lg border border-neutral-200 bg-white px-3 py-2.5 text-sm text-neutral-900 shadow-sm focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
+              className="mt-1 w-full min-w-0 rounded-lg border border-neutral-200 bg-white px-3 py-2.5 text-sm text-neutral-900 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-400"
               value={selectedOppId}
               disabled={loadingOpps}
               onChange={(e) => setSelectedOppId(e.target.value)}
@@ -233,7 +233,7 @@ export function AddDealDrawer({
           type="button"
           disabled={saving || !effectiveOppId}
           onClick={submit}
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-orange-500 px-4 text-sm font-semibold text-white shadow-sm hover:bg-orange-600 disabled:opacity-50"
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[var(--brand-primary)] px-4 text-sm font-semibold text-white shadow-sm hover:bg-[var(--brand-primary-dark)] disabled:opacity-50"
         >
           <Plus className="h-4 w-4" />
           Create deal

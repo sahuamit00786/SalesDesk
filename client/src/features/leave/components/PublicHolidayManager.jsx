@@ -11,9 +11,17 @@ import {
   useGetPublicHolidaysQuery,
 } from '@/features/leave/leaveApi'
 
+function FieldLabel({ children, htmlFor }) {
+  return (
+    <label htmlFor={htmlFor} className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+      {children}
+    </label>
+  )
+}
+
 export function PublicHolidayManager({ year }) {
   const { data, isLoading } = useGetPublicHolidaysQuery(year)
-  const [createHoliday] = useCreateHolidayMutation()
+  const [createHoliday, { isLoading: creating }] = useCreateHolidayMutation()
   const [deleteHoliday] = useDeleteHolidayMutation()
   const holidays = data?.data || []
 
@@ -54,18 +62,40 @@ export function PublicHolidayManager({ year }) {
       description="Company-wide holidays excluded from leave day calculations"
       icon={PartyPopper}
     >
-      <form onSubmit={addHoliday} className="mb-6 grid gap-3 rounded-xl border border-surface-border/80 bg-surface-subtle/40 p-4 sm:grid-cols-3">
-        <Input placeholder="Holiday name" value={name} onChange={(e) => setName(e.target.value)} />
-        <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-        <Input
-          placeholder="Description (optional)"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          className="sm:col-span-2"
-        />
-        <Button type="submit" className="sm:col-span-1">
-          Add holiday
-        </Button>
+      <form
+        onSubmit={addHoliday}
+        className="mb-6 space-y-4 rounded-xl border border-surface-border bg-surface-subtle/50 p-4 sm:p-5"
+      >
+        <p className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Add holiday</p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <FieldLabel htmlFor="holiday-name">Holiday name</FieldLabel>
+            <Input
+              id="holiday-name"
+              placeholder="e.g. Independence Day"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
+          <div>
+            <FieldLabel htmlFor="holiday-date">Date</FieldLabel>
+            <Input id="holiday-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </div>
+          <div className="sm:col-span-2">
+            <FieldLabel htmlFor="holiday-desc">Description (optional)</FieldLabel>
+            <Input
+              id="holiday-desc"
+              placeholder="Optional note for your team"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="flex justify-end border-t border-surface-border/70 pt-4">
+          <Button type="submit" disabled={creating}>
+            {creating ? 'Adding…' : 'Add holiday'}
+          </Button>
+        </div>
       </form>
 
       {isLoading ? (
@@ -78,11 +108,11 @@ export function PublicHolidayManager({ year }) {
           className="border-0 bg-transparent py-6"
         />
       ) : (
-        <ul className="divide-y divide-surface-border/80 overflow-hidden rounded-xl border border-surface-border/80">
+        <ul className="divide-y divide-surface-border overflow-hidden rounded-xl border border-surface-border">
           {holidays.map((h) => (
             <li
               key={h.id}
-              className="flex flex-wrap items-center justify-between gap-3 bg-white px-4 py-3.5 transition-colors hover:bg-brand-50/20"
+              className="flex flex-wrap items-center justify-between gap-3 bg-white px-4 py-3.5 transition-colors hover:bg-slate-50/30 sm:px-5"
             >
               <div className="min-w-0">
                 <p className="font-semibold text-ink">{h.name}</p>

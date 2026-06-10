@@ -61,12 +61,12 @@ export function EmailPreviewCard({ subject, bodyHtml, attachments = [], sampleVa
           {filledSubject || <span className="italic text-ink-faint">No subject yet</span>}
         </h3>
         <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-ink-muted">
-          <span className="inline-flex items-center gap-1 rounded-md bg-orange-50 px-1.5 py-0.5 font-medium text-orange-700">Inbox</span>
+          <span className="inline-flex items-center gap-1 rounded-md bg-brand-50 px-1.5 py-0.5 font-medium text-brand-700">Inbox</span>
           <span className="inline-flex items-center gap-1 rounded-md bg-surface-subtle px-1.5 py-0.5 font-medium text-ink-muted">Outreach</span>
         </div>
       </div>
       <div className="flex items-start gap-3 px-5 py-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-orange-500 text-sm font-semibold text-white">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--brand-primary)] text-sm font-semibold text-white">
           {photoUrl ? (
             <img src={photoUrl} alt={senderName} className="h-full w-full object-cover" />
           ) : (
@@ -112,9 +112,9 @@ export function EmailPreviewCard({ subject, bodyHtml, attachments = [], sampleVa
               return (
                 <div
                   key={`${a.url}-${i}`}
-                  className="flex max-w-xs items-center gap-2 rounded-lg border border-orange-200 bg-orange-50 px-2.5 py-1.5"
+                  className="flex max-w-xs items-center gap-2 rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1.5"
                 >
-                  <Icon className="h-4 w-4 text-orange-600" />
+                  <Icon className="h-4 w-4 text-brand-700" />
                   <div className="min-w-0">
                     <p className="truncate text-xs font-medium text-ink">{a.filename}</p>
                     {a.size ? <p className="text-[10px] text-ink-muted">{formatSize(a.size)}</p> : null}

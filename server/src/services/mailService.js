@@ -175,6 +175,46 @@ export async function sendRegistrationEmails({ to, name, companyName, otpPlain }
   return { sent: true }
 }
 
+export async function sendPasswordResetOtpEmail({ to, name, otpPlain }) {
+  const transport = getMailTransport()
+  const from = fromAddress()
+  const app = appDisplayName()
+  const safeName = escapeHtml(name)
+  const safeApp = escapeHtml(app)
+  const html = buildMinimalEmailDocument({
+    innerHtml: `${brandMarkHtml()}
+<h1 style="margin:0 0 12px;font-size:22px;font-weight:700;color:#000000;line-height:1.25;">Reset your password</h1>
+<p style="margin:0 0 4px;font-size:15px;line-height:1.55;color:#374151;">Hi ${safeName},</p>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#374151;">Use this code to reset your <strong>${safeApp}</strong> password:</p>
+${buildOtpCodeRowHtml(otpPlain)}
+<p style="margin:20px 0 0;font-size:15px;font-weight:700;color:#000000;line-height:1.4;">This code expires in ${OTP_EXPIRY_MIN} minutes.</p>
+${otpDisclaimerFooterHtml(app)}`,
+  })
+
+  if (!transport) {
+    if (process.env.NODE_ENV !== 'production') {
+      // eslint-disable-next-line no-console
+      console.info(`[${app} mail] SMTP not configured. Password reset OTP for ${to}: ${otpPlain}`)
+      return { sent: false, devOtp: otpPlain }
+    }
+    const err = new Error('SMTP is not configured')
+    err.status = 503
+    err.code = 'SMTP_UNAVAILABLE'
+    err.publicMessage = 'Email delivery is not configured on the server'
+    throw err
+  }
+
+  await transport.sendMail({
+    from,
+    to,
+    subject: `${app} — password reset code`,
+    html,
+    text: `Hi ${name},\n\nYour ${app} password reset code is: ${otpPlain}\n\nThis code expires in ${OTP_EXPIRY_MIN} minutes.\n`,
+  })
+
+  return { sent: true }
+}
+
 export async function sendResendOtpEmail({ to, name, otpPlain }) {
   const transport = getMailTransport()
   const from = fromAddress()

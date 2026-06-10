@@ -18,7 +18,7 @@ const LEGEND_PERSONAL = [
 
 const LEGEND_TEAM = [
   ...LEGEND_PERSONAL,
-  { key: 'on_leave', label: 'On leave', dotClassName: 'bg-violet-400 border-violet-300' },
+  { key: 'on_leave', label: 'On leave', dotClassName: 'bg-violet-400 border-brand-300' },
 ]
 
 export function AttendanceCalendarWorkspace({
@@ -26,6 +26,7 @@ export function AttendanceCalendarWorkspace({
   mode = 'personal',
   logs = [],
   calendar = {},
+  memberName,
   syncPeriod,
   onPeriodChange,
   onDayClick,
@@ -33,6 +34,22 @@ export function AttendanceCalendarWorkspace({
   const events = useMemo(() => {
     if (mode === 'team') return teamAttendanceToEvents(calendar)
     return personalAttendanceToEvents(logs)
+  }, [mode, logs, calendar])
+
+  const dayStatusByDate = useMemo(() => {
+    const map = {}
+    if (mode === 'personal') {
+      for (const log of logs) {
+        const key = String(log.date).slice(0, 10)
+        map[key] = String(log.status || '').toLowerCase()
+      }
+      return map
+    }
+    for (const [dateKey, stats] of Object.entries(calendar)) {
+      if (!stats) continue
+      if (Number(stats.absent) > 0) map[dateKey] = 'absent'
+    }
+    return map
   }, [mode, logs, calendar])
 
   const legend = mode === 'team' ? LEGEND_TEAM : LEGEND_PERSONAL
@@ -65,11 +82,16 @@ export function AttendanceCalendarWorkspace({
 
   const leftSidebar = (
     <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
+      {memberName ? (
+        <p className="mb-2 text-sm font-semibold text-gray-900">{memberName}</p>
+      ) : null}
       <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-500">Legend</p>
       <HrCalendarLegend items={legend} />
-      {mode === 'team' ? (
-        <p className="mt-3 text-xs leading-relaxed text-gray-500">Click a day or event to view team attendance details.</p>
-      ) : null}
+      <p className="mt-3 text-xs leading-relaxed text-gray-500">
+        {mode === 'team'
+          ? 'Click a day or event to view team attendance details. Use the mini calendar to pick a date range.'
+          : 'Pick a date range in the mini calendar to focus the main view. Absent days are highlighted in red.'}
+      </p>
     </div>
   )
 
@@ -82,6 +104,8 @@ export function AttendanceCalendarWorkspace({
       EventComponent={EventComponent}
       leftSidebar={leftSidebar}
       showRightPanel={false}
+      highlightAttendanceStatus
+      dayStatusByDate={dayStatusByDate}
       selectable={Boolean(onDayClick)}
       syncPeriod={syncPeriod}
       onPeriodChange={onPeriodChange}

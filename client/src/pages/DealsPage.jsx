@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowDownUp,
   Check,
@@ -22,6 +22,9 @@ import { useGetDealsQuery, usePatchDealStageMutation, useCreateDealMutation } fr
 import { useGetLeadFormMetaQuery, useGetLeadQuery } from '@/features/leads/leadsApi'
 import { cn } from '@/utils/cn'
 import { TablePaginationBar } from '@/components/ui/TablePaginationBar'
+import { inputFieldClassName } from '@/components/ui/Input'
+import { Select } from '@/components/ui/Select'
+import { DataGrid } from '@/components/shared/DataGrid'
 import { formatAggregatedDealAmount, formatDealMoney } from '@/features/deals/dealCurrencies'
 
 const STAGE_FILTER_FALLBACK = ['Lead Inbound', 'New', 'Contacted', 'Qualified', 'Proposal', 'Won', 'Lost']
@@ -63,76 +66,6 @@ function ParentOpportunityLabel({ id }) {
   const lead = data?.data
   const label = (lead?.title || lead?.contactName || '').trim() || 'Opportunity'
   return <span>{label}</span>
-}
-
-function DealsTableRow({ row, opportunityStages, updatingStage, onStageChange, onOpenSidebar, onOpenPage }) {
-  return (
-    <tr>
-      <td className="text-xs text-neutral-700">
-        {row.parentOpportunityLeadId ? <ParentOpportunityLabel id={row.parentOpportunityLeadId} /> : '—'}
-      </td>
-      <td>
-        <div className="flex items-start gap-2">
-          <button
-            type="button"
-            className="min-w-0 flex-1 text-left"
-            onClick={() => onOpenSidebar(row.id)}
-          >
-            <span className="text-sm font-bold text-neutral-900 hover:text-orange-600">{row.dealName || row.companyName}</span>
-            <span className="mt-0.5 block truncate text-xs text-neutral-500">{row.companyName}</span>
-          </button>
-          <button
-            type="button"
-            title="Open full page"
-            className="shrink-0 rounded p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
-            onClick={() => onOpenPage(row.id)}
-          >
-            <ExternalLink className="h-4 w-4" />
-          </button>
-        </div>
-      </td>
-      <td className="align-middle" onClick={(e) => e.stopPropagation()}>
-        <div className="relative max-w-[200px]">
-          <select
-            className="h-8 w-full appearance-none rounded-md border border-neutral-300 bg-white pl-2 pr-8 text-xs font-semibold text-neutral-800"
-            value={row.currentStage || ''}
-            disabled={updatingStage}
-            onChange={(e) => onStageChange(row, e.target.value)}
-            aria-label="Stage"
-          >
-            {!row.currentStage ? <option value="">Select stage</option> : null}
-            {opportunityStages.length === 0 && row.currentStage ? (
-              <option value={row.currentStage}>{formatStageLabel(row.currentStage)}</option>
-            ) : null}
-            {row.currentStage && opportunityStages.length > 0 && !opportunityStages.some((s) => s.name === row.currentStage) ? (
-              <option value={row.currentStage}>{formatStageLabel(row.currentStage)}</option>
-            ) : null}
-            {opportunityStages
-              .filter((stage) => stage?.name)
-              .map((stage) => (
-                <option key={`${row.id}-${stage.name}`} value={stage.name}>
-                  {formatStageLabel(stage.name)}
-                </option>
-              ))}
-          </select>
-          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-neutral-400" />
-        </div>
-      </td>
-      <td className="text-sm font-bold text-neutral-900">
-        {formatDealMoney(row.dealValue, row.dealCurrency)}
-      </td>
-      <td className="text-xs text-neutral-700">{row.fullName}</td>
-      <td>
-        <div className="flex items-center gap-2">
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-neutral-200 text-[10px] font-bold text-neutral-700">
-            {initials(row.owner?.name || row.owner?.email)}
-          </span>
-          <span className="text-xs font-medium text-neutral-800">{row.owner?.name || row.owner?.email || '—'}</span>
-        </div>
-      </td>
-      <td className="text-xs text-neutral-500">{shortUpdated(row.updatedAt)}</td>
-    </tr>
-  )
 }
 
 export function DealsPage() {
@@ -195,16 +128,21 @@ export function DealsPage() {
   const totalPages = Math.max(1, Math.ceil(total / (mode === 'pipeline' ? listQuery.limit : limit)))
   const users = formMetaData?.data?.users || []
   const opportunityStages = formMetaData?.data?.opportunityStages || []
+  const dealStatuses = useMemo(
+    () => [...(formMetaData?.data?.dealStatuses || [])].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)),
+    [formMetaData?.data?.dealStatuses],
+  )
 
   const stageFilterOptions = useMemo(() => {
+    if (dealStatuses.length) return dealStatuses.map((s) => s.name).filter(Boolean)
     const names = opportunityStages.map((s) => s.name).filter(Boolean)
     if (names.length) return names
     return STAGE_FILTER_FALLBACK
-  }, [opportunityStages])
+  }, [dealStatuses, opportunityStages])
 
   const dealStageName = useMemo(
-    () => opportunityStages.find((stage) => stage?.isDealStatus)?.name || '',
-    [opportunityStages],
+    () => dealStatuses.find((s) => s.isDealCompleteStatus)?.name || '',
+    [dealStatuses],
   )
 
   useEffect(() => {
@@ -309,6 +247,176 @@ export function DealsPage() {
     }
   }
 
+  const dealsGridRows = useMemo(() => {
+    if (!groupByOpportunity || !groupedForList) return rows
+    const out = []
+    for (const [parentId, list] of groupedForList.byParent.entries()) {
+      out.push({ id: `__group__op-${parentId}`, _isGroupHeader: true, _groupParentId: parentId })
+      out.push(...list)
+    }
+    if (groupedForList.direct.length) {
+      out.push({
+        id: '__group__direct',
+        _isGroupHeader: true,
+        _groupLabel: 'Direct deals (no opportunity)',
+      })
+      out.push(...groupedForList.direct)
+    }
+    return out
+  }, [rows, groupByOpportunity, groupedForList])
+
+  const displayDealsRows = groupByOpportunity && groupedForList ? dealsGridRows : rows
+
+  const dealsColumns = useMemo(
+    () => [
+      {
+        field: 'opportunity',
+        headerName: 'Opportunity',
+        flex: 1,
+        minWidth: 140,
+        sortable: false,
+        renderCell: ({ row }) => {
+          if (row._isGroupHeader) {
+            return (
+              <span
+                className={cn(
+                  'text-xs font-bold',
+                  row._groupParentId ? 'text-emerald-900' : 'text-ink',
+                )}
+              >
+                {row._groupParentId ? (
+                  <>
+                    Opportunity: <ParentOpportunityLabel id={row._groupParentId} />
+                  </>
+                ) : (
+                  row._groupLabel
+                )}
+              </span>
+            )
+          }
+          return row.parentOpportunityLeadId ? (
+            <ParentOpportunityLabel id={row.parentOpportunityLeadId} />
+          ) : (
+            <span className="text-xs text-ink-muted">—</span>
+          )
+        },
+      },
+      {
+        field: 'deal',
+        headerName: 'Deal',
+        flex: 1,
+        minWidth: 160,
+        sortable: false,
+        renderCell: ({ row }) => {
+          if (row._isGroupHeader) return null
+          return (
+            <div className="flex items-start gap-2">
+              <button
+                type="button"
+                className="min-w-0 flex-1 text-left"
+                onClick={() => setEditingOpp(rows.find((r) => r.id === row.id) ?? { id: row.id })}
+              >
+                <span className="text-sm font-bold text-ink hover:text-brand-600">
+                  {row.dealName || row.companyName}
+                </span>
+                <span className="mt-0.5 block truncate text-xs text-ink-muted">{row.companyName}</span>
+              </button>
+              <button
+                type="button"
+                title="Open full page"
+                className="shrink-0 rounded p-1 text-ink-muted hover:bg-surface-subtle hover:text-ink"
+                onClick={() => navigate(`/deals/${row.id}`)}
+              >
+                <ExternalLink className="h-4 w-4" />
+              </button>
+            </div>
+          )
+        },
+      },
+      {
+        field: 'currentStage',
+        headerName: 'Stage',
+        width: 200,
+        sortable: false,
+        renderCell: ({ row }) => {
+          if (row._isGroupHeader) return null
+          return (
+            <div className="relative max-w-[200px]" onClick={(e) => e.stopPropagation()}>
+              <Select
+                className="h-8 w-full appearance-none pr-8 text-xs font-semibold"
+                value={row.currentStage || ''}
+                disabled={updatingStage}
+                onChange={(e) => handleStageChange(row, e.target.value)}
+                aria-label="Stage"
+              >
+                {!row.currentStage ? <option value="">Select stage</option> : null}
+                {stageFilterOptions.length === 0 && row.currentStage ? (
+                  <option value={row.currentStage}>{row.currentStage}</option>
+                ) : null}
+                {row.currentStage &&
+                stageFilterOptions.length > 0 &&
+                !stageFilterOptions.includes(row.currentStage) ? (
+                  <option value={row.currentStage}>{row.currentStage}</option>
+                ) : null}
+                {stageFilterOptions.map((name) => (
+                  <option key={`${row.id}-${name}`} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </Select>
+              <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-neutral-400" />
+            </div>
+          )
+        },
+      },
+      {
+        field: 'dealValue',
+        headerName: 'Value',
+        width: 110,
+        renderCell: ({ row }) =>
+          row._isGroupHeader ? null : (
+            <span className="text-sm font-bold text-ink">
+              {formatDealMoney(row.dealValue, row.dealCurrency)}
+            </span>
+          ),
+      },
+      {
+        field: 'fullName',
+        headerName: 'Contact',
+        width: 120,
+        renderCell: ({ row }) =>
+          row._isGroupHeader ? null : <span className="text-xs text-ink-muted">{row.fullName}</span>,
+      },
+      {
+        field: 'owner',
+        headerName: 'Owner',
+        flex: 1,
+        minWidth: 130,
+        sortable: false,
+        renderCell: ({ row }) => {
+          if (row._isGroupHeader) return null
+          return (
+            <div className="flex items-center gap-2">
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-200 text-[10px] font-semibold text-brand-800">
+                {initials(row.owner?.name || row.owner?.email)}
+              </span>
+              <span className="text-xs font-medium text-ink">
+                {row.owner?.name || row.owner?.email || '—'}
+              </span>
+            </div>
+          )
+        },
+      },
+      {
+        field: 'updatedAt',
+        headerName: 'Updated',
+        width: 110,
+        valueGetter: (_v, row) => (row._isGroupHeader ? '' : shortUpdated(row.updatedAt)),
+      },
+    ],
+    [stageFilterOptions, updatingStage, rows, navigate],
+  )
+
   useEffect(() => {
     if (!openFilter && !openSort) return undefined
     let attached = false
@@ -328,93 +436,89 @@ export function DealsPage() {
   }, [openFilter, openSort])
 
   return (
-    <PageShell fullWidth flush mainClassName="bg-white">
-      <div className="flex h-[calc(100dvh-65px)] min-h-0 flex-col">
-        <div className="shrink-0 border-b border-neutral-200 bg-white px-5 py-3 sm:px-8">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-4">
-              <div className="inline-flex items-center rounded-md border border-neutral-300 bg-neutral-100 p-0.5 shadow-sm">
-                <button
-                  type="button"
-                  onClick={() => setMode('pipeline')}
-                  className={cn(
-                    'inline-flex h-8 items-center gap-1.5 rounded-[5px] px-3 text-sm font-semibold transition',
-                    mode === 'pipeline'
-                      ? 'bg-orange-500 text-white shadow-sm'
-                      : 'text-neutral-600 hover:bg-white hover:text-neutral-900',
-                  )}
-                  aria-pressed={mode === 'pipeline'}
-                >
-                  <Kanban className="h-4 w-4" />
-                  Kanban view
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMode('list')}
-                  className={cn(
-                    'inline-flex h-8 items-center gap-1.5 rounded-[5px] px-3 text-sm font-semibold transition',
-                    mode === 'list'
-                      ? 'bg-orange-500 text-white shadow-sm'
-                      : 'text-neutral-600 hover:bg-white hover:text-neutral-900',
-                  )}
-                  aria-pressed={mode === 'list'}
-                >
-                  <List className="h-4 w-4" />
-                  List
-                </button>
-              </div>
-              <span className="hidden h-4 w-px bg-neutral-200 lg:block" />
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-neutral-500">
-                <span>
-                  Projected Deals: <span className="font-semibold text-neutral-800">{total.toLocaleString()}</span>
-                </span>
-                <span>
-                  Projected Revenue:{' '}
-                  <span className="font-semibold text-neutral-800">
-                    {formatAggregatedDealAmount(rows, revenueSum)}
+    <PageShell fullWidth>
+      <div className="flex h-[calc(100dvh-89px)] min-h-0 flex-col gap-3 px-2 py-2 lg:px-4 lg:py-3">
+        <div className="flex flex-col gap-3 rounded-2xl border border-surface-border bg-gradient-to-br from-white via-slate-50 to-slate-50 px-4 py-4 sm:px-5">
+          <div className="flex flex-col gap-3 border-b border-surface-border/60 pb-3">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
+                <div className="inline-flex rounded-xl border border-surface-border bg-white p-0.5 shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => setMode('pipeline')}
+                    className={cn(
+                      'inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold',
+                      mode === 'pipeline' ? 'bg-[var(--brand-primary)] text-white' : 'text-ink-muted hover:bg-surface-subtle',
+                    )}
+                    aria-pressed={mode === 'pipeline'}
+                  >
+                    <Kanban className="h-3.5 w-3.5" />
+                    Board
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMode('list')}
+                    className={cn(
+                      'inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold',
+                      mode === 'list' ? 'bg-[var(--brand-primary)] text-white' : 'text-ink-muted hover:bg-surface-subtle',
+                    )}
+                    aria-pressed={mode === 'list'}
+                  >
+                    <List className="h-3.5 w-3.5" />
+                    List
+                  </button>
+                </div>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-muted">
+                  <span>
+                    Deals: <span className="font-semibold text-ink">{total.toLocaleString()}</span>
                   </span>
-                </span>
-                {isFetching ? <span className="text-xs text-neutral-400">Updating…</span> : null}
+                  <span>
+                    Revenue:{' '}
+                    <span className="font-semibold text-ink">{formatAggregatedDealAmount(rows, revenueSum)}</span>
+                  </span>
+                  {isFetching ? <span className="text-[10px] font-medium">Updating…</span> : null}
+                </div>
               </div>
             </div>
-
+          </div>
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+            <div className="relative min-w-0 lg:flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
+              <input
+                className="h-9 w-full rounded-xl border border-surface-border bg-white pl-10 pr-3 text-sm outline-none ring-brand-500/30 focus:border-brand-400 focus:ring-2"
+                placeholder="Search deals…"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                aria-label="Search deals"
+              />
+            </div>
             <div className="flex flex-wrap items-center gap-2">
-              <div className="relative min-w-[200px] flex-1 lg:max-w-xs">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
-                <input
-                  className="h-9 w-full rounded-md border border-neutral-300 bg-white pl-9 pr-3 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
-                  placeholder="Search deals..."
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  aria-label="Search deals"
-                />
-              </div>
               <div className="relative" data-deals-dropdown>
                 <button
                   type="button"
+                  title="Filter by stage"
                   onClick={(e) => {
                     e.stopPropagation()
                     setOpenSort(false)
                     setOpenFilter((v) => !v)
                   }}
-                  className="inline-flex h-9 items-center gap-2 rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-800 hover:bg-neutral-50"
+                  className="inline-flex h-9 items-center gap-2 rounded-xl border border-surface-border bg-white px-2.5 text-xs font-semibold text-ink shadow-sm hover:bg-surface-subtle"
                 >
-                  <Filter className="h-4 w-4 text-neutral-500" />
-                  Filter
+                  <Filter className="h-4 w-4 text-ink-muted" />
                   {selectedStages.length > 0 ? (
-                    <span className="rounded-full bg-orange-500/20 px-1.5 text-xs font-semibold text-orange-800">{selectedStages.length}</span>
+                    <span className="rounded-full bg-[var(--brand-primary)]/20 px-1.5 text-xs font-semibold text-brand-800">{selectedStages.length}</span>
                   ) : null}
                 </button>
                 {openFilter ? (
                   <div
-                    className="absolute right-0 z-30 mt-1 w-64 rounded-md border border-neutral-200 bg-white p-2 shadow-lg"
+                    className="absolute right-0 z-30 mt-2 w-64 rounded-xl border border-surface-border bg-white p-2 shadow-lg"
                     onClick={(e) => e.stopPropagation()}
                     onKeyDown={(e) => e.stopPropagation()}
                     role="presentation"
                   >
                     <div className="mb-2 flex items-center justify-between px-1">
                       <span className="text-xs font-semibold text-neutral-500">Stage</span>
-                      <button type="button" className="text-xs font-medium text-orange-600 hover:underline" onClick={() => setSelectedStages([])}>
+                      <button type="button" className="text-xs font-medium text-brand-700 hover:underline" onClick={() => setSelectedStages([])}>
                         Clear
                       </button>
                     </div>
@@ -432,7 +536,7 @@ export function DealsPage() {
                             <span
                               className={cn(
                                 'ml-2 flex h-4 w-4 shrink-0 items-center justify-center rounded border',
-                                checked ? 'border-orange-500 bg-orange-500 text-white' : 'border-neutral-300',
+                                checked ? 'border-brand-600 bg-[var(--brand-primary)] text-white' : 'border-neutral-300',
                               )}
                             >
                               {checked ? <Check className="h-3 w-3" /> : null}
@@ -447,20 +551,19 @@ export function DealsPage() {
               <div className="relative" data-deals-dropdown>
                 <button
                   type="button"
+                  title="Sort"
                   onClick={(e) => {
                     e.stopPropagation()
                     setOpenFilter(false)
                     setOpenSort((v) => !v)
                   }}
-                  className="inline-flex h-9 items-center gap-2 rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-800 hover:bg-neutral-50"
+                  className="inline-flex h-9 items-center gap-2 rounded-xl border border-surface-border bg-white px-2.5 text-xs font-semibold text-ink shadow-sm hover:bg-surface-subtle"
                 >
-                  <ArrowDownUp className="h-4 w-4 text-neutral-500" />
-                  Sort
-                  <ChevronDown className="h-3.5 w-3.5 text-neutral-400" />
+                  <ArrowDownUp className="h-4 w-4 text-ink-muted" />
                 </button>
                 {openSort ? (
                   <div
-                    className="absolute right-0 z-30 mt-1 w-56 rounded-md border border-neutral-200 bg-white py-1 shadow-lg"
+                    className="absolute right-0 z-30 mt-2 w-56 rounded-xl border border-surface-border bg-white py-1 shadow-lg"
                     onClick={(e) => e.stopPropagation()}
                     onKeyDown={(e) => e.stopPropagation()}
                     role="presentation"
@@ -479,7 +582,7 @@ export function DealsPage() {
                         )}
                       >
                         {o.label}
-                        {sortValue === o.value ? <Check className="h-4 w-4 text-orange-600" /> : null}
+                        {sortValue === o.value ? <Check className="h-4 w-4 text-brand-700" /> : null}
                       </button>
                     ))}
                   </div>
@@ -487,23 +590,23 @@ export function DealsPage() {
               </div>
               <button
                 type="button"
+                title="Export CSV"
                 onClick={exportVisibleRows}
-                className="inline-flex h-9 items-center gap-2 rounded-md border border-neutral-300 bg-white px-3.5 text-sm font-medium text-neutral-800 shadow-sm hover:bg-neutral-50"
+                className="inline-flex h-9 items-center justify-center rounded-xl border border-surface-border bg-white px-2.5 text-xs font-semibold text-ink shadow-sm hover:bg-surface-subtle"
               >
-                <Download className="h-4 w-4 text-neutral-600" />
-                Export
+                <Download className="h-3.5 w-3.5" />
               </button>
               <button
                 type="button"
                 disabled={mode !== 'list'}
                 onClick={() => setGroupByOpportunity((v) => !v)}
                 className={cn(
-                  'inline-flex h-9 items-center gap-2 rounded-md border px-3.5 text-sm font-medium shadow-sm',
+                  'inline-flex h-9 items-center gap-2 rounded-xl border px-3 text-xs font-semibold shadow-sm',
                   mode === 'list'
                     ? groupByOpportunity
-                      ? 'border-emerald-300 bg-emerald-50 text-emerald-900 hover:bg-emerald-100'
-                      : 'border-neutral-300 bg-white text-neutral-800 hover:bg-neutral-50'
-                    : 'cursor-not-allowed border-neutral-200 bg-neutral-100 text-neutral-400',
+                      ? 'border-brand-300 bg-brand-50 text-brand-900 hover:bg-brand-100'
+                      : 'border-surface-border bg-white text-ink hover:bg-surface-subtle'
+                    : 'cursor-not-allowed border-surface-border bg-surface-subtle text-ink-faint',
                 )}
               >
                 Group by opportunity
@@ -511,21 +614,26 @@ export function DealsPage() {
               <button
                 type="button"
                 onClick={() => setOpenAddDealDrawer(true)}
-                className="inline-flex h-9 items-center gap-2 rounded-md bg-orange-500 px-3.5 text-sm font-semibold text-white shadow-sm hover:bg-orange-600"
+                className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[var(--brand-primary)] px-3 text-xs font-semibold text-white shadow-sm hover:bg-[var(--brand-primary-dark)]"
               >
-                <Plus className="h-4 w-4" />
-                Add deal
+                <Plus className="h-3.5 w-3.5" />
+                New deal
               </button>
             </div>
           </div>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col bg-white px-5 sm:px-8">
+        <section
+          className={cn(
+            'rounded-xl border border-surface-border bg-white shadow-sm',
+            mode === 'pipeline' ? 'min-h-0 flex-1 overflow-hidden' : 'overflow-visible',
+          )}
+        >
           {mode === 'pipeline' ? (
-            <div className="flex min-h-0 flex-1 flex-col py-4">
+            <div className="flex h-full min-h-0 flex-col p-3 sm:p-4">
               <DealsPipelineKanban
                 opportunities={rows}
-                opportunityStages={opportunityStages}
+                opportunityStages={dealStatuses.length ? dealStatuses : opportunityStages}
                 isLoading={isLoading}
                 dealStageName={dealStageName}
                 onOpenDeal={(dealId) => setEditingOpp(rows.find((r) => r.id === dealId) ?? { id: dealId })}
@@ -533,124 +641,63 @@ export function DealsPage() {
               />
             </div>
           ) : (
-            <div className="my-5 overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 px-4 py-3">
-                <p className="text-sm text-neutral-600">
-                  <span className="font-semibold text-neutral-900">{total.toLocaleString()}</span> deals
+            <>
+              <div className="flex items-center border-b border-surface-border px-3 py-2">
+                <p className="text-xs font-semibold text-ink-muted">
+                  <span className="text-ink">{total.toLocaleString()}</span> deals
                 </p>
-                <div className="flex items-center gap-2">
-                  <select
-                    className="h-8 rounded-md border border-neutral-300 bg-white px-2 text-xs font-medium"
-                    value={String(limit)}
-                    onChange={(e) => setLimit(Number(e.target.value))}
-                  >
-                    {[10, 25, 50].map((n) => (
-                      <option key={n} value={n}>
-                        {n} / page
-                      </option>
-                    ))}
-                  </select>
-                </div>
               </div>
-              <div className="overflow-x-auto">
-                <table className="cx-table min-w-[1020px] text-sm">
-                  <thead className="cx-table-sticky-head">
-                    <tr>
-                      <th>Opportunity</th>
-                      <th>Deal</th>
-                      <th>Stage</th>
-                      <th>Value</th>
-                      <th>Contact</th>
-                      <th>Owner</th>
-                      <th>Updated</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {isLoading ? (
-                      <tr>
-                        <td colSpan={7} className="px-4 py-12 text-center text-sm text-neutral-500">
-                          Loading…
-                        </td>
-                      </tr>
-                    ) : rows.length ? (
-                      groupByOpportunity && groupedForList ? (
-                        <>
-                          {[...groupedForList.byParent.entries()].map(([parentId, list]) => (
-                            <Fragment key={parentId}>
-                              <tr className="bg-emerald-50/60">
-                                <td colSpan={7} className="px-4 py-2 text-xs font-bold text-emerald-900">
-                                  Opportunity: <ParentOpportunityLabel id={parentId} />
-                                </td>
-                              </tr>
-                              {list.map((row) => (
-                                <DealsTableRow
-                                  key={row.id}
-                                  row={row}
-                                  opportunityStages={opportunityStages}
-                                  updatingStage={updatingStage}
-                                  onStageChange={handleStageChange}
-                                  onOpenSidebar={(dealId) => setEditingOpp(rows.find((r) => r.id === dealId) ?? { id: dealId })}
-                                  onOpenPage={(dealId) => navigate(`/deals/${dealId}`)}
-                                />
-                              ))}
-                            </Fragment>
-                          ))}
-                          {groupedForList.direct.length ? (
-                            <Fragment key="direct-deals">
-                              <tr className="bg-neutral-100">
-                                <td colSpan={7} className="px-4 py-2 text-xs font-bold text-neutral-700">
-                                  Direct deals (no opportunity)
-                                </td>
-                              </tr>
-                              {groupedForList.direct.map((row) => (
-                                <DealsTableRow
-                                  key={row.id}
-                                  row={row}
-                                  opportunityStages={opportunityStages}
-                                  updatingStage={updatingStage}
-                                  onStageChange={handleStageChange}
-                                  onOpenSidebar={(dealId) => setEditingOpp(rows.find((r) => r.id === dealId) ?? { id: dealId })}
-                                  onOpenPage={(dealId) => navigate(`/deals/${dealId}`)}
-                                />
-                              ))}
-                            </Fragment>
-                          ) : null}
-                        </>
-                      ) : (
-                        rows.map((row) => (
-                          <DealsTableRow
-                            key={row.id}
-                            row={row}
-                            opportunityStages={opportunityStages}
-                            updatingStage={updatingStage}
-                            onStageChange={handleStageChange}
-                            onOpenSidebar={(dealId) => setEditingOpp(rows.find((r) => r.id === dealId) ?? { id: dealId })}
-                            onOpenPage={(dealId) => navigate(`/deals/${dealId}`)}
-                          />
-                        ))
-                      )
-                    ) : (
-                      <tr>
-                        <td colSpan={7} className="px-4 py-14 text-center text-sm text-neutral-500">
-                          <Filter className="mx-auto mb-2 h-8 w-8 opacity-25" />
-                          No deals match your filters.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-              <div className="border-t border-neutral-100 px-4 py-3">
+              <DataGrid
+                gridColumns
+                columns={dealsColumns}
+                data={displayDealsRows}
+                loading={isLoading || isFetching}
+                searchable={false}
+                showColumnToggle={false}
+                showExportCsv={false}
+                hideFooter
+                getRowClassName={(params) => {
+                  if (!params.row._isGroupHeader) return ''
+                  return params.row._groupParentId ? '!bg-brand-50/80' : '!bg-surface-subtle'
+                }}
+                isRowSelectable={(params) => !params.row._isGroupHeader}
+                defaultPageSize={limit}
+                emptyTitle="No deals match your filters"
+                className="rounded-none border-0 shadow-none"
+              />
+              <div className="cx-data-grid-footer px-3 py-1.5 sm:px-4">
                 <TablePaginationBar
-                  variant="neutral"
+                  compact
+                  variant="brand"
                   page={page}
                   totalPages={totalPages}
                   onPageChange={setPage}
+                  subLabel={
+                    <>
+                      Showing {(page - 1) * limit + 1}–{Math.min(page * limit, total)} of{' '}
+                      {total.toLocaleString()}
+                    </>
+                  }
+                  beforeNav={
+                    <label className="flex items-center gap-1.5 text-[11px] font-medium text-ink-muted">
+                      <span className="hidden sm:inline">Rows per page</span>
+                      <select
+                        className={cn(inputFieldClassName, 'h-[1.6875rem] w-[4rem] rounded-md px-1.5 text-[11px]')}
+                        value={String(limit)}
+                        onChange={(e) => setLimit(Number(e.target.value))}
+                        aria-label="Rows per page"
+                      >
+                        {[10, 25, 50].map((n) => (
+                          <option key={n} value={n}>{n}</option>
+                        ))}
+                      </select>
+                    </label>
+                  }
                 />
               </div>
-            </div>
+            </>
           )}
-        </div>
+        </section>
       </div>
 
       <AddDealDrawer
@@ -667,7 +714,7 @@ export function DealsPage() {
         open={Boolean(editingOpp)}
         onClose={() => setEditingOpp(null)}
         opp={editingOpp}
-        opportunityStages={opportunityStages}
+        opportunityStages={dealStatuses.length ? dealStatuses : opportunityStages}
       />
     </PageShell>
   )

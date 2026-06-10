@@ -1,6 +1,6 @@
 /**
  * Setup hints for the machine that runs the Node API (not the browser).
- * `clientOs` is the organizer's desktop OS for tailored FFmpeg install notes.
+ * `clientOs` is the organizer's desktop OS for tailored browser install notes.
  */
 export function buildMeetingBotRequirements(clientOs, serverPlatform) {
   const os = normalizeClientOs(clientOs)
@@ -10,29 +10,32 @@ export function buildMeetingBotRequirements(clientOs, serverPlatform) {
     serverRunsBotOn: server,
     organizerDeviceOs: os,
     masterEnvEnable:
-      'Set ENABLE_MEETING_BOT=true on the server and restart the API so the bot can start during the meeting window.',
+      'Set ENABLE_MEETING_BOT=true on the server and restart the API so the bot can join during the meeting window.',
     masterEnvDisable:
-      'When the meeting ends, the bot stops automatically; set ENABLE_MEETING_BOT=false only if you want to disable the feature for all meetings.',
-    groqEnv: 'GROQ_API_KEY is required for transcription and AI summary after recording.',
+      'Set ENABLE_MEETING_BOT=false to disable the bot for all meetings.',
+    openaiEnv:
+      'OPENAI_API_KEY is required for AI summary (gpt-4o-mini) after the meeting ends.',
     stepsByOs: {
       windows: [
-        'Install FFmpeg and add it to PATH (https://ffmpeg.org). Verify: ffmpeg -version',
-        'Browser: install Chromium or Chrome, set MEETING_BOT_BROWSER_EXECUTABLE to chrome.exe (Windows), or run: cd server && npx playwright install chromium',
-        'List DirectShow devices: ffmpeg -hide_banner -f dshow -list_devices true -i dummy (harmless "dummy" error after the list is normal)',
-        'Enable Stereo Mix in Windows Sound settings or install VB-Audio Virtual Cable, then set MEETING_BOT_WIN_DSHOW in server .env to your device string.',
-        'Optional: MEETING_BOT_HEADLESS=false so Chromium can join Meet reliably on first try.',
+        'Install Playwright Chromium: cd server && npx playwright install chromium',
+        'Optional: install Google Chrome and set MEETING_BOT_BROWSER_EXECUTABLE to chrome.exe for better Meet compatibility.',
+        'Ensure the Google Workspace account used has Live Captions enabled (Meet → Settings → Captions).',
+        'Optional: MEETING_BOT_HEADLESS=false to watch the bot join in a visible window for debugging.',
       ],
       darwin: [
-        'Install FFmpeg (brew install ffmpeg) and Playwright (cd server && npx playwright install chromium).',
-        'Install BlackHole (or similar) to route Meet audio; set MEETING_BOT_MAC_AVFOUNDATION=:BlackHole 2ch (or your device) in server .env.',
+        'Install Playwright Chromium: cd server && npx playwright install chromium',
+        'Optional: set MEETING_BOT_BROWSER_EXECUTABLE to Google Chrome path for better Meet compatibility.',
+        'Ensure the Google Workspace account has Live Captions enabled.',
       ],
       linux: [
-        'Install ffmpeg, Xvfb, PulseAudio; cd server && npx playwright install chromium && npx playwright install-deps (as needed).',
-        'Headless servers use Pulse null sink + VirtualSink (see meetingBot.js).',
+        'Install Playwright Chromium: cd server && npx playwright install chromium && npx playwright install-deps',
+        'Headless Chromium works on Linux without Xvfb when using MEETING_BOT_HEADLESS=true (default).',
+        'Ensure the Google Workspace account has Live Captions enabled.',
       ],
     },
     note:
-      'The recording bot runs on the server process, not inside each user\'s browser. Organizers only approve consent in the app; IT installs FFmpeg/Playwright once per deployment.',
+      'The bot runs on the server, joins the Google Meet link, enables live captions, and scrapes the transcript from the DOM. ' +
+      'No audio recording or FFmpeg required. Google Workspace with Live Captions is needed for transcription.',
   }
 }
 

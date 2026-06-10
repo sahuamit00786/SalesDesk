@@ -35,6 +35,8 @@ export function serializeUser(user) {
       name: w.name,
       description: w.description ?? null,
       archived: Boolean(w.archivedAt),
+      themeColor: w.themeColor ?? null,
+      sidebarTextColor: w.sidebarTextColor ?? null,
     }))
   const companyWorkspaces = Array.isArray(c?.workspaces)
     ? c.workspaces.map((w) => ({
@@ -42,6 +44,8 @@ export function serializeUser(user) {
         name: w.name,
         description: w.description ?? null,
         archived: Boolean(w.archivedAt),
+        themeColor: w.themeColor ?? null,
+        sidebarTextColor: w.sidebarTextColor ?? null,
       }))
     : []
   const scopedWorkspaces = user.isCompanyAdmin ? companyWorkspaces : memberWorkspaces

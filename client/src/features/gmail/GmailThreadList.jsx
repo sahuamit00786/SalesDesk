@@ -19,7 +19,9 @@ function ThreadListItem({ thread, isActive, onClick }) {
         'flex w-full items-start gap-2.5 border-b border-surface-border border-l-[3px] px-3 py-2.5 text-left transition-colors',
         isActive
           ? 'border-l-brand-600 bg-surface-muted'
-          : 'border-l-transparent hover:bg-surface-muted/60',
+          : thread.lead?.id
+            ? 'border-l-green-400 bg-green-50 hover:bg-green-100/70'
+            : 'border-l-transparent hover:bg-surface-muted/60',
       )}
     >
       <div
@@ -31,7 +33,7 @@ function ThreadListItem({ thread, isActive, onClick }) {
       <div
         className={cn(
           'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold',
-          isActive ? 'bg-brand-600 text-white' : 'bg-surface-muted text-ink-muted',
+          isActive ? 'bg-[var(--brand-primary)] text-white' : 'bg-surface-muted text-ink-muted',
         )}
       >
         {senderInitials}
@@ -57,7 +59,7 @@ function ThreadListItem({ thread, isActive, onClick }) {
             </span>
           ) : null}
           {thread.lead?.id ? (
-            <span className="rounded border border-brand-200 bg-brand-50 px-1.5 py-0.5 text-[10px] font-medium text-brand-800">
+            <span className="rounded border border-brand-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-brand-800">
               Lead
             </span>
           ) : null}

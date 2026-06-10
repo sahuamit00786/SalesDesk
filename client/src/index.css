@@ -3,15 +3,77 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --brand-primary: #5b21b6;
+    --brand-primary-dark: #4c1d95;
+    --surface-page: #f9f7fc;
+    --chrome-header-height: 4.5rem; /* 72px — sidebar brand + main topbar */
+    --sidebar-text: #ffffff;
+  }
+
+  /* CRM page canvas — explicit hex so dev/HMR always picks it up */
+  .cx-page-bg {
+    background-color: var(--surface-page);
+  }
+
+  /* Shared height so sidebar header border aligns with topbar border */
+  .cx-chrome-header {
+    box-sizing: border-box;
+    height: var(--chrome-header-height);
+    min-height: var(--chrome-header-height);
+    max-height: var(--chrome-header-height);
+  }
+
+  /* Primary CTAs — workspace theme color */
+  .cx-btn-primary {
+    background-color: var(--brand-primary);
+    color: var(--sidebar-text, #ffffff);
+  }
+
+  .cx-btn-primary:hover {
+    background-color: var(--brand-primary-dark);
+  }
+
+  .cx-btn-primary:active {
+    background-color: var(--brand-primary-dark);
+  }
+
+  /* Sidebar text — override Tailwind text-white* with workspace sidebar text color */
+  .cx-sidebar .text-white { color: var(--sidebar-text) !important; }
+  .cx-sidebar .text-white\/90 { color: color-mix(in srgb, var(--sidebar-text) 90%, transparent) !important; }
+  .cx-sidebar .text-white\/70 { color: color-mix(in srgb, var(--sidebar-text) 70%, transparent) !important; }
+  .cx-sidebar .text-white\/55 { color: color-mix(in srgb, var(--sidebar-text) 55%, transparent) !important; }
+  .cx-sidebar .hover\:text-white:hover { color: var(--sidebar-text) !important; }
+
   body {
+    background-color: var(--surface-page);
     @apply bg-surface-muted font-sans text-ink antialiased;
   }
 }
 
-/* LeadFlow AI marketing (public landing) */
+/* LeadFlow CRM marketing (public landing) — dark premium theme */
 .leadflow-landing {
-  --lf-hero-glow: rgba(147, 51, 234, 0.35);
-  --lf-cyan: rgba(56, 189, 248, 0.25);
+  --lf-hero-glow: rgba(139, 92, 246, 0.35);
+  background-color: #050510;
+  color: #f1f5f9;
+}
+
+/* Gradient border utility for landing cards */
+.lf-card-glow {
+  position: relative;
+}
+.lf-card-glow::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(139,92,246,0.35), rgba(255,255,255,0.04), rgba(34,211,238,0.15));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
 }
 
 .leadflow-mask-x {
@@ -41,6 +103,17 @@
   .scrollbar-subtle::-webkit-scrollbar-thumb:hover {
     background-color: #e5e7eb;
   }
+
+  .scrollbar-none {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
 }
 
 @layer components {
@@ -52,15 +125,52 @@
     @apply w-full border-collapse text-left text-sm text-ink;
   }
 
-  .cx-table thead {
+  .cx-table:not(.cx-data-grid) thead {
     @apply border-b border-slate-200 bg-slate-50/95;
+  }
+
+  /* App DataGrid — workspace theme color for header + footer */
+  .cx-table.cx-data-grid thead,
+  .cx-table.cx-data-grid thead.cx-table-sticky-head {
+    background-color: var(--brand-primary);
+    border-bottom: 1px solid var(--brand-primary-dark);
+  }
+
+  .cx-table.cx-data-grid thead.cx-table-sticky-head {
+    @apply sticky top-0 z-[1] shadow-sm;
+    backdrop-filter: none;
+  }
+
+  .cx-table.cx-data-grid thead th {
+    @apply px-4 py-3.5 text-left align-middle text-[11px] font-semibold uppercase tracking-wide;
+    color: #ffffff;
+  }
+
+  .cx-table.cx-data-grid thead th button {
+    color: #ffffff;
+  }
+
+  .cx-table.cx-data-grid thead th button:hover {
+    color: #ede9fe;
+  }
+
+  .cx-table.cx-data-grid thead th button svg {
+    color: #ffffff;
+    opacity: 0.95;
+  }
+
+  /* DataGrid pagination footer — workspace theme tint */
+  .cx-data-grid-footer {
+    border-top: 1px solid color-mix(in srgb, var(--brand-primary) 30%, white);
+    background-color: color-mix(in srgb, var(--brand-primary) 8%, white);
+    min-height: 0;
   }
 
   .cx-table thead.cx-table-sticky-head {
     @apply sticky top-0 z-[1] shadow-sm backdrop-blur-sm;
   }
 
-  .cx-table thead th {
+  .cx-table:not(.cx-data-grid) thead th {
     @apply px-4 py-3.5 text-left align-middle text-[11px] font-semibold uppercase tracking-wide text-ink-muted;
   }
 
@@ -82,6 +192,191 @@
 
   .cx-table tbody td.cx-table-cell-actions {
     @apply align-middle;
+  }
+
+  .cx-table.cx-table--sales-docs {
+    table-layout: fixed;
+    width: 100%;
+  }
+
+  .cx-table.cx-table--sales-docs th.cx-table-cell-actions,
+  .cx-table.cx-table--sales-docs td.cx-table-cell-actions {
+    width: 12.5rem;
+    min-width: 12.5rem;
+    max-width: 12.5rem;
+    text-align: right;
+    vertical-align: middle;
+  }
+
+  .cx-table.cx-table--sales-docs tbody td.cx-table-cell-actions > div {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.25rem;
+  }
+
+  /* Quotation / invoice full editor — compact spacing */
+  .sales-doc-editor .sde-card {
+    @apply rounded-xl border border-neutral-200 bg-white p-3.5 shadow-sm;
+  }
+
+  .sales-doc-editor .sde-field-stack {
+    @apply mt-2 space-y-2.5;
+  }
+
+  .sales-doc-editor .sde-field-grid {
+    @apply grid grid-cols-1 gap-2 sm:grid-cols-2;
+  }
+
+  .sales-doc-editor label.block > select,
+  .sales-doc-editor label.block > input:not([type='color']),
+  .sales-doc-editor label.block > textarea {
+    @apply mt-0.5 px-2.5 py-1.5;
+  }
+
+  .sales-doc-editor .sde-line-stack {
+    @apply mt-2 space-y-2;
+  }
+
+  .sales-doc-editor .sde-line-card {
+    @apply rounded-lg border border-neutral-100 bg-neutral-50/80 p-2.5;
+  }
+
+  /* Advanced query filter builder — floating popover (0.80× width) */
+  .qf-panel-card {
+    @apply max-w-full overflow-hidden rounded-2xl border-2 border-neutral-300 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.14)];
+  }
+
+  .qf-popover {
+    @apply max-w-[calc(100vw-24px)] overflow-hidden;
+  }
+
+  .qf-builder {
+    @apply max-w-full overflow-hidden text-sm text-neutral-800;
+  }
+
+  .qf-popover .qf-select,
+  .qf-popover input:not([type='checkbox']):not([type='radio']) {
+    @apply h-10 w-full rounded-xl border border-surface-border bg-white text-sm text-ink shadow-sm outline-none transition-colors hover:border-brand-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/15;
+  }
+
+  .qf-select {
+    @apply cursor-pointer appearance-none py-0 pl-3 pr-8;
+  }
+
+  .qf-spine {
+    @apply flex items-stretch gap-2;
+  }
+
+  .qf-spine-rail {
+    @apply relative flex w-[3.25rem] shrink-0 flex-col items-center pt-0.5;
+  }
+
+  .qf-spine-toggle {
+    @apply relative z-[1] shrink-0;
+  }
+
+  .qf-spine-line {
+    @apply mt-1 w-px flex-1 min-h-[1.25rem] bg-neutral-300;
+  }
+
+  .qf-logic-toggle {
+    @apply inline-flex max-w-full items-center gap-0.5 whitespace-nowrap rounded-lg border border-surface-border bg-white px-1.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-ink-muted shadow-sm transition-colors hover:border-brand-300 hover:bg-brand-50;
+  }
+
+  .qf-rules {
+    @apply min-w-0 flex-1 space-y-2 overflow-hidden;
+  }
+
+  .qf-row {
+    @apply grid w-full min-w-0 items-center gap-1.5 py-0.5;
+    grid-template-columns: 1rem minmax(0, 1.05fr) minmax(0, 0.92fr) minmax(0, 1.28fr) 2.125rem;
+    container-type: inline-size;
+  }
+
+  @container (max-width: 400px) {
+    .qf-value-dates {
+      grid-template-columns: 1fr;
+    }
+
+    .qf-value-dates .qf-date-sep {
+      @apply justify-self-center py-0.5;
+    }
+  }
+
+  .qf-grip {
+    @apply h-4 w-4 shrink-0 cursor-grab text-neutral-300;
+  }
+
+  .qf-field-select,
+  .qf-op-select {
+    @apply min-w-0 w-full max-w-full;
+  }
+
+  .qf-value {
+    @apply flex min-w-0 w-full items-center overflow-hidden;
+  }
+
+  .qf-value .qf-select,
+  .qf-value input {
+    @apply min-w-0 w-full max-w-full;
+  }
+
+  .qf-value-dates {
+    @apply grid w-full min-w-0 gap-1.5;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  }
+
+  .qf-value-dates .qf-date-sep {
+    @apply shrink-0 text-xs text-neutral-400;
+  }
+
+  .qf-row-delete {
+    @apply justify-self-end;
+  }
+
+  .qf-icon-btn {
+    @apply shrink-0 rounded-lg border-2 border-neutral-300 bg-white p-1.5 text-neutral-500 shadow-sm transition-colors hover:border-red-300 hover:bg-red-50 hover:text-red-600;
+  }
+
+  .qf-action-btn {
+    @apply inline-flex h-10 items-center rounded-xl border border-brand-200 bg-brand-50 px-2.5 text-sm font-medium text-brand-700 shadow-sm transition-colors hover:border-brand-400 hover:bg-brand-100;
+  }
+
+  .qf-clear-btn {
+    @apply inline-flex h-8 items-center rounded-lg border-2 border-neutral-300 bg-white px-2.5 text-sm font-medium text-neutral-600 shadow-sm transition-colors hover:border-neutral-400 hover:bg-neutral-50;
+  }
+
+  .qf-inline-actions {
+    @apply flex flex-wrap gap-2 pt-1;
+  }
+
+  .qf-footer {
+    @apply mt-3 flex flex-wrap items-center justify-between gap-2 border-t-2 border-neutral-200 pt-3;
+  }
+
+  .qf-subgroup {
+    @apply my-2 rounded-xl border-2 border-neutral-300 bg-neutral-50/90 px-2.5 py-2.5;
+  }
+
+  .qf-subgroup-header {
+    @apply mb-2 flex items-center justify-between gap-2;
+  }
+
+  .qf-subgroup-title {
+    @apply text-xs font-medium text-neutral-600;
+  }
+
+  .qf-group .qf-subgroup .qf-spine-rail {
+    @apply w-12;
+  }
+
+  .qf-enum-pill {
+    @apply inline-flex items-center gap-1.5 rounded-lg border-2 border-neutral-300 bg-white px-2 py-1 text-xs font-medium text-neutral-700 shadow-sm;
+  }
+
+  .qf-status-dot {
+    @apply h-2.5 w-2.5 shrink-0 rounded-sm;
   }
 
   .cx-table--dense thead th {
@@ -191,7 +486,35 @@
   border-left: 1px solid #f3f4f6;
 }
 
-.rbc-today {
+.rbc-day-bg.rbc-day-excluded {
+  background-color: #f9fafb !important;
+  border-color: #d1d5db !important;
+  background-image: repeating-linear-gradient(
+    -55deg,
+    transparent,
+    transparent 5px,
+    rgba(156, 163, 175, 0.12) 5px,
+    rgba(156, 163, 175, 0.12) 6px
+  );
+}
+
+.rbc-day-bg.rbc-day-absent,
+.calendar-attendance-mode .rbc-month-view .rbc-day-bg.rbc-day-absent {
+  background-color: #fca5a5 !important;
+  background-image: none !important;
+}
+
+.rbc-day-bg.rbc-today.rbc-day-absent,
+.calendar-attendance-mode .rbc-month-view .rbc-day-bg.rbc-today.rbc-day-absent {
+  background-color: #fca5a5 !important;
+  background-image: none !important;
+}
+
+.rbc-day-bg.rbc-day-excluded.rbc-day-absent {
+  background-color: #f9fafb !important;
+}
+
+.rbc-today:not(.rbc-day-absent) {
   background-color: #eef2ff !important;
 }
 

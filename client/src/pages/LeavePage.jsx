@@ -39,7 +39,7 @@ export function LeavePage() {
       <div className="flex min-h-0 flex-col">
         <div className="shrink-0 space-y-4 px-4 py-4 sm:px-6">
           <PendingLeaveBanner />
-          <LeaveBalanceCard balances={balances} />
+          <LeaveBalanceCard balances={balances} year={year} />
         </div>
 
         <LeaveCalendarWorkspace

@@ -1,4 +1,5 @@
 import { Op } from 'sequelize'
+import { sequelize } from '../config/db.js'
 import {
   CompanyRole,
   LeaveBalance,
@@ -16,9 +17,11 @@ import {
 import {
   calculateLeaveDays,
   getCompanyWeeklyOffDays,
+  getLateThreshold,
   getOrCreateBalance,
   refreshBalanceAvailable,
   setCompanyWeeklyOffDays,
+  setLateThreshold,
   validateLeaveRequest,
 } from '../services/leaveCalculatorService.js'
 import { createNotification, notifyUserEmail } from '../services/notificationService.js'
@@ -134,7 +137,19 @@ export async function deleteLeaveType(req, res, next) {
     }
     const row = await LeaveType.findOne({ where: { id: req.params.id, companyId: req.user.companyId } })
     if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Not found' } })
-    await row.destroy()
+
+    await sequelize.transaction(async (transaction) => {
+      await LeaveBalance.destroy({
+        where: { leaveTypeId: row.id, companyId: req.user.companyId },
+        transaction,
+      })
+      await LeaveRequest.destroy({
+        where: { leaveTypeId: row.id, companyId: req.user.companyId },
+        transaction,
+      })
+      await row.destroy({ transaction })
+    })
+
     return res.json({ success: true, data: { ok: true }, meta: {} })
   } catch (e) {
     return next(e)
@@ -146,7 +161,7 @@ export async function getMyLeaveBalance(req, res, next) {
     const year = Number(req.query.year) || new Date().getFullYear()
     const rows = await LeaveBalance.findAll({
       where: { userId: req.user.id, companyId: req.user.companyId, year },
-      include: [{ model: LeaveType, as: 'leaveType' }],
+      include: [{ model: LeaveType, as: 'leaveType', required: true }],
     })
     return res.json({ success: true, data: rows, meta: {} })
   } catch (e) {
@@ -163,7 +178,7 @@ export async function getUserLeaveBalance(req, res, next) {
     const year = Number(req.query.year) || new Date().getFullYear()
     const rows = await LeaveBalance.findAll({
       where: { userId: req.params.userId, companyId: req.user.companyId, year },
-      include: [{ model: LeaveType, as: 'leaveType' }],
+      include: [{ model: LeaveType, as: 'leaveType', required: true }],
     })
     return res.json({ success: true, data: rows, meta: {} })
   } catch (e) {
@@ -204,8 +219,19 @@ export async function previewLeaveDays(req, res, next) {
 
 export async function getLeaveSettings(req, res, next) {
   try {
-    const weeklyOffDays = await getCompanyWeeklyOffDays(req.user.companyId)
-    return res.json({ success: true, data: { weeklyOffDays }, meta: {} })
+    const [weeklyOffDays, lateThreshold] = await Promise.all([
+      getCompanyWeeklyOffDays(req.user.companyId),
+      getLateThreshold(req.user.companyId),
+    ])
+    return res.json({
+      success: true,
+      data: {
+        weeklyOffDays,
+        lateThresholdHour: lateThreshold.hour,
+        lateThresholdMinute: lateThreshold.minute,
+      },
+      meta: {},
+    })
   } catch (e) {
     return next(e)
   }
@@ -217,15 +243,31 @@ export async function updateLeaveSettings(req, res, next) {
     if (!isHrAdmin(hrRole)) {
       return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Admin only' } })
     }
-    const { weeklyOffDays } = req.body || {}
-    if (!Array.isArray(weeklyOffDays)) {
-      return res.status(400).json({
-        success: false,
-        error: { code: 'VALIDATION', message: 'weeklyOffDays must be an array of day numbers (0–6)' },
-      })
+    const { weeklyOffDays, lateThresholdHour, lateThresholdMinute } = req.body || {}
+    const updates = {}
+
+    if (weeklyOffDays !== undefined) {
+      if (!Array.isArray(weeklyOffDays)) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'VALIDATION', message: 'weeklyOffDays must be an array of day numbers (0–6)' },
+        })
+      }
+      updates.weeklyOffDays = await setCompanyWeeklyOffDays(req.user.companyId, weeklyOffDays)
     }
-    const saved = await setCompanyWeeklyOffDays(req.user.companyId, weeklyOffDays)
-    return res.json({ success: true, data: { weeklyOffDays: saved }, meta: {} })
+
+    if (lateThresholdHour !== undefined || lateThresholdMinute !== undefined) {
+      const current = await getLateThreshold(req.user.companyId)
+      const saved = await setLateThreshold(
+        req.user.companyId,
+        lateThresholdHour ?? current.hour,
+        lateThresholdMinute ?? current.minute,
+      )
+      updates.lateThresholdHour = saved.hour
+      updates.lateThresholdMinute = saved.minute
+    }
+
+    return res.json({ success: true, data: updates, meta: {} })
   } catch (e) {
     return next(e)
   }
@@ -233,17 +275,41 @@ export async function updateLeaveSettings(req, res, next) {
 
 export async function applyLeave(req, res, next) {
   try {
-    const { leaveTypeId, fromDate, toDate, reason } = req.body || {}
+    const { leaveTypeId, fromDate, toDate, reason, isHalfDay, targetUserId } = req.body || {}
+    const halfDay = Boolean(isHalfDay)
     const documentUrl = req.file
       ? `/uploads/leave/${req.file.filename}`
       : req.body?.documentUrl || null
 
+    // Admins / managers may apply on behalf of another user
+    const isAdminOrManager =
+      req.user.isCompanyAdmin ||
+      ['manager', 'workspace_admin'].includes(String(req.user.companyRole?.userRoleKind || '').toLowerCase())
+
+    let applicantId = req.user.id
+    let applicant = req.user
+    if (targetUserId && targetUserId !== req.user.id) {
+      if (!isAdminOrManager) {
+        return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Only managers/admins can apply leave for others' } })
+      }
+      const target = await User.findOne({ where: { id: targetUserId, companyId: req.user.companyId } })
+      if (!target) {
+        return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Target user not found' } })
+      }
+      applicantId = target.id
+      applicant = target
+    }
+
+    // For half-day, toDate must equal fromDate
+    const effectiveToDate = halfDay ? fromDate : toDate
+
     const validation = await validateLeaveRequest({
-      userId: req.user.id,
+      userId: applicantId,
       leaveTypeId,
       fromDate,
-      toDate,
+      toDate: effectiveToDate,
       companyId: req.user.companyId,
+      isHalfDay: halfDay,
     })
     if (!validation.ok) {
       return res.status(400).json({
@@ -252,13 +318,16 @@ export async function applyLeave(req, res, next) {
       })
     }
 
+    const days = halfDay ? 0.5 : validation.days
+
     const row = await LeaveRequest.create({
-      userId: req.user.id,
+      userId: applicantId,
       leaveTypeId,
       companyId: req.user.companyId,
       fromDate: validation.fromStr,
       toDate: validation.toStr,
-      days: validation.days,
+      days,
+      isHalfDay: halfDay,
       reason: reason || null,
       documentUrl,
       status: 'pending',
@@ -266,14 +335,14 @@ export async function applyLeave(req, res, next) {
     })
 
     const balance = validation.balance
-    await balance.update({ pending: Number(balance.pending) + validation.days })
+    await balance.update({ pending: Number(balance.pending) + days })
     await refreshBalanceAvailable(balance)
 
     const created = await LeaveRequest.findByPk(row.id, { include: leaveInclude })
     const leaveType = created?.leaveType || (await LeaveType.findByPk(leaveTypeId))
     await notifyLeaveApprovers({
       companyId: req.user.companyId,
-      applicant: req.user,
+      applicant,
       leaveType,
       fromDate: validation.fromStr,
       toDate: validation.toStr,
@@ -329,20 +398,25 @@ export async function getAllLeaves(req, res, next) {
 }
 
 async function finalizeLeaveApproval(request, approverId) {
-  await request.update({ status: 'approved', approvedBy: approverId, rejectionReason: null })
   const balance = await getOrCreateBalance(
     request.userId,
     request.leaveTypeId,
     request.companyId,
     new Date(request.fromDate).getFullYear(),
   )
-  if (balance) {
-    await balance.update({
-      used: Number(balance.used) + Number(request.days),
-      pending: Math.max(0, Number(balance.pending) - Number(request.days)),
-    })
-    await refreshBalanceAvailable(balance)
+  if (!balance) {
+    const err = new Error('Leave balance not found — cannot approve leave')
+    err.status = 422
+    err.code = 'BALANCE_NOT_FOUND'
+    throw err
   }
+  await sequelize.transaction(async (t) => {
+    await request.update({ status: 'approved', approvedBy: approverId, rejectionReason: null }, { transaction: t })
+    const newUsed = Number(balance.used) + Number(request.days)
+    const newPending = Math.max(0, Number(balance.pending) - Number(request.days))
+    const newAvailable = Math.max(0, Number(balance.allocated || 0) - newUsed - newPending)
+    await balance.update({ used: newUsed, pending: newPending, available: newAvailable }, { transaction: t })
+  })
 }
 
 export async function approveLeave(req, res, next) {
@@ -409,17 +483,20 @@ export async function rejectLeave(req, res, next) {
     if (request.status !== 'pending') {
       return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Request is not pending' } })
     }
-    await request.update({ status: 'rejected', rejectionReason, approvedBy: req.user.id })
     const balance = await getOrCreateBalance(
       request.userId,
       request.leaveTypeId,
       request.companyId,
       new Date(request.fromDate).getFullYear(),
     )
-    if (balance) {
-      await balance.update({ pending: Math.max(0, Number(balance.pending) - Number(request.days)) })
-      await refreshBalanceAvailable(balance)
-    }
+    await sequelize.transaction(async (t) => {
+      await request.update({ status: 'rejected', rejectionReason, approvedBy: req.user.id }, { transaction: t })
+      if (balance) {
+        const newPending = Math.max(0, Number(balance.pending) - Number(request.days))
+        const newAvailable = Math.max(0, Number(balance.allocated || 0) - Number(balance.used) - newPending)
+        await balance.update({ pending: newPending, available: newAvailable }, { transaction: t })
+      }
+    })
     const employee = request.user || (await User.findByPk(request.userId))
     await createNotification({
       userId: request.userId,

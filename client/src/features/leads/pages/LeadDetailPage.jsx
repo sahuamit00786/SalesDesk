@@ -4,9 +4,9 @@ import { useLocation, useNavigate, useParams, Link } from 'react-router-dom'
 import DOMPurify from 'dompurify'
 import toast from 'react-hot-toast'
 import {
+  BadgeDollarSign,
   BadgeIndianRupee,
   Bell,
-  Bold,
   CalendarCheck2,
   CheckSquare,
   ChevronRight,
@@ -15,21 +15,17 @@ import {
   Plus,
   Hash,
   Home,
-  Italic,
-  Link2,
   Mail,
   MapPin,
   MessageCircle,
   MessageSquare,
   MoreHorizontal,
   NotebookPen,
-  Paperclip,
   Pencil,
   Phone,
   PhoneCall,
   Presentation,
   Search,
-  Smile,
   Sparkles,
   Tag,
   User,
@@ -37,8 +33,10 @@ import {
   X,
 } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
+import { SkeletonDetail } from '@/components/shared/SkeletonLoader'
 import { Select } from '@/components/ui/Select'
 import { IconInput, IconTextarea } from '@/components/ui/IconInput'
+import { LeadEmailComposeModal } from '@/features/leads/components/LeadEmailComposeModal'
 import { AddLeadModal } from '@/features/leads/components/AddLeadModal'
 import { TaskAttachmentIcons } from '@/features/leads/components/TaskAttachmentIcons'
 import { LeadFollowupsTab } from '@/features/leads/components/LeadFollowupsTab'
@@ -76,7 +74,6 @@ import {
   useGetLeadFormMetaQuery,
   usePatchLeadNoteMutation,
   usePatchLeadTaskMutation,
-  useSendLeadEmailMutation,
   useSyncLeadEmailsMutation,
   useUpdateLeadMutation,
   leadsApi,
@@ -193,16 +190,16 @@ const ACTIVITY_STYLE = {
   note: {
     label: 'Note',
     Icon: NotebookPen,
-    iconWrap: 'bg-orange-100 text-orange-600',
-    chip: 'border-orange-200 bg-orange-50 text-orange-800',
-    card: 'bg-orange-50',
+    iconWrap: 'bg-brand-100 text-brand-700',
+    chip: 'border-brand-200 bg-brand-50 text-brand-800',
+    card: 'bg-brand-50',
   },
   email: {
     label: 'Email',
     Icon: Mail,
-    iconWrap: 'bg-blue-100 text-blue-700',
-    chip: 'border-blue-200 bg-blue-50 text-blue-800',
-    card: 'bg-blue-50',
+    iconWrap: 'bg-brand-100 text-brand-700',
+    chip: 'border-brand-200 bg-brand-50 text-brand-800',
+    card: 'bg-brand-50',
   },
   call: {
     label: 'Call',
@@ -214,9 +211,9 @@ const ACTIVITY_STYLE = {
   meeting: {
     label: 'Meeting',
     Icon: CalendarCheck2,
-    iconWrap: 'bg-violet-100 text-violet-700',
+    iconWrap: 'bg-slate-100 text-brand-700',
     chip: 'border-fuchsia-200 bg-fuchsia-50 text-fuchsia-800',
-    card: 'bg-violet-50',
+    card: 'bg-slate-50',
   },
   follow_up: {
     label: 'Follow-up',
@@ -256,9 +253,9 @@ const ACTIVITY_STYLE = {
   tag: {
     label: 'Tag',
     Icon: Tag,
-    iconWrap: 'bg-violet-100 text-violet-700',
-    chip: 'border-violet-200 bg-violet-50 text-violet-800',
-    card: 'bg-violet-50',
+    iconWrap: 'bg-slate-100 text-brand-700',
+    chip: 'border-brand-200 bg-slate-50 text-brand-800',
+    card: 'bg-slate-50',
   },
   system: {
     label: 'Activity',
@@ -266,6 +263,20 @@ const ACTIVITY_STYLE = {
     iconWrap: 'bg-slate-100 text-slate-700',
     chip: 'border-slate-200 bg-slate-50 text-slate-700',
     card: 'bg-slate-50',
+  },
+  payment: {
+    label: 'Payment',
+    Icon: BadgeDollarSign,
+    iconWrap: 'bg-emerald-100 text-emerald-700',
+    chip: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+    card: 'bg-emerald-50',
+  },
+  web_form: {
+    label: 'Form submission',
+    Icon: ClipboardList,
+    iconWrap: 'bg-violet-100 text-violet-700',
+    chip: 'border-violet-200 bg-violet-50 text-violet-800',
+    card: 'bg-violet-50',
   },
 }
 
@@ -280,11 +291,13 @@ function inferStyleKeyFromSystemAction(action) {
   if (a.startsWith('task_')) return 'task'
   if (a.startsWith('note_')) return 'note'
   if (a.startsWith('followup_')) return 'follow_up'
+  if (a === 'payment_recorded' || a === 'deal_payment_recorded') return 'payment'
   return null
 }
 
 function detectActivityVisualKey(activity, headline = '', detail = '') {
   const md = activity?.metadata || {}
+  if (md.source === 'web_form') return 'web_form'
   const fromMeta = String(md.activityTypeKey || '').toLowerCase()
   if (fromMeta && fromMeta !== 'system' && ACTIVITY_STYLE[fromMeta]) return fromMeta
 
@@ -523,12 +536,8 @@ export function LeadDetailPage() {
   const [taskDrawerOpen, setTaskDrawerOpen] = useState(false)
   const [taskDrawerTaskId, setTaskDrawerTaskId] = useState(null)
   const [noteTitle, setNoteTitle] = useState('')
-  const [emailSubject, setEmailSubject] = useState('')
-  const [emailBody, setEmailBody] = useState('')
-  const [emailTo, setEmailTo] = useState('')
   const [isComposeOpen, setIsComposeOpen] = useState(false)
   const [selectedThreadId, setSelectedThreadId] = useState(null)
-  const [selectedAttachmentIds, setSelectedAttachmentIds] = useState([])
   const [editingNoteId, setEditingNoteId] = useState(null)
   const [noteEditorVersion, setNoteEditorVersion] = useState(0)
   const [lostReason, setLostReason] = useState('')
@@ -552,10 +561,14 @@ export function LeadDetailPage() {
   const { data: taskData } = useGetLeadTasksQuery(id, { skip: !id })
   const { data: googleEmailStatus } = useGetGoogleEmailStatusQuery()
   const googleEmailConnected = Boolean(googleEmailStatus?.data?.connected)
-  const { data: emailThreadsData } = useGetLeadEmailThreadsQuery(id, { skip: !id || !googleEmailConnected })
+  const emailsTabActive = activeTab === 'emails'
+  const { data: emailThreadsData } = useGetLeadEmailThreadsQuery(id, {
+    skip: !id || !googleEmailConnected || !emailsTabActive,
+  })
   const { data: threadData } = useGetLeadEmailThreadQuery(
     { id, threadId: selectedThreadId },
-    { skip: !id || !selectedThreadId || !googleEmailConnected },
+    { skip: !id || !selectedThreadId || !googleEmailConnected || !emailsTabActive,
+    },
   )
   const { data: notesData } = useGetLeadNotesQuery(id, { skip: !id })
   const { data: filesData } = useGetLeadFilesQuery(id, { skip: !id })
@@ -565,7 +578,6 @@ export function LeadDetailPage() {
   const [patchNote, { isLoading: patchingNote }] = usePatchLeadNoteMutation()
   const [deleteNote] = useDeleteLeadNoteMutation()
   const [uploadDocumentForNote] = useUploadDocumentMutation()
-  const [sendLeadEmail, { isLoading: sendingEmail }] = useSendLeadEmailMutation()
   const [syncLeadEmails, { isLoading: syncingEmails }] = useSyncLeadEmailsMutation()
   const [patchTask] = usePatchLeadTaskMutation()
   const [deleteTask] = useDeleteLeadTaskMutation()
@@ -656,17 +668,22 @@ export function LeadDetailPage() {
 
   const parsedThreads = useMemo(
     () =>
-      emailThreads.map((thread) => ({
-        ...thread,
-        id: thread.threadId,
-        messages: [],
-        participants: [],
-        messageCount: thread.count || 0,
-        hasAttachments: false,
-        lastDateFormatted: emailTimeLabel(thread.lastMessageAt),
-        snippet: thread.preview || '',
-        lastMessage: { from: { name: 'Unknown', email: '', initials: '??' } },
-      })),
+      emailThreads.map((thread) => {
+        const senderEmail = thread.lastFromEmail || ''
+        const senderName = thread.lastDirection === 'outbound' ? 'You' : (senderEmail || 'Lead')
+        const initials = senderName === 'You' ? 'YO' : (senderEmail ? senderEmail.slice(0, 2).toUpperCase() : 'LD')
+        return {
+          ...thread,
+          id: thread.threadId,
+          messages: [],
+          participants: [],
+          messageCount: thread.count || 0,
+          hasAttachments: false,
+          lastDateFormatted: emailTimeLabel(thread.lastMessageAt),
+          snippet: thread.preview || '',
+          lastMessage: { from: { name: senderName, email: senderEmail, initials } },
+        }
+      }),
     [emailThreads],
   )
   const parsedSelectedThread = useMemo(() => parseStoredThread(selectedThread), [selectedThread])
@@ -786,10 +803,6 @@ export function LeadDetailPage() {
   }, [id])
 
   useEffect(() => {
-    if (lead?.email) setEmailTo((prev) => prev || lead.email)
-  }, [lead?.email])
-
-  useEffect(() => {
     setSelectedTags((lead?.tags || []).map((tag) => tag.name))
   }, [lead?.id, lead?.updatedAt, lead?.tags])
 
@@ -871,7 +884,7 @@ export function LeadDetailPage() {
     [id, patchTask],
   )
 
-  if (isLoading) return <PageShell fullWidth><div className="px-6 py-6">Loading lead...</div></PageShell>
+  if (isLoading) return <PageShell fullWidth><div className="px-6 py-6"><SkeletonDetail /></div></PageShell>
   if (!lead) return <PageShell fullWidth><div className="px-6 py-6">Lead not found.</div></PageShell>
 
   async function submitCallLog() {
@@ -884,32 +897,6 @@ export function LeadDetailPage() {
     } catch (e) {
       toast.error(e?.data?.error?.message || 'Could not log call')
     }
-  }
-
-  async function submitEmail() {
-    if (!emailTo.trim() || !emailBody.trim()) return
-    const selectedAttachments = leadFiles.filter((file) => selectedAttachmentIds.includes(file.id)).map((file) => ({
-      fileName: file.fileName,
-      fileUrl: file.fileUrl,
-      mimeType: file.mimeType || null,
-      sizeBytes: file.sizeBytes || null,
-    }))
-    await sendLeadEmail({
-      id,
-      to: emailTo.trim().split(',').map((x) => x.trim()).filter(Boolean),
-      subject: emailSubject.trim(),
-      bodyHtml: emailBody.trim(),
-      attachments: selectedAttachments,
-    }).unwrap()
-    setEmailSubject('')
-    setEmailBody('')
-    setSelectedAttachmentIds([])
-    setIsComposeOpen(false)
-    if (!lead.email) setEmailTo('')
-  }
-
-  function appendToBody(text) {
-    setEmailBody((prev) => `${prev || ''}${text}`)
   }
 
   async function convertToOpportunity() {
@@ -970,7 +957,7 @@ export function LeadDetailPage() {
             <div className="p-3.5">
            
               <div className="mt-3.5 flex flex-col items-center text-center">
-                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-violet-100 text-2xl font-semibold text-violet-700">
+                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-100 text-2xl font-semibold text-brand-700">
                   {avatarLetter}
                 </div>
                 <div className="mt-2 flex items-center justify-center gap-2">
@@ -996,7 +983,7 @@ export function LeadDetailPage() {
                     type="button"
                     disabled={convertingToOpportunity}
                     onClick={convertToOpportunity}
-                    className="h-10 w-full rounded-xl bg-orange-500 px-4 text-sm font-semibold text-white disabled:opacity-60"
+                    className="h-10 w-full rounded-xl bg-[var(--brand-primary)] px-4 text-sm font-semibold text-white disabled:opacity-60"
                   >
                     {convertingToOpportunity ? 'Creating…' : 'Convert to opportunity'}
                   </button>
@@ -1157,13 +1144,25 @@ export function LeadDetailPage() {
                         type="button"
                         className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-surface-border bg-white px-3 text-sm font-medium text-ink shadow-sm hover:bg-surface-subtle disabled:opacity-60"
                         disabled={syncingEmails}
-                        onClick={() => syncLeadEmails({ id })}
+                        onClick={async () => {
+                          try {
+                            await syncLeadEmails({ id }).unwrap()
+                            toast.success('Replies synced')
+                          } catch (err) {
+                            const code = err?.data?.error?.code
+                            if (code === 'GOOGLE_TOKEN_INVALID') {
+                              toast.error('Google token expired — reconnect in Integrations.', { duration: 6000 })
+                            } else {
+                              toast.error(err?.data?.error?.message || 'Sync failed')
+                            }
+                          }
+                        }}
                       >
                         {syncingEmails ? 'Syncing…' : 'Sync replies'}
                       </button>
                       <button
                         type="button"
-                        className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-brand-700"
+                        className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-slate-800 px-4 text-sm font-semibold text-white shadow-sm hover:bg-slate-800"
                         onClick={() => setIsComposeOpen(true)}
                       >
                         <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -1192,6 +1191,20 @@ export function LeadDetailPage() {
                 </section>
               </div>
               </div>
+            ) : googleEmailStatus?.data?.tokenExpired ? (
+              <div className="mt-8 rounded-2xl border border-rose-200 bg-rose-50 p-8 text-center sm:p-10">
+                <p className="text-base font-semibold text-rose-900">Google account token expired</p>
+                <p className="mx-auto mt-2 max-w-lg text-sm text-rose-800/85">
+                  Your Google OAuth token is no longer valid (invalid_grant). Please reconnect your Google account to continue sending and syncing emails.
+                </p>
+                <button
+                  type="button"
+                  className="mt-5 h-10 rounded-lg bg-rose-700 px-5 text-sm font-semibold text-white shadow-sm hover:bg-rose-800"
+                  onClick={() => navigate('/integrations?tab=google')}
+                >
+                  Reconnect Google Account
+                </button>
+              </div>
             ) : (
               <div className="mt-8 rounded-2xl border border-amber-200/90 bg-amber-50 p-8 text-center sm:p-10">
                 <p className="text-base font-semibold text-amber-950">Connect Google to view synced emails</p>
@@ -1200,7 +1213,7 @@ export function LeadDetailPage() {
                 </p>
                 <button
                   type="button"
-                  className="mt-5 h-10 rounded-lg bg-brand-600 px-5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700"
+                  className="mt-5 h-10 rounded-lg bg-slate-800 px-5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800"
                   onClick={() => navigate('/integrations?tab=google')}
                 >
                   Open Google Settings
@@ -1215,7 +1228,7 @@ export function LeadDetailPage() {
                 action={
                   <button
                     type="button"
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-700"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800"
                     onClick={() => {
                       setTaskDrawerTaskId(null)
                       setTaskDrawerOpen(true)
@@ -1306,7 +1319,7 @@ export function LeadDetailPage() {
                         {task.status !== 'completed' && task.status !== 'cancelled' ? (
                           <button
                             type="button"
-                            className="h-8 rounded-lg border border-brand-300 bg-white px-3 text-xs font-semibold text-brand-800 shadow-sm hover:bg-brand-50"
+                            className="h-8 rounded-lg border border-brand-300 bg-white px-3 text-xs font-semibold text-brand-800 shadow-sm hover:bg-slate-50"
                             onClick={async () => {
                               await patchTask({ id, taskId: task.id, status: 'completed' }).unwrap()
                             }}
@@ -1346,7 +1359,7 @@ export function LeadDetailPage() {
                             {dueTimer ? (
                               <span
                                 className={`shrink-0 rounded-lg px-2 py-1 text-xs font-bold tabular-nums ${
-                                  isOverdue ? 'bg-red-100 text-red-800' : 'bg-brand-100 text-brand-900'
+                                  isOverdue ? 'bg-red-100 text-red-800' : 'bg-slate-200 text-brand-900'
                                 }`}
                               >
                                 {dueTimer}
@@ -1456,7 +1469,7 @@ export function LeadDetailPage() {
                   action={
                     <button
                       type="button"
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-700"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800"
                       onClick={() => {
                         setTaskDrawerTaskId(null)
                         setTaskDrawerOpen(true)
@@ -1483,7 +1496,7 @@ export function LeadDetailPage() {
             setEditingMeeting(null)
             setCreateMeetingModalOpen(true)
           }}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-700"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800"
         >
           <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
           Create meeting
@@ -1502,7 +1515,7 @@ export function LeadDetailPage() {
               setEditingMeeting(null)
               setCreateMeetingModalOpen(true)
             }}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-700"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800"
           >
             <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
             Create meeting
@@ -1534,7 +1547,7 @@ export function LeadDetailPage() {
                       isLive
                         ? 'bg-green-100 text-green-700'
                         : isUpcoming
-                          ? 'bg-blue-100 text-blue-700'
+                          ? 'bg-brand-100 text-brand-700'
                           : isCompleted
                             ? 'bg-emerald-100 text-emerald-700'
                             : 'bg-red-100 text-red-700'
@@ -1625,7 +1638,7 @@ export function LeadDetailPage() {
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">Participants</p>
                 <div className="flex flex-wrap gap-2">
                   {meeting.participants.map((p) => (
-                    <span key={p.userId} className="rounded-full bg-brand-50 px-3 py-1 text-xs text-brand-700">
+                    <span key={p.userId} className="rounded-full bg-slate-100 px-3 py-1 text-xs text-brand-700">
                       {p.user?.name || p.user?.email || p.userId}
                     </span>
                   ))}
@@ -1655,7 +1668,7 @@ export function LeadDetailPage() {
                   <button
                     type="button"
                     onClick={startCreateNote}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-700"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800"
                   >
                     <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
                     Create note
@@ -1780,7 +1793,7 @@ export function LeadDetailPage() {
                   <button
                     type="button"
                     onClick={() => setAddDealDrawerOpen(true)}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-brand-600 px-3 text-xs font-semibold text-white shadow-sm hover:bg-brand-700"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-slate-800 px-3 text-xs font-semibold text-white shadow-sm hover:bg-slate-800"
                   >
                     <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
                     Add deal
@@ -1818,7 +1831,7 @@ export function LeadDetailPage() {
                             <div className="flex items-start justify-between gap-3">
                               <div className="flex min-w-0 flex-1 items-center gap-3">
                                 <div
-                                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 text-[13px] font-bold text-white shadow-md ring-2 ring-white"
+                                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-600 to-brand-700 text-[13px] font-bold text-white shadow-md ring-2 ring-white"
                                   aria-hidden
                                 >
                                   {dealCardInitials(title)}
@@ -1884,7 +1897,7 @@ export function LeadDetailPage() {
                     <button
                       type="button"
                       onClick={() => setAddDealDrawerOpen(true)}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-700"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800"
                     >
                       <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
                       Add deal
@@ -1903,7 +1916,7 @@ export function LeadDetailPage() {
                       setCallLogBody('')
                       setCallLogModalOpen(true)
                     }}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-700"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800"
                   >
                     <PhoneCall className="h-3.5 w-3.5 shrink-0" aria-hidden />
                     Log call
@@ -2038,6 +2051,16 @@ export function LeadDetailPage() {
                           ) : null}
                         </div>
                       ) : null}
+                      {styleKey === 'web_form' && Array.isArray(metadata.fields) && metadata.fields.length > 0 ? (
+                        <div className="mt-2 divide-y divide-violet-100 rounded-lg bg-white/70 overflow-hidden">
+                          {metadata.fields.map((f, fi) => (
+                            <div key={fi} className="grid grid-cols-[40%_60%] gap-2 px-2.5 py-1.5">
+                              <p className="text-[11px] font-medium text-ink-muted truncate" title={f.label}>{f.label}</p>
+                              <p className="text-[11px] font-semibold text-ink break-words">{f.value}</p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
                       {!isTask ? <p className="mt-2 text-right text-[11px] font-medium text-ink-muted">by {activity.user?.name || 'System user'}</p> : null}
                     </div>
                   </article>
@@ -2060,7 +2083,7 @@ export function LeadDetailPage() {
                           setCallLogBody('')
                           setCallLogModalOpen(true)
                         }}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-700"
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800"
                       >
                         <PhoneCall className="h-3.5 w-3.5 shrink-0" aria-hidden />
                         Log call
@@ -2137,7 +2160,7 @@ export function LeadDetailPage() {
                     <button
                       type="button"
                       disabled={!callLogBody.trim() || creatingActivity}
-                      className="h-9 rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700 disabled:opacity-50"
+                      className="h-9 rounded-lg bg-slate-800 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-50"
                       onClick={() => void submitCallLog()}
                     >
                       {creatingActivity ? 'Saving…' : 'Save call'}
@@ -2157,84 +2180,14 @@ export function LeadDetailPage() {
             users={formMetaData?.data?.users || []}
             initialData={editingMeeting}
           />
-          {isComposeOpen ? (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-              <div className="w-full min-w-0 max-w-none overflow-hidden rounded-2xl border border-surface-border bg-white shadow-2xl">
-                <div className="flex items-center justify-between bg-slate-900 px-4 py-2.5 text-white">
-                  <p className="text-sm font-semibold">New Message</p>
-                  <button type="button" className="rounded border border-white/20 px-2 py-1 text-xs" onClick={() => setIsComposeOpen(false)}>Close</button>
-                </div>
-                <div className="space-y-0 p-0">
-                  <div className="border-b border-surface-border px-4 py-2">
-                    <IconInput
-                      icon={Mail}
-                      className="h-9 rounded-none border-0 bg-transparent px-0 pl-9 text-sm shadow-none hover:border-transparent focus:border-transparent focus:ring-0"
-                      placeholder="To (comma separated emails)"
-                      value={emailTo}
-                      onChange={(e) => setEmailTo(e.target.value)}
-                    />
-                  </div>
-                  <div className="border-b border-surface-border px-4 py-2">
-                    <IconInput
-                      icon={MessageSquare}
-                      className="h-9 rounded-none border-0 bg-transparent px-0 pl-9 text-sm shadow-none hover:border-transparent focus:border-transparent focus:ring-0"
-                      placeholder="Subject"
-                      value={emailSubject}
-                      onChange={(e) => setEmailSubject(e.target.value)}
-                    />
-                  </div>
-                  <div className="px-2 py-2">
-                    <IconTextarea
-                      icon={MessageSquare}
-                      className="min-h-[220px] rounded-none border-0 bg-transparent px-4 py-3 pl-9 text-sm shadow-none hover:border-transparent focus:border-transparent focus:ring-0"
-                      placeholder="Write email..."
-                      value={emailBody}
-                      onChange={(e) => setEmailBody(e.target.value)}
-                    />
-                  </div>
-                  <div className="flex items-center gap-1 border-t border-surface-border px-3 py-2">
-                    <button type="button" className="rounded p-1.5 text-ink-muted hover:bg-surface-subtle hover:text-ink" onClick={() => appendToBody('**bold**')}><Bold size={16} /></button>
-                    <button type="button" className="rounded p-1.5 text-ink-muted hover:bg-surface-subtle hover:text-ink" onClick={() => appendToBody('_italic_')}><Italic size={16} /></button>
-                    <button type="button" className="rounded p-1.5 text-ink-muted hover:bg-surface-subtle hover:text-ink" onClick={() => appendToBody(' https://')}><Link2 size={16} /></button>
-                    <button type="button" className="rounded p-1.5 text-ink-muted hover:bg-surface-subtle hover:text-ink" onClick={() => appendToBody(' 🙂')}><Smile size={16} /></button>
-                    <button type="button" className="rounded p-1.5 text-ink-muted hover:bg-surface-subtle hover:text-ink"><Paperclip size={16} /></button>
-                  </div>
-                  <div className="rounded-lg border border-surface-border p-3">
-                    <p className="text-xs font-semibold text-ink">Attachments from lead files</p>
-                    <div className="mt-2 max-h-28 space-y-1 overflow-auto text-xs">
-                      {leadFiles.map((file) => (
-                        <label key={file.id} className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={selectedAttachmentIds.includes(file.id)}
-                            onChange={(e) =>
-                              setSelectedAttachmentIds((prev) =>
-                                e.target.checked ? [...prev, file.id] : prev.filter((id) => id !== file.id),
-                              )
-                            }
-                          />
-                          <span>{file.fileName}</span>
-                        </label>
-                      ))}
-                      {leadFiles.length === 0 ? <p className="text-ink-muted">No files uploaded for this lead.</p> : null}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between gap-2 border-t border-surface-border px-4 py-3">
-                  <div className="flex items-center gap-1 text-xs text-ink-muted">
-                    <button type="button" className="rounded border border-surface-border px-2 py-1" onClick={() => appendToBody(' 😀')}>Emoji</button>
-                    <button type="button" className="rounded border border-surface-border px-2 py-1" onClick={() => appendToBody('\n\nThanks,\n')}>Signature</button>
-                  </div>
-                  <div className="flex items-center gap-2">
-                  <button type="button" className="h-10 rounded-lg border border-surface-border px-4 text-sm" onClick={() => setIsComposeOpen(false)}>Cancel</button>
-                  <button type="button" className="h-10 rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white disabled:opacity-60" disabled={sendingEmail || !googleEmailStatus?.data?.connected} onClick={submitEmail}>
-                    {sendingEmail ? 'Sending...' : 'Send'}
-                  </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : null}
+          <LeadEmailComposeModal
+            open={isComposeOpen}
+            onClose={() => setIsComposeOpen(false)}
+            leadId={id}
+            lead={lead}
+            leadEmail={lead?.email || ''}
+            googleEmailConnected={googleEmailConnected}
+          />
           {dealPanelOpp ? (
             <DealDetailPanel
               open

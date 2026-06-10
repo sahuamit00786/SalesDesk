@@ -84,7 +84,7 @@ export function MeetingsPage() {
                     'inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition',
                     active
                       ? id === 'video'
-                        ? 'border-indigo-300 bg-indigo-50 text-indigo-900'
+                        ? 'border-brand-300 bg-brand-50 text-indigo-900'
                         : 'border-emerald-300 bg-emerald-50 text-emerald-900'
                       : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50',
                   )}
@@ -104,7 +104,7 @@ export function MeetingsPage() {
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 placeholder="Search by title…"
-                className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/30"
+                className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-brand-400/30"
                 autoComplete="off"
               />
             </div>
@@ -114,7 +114,7 @@ export function MeetingsPage() {
                 type="date"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
-                className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm text-gray-900 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/30"
+                className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm text-gray-900 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-brand-400/30"
               />
             </label>
             <label className="flex min-w-0 flex-col gap-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
@@ -123,7 +123,7 @@ export function MeetingsPage() {
                 type="date"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
-                className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm text-gray-900 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/30"
+                className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm text-gray-900 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-brand-400/30"
               />
             </label>
             <button
@@ -134,12 +134,12 @@ export function MeetingsPage() {
             >
               {sortOrder === 'asc' ? (
                 <>
-                  <ArrowUpNarrowWide className="h-4 w-4 text-indigo-600" />
+                  <ArrowUpNarrowWide className="h-4 w-4 text-brand-600" />
                   Earliest first
                 </>
               ) : (
                 <>
-                  <ArrowDownWideNarrow className="h-4 w-4 text-indigo-600" />
+                  <ArrowDownWideNarrow className="h-4 w-4 text-brand-600" />
                   Latest first
                 </>
               )}

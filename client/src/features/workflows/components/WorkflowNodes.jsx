@@ -92,25 +92,72 @@ function TriggerLeadCreatedNode({ id, selected }) {
       title={WORKFLOW_NODE_TYPES.triggerLeadCreated}
       subtitle="Trigger"
       selected={selected}
-      tone="ring-1 ring-violet-200/80"
+      tone="ring-1 ring-brand-200/80"
     >
       <p className="text-[11px] leading-snug text-ink-muted">Runs when a new lead is created in this workspace.</p>
-      <Handle type="source" position={Position.Bottom} className="!h-2.5 !w-2.5 !border-2 !border-white !bg-violet-500" />
+      <Handle type="source" position={Position.Bottom} className="!h-2.5 !w-2.5 !border-2 !border-white !bg-slate-500" />
     </NodeShell>
   )
 }
 
-function TriggerLeadUpdatedNode({ id, selected }) {
+const WATCHABLE_FIELDS = [
+  { value: 'status', label: 'Lifecycle status' },
+  { value: 'source', label: 'Source channel' },
+  { value: 'sourceId', label: 'Workspace source' },
+  { value: 'opportunityStage', label: 'Pipeline stage' },
+  { value: 'assignedTo', label: 'Assigned to' },
+  { value: 'email', label: 'Email' },
+  { value: 'phone', label: 'Phone' },
+  { value: 'company', label: 'Company' },
+  { value: 'contactName', label: 'Contact name' },
+  { value: 'title', label: 'Title' },
+  { value: 'city', label: 'City' },
+  { value: 'value', label: 'Deal value' },
+  { value: 'notes', label: 'Notes' },
+]
+
+function TriggerLeadUpdatedNode({ id, data, selected, updateNodeData }) {
+  const watchFields = Array.isArray(data?.watchFields) ? data.watchFields : []
+
+  const toggleField = (val) => {
+    const next = watchFields.includes(val) ? watchFields.filter((f) => f !== val) : [...watchFields, val]
+    updateNodeData(id, { watchFields: next })
+  }
+
   return (
     <NodeShell
       id={id}
       title={WORKFLOW_NODE_TYPES.triggerLeadUpdated}
       subtitle="Trigger"
       selected={selected}
-      tone="ring-1 ring-sky-200/80"
+      tone="ring-1 ring-brand-200/80"
     >
       <p className="text-[11px] leading-snug text-ink-muted">Runs when an existing lead is updated.</p>
-      <Handle type="source" position={Position.Bottom} className="!h-2.5 !w-2.5 !border-2 !border-white !bg-sky-500" />
+      <div className="rounded-lg border border-dashed border-surface-border bg-surface-muted/30 px-2 py-2">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Watch specific fields (optional)</p>
+        <p className="mt-0.5 text-[9px] leading-snug text-ink-muted">
+          If set, only fires when one of these fields actually changes. Leave empty to fire on any update.
+        </p>
+        <div className="mt-1.5 max-h-28 overflow-y-auto space-y-1">
+          {WATCHABLE_FIELDS.map((f) => (
+            <label key={f.value} className="flex items-center gap-1.5 cursor-pointer">
+              <input
+                type="checkbox"
+                className="nodrag h-3.5 w-3.5 shrink-0 rounded border-surface-border text-brand-600"
+                checked={watchFields.includes(f.value)}
+                onChange={() => toggleField(f.value)}
+              />
+              <span className="text-[11px] text-ink">{f.label}</span>
+            </label>
+          ))}
+        </div>
+        {watchFields.length > 0 ? (
+          <p className="mt-1 text-[9px] text-sky-700 dark:text-sky-400">
+            Watching: {watchFields.map((v) => WATCHABLE_FIELDS.find((f) => f.value === v)?.label || v).join(', ')}
+          </p>
+        ) : null}
+      </div>
+      <Handle type="source" position={Position.Bottom} className="!h-2.5 !w-2.5 !border-2 !border-white !bg-[var(--brand-primary)]" />
     </NodeShell>
   )
 }
@@ -166,10 +213,14 @@ function ConditionValueControl({ field, value, operator, updateNodeData, id, lea
   const sources = Array.isArray(leadSetup?.sources) ? leadSetup.sources : []
   const stages = Array.isArray(leadSetup?.opportunityStages) ? leadSetup.opportunityStages : []
 
+  if (operator === 'is_empty' || operator === 'is_not_empty') {
+    return null
+  }
+
   if (operator === 'changed') {
     return (
-      <p className="text-[10px] leading-snug text-ink-muted">
-        “Changed” compares current vs previous value on the lead update event (no value needed).
+      <p className="text-[10px] leading-snug text-amber-700 dark:text-amber-400">
+        &ldquo;Changed&rdquo; only works with the <strong>Lead Updated</strong> trigger &mdash; always false on Lead Created.
       </p>
     )
   }
@@ -326,8 +377,14 @@ function ConditionFieldNode({ id, data, selected, updateNodeData, leadSetup }) {
           onChange={(e) => updateNodeData(id, { operator: e.target.value })}
         >
           <option value="equals">Equals</option>
+          <option value="not_equals">Not equals</option>
           <option value="contains">Contains (text)</option>
-          <option value="changed">Changed (vs previous — for “Lead updated”)</option>
+          <option value="not_contains">Does not contain</option>
+          <option value="starts_with">Starts with</option>
+          <option value="ends_with">Ends with</option>
+          <option value="is_empty">Is empty</option>
+          <option value="is_not_empty">Is not empty</option>
+          <option value="changed">Changed (Lead Updated trigger only)</option>
         </select>
       </label>
       <ConditionValueControl
@@ -401,14 +458,6 @@ function DelayWaitNode({ id, data, selected, updateNodeData }) {
   )
 }
 
-function isoToDatetimeLocalValue(iso) {
-  if (!iso) return ''
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  const pad = (n) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-
 function WorkflowLeadContextBanner({ compact }) {
   return (
     <div
@@ -418,7 +467,7 @@ function WorkflowLeadContextBanner({ compact }) {
       )}
     >
       <span className="font-semibold">Lead</span> — the lead that triggered this workflow. After{' '}
-      <span className="font-medium">Assign owner</span>, “Lead assignee” uses the new owner for tasks and follow-ups.
+      <span className="font-medium">Assign owner</span>, "Lead assignee" uses the new owner for tasks and follow-ups.
     </div>
   )
 }
@@ -486,7 +535,7 @@ function ActionAssignOwnerNode({ id, data, selected, updateNodeData, teamUsers }
 function ActionCreateTaskNode({ id, data, selected, updateNodeData, teamUsers }) {
   const users = Array.isArray(teamUsers) ? teamUsers : []
   const assigneeMode = String(data?.assigneeMode || 'from_lead')
-  const dueMode = String(data?.dueMode || 'relative_days')
+  const dueMode = String(data?.dueMode || 'relative_days') === 'none' ? 'none' : 'relative_days'
   const subtasksUi = normalizeWorkflowSubtasksForUi(data)
 
   const persistSubtasks = (rows) =>
@@ -593,7 +642,7 @@ function ActionCreateTaskNode({ id, data, selected, updateNodeData, teamUsers })
           </div>
           <button
             type="button"
-            className="nodrag nopan mt-2 inline-flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-brand-300/80 bg-brand-50/40 py-1.5 text-[10px] font-semibold text-brand-800 hover:bg-brand-50/80 dark:border-brand-500/30 dark:bg-brand-950/20 dark:text-brand-200 dark:hover:bg-brand-950/40"
+            className="nodrag nopan mt-2 inline-flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-brand-300/80 bg-slate-50 py-1.5 text-[10px] font-semibold text-brand-800 hover:bg-slate-50/80 dark:border-brand-500/30 dark:bg-brand-950/20 dark:text-brand-200 dark:hover:bg-brand-950/40"
             onClick={() => persistSubtasks([...subtasksUi, { key: newWorkflowSubtaskKey(), title: '', done: false }])}
           >
             <Plus className="h-3 w-3" /> Add subtask
@@ -628,50 +677,37 @@ function ActionCreateTaskNode({ id, data, selected, updateNodeData, teamUsers })
             </select>
           </label>
         ) : null}
-        <label className="block text-[11px] font-medium text-ink-muted">
-          Due date
-          <select
-            className="mt-0.5 w-full rounded-lg border border-surface-border bg-surface-muted px-2 py-1 text-xs text-ink"
-            value={dueMode}
-            onChange={(e) => updateNodeData(id, { dueMode: e.target.value })}
-          >
-            <option value="none">No due date</option>
-            <option value="relative_days">Due in (days) from run</option>
-            <option value="absolute">Due at (date and time)</option>
-          </select>
-        </label>
-        {dueMode === 'relative_days' ? (
-          <label className="block text-[11px] font-medium text-ink-muted">
-            Days from run
-            <input
-              type="number"
-              min={0}
-              max={3650}
-              className="mt-0.5 w-full rounded-lg border border-surface-border bg-surface-muted px-2 py-1 text-xs text-ink"
-              value={data?.dueInDays ?? 3}
-              onChange={(e) => updateNodeData(id, { dueInDays: Number(e.target.value) || 0 })}
-            />
-          </label>
-        ) : null}
-        {dueMode === 'absolute' ? (
-          <label className="block text-[11px] font-medium text-ink-muted">
-            Due at (local)
-            <input
-              type="datetime-local"
-              className="mt-0.5 w-full rounded-lg border border-surface-border bg-surface-muted px-2 py-1 text-xs text-ink"
-              value={isoToDatetimeLocalValue(data?.dueAtIso)}
-              onChange={(e) => {
-                const v = e.target.value
-                if (!v) {
-                  updateNodeData(id, { dueAtIso: '' })
-                  return
-                }
-                const d = new Date(v)
-                updateNodeData(id, { dueAtIso: Number.isNaN(d.getTime()) ? '' : d.toISOString() })
-              }}
-            />
-          </label>
-        ) : null}
+        <div className="space-y-1">
+          <span className="block text-[11px] font-medium text-ink-muted">Due date</span>
+          <div className="flex items-center gap-1.5">
+            <select
+              className="min-w-0 flex-1 rounded-lg border border-surface-border bg-surface-muted px-2 py-1 text-xs text-ink"
+              value={dueMode}
+              onChange={(e) =>
+                updateNodeData(id, {
+                  dueMode: e.target.value,
+                  dueAtIso: '',
+                })
+              }
+            >
+              <option value="none">No due date</option>
+              <option value="relative_days">After N days</option>
+            </select>
+            {dueMode === 'relative_days' ? (
+              <div className="flex shrink-0 items-center gap-1">
+                <input
+                  type="number"
+                  min={0}
+                  max={3650}
+                  className="w-14 rounded-lg border border-surface-border bg-surface-muted px-2 py-1 text-xs text-ink"
+                  value={data?.dueInDays ?? 3}
+                  onChange={(e) => updateNodeData(id, { dueInDays: Number(e.target.value) || 0 })}
+                />
+                <span className="text-[11px] text-ink-muted">days</span>
+              </div>
+            ) : null}
+          </div>
+        </div>
       </div>
       <Handle type="source" position={Position.Bottom} className="!h-2.5 !w-2.5 !border-2 !border-white !bg-emerald-500" />
     </NodeShell>
@@ -750,7 +786,7 @@ function ActionSendEmailTemplateNode({ id, data, selected, updateNodeData, templ
 export function createWorkflowNodeTypes({ updateNodeData, teamUsers, templates, leadSetup }) {
   return {
     triggerLeadCreated: (p) => <TriggerLeadCreatedNode {...p} />,
-    triggerLeadUpdated: (p) => <TriggerLeadUpdatedNode {...p} />,
+    triggerLeadUpdated: (p) => <TriggerLeadUpdatedNode {...p} updateNodeData={updateNodeData} />,
     conditionField: (p) => <ConditionFieldNode {...p} updateNodeData={updateNodeData} leadSetup={leadSetup} />,
     delayWait: (p) => <DelayWaitNode {...p} updateNodeData={updateNodeData} />,
     actionAssignOwner: (p) => <ActionAssignOwnerNode {...p} updateNodeData={updateNodeData} teamUsers={teamUsers} />,

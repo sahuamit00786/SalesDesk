@@ -21,6 +21,7 @@ import {
   usePatchLeadFollowupMutation,
 } from '@/features/leads/leadsApi'
 import { LeadTabEmptyState, LeadTabSectionHeader } from '@/features/leads/components/LeadTabSectionHeader'
+import { SkeletonList } from '@/components/shared/SkeletonLoader'
 
 function pad2(n) {
   return String(n).padStart(2, '0')
@@ -287,7 +288,7 @@ export function LeadFollowupsTab({ leadId }) {
     <button
       type="button"
       onClick={openDrawer}
-      className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-700"
+      className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand-primary)] px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[var(--brand-primary-dark)]"
     >
       <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
       Add follow-up
@@ -303,7 +304,7 @@ export function LeadFollowupsTab({ leadId }) {
       />
 
       {isLoading ? (
-        <p className="text-sm text-ink-muted">Loading…</p>
+        <SkeletonList rows={3} />
       ) : followups.length === 0 ? (
         <LeadTabEmptyState
           icon={BellRing}
@@ -391,7 +392,7 @@ export function LeadFollowupsTab({ leadId }) {
                         <>
                           <button
                             type="button"
-                            className="inline-flex h-7 items-center gap-1 rounded-md border border-violet-200 bg-white px-2 text-[11px] font-medium text-violet-800 transition hover:bg-violet-50"
+                            className="inline-flex h-7 items-center gap-1 rounded-md border border-brand-200 bg-white px-2 text-[11px] font-medium text-brand-800 transition hover:bg-slate-50"
                             title="Edit remark or time"
                             onClick={() => openDrawerForEdit(fu)}
                           >
@@ -525,7 +526,7 @@ export function LeadFollowupsTab({ leadId }) {
               type="button"
               disabled={editingId ? patching : creating || !scheduledValid}
               onClick={onSubmit}
-              className="h-10 rounded-xl bg-violet-600 px-5 text-sm font-semibold text-white shadow-sm hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
+              className="h-10 rounded-xl bg-[var(--brand-primary)] px-5 text-sm font-semibold text-white shadow-sm hover:bg-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {editingId ? (patching ? 'Saving…' : 'Save changes') : creating ? 'Saving…' : 'Schedule'}
             </button>
@@ -544,8 +545,8 @@ export function LeadFollowupsTab({ leadId }) {
                   onClick={() => setMode('quick')}
                   className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${
                     mode === 'quick'
-                      ? 'border-violet-400 bg-violet-50 text-violet-900 shadow-sm'
-                      : 'border-surface-border text-ink-muted hover:border-violet-200 hover:text-ink'
+                      ? 'border-brand-400 bg-slate-50 text-brand-900 shadow-sm'
+                      : 'border-surface-border text-ink-muted hover:border-brand-200 hover:text-ink'
                   }`}
                 >
                   Quick
@@ -558,8 +559,8 @@ export function LeadFollowupsTab({ leadId }) {
                   }}
                   className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-medium transition ${
                     mode === 'custom'
-                      ? 'border-violet-400 bg-violet-50 text-violet-900 shadow-sm'
-                      : 'border-surface-border text-ink-muted hover:border-violet-200 hover:text-ink'
+                      ? 'border-brand-400 bg-slate-50 text-brand-900 shadow-sm'
+                      : 'border-surface-border text-ink-muted hover:border-brand-200 hover:text-ink'
                   }`}
                 >
                   <CalendarDays className="h-4 w-4" aria-hidden />
@@ -580,15 +581,15 @@ export function LeadFollowupsTab({ leadId }) {
                     onClick={() => setQuickPick(minutes)}
                     className={`min-w-[4.5rem] rounded-xl border-2 px-3 py-2.5 text-sm font-bold transition ${
                       quickPick === minutes
-                        ? 'border-violet-500 bg-violet-600 text-white shadow-md shadow-violet-500/30'
-                        : 'border-surface-border bg-white text-ink hover:border-violet-300'
+                        ? 'border-violet-500 bg-[var(--brand-primary)] text-white shadow-md shadow-violet-500/30'
+                        : 'border-surface-border bg-white text-ink hover:border-brand-300'
                     }`}
                   >
                     {label}
                   </button>
                 ))}
               </div>
-              <p className="mt-3 rounded-xl border border-violet-100 bg-violet-50/50 px-3 py-2 text-xs text-violet-900">
+              <p className="mt-3 rounded-xl border border-violet-100 bg-slate-50 px-3 py-2 text-xs text-brand-900">
                 <span className="font-semibold">Scheduled:</span>{' '}
                 {scheduledFromForm && !Number.isNaN(scheduledFromForm.getTime())
                   ? formatFollowupWhen(scheduledFromForm.toISOString())
@@ -616,7 +617,7 @@ export function LeadFollowupsTab({ leadId }) {
                         if (t && t.getTime() <= floorNow.getTime()) setCustomTime(toTimeInputValue(floorNow))
                       }
                     }}
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-ink shadow-sm outline-none ring-violet-500/20 transition focus:border-violet-400 focus:ring-4"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-ink shadow-sm outline-none ring-brand-500/20 transition focus:border-brand-400 focus:ring-4"
                   />
                 </label>
                 <div className="block space-y-1.5">
@@ -635,7 +636,7 @@ export function LeadFollowupsTab({ leadId }) {
                         if (m < minM) m = minM
                         setCustomTime(`${pad2(h)}:${pad2(m)}`)
                       }}
-                      className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-ink shadow-sm outline-none ring-violet-500/20 transition focus:border-fuchsia-400 focus:ring-4"
+                      className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-ink shadow-sm outline-none ring-brand-500/20 transition focus:border-fuchsia-400 focus:ring-4"
                     >
                       {hourOptions.map((h) => (
                         <option key={h} value={h}>
@@ -653,7 +654,7 @@ export function LeadFollowupsTab({ leadId }) {
                         const m = Number(e.target.value)
                         setCustomTime(`${pad2(effectiveH)}:${pad2(m)}`)
                       }}
-                      className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-ink shadow-sm outline-none ring-violet-500/20 transition focus:border-fuchsia-400 focus:ring-4"
+                      className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-ink shadow-sm outline-none ring-brand-500/20 transition focus:border-fuchsia-400 focus:ring-4"
                     >
                       {minuteOptions.map((m) => (
                         <option key={m} value={m}>
@@ -678,7 +679,7 @@ export function LeadFollowupsTab({ leadId }) {
               rows={4}
               maxLength={8000}
               placeholder="What to do when you follow up…"
-              className="w-full resize-y rounded-xl border border-surface-border bg-white px-3 py-2.5 text-sm text-ink shadow-sm outline-none ring-violet-500/15 transition focus:border-violet-400 focus:ring-4"
+              className="w-full resize-y rounded-xl border border-surface-border bg-white px-3 py-2.5 text-sm text-ink shadow-sm outline-none ring-brand-500/15 transition focus:border-brand-400 focus:ring-4"
             />
           </label>
         </div>

@@ -176,7 +176,7 @@ export async function listMeetings(query, user, workspaceId) {
   // 🔍 Search
   if (search) {
     where.title = {
-      [Op.iLike]: `%${search}%`,
+      [Op.like]: `%${search}%`,
     };
   }
 
@@ -201,7 +201,7 @@ export async function listMeetings(query, user, workspaceId) {
   const { rows, count } = await Meeting.findAndCountAll({
     where,
     distinct: true,
-    col: "Meeting.id",
+    col: "id",
     include: [
       {
         model: MeetingParticipant,

@@ -1,8 +1,10 @@
-import * as aiService from "../services/aiMeetingService.js";
+import * as aiService from '../services/aiMeetingService.js'
+import { assertMeetingAccess } from '../services/meetingAccessService.js'
 
 export async function summarizeMeeting(req, res, next) {
   try {
-    const data = await aiService.generateSummary(req.params.id);
+    await assertMeetingAccess(req.params.id, req.user, req.headers['x-workspace-id'])
+    const data = await aiService.generateSummary(req.params.id)
 
     res.json({
       success: true,
@@ -15,7 +17,8 @@ export async function summarizeMeeting(req, res, next) {
 
 export async function actionItems(req, res, next) {
   try {
-    const data = await aiService.extractActions(req.params.id);
+    await assertMeetingAccess(req.params.id, req.user, req.headers['x-workspace-id'])
+    const data = await aiService.extractActions(req.params.id)
 
     res.json({
       success: true,
@@ -28,7 +31,8 @@ export async function actionItems(req, res, next) {
 
 export async function sentiment(req, res, next) {
   try {
-    const data = await aiService.analyzeSentiment(req.params.id);
+    await assertMeetingAccess(req.params.id, req.user, req.headers['x-workspace-id'])
+    const data = await aiService.analyzeSentiment(req.params.id)
 
     res.json({
       success: true,

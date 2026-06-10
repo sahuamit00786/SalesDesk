@@ -113,7 +113,7 @@ export function CreateReminderDrawer({ isOpen, onClose, initialDate = new Date()
             onChange={(e) => setForm({ ...form, notes: e.target.value })}
             placeholder="Add details..."
             rows={3}
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 resize-none"
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600 resize-none"
           />
         </div>
 
@@ -150,7 +150,7 @@ export function CreateReminderDrawer({ isOpen, onClose, initialDate = new Date()
                 type="checkbox"
                 checked={form.channelPush}
                 onChange={(e) => setForm({ ...form, channelPush: e.target.checked })}
-                className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                className="w-4 h-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
               />
               <span className="text-sm text-gray-600">Push notification</span>
             </label>
@@ -159,7 +159,7 @@ export function CreateReminderDrawer({ isOpen, onClose, initialDate = new Date()
                 type="checkbox"
                 checked={form.channelEmail}
                 onChange={(e) => setForm({ ...form, channelEmail: e.target.checked })}
-                className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                className="w-4 h-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
               />
               <span className="text-sm text-gray-600">Email notification</span>
             </label>
@@ -179,7 +179,7 @@ export function CreateReminderDrawer({ isOpen, onClose, initialDate = new Date()
           <Button
             type="submit"
             isLoading={isLoading}
-            className="flex-1 bg-indigo-600 hover:bg-indigo-700"
+            className="flex-1 bg-[var(--brand-primary)] hover:bg-[var(--brand-primary-dark)]"
           >
             Create Reminder
           </Button>

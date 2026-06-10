@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ChevronDown,
   Download,
@@ -29,6 +29,8 @@ import { selectWorkspaceList } from '@/features/workspace/workspaceSlice'
 import { cn } from '@/utils/cn'
 import { TablePaginationBar } from '@/components/ui/TablePaginationBar'
 import { inputFieldClassName } from '@/components/ui/Input'
+import { Select } from '@/components/ui/Select'
+import { DataGrid } from '@/components/shared/DataGrid'
 import { formatAggregatedDealAmount, formatDealMoney } from '@/features/deals/dealCurrencies'
 
 const STAGE_FILTER_FALLBACK = ['Lead Inbound', 'New', 'Contacted', 'Qualified', 'Proposal', 'Won', 'Lost']
@@ -314,10 +316,166 @@ export function PipelinePage() {
 
   const displayLimit = mode === 'kanban' ? listQuery.limit : limit
 
+  const pipelineColumns = useMemo(
+    () => [
+      {
+        field: 'opportunity',
+        headerName: 'Opportunity',
+        flex: 1,
+        minWidth: 150,
+        renderCell: ({ row }) => (
+          <div>
+            <p className="text-sm font-semibold text-ink">{(row.dealName || '').trim() || row.fullName}</p>
+            <p className="text-[11px] text-ink-muted">
+              {(row.dealName || '').trim() ? row.companyName || '—' : row.location || '—'}
+            </p>
+          </div>
+        ),
+      },
+      {
+        field: 'companyRole',
+        headerName: 'Company & role',
+        flex: 1,
+        minWidth: 130,
+        renderCell: ({ row }) => (
+          <div>
+            <p className="text-xs font-semibold text-ink">{row.jobTitle || '—'}</p>
+            <p className="text-[11px] text-ink-muted">{row.companyName || '—'}</p>
+          </div>
+        ),
+      },
+      {
+        field: 'contact',
+        headerName: 'Contact',
+        flex: 1,
+        minWidth: 130,
+        renderCell: ({ row }) => (
+          <div>
+            <p className="text-xs text-ink">{row.email || '—'}</p>
+            <p className="text-[11px] text-ink-muted">{row.phoneNumber || row.directPhone || '—'}</p>
+          </div>
+        ),
+      },
+      {
+        field: 'currentStage',
+        headerName: 'Status',
+        width: 200,
+        sortable: false,
+        renderCell: ({ row }) => (
+          <div className="relative max-w-[190px]" onClick={(e) => e.stopPropagation()}>
+            <Select
+              className="h-8 w-full appearance-none pr-7 text-[11px] font-semibold"
+              value={row.currentStage || ''}
+              disabled={updatingStage}
+              onChange={(event) => handleStageChange(row, event.target.value)}
+              aria-label={`Pipeline status for ${row.fullName || 'opportunity'}`}
+            >
+              {!row.currentStage ? <option value="">Select status</option> : null}
+              {opportunityStages
+                .filter((stage) => stage?.name)
+                .map((stage) => (
+                  <option key={`${row.id}-${stage.name}`} value={stage.name}>
+                    {formatStageLabel(stage.name)}
+                  </option>
+                ))}
+            </Select>
+            <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-muted" />
+          </div>
+        ),
+      },
+      {
+        field: 'dealValue',
+        headerName: 'Value',
+        width: 100,
+        renderCell: ({ row }) => (
+          <span className="text-sm font-semibold text-ink">
+            {formatDealMoney(row.dealValue, row.dealCurrency)}
+          </span>
+        ),
+      },
+      {
+        field: 'leadScore',
+        headerName: 'Score',
+        width: 80,
+        renderCell: ({ row }) => (
+          <span className="inline-flex h-8 min-w-[2rem] items-center justify-center rounded-lg border border-brand-200 bg-brand-50 text-xs font-bold text-brand-900">
+            {row.leadScore ?? 0}
+          </span>
+        ),
+      },
+      {
+        field: 'owner',
+        headerName: 'Owner',
+        flex: 1,
+        minWidth: 130,
+        renderCell: ({ row }) => (
+          <div className="inline-flex items-center gap-2">
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-200 text-[10px] font-semibold text-brand-800">
+              {initials(row.owner?.name || row.owner?.email)}
+            </span>
+            <span className="text-xs font-medium text-ink">{row.owner?.name || row.owner?.email || 'Unassigned'}</span>
+          </div>
+        ),
+      },
+      {
+        field: 'lastActivity',
+        headerName: 'Last activity',
+        flex: 1,
+        minWidth: 130,
+        renderCell: ({ row }) => (
+          <div>
+            <p className="text-xs font-medium text-ink">{row.lastActivityType || '—'}</p>
+            <p className="text-[11px] text-ink-muted">
+              {row.lastActivityAt ? new Date(row.lastActivityAt).toLocaleString() : '—'}
+            </p>
+          </div>
+        ),
+      },
+      {
+        field: 'actions',
+        headerName: 'Action',
+        width: 180,
+        sortable: false,
+        filterable: false,
+        align: 'right',
+        headerAlign: 'right',
+        renderCell: ({ row }) => (
+          <div className="inline-flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => navigate(`/opportunities/${row.id}`)}
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-surface-border bg-white px-2.5 text-[11px] font-semibold text-ink hover:bg-surface-subtle"
+            >
+              Open
+            </button>
+            {dealStageName && row.currentStage === dealStageName ? (
+              <button
+                type="button"
+                onClick={(event) => handleCreateDeal(row, event)}
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 text-[11px] font-semibold text-emerald-800 shadow-sm hover:bg-emerald-100/90"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add deal
+              </button>
+            ) : null}
+          </div>
+        ),
+      },
+    ],
+    [opportunityStages, updatingStage, dealStageName, navigate],
+  )
+
+  const onPipelineRowClick = useCallback(
+    (params) => {
+      if (!params.row?._isGroupHeader) navigate(`/opportunities/${params.row.id}`)
+    },
+    [navigate],
+  )
+
   return (
     <PageShell fullWidth>
       <div className="flex h-[calc(100dvh-89px)] min-h-0 flex-col gap-3 px-2 py-2 lg:px-4 lg:py-3">
-        <div className="flex flex-col gap-3 rounded-2xl border border-surface-border bg-gradient-to-br from-white via-brand-50/40 to-violet-50/30 px-4 py-4 sm:px-5">
+        <div className="flex flex-col gap-3 rounded-2xl border border-surface-border bg-gradient-to-br from-white via-slate-50 to-slate-50 px-4 py-4 sm:px-5">
           <div className="order-2 flex flex-col gap-3 border-t border-surface-border/60 pt-3">
             <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
               <div className="relative min-w-0 lg:flex-1">
@@ -336,8 +494,7 @@ export function PipelinePage() {
               <div className="flex flex-wrap items-center gap-2">
                 {isCompanyAdmin && workspaceList.length ? (
                   <label className="inline-flex flex-col gap-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
-                    <span className="sr-only sm:not-sr-only sm:pl-0.5">Workspace</span>
-                    <select
+                   <select
                       className={cn(inputFieldClassName, 'h-9 min-w-[9.5rem] cursor-pointer py-0 text-xs font-medium text-ink')}
                       value={pipelineWorkspaceId}
                       onChange={(e) => {
@@ -365,7 +522,7 @@ export function PipelinePage() {
                     className="inline-flex h-9 items-center gap-2 rounded-xl border border-surface-border bg-white px-3 text-xs font-semibold text-ink shadow-sm"
                   >
                     Status
-                    <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] text-brand-700">
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-brand-700">
                       {selectedStages.length || 'All'}
                     </span>
                   </button>
@@ -390,7 +547,7 @@ export function PipelinePage() {
                           return (
                             <label key={s} className="flex cursor-pointer items-center justify-between rounded-lg px-2 py-1.5 hover:bg-surface-subtle">
                               <span className="text-xs text-ink">{formatStageLabel(s)}</span>
-                              <span className={cn('inline-flex h-4 w-4 items-center justify-center rounded border', checked ? 'border-brand-600 bg-brand-600 text-white' : 'border-surface-border')}>
+                              <span className={cn('inline-flex h-4 w-4 items-center justify-center rounded border', checked ? 'border-brand-600 bg-[var(--brand-primary)] text-white' : 'border-surface-border')}>
                                 {checked ? <Check className="h-3 w-3" /> : null}
                               </span>
                               <input type="checkbox" className="sr-only" checked={checked} onChange={() => toggleStage(s)} />
@@ -412,7 +569,7 @@ export function PipelinePage() {
                     className="inline-flex h-9 items-center gap-2 rounded-xl border border-surface-border bg-white px-3 text-xs font-semibold text-ink shadow-sm"
                   >
                     Assigned to
-                    <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] text-brand-700">
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-brand-700">
                       {selectedAssignees.length || 'All'}
                     </span>
                   </button>
@@ -437,7 +594,7 @@ export function PipelinePage() {
                           return (
                             <label key={u.id} className="flex cursor-pointer items-center justify-between rounded-lg px-2 py-1.5 hover:bg-surface-subtle">
                               <span className="truncate text-xs text-ink">{u.name || u.email || 'User'}</span>
-                              <span className={cn('inline-flex h-4 w-4 items-center justify-center rounded border', checked ? 'border-brand-600 bg-brand-600 text-white' : 'border-surface-border')}>
+                              <span className={cn('inline-flex h-4 w-4 items-center justify-center rounded border', checked ? 'border-brand-600 bg-[var(--brand-primary)] text-white' : 'border-surface-border')}>
                                 {checked ? <Check className="h-3 w-3" /> : null}
                               </span>
                               <input type="checkbox" className="sr-only" checked={checked} onChange={() => toggleAssignee(u.id)} />
@@ -493,7 +650,7 @@ export function PipelinePage() {
                     onClick={() => setMode('list')}
                     className={cn(
                       'inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold',
-                      mode === 'list' ? 'bg-brand-600 text-white' : 'text-ink-muted hover:bg-surface-subtle',
+                      mode === 'list' ? 'bg-[var(--brand-primary)] text-white' : 'text-ink-muted hover:bg-surface-subtle',
                     )}
                   >
                     <List className="h-3.5 w-3.5" />
@@ -504,7 +661,7 @@ export function PipelinePage() {
                     onClick={() => setMode('kanban')}
                     className={cn(
                       'inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold',
-                      mode === 'kanban' ? 'bg-brand-600 text-white' : 'text-ink-muted hover:bg-surface-subtle',
+                      mode === 'kanban' ? 'bg-[var(--brand-primary)] text-white' : 'text-ink-muted hover:bg-surface-subtle',
                     )}
                   >
                     <LayoutGrid className="h-3.5 w-3.5" />
@@ -521,7 +678,7 @@ export function PipelinePage() {
                 </button>
                 <button
                   type="button"
-                  className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-brand-700 px-3 text-xs font-semibold text-white shadow-sm hover:bg-brand-800"
+                  className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[var(--brand-primary)] px-3 text-xs font-semibold text-white shadow-sm hover:bg-[var(--brand-primary-dark)]"
                   onClick={() => setOpenCreate(true)}
                 >
                   <Plus className="h-3.5 w-3.5" />
@@ -532,7 +689,7 @@ export function PipelinePage() {
             {activeFilterCount > 0 ? (
               <div className="flex flex-wrap items-center gap-1.5 border-t border-surface-border/80 pt-2 text-[11px]">
                 <span className="font-semibold text-ink-muted">Active filters:</span>
-                {debouncedSearch ? <span className="rounded-full bg-brand-50 px-2 py-0.5 text-brand-700">Search: {debouncedSearch}</span> : null}
+                {debouncedSearch ? <span className="rounded-full bg-slate-100 px-2 py-0.5 text-brand-700">Search: {debouncedSearch}</span> : null}
                 {selectedStages.map((stage) => (
                   <span key={stage} className="rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-700">
                     Status: {formatStageLabel(stage)}
@@ -541,7 +698,7 @@ export function PipelinePage() {
                 {selectedAssignees.map((id) => {
                   const user = users.find((u) => u.id === id)
                   return (
-                    <span key={id} className="rounded-full bg-violet-50 px-2 py-0.5 text-violet-700">
+                    <span key={id} className="rounded-full bg-brand-50 px-2 py-0.5 text-brand-700">
                       Owner: {user?.name || user?.email || 'User'}
                     </span>
                   )
@@ -601,7 +758,12 @@ export function PipelinePage() {
           </div>
         </div>
 
-        <section className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-surface-border bg-white shadow-sm">
+        <section
+          className={cn(
+            'rounded-xl border border-surface-border bg-white shadow-sm',
+            mode === 'kanban' ? 'min-h-0 flex-1 overflow-hidden' : 'overflow-visible',
+          )}
+        >
           {mode === 'kanban' ? (
             <div className="flex h-full min-h-0 flex-col p-3 sm:p-4">
               <div className="min-h-0 flex-1">
@@ -626,135 +788,24 @@ export function PipelinePage() {
                   </p>
                 </div>
               </div>
-              <div className="overflow-x-auto">
-                <table className="cx-table min-w-[1100px] text-xs">
-                  <thead className="cx-table-sticky-head">
-                    <tr>
-                      <th>Opportunity</th>
-                      <th>Company & role</th>
-                      <th>Contact</th>
-                      <th>Status</th>
-                      <th>Value</th>
-                      <th>Score</th>
-                      <th>Owner</th>
-                      <th>Last activity</th>
-                      <th className="cx-table-cell-actions text-right">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {isLoading ? (
-                      <tr>
-                        <td className="px-4 py-10 text-sm text-ink-muted" colSpan={9}>
-                          Loading pipeline…
-                        </td>
-                      </tr>
-                    ) : rows.length ? (
-                      rows.map((row) => (
-                        <tr
-                          key={row.id}
-                          className="cursor-pointer"
-                          onClick={() => navigate(`/opportunities/${row.id}`)}
-                        >
-                          <td>
-                            <p className="text-sm font-semibold text-ink">
-                              {(row.dealName || '').trim() || row.fullName}
-                            </p>
-                            <p className="text-[11px] text-ink-muted">
-                              {(row.dealName || '').trim() ? row.companyName || '—' : row.location || '—'}
-                            </p>
-                          </td>
-                          <td>
-                            <p className="text-xs font-semibold text-ink">{row.jobTitle || '—'}</p>
-                            <p className="text-[11px] text-ink-muted">{row.companyName || '—'}</p>
-                          </td>
-                          <td>
-                            <p className="text-xs text-ink">{row.email || '—'}</p>
-                            <p className="text-[11px] text-ink-muted">{row.phoneNumber || row.directPhone || '—'}</p>
-                          </td>
-                          <td>
-                            <div className="relative max-w-[190px]">
-                              <select
-                                className="h-8 w-full appearance-none rounded-lg border border-surface-border bg-white pl-2.5 pr-7 text-[11px] font-semibold text-ink outline-none ring-brand-500/30 focus:border-brand-400 focus:ring-2 disabled:cursor-not-allowed disabled:bg-surface-muted/30"
-                                value={row.currentStage || ''}
-                                disabled={updatingStage}
-                                onClick={(event) => event.stopPropagation()}
-                                onChange={(event) => handleStageChange(row, event.target.value)}
-                                aria-label={`Pipeline status for ${row.fullName || 'opportunity'}`}
-                              >
-                                {!row.currentStage ? <option value="">Select status</option> : null}
-                                {opportunityStages
-                                  .filter((stage) => stage?.name)
-                                  .map((stage) => (
-                                    <option key={`${row.id}-${stage.name}`} value={stage.name}>
-                                      {formatStageLabel(stage.name)}
-                                    </option>
-                                  ))}
-                              </select>
-                              <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-muted" />
-                            </div>
-                          </td>
-                          <td className="text-sm font-semibold text-ink">
-                            {formatDealMoney(row.dealValue, row.dealCurrency)}
-                          </td>
-                          <td>
-                            <span className="inline-flex h-8 min-w-[2rem] items-center justify-center rounded-lg border border-violet-200 bg-violet-50 text-xs font-bold text-violet-900">
-                              {row.leadScore ?? 0}
-                            </span>
-                          </td>
-                          <td>
-                            <div className="inline-flex items-center gap-2">
-                              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-brand-100 text-[10px] font-semibold text-brand-800">
-                                {initials(row.owner?.name || row.owner?.email)}
-                              </span>
-                              <span className="text-xs font-medium text-ink">{row.owner?.name || row.owner?.email || 'Unassigned'}</span>
-                            </div>
-                          </td>
-                          <td>
-                            <p className="text-xs font-medium text-ink">{row.lastActivityType || '—'}</p>
-                            <p className="text-[11px] text-ink-muted">
-                              {row.lastActivityAt ? new Date(row.lastActivityAt).toLocaleString() : '—'}
-                            </p>
-                          </td>
-                          <td className="cx-table-cell-actions text-right">
-                            <div className="inline-flex items-center justify-end gap-1.5">
-                              <button
-                                type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation()
-                                  navigate(`/opportunities/${row.id}`)
-                                }}
-                                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-surface-border bg-white px-2.5 text-[11px] font-semibold text-ink hover:bg-surface-subtle"
-                              >
-                                Open
-                              </button>
-                              {dealStageName && row.currentStage === dealStageName ? (
-                                <button
-                                  type="button"
-                                  onClick={(event) => handleCreateDeal(row, event)}
-                                  className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 text-[11px] font-semibold text-emerald-800 shadow-sm hover:bg-emerald-100/90"
-                                >
-                                  <Plus className="h-3.5 w-3.5" />
-                                  Add deal
-                                </button>
-                              ) : null}
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td className="px-4 py-14 text-center text-sm text-ink-muted" colSpan={9}>
-                          <Filter className="mx-auto mb-2 h-8 w-8 opacity-30" />
-                          No records match your filters.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-              <div className="border-t border-surface-border px-3 py-3 sm:px-4">
+              <DataGrid
+                gridColumns
+                columns={pipelineColumns}
+                data={rows}
+                loading={isLoading || isFetching}
+                searchable={false}
+                showColumnToggle={false}
+                showExportCsv={false}
+                hideFooter
+                onRowClick={onPipelineRowClick}
+                defaultPageSize={limit}
+                emptyTitle="No records match your filters"
+                className="rounded-none border-0 shadow-none"
+              />
+              <div className="cx-data-grid-footer px-3 py-1.5 sm:px-4">
                 <TablePaginationBar
-                  variant="surface"
+                  compact
+                  variant="brand"
                   page={page}
                   totalPages={totalPages}
                   onPageChange={setPage}

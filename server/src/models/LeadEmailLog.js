@@ -25,6 +25,13 @@ export const LeadEmailLog = sequelize.define(
       allowNull: false,
       defaultValue: 'drafted',
     },
+    source: {
+      type: DataTypes.ENUM('direct', 'bulk', 'workflow'),
+      allowNull: false,
+      defaultValue: 'bulk',
+    },
+    openCount: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false, defaultValue: 0, field: 'open_count' },
+    clickCount: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false, defaultValue: 0, field: 'click_count' },
   },
   {
     tableName: 'lead_email_logs',

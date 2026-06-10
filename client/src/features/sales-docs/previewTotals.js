@@ -74,8 +74,8 @@ export function aggregateQuotationTotals(lines, { shipping = 0, adjustment = 0 }
   }
 }
 
-export function aggregateInvoiceTotals(lines, { roundOff = 0 } = {}) {
-  const agg = aggregateQuotationTotals(lines, { shipping: 0, adjustment: 0 })
+export function aggregateInvoiceTotals(lines, { roundOff = 0, shipping = 0, adjustment = 0 } = {}) {
+  const agg = aggregateQuotationTotals(lines, { shipping, adjustment })
   const ro = Number(roundOff) || 0
   agg.grandTotal = roundMoney(agg.grandTotal + ro)
   agg.roundOff = roundMoney(ro)

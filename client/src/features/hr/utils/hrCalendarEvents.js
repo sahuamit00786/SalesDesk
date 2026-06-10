@@ -99,7 +99,7 @@ export function expandLeavesToDateMap(requests = []) {
 
 const LEAVE_HEX = {
   'bg-teal-600': '#0d9488',
-  'bg-indigo-600': '#4f46e5',
+  'bg-[#5B21B6]': '#4f46e5',
   'bg-emerald-600': '#059669',
   'bg-rose-900': '#881337',
   'bg-green-600': '#16a34a',

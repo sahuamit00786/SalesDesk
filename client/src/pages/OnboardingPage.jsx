@@ -149,7 +149,7 @@ export function OnboardingPage() {
     <div className="flex min-h-screen bg-[#eceef3] font-sans text-ink">
       <aside className="flex w-[min(100%,280px)] shrink-0 flex-col border-r border-surface-border bg-white px-5 py-8 lg:w-72 lg:px-8">
         <div className="mb-10 flex items-center gap-2.5">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 text-lg font-bold text-white shadow-sm">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-slate-700 to-slate-900 text-lg font-bold text-white shadow-sm">
             S
           </span>
           <div>
@@ -302,7 +302,7 @@ export function OnboardingPage() {
                     className={cn(
                       'rounded-2xl border p-5 text-left transition-all',
                       billingPlan === p.id
-                        ? 'border-brand-500 bg-brand-50 shadow-md ring-2 ring-brand-500/20'
+                        ? 'border-brand-500 bg-white shadow-md ring-2 ring-brand-500/20'
                         : 'border-surface-border bg-white hover:border-brand-200 hover:shadow-sm',
                     )}
                   >
@@ -332,7 +332,7 @@ export function OnboardingPage() {
                 <Button
                   type="button"
                   variant="primary"
-                  className="min-w-[160px] bg-brand-700 hover:bg-brand-800"
+                  className="min-w-[160px] bg-slate-800 hover:bg-slate-900"
                   disabled={isLoading}
                   onClick={onCompleteSetup}
                 >

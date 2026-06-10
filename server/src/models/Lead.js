@@ -173,6 +173,11 @@ export const Lead = sequelize.define(
       allowNull: true,
       field: 'opportunity_stage',
     },
+    opportunityStatus: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      field: 'opportunity_status_id',
+    },
   },
   {
     tableName: 'leads',

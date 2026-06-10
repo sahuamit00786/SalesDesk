@@ -13,7 +13,7 @@ const ITEMS = [
     rating: 5,
   },
   {
-    quote: 'The omnichannel inbox alone paid for the pilot. Everything else feels like bonus.',
+    quote: 'Having Gmail and meetings in one place paid for the pilot. Everything else feels like bonus.',
     name: 'Marcus Reid',
     role: 'Head of Growth, Northwind',
     rating: 5,

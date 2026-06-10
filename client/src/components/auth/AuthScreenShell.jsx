@@ -60,11 +60,11 @@ export function AuthScreenShell({ variant = 'login', eyebrow, title, subtitle, v
     >
       <div
         ref={glowRef}
-        className="pointer-events-none absolute -left-[20%] top-[-30%] h-[70vmin] w-[70vmin] rounded-full bg-brand-600/25 blur-[100px]"
+        className="pointer-events-none absolute -left-[20%] top-[-30%] h-[70vmin] w-[70vmin] rounded-full bg-[var(--brand-primary)]/25 blur-[100px]"
         aria-hidden
       />
       <div
-        className="pointer-events-none absolute right-[-10%] bottom-[-20%] h-[55vmin] w-[55vmin] rounded-full bg-indigo-500/20 blur-[90px]"
+        className="pointer-events-none absolute right-[-10%] bottom-[-20%] h-[55vmin] w-[55vmin] rounded-full bg-[var(--brand-primary)]/20 blur-[90px]"
         aria-hidden
       />
 

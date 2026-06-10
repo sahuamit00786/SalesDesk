@@ -14,7 +14,7 @@ import {
 } from 'lucide-react'
 
 const TOOLBAR_BUTTON =
-  'flex h-8 w-8 items-center justify-center rounded-md text-ink-muted transition-colors duration-150 hover:bg-orange-50 hover:text-orange-700'
+  'flex h-8 w-8 items-center justify-center rounded-md text-ink-muted transition-colors duration-150 hover:bg-brand-50 hover:text-brand-700'
 
 /**
  * Rich text editor (contentEditable) with a toolbar for Bold / Italic / Underline,
@@ -116,7 +116,7 @@ export const TemplateRichEditor = forwardRef(function TemplateRichEditor(
   }
 
   return (
-    <div className="rounded-xl border border-surface-border bg-white transition-colors focus-within:border-orange-500 focus-within:ring-2 focus-within:ring-orange-200">
+    <div className="rounded-xl border border-surface-border bg-white transition-colors focus-within:border-brand-600 focus-within:ring-2 focus-within:ring-brand-200">
       <div className="flex flex-wrap items-center gap-1 border-b border-surface-border px-2 py-1.5">
         <button type="button" title="Bold" className={TOOLBAR_BUTTON} onClick={() => exec('bold')}>
           <Bold className="h-4 w-4" />
@@ -152,7 +152,7 @@ export const TemplateRichEditor = forwardRef(function TemplateRichEditor(
           type="button"
           title="Insert lead variable"
           onClick={handleInsertVariable}
-          className="ml-auto flex h-8 items-center gap-1 rounded-md border border-orange-200 bg-orange-50 px-2 text-xs font-semibold text-orange-700 transition-colors duration-150 hover:bg-orange-100"
+          className="ml-auto flex h-8 items-center gap-1 rounded-md border border-brand-200 bg-brand-50 px-2 text-xs font-semibold text-brand-700 transition-colors duration-150 hover:bg-brand-100"
         >
           <AtSign className="h-3.5 w-3.5" />
           Insert variable

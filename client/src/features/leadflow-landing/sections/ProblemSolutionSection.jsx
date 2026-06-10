@@ -1,8 +1,8 @@
 import { useLayoutEffect, useRef, useState } from 'react'
+import { X, Check } from 'lucide-react'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import gsap from 'gsap'
 import { Section } from '@/features/leadflow-landing/components/Section'
-import { GlassPanel } from '@/features/leadflow-landing/components/GlassPanel'
 import { usePrefersReducedMotion } from '@/features/leadflow-landing/hooks/usePrefersReducedMotion'
 
 gsap.registerPlugin(ScrollTrigger)
@@ -20,7 +20,7 @@ const problems = [
 const solutions = [
   'Unified timeline & ownership',
   'Cadences & SLA-aware nudges',
-  'WhatsApp · Instagram · Facebook · Email',
+  'Gmail sync · Templates · Lead threads',
   'Calendar sync + AI summaries',
   'Live dashboards & forecasting',
   'Workflow builder with guardrails',
@@ -50,49 +50,72 @@ export function ProblemSolutionSection() {
   const sOpacity = reduced ? 1 : Math.min(1, Math.max(0, (progress - 0.15) * 1.4))
 
   return (
-    <Section ref={rootRef} className="relative overflow-hidden bg-gradient-to-br from-rose-50/90 via-violet-50/50 to-cyan-50/40">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_20%_30%,rgba(244,114,182,0.15),transparent_50%)]" />
-      <div className="relative z-10 mx-auto max-w-6xl px-4 py-20 sm:px-6 lg:px-8">
-        <div className="grid gap-10 lg:grid-cols-2 lg:gap-16">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-fuchsia-600">Story</p>
-            <h2 className="mt-2 bg-gradient-to-r from-violet-900 via-fuchsia-800 to-indigo-900 bg-clip-text text-3xl font-semibold tracking-tight text-transparent sm:text-4xl">
-              From chaos to clarity — on one canvas.
-            </h2>
-            <ul className="mt-8 space-y-3" style={{ opacity: pOpacity }}>
+    <Section ref={rootRef} className="relative overflow-hidden bg-[#080820]">
+      {/* Background atmosphere */}
+      <div className="pointer-events-none absolute inset-0" aria-hidden>
+        <div className="absolute left-0 top-1/2 h-[600px] w-[600px] -translate-y-1/2 rounded-full bg-rose-900/[0.1] blur-[120px]" />
+        <div className="absolute right-0 top-1/2 h-[600px] w-[600px] -translate-y-1/2 rounded-full bg-emerald-900/[0.08] blur-[120px]" />
+      </div>
+
+      <div className="relative z-10 mx-auto max-w-6xl px-4 py-24 sm:px-6 lg:px-8">
+        <div className="mb-12 text-center">
+          <p className="text-xs font-bold uppercase tracking-[0.22em] text-violet-400">The shift</p>
+          <h2 className="mt-3 font-display text-3xl font-bold tracking-[-0.02em] text-white sm:text-4xl">
+            From chaos to clarity — on one canvas.
+          </h2>
+        </div>
+
+        <div className="grid gap-8 lg:grid-cols-2 lg:gap-12">
+          {/* Problems */}
+          <div style={{ opacity: pOpacity }}>
+            <div className="mb-5 flex items-center gap-3">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-rose-500/15 ring-1 ring-rose-500/25">
+                <X className="h-3.5 w-3.5 text-rose-400" />
+              </span>
+              <p className="text-sm font-semibold text-rose-300/80">Before LeadFlow</p>
+            </div>
+            <ul className="space-y-2.5">
               {problems.map((t) => (
                 <li
                   key={t}
-                  className="flex items-start gap-3 rounded-xl border border-rose-200 bg-gradient-to-r from-rose-50 to-orange-50/80 px-4 py-3 text-sm font-medium text-rose-950 shadow-sm"
+                  className="flex items-center gap-3 rounded-xl border border-rose-500/[0.12] bg-rose-500/[0.06] px-4 py-3 text-sm font-medium text-rose-200/70"
                 >
-                  <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-gradient-to-br from-rose-500 to-orange-500 shadow-sm shadow-rose-400/50" />
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500/70" />
                   {t}
                 </li>
               ))}
             </ul>
           </div>
-          <div className="relative min-h-[320px] lg:min-h-[420px]">
-            <GlassPanel
-              className="absolute inset-0 flex flex-col justify-center p-6 sm:p-8"
-              style={{ opacity: sOpacity }}
-            >
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-600">LeadFlow AI</p>
-              <h3 className="mt-2 bg-gradient-to-r from-emerald-800 to-teal-800 bg-clip-text text-2xl font-semibold text-transparent">
-                What changes when you switch
-              </h3>
-              <ul className="mt-6 space-y-3">
-                {solutions.map((t) => (
-                  <li
-                    key={t}
-                    className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-50 via-teal-50 to-cyan-50 px-4 py-3 text-sm font-medium text-emerald-950 shadow-sm"
-                  >
-                    <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-gradient-to-br from-emerald-400 to-cyan-500 shadow-sm shadow-emerald-400/50" />
-                    {t}
-                  </li>
-                ))}
-              </ul>
-              <div className="pointer-events-none absolute inset-x-8 bottom-6 h-px bg-gradient-to-r from-transparent via-fuchsia-400 to-transparent opacity-80" />
-            </GlassPanel>
+
+          {/* Solutions */}
+          <div
+            className="relative overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.025] p-6 backdrop-blur-sm sm:p-8"
+            style={{ opacity: sOpacity }}
+          >
+            {/* Top highlight line */}
+            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" />
+
+            <div className="mb-5 flex items-center gap-3">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500/15 ring-1 ring-emerald-500/25">
+                <Check className="h-3.5 w-3.5 text-emerald-400" />
+              </span>
+              <p className="text-sm font-semibold text-emerald-300/80">After LeadFlow</p>
+            </div>
+
+            <ul className="space-y-2.5">
+              {solutions.map((t) => (
+                <li
+                  key={t}
+                  className="flex items-center gap-3 rounded-xl border border-emerald-500/[0.12] bg-emerald-500/[0.06] px-4 py-3 text-sm font-medium text-emerald-200/70"
+                >
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400/70" />
+                  {t}
+                </li>
+              ))}
+            </ul>
+
+            {/* Bottom glow line */}
+            <div className="absolute inset-x-8 bottom-0 h-px bg-gradient-to-r from-transparent via-violet-500/40 to-transparent" />
           </div>
         </div>
       </div>

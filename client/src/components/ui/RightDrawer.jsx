@@ -6,7 +6,7 @@ import { cn } from '@/utils/cn'
 /**
  * Right-side panel (~40vw) with backdrop. Prefer this over centered modals for create/edit flows.
  */
-export function RightDrawer({ open, onClose, title, description, children, footer, className, leftPanel }) {
+export function RightDrawer({ open, onClose, title, description, children, footer, className, leftPanel, containerClassName }) {
   useEffect(() => {
     if (!open) return
     const prev = document.body.style.overflow
@@ -38,10 +38,11 @@ export function RightDrawer({ open, onClose, title, description, children, foote
       <div
         className={cn(
           'relative flex h-full max-h-dvh w-full max-w-full bg-white shadow-2xl animate-in slide-in-from-right duration-200 ease-out',
-          'border-l border-orange-200/60 sm:rounded-l-2xl overflow-hidden',
-          leftPanel
+          'border-l border-brand-200/60 sm:rounded-l-2xl overflow-hidden',
+          !containerClassName && (leftPanel
             ? 'sm:max-w-[min(560px,40vw)] sm:min-w-[320px] lg:max-w-[min(1240px,84vw)]'
-            : 'sm:max-w-[min(560px,40vw)] sm:min-w-[320px]',
+            : 'sm:max-w-[min(560px,40vw)] sm:min-w-[320px]'),
+          containerClassName,
         )}
       >
         {leftPanel ? (
@@ -55,7 +56,7 @@ export function RightDrawer({ open, onClose, title, description, children, foote
             className,
           )}
         >
-          <header className="flex shrink-0 items-start justify-between gap-3 border-b-2 border-orange-500/35 px-4 py-3">
+          <header className="flex shrink-0 items-start justify-between gap-3 border-b-2 border-brand-600/35 px-4 py-3">
             <div className="min-w-0 pr-2">
               <h2 id="right-drawer-title" className="text-base font-semibold tracking-tight text-ink">
                 {title}
@@ -74,7 +75,7 @@ export function RightDrawer({ open, onClose, title, description, children, foote
           <div className="drawer-form scrollbar-subtle min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-2">
             {children}
           </div>
-          {footer ? <footer className="drawer-footer shrink-0 border-t-2 border-orange-500/35 bg-white px-4 py-2">{footer}</footer> : null}
+          {footer ? <footer className="drawer-footer shrink-0 border-t-2 border-brand-600/35 bg-white px-4 py-2">{footer}</footer> : null}
         </aside>
       </div>
     </div>,

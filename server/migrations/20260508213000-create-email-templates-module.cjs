@@ -28,7 +28,7 @@ module.exports = {
         },
         name: { type: Sequelize.STRING(255), allowNull: false },
         subject: { type: Sequelize.STRING(500), allowNull: false, defaultValue: '' },
-        body_html: { type: Sequelize.TEXT('long'), allowNull: false, defaultValue: '' },
+        body_html: { type: Sequelize.TEXT('long'), allowNull: false },
         category: {
           type: Sequelize.ENUM('cold_outreach', 'follow_up', 'proposal', 're_engagement'),
           allowNull: false,

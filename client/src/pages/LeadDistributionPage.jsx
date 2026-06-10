@@ -14,25 +14,28 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { PageShell } from '@/components/layout/PageShell'
-import { TablePaginationBar } from '@/components/ui/TablePaginationBar'
+import { PageStack } from '@/components/layout/PageStack'
+import { PageFilterBar } from '@/components/layout/PageFilterBar'
+import { PageContentPanel } from '@/components/layout/PageContentPanel'
+import { DataGrid } from '@/components/shared/DataGrid'
 import { cn } from '@/utils/cn'
+import { STATUS_STYLES } from '@/features/leads/constants'
 import { LeadStatusBadge } from '@/features/leads/components/LeadStatusBadge'
 import { formatStageLabel } from '@/features/opportunities/components/OpportunitiesKanban'
 import {
   useDistributeLeadsRoundRobinMutation,
   useGetLeadFormMetaQuery,
   useGetLeadsQuery,
+  useLazyGetLeadsQuery,
 } from '@/features/leads/leadsApi'
 
-const STATUS_OPTIONS = [
-  { id: 'new', label: 'New' },
-  { id: 'contacted', label: 'Contacted' },
-  { id: 'qualified', label: 'Qualified' },
-  { id: 'proposal', label: 'Proposal' },
-  { id: 'won', label: 'Won' },
-  { id: 'lost', label: 'Lost' },
-  { id: 'junk', label: 'Junk' },
-]
+const DISTRIBUTE_MAX_LEADS = 500
+const SELECT_ALL_PAGE_SIZE = 100
+
+const STATUS_OPTIONS = Object.keys(STATUS_STYLES).map((id) => ({
+  id,
+  label: id.charAt(0).toUpperCase() + id.slice(1),
+}))
 
 function statusLabel(id) {
   return STATUS_OPTIONS.find((o) => o.id === id)?.label ?? id
@@ -88,20 +91,19 @@ export function LeadDistributionPage() {
   const [statusFilter, setStatusFilter] = useState(() => [])
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false)
   const statusDropdownRef = useRef(null)
-  const [oppStageTab, setOppStageTab] = useState('')
+  const [stageFilter, setStageFilter] = useState('')
+  const [stageDropdownOpen, setStageDropdownOpen] = useState(false)
+  const stageDropdownRef = useRef(null)
   const [selectedLeadIds, setSelectedLeadIds] = useState(() => new Set())
+  const [selectingAll, setSelectingAll] = useState(false)
   const [assignModalOpen, setAssignModalOpen] = useState(false)
   const [callerOrder, setCallerOrder] = useState([])
-  const headerCheckboxRef = useRef(null)
-
   const { data: formMeta } = useGetLeadFormMetaQuery()
   const users = formMeta?.data?.users || []
   const opportunityStages = formMeta?.data?.opportunityStages || []
 
-  const listParams = useMemo(() => {
+  const listFilterParams = useMemo(() => {
     const p = {
-      page,
-      limit,
       search: debouncedSearch || undefined,
       unassignedOnly: 'true',
       sort: 'createdAt',
@@ -109,17 +111,20 @@ export function LeadDistributionPage() {
     }
     if (recordType === 'leads') p.isOpportunity = 'false'
     if (recordType === 'opps') p.isOpportunity = 'true'
-    if (
-      statusFilter.length > 0 &&
-      statusFilter.length < STATUS_OPTIONS.length
-    ) {
+    if (statusFilter.length > 0) {
       p.status = [...statusFilter].sort().join(',')
     }
-    if (recordType === 'opps' && oppStageTab) p.stage = oppStageTab
+    if (recordType !== 'leads' && stageFilter) p.stage = stageFilter
     return p
-  }, [page, limit, debouncedSearch, recordType, statusFilter, oppStageTab])
+  }, [debouncedSearch, recordType, statusFilter, stageFilter])
+
+  const listParams = useMemo(
+    () => ({ ...listFilterParams, page, limit }),
+    [listFilterParams, page, limit],
+  )
 
   const { data, isLoading, isFetching, refetch } = useGetLeadsQuery(listParams)
+  const [fetchLeadsPage] = useLazyGetLeadsQuery()
   const [distribute, { isLoading: distributing }] = useDistributeLeadsRoundRobinMutation()
 
   const rows = data?.data || []
@@ -136,10 +141,10 @@ export function LeadDistributionPage() {
 
   useEffect(() => {
     setPage(1)
-  }, [debouncedSearch, recordType, statusFilterKey, oppStageTab])
+  }, [debouncedSearch, recordType, statusFilterKey, stageFilter])
 
   useEffect(() => {
-    if (recordType !== 'opps') setOppStageTab('')
+    if (recordType === 'leads') setStageFilter('')
   }, [recordType])
 
   useEffect(() => {
@@ -160,6 +165,25 @@ export function LeadDistributionPage() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [statusDropdownOpen])
+
+  useEffect(() => {
+    if (!stageDropdownOpen) return
+    function onDocMouseDown(e) {
+      const el = stageDropdownRef.current
+      if (el && !el.contains(e.target)) setStageDropdownOpen(false)
+    }
+    document.addEventListener('mousedown', onDocMouseDown)
+    return () => document.removeEventListener('mousedown', onDocMouseDown)
+  }, [stageDropdownOpen])
+
+  useEffect(() => {
+    if (!stageDropdownOpen) return
+    function onKey(e) {
+      if (e.key === 'Escape') setStageDropdownOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [stageDropdownOpen])
 
   function toggleStatusOption(id) {
     setStatusFilter((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
@@ -187,39 +211,6 @@ export function LeadDistributionPage() {
     return () => window.removeEventListener('keydown', onKey)
   }, [assignModalOpen])
 
-  const allPageSelected = rows.length > 0 && rows.every((r) => selectedLeadIds.has(r.id))
-  const somePageSelected = rows.some((r) => selectedLeadIds.has(r.id))
-
-  useEffect(() => {
-    const el = headerCheckboxRef.current
-    if (el) el.indeterminate = !allPageSelected && somePageSelected
-  }, [allPageSelected, somePageSelected, rows])
-
-  function toggleLead(id) {
-    setSelectedLeadIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  function toggleSelectPage() {
-    if (allPageSelected) {
-      setSelectedLeadIds((prev) => {
-        const next = new Set(prev)
-        rows.forEach((r) => next.delete(r.id))
-        return next
-      })
-    } else {
-      setSelectedLeadIds((prev) => {
-        const next = new Set(prev)
-        rows.forEach((r) => next.add(r.id))
-        return next
-      })
-    }
-  }
-
   function selectAllOnPage() {
     if (!rows.length) return
     setSelectedLeadIds((prev) => {
@@ -228,6 +219,42 @@ export function LeadDistributionPage() {
       return next
     })
     toast.success(`Selected ${rows.length} lead${rows.length === 1 ? '' : 's'} on this page`)
+  }
+
+  async function selectAllMatching() {
+    const cap = Math.min(total, DISTRIBUTE_MAX_LEADS)
+    if (!cap) {
+      toast.error('No leads match these filters')
+      return
+    }
+    setSelectingAll(true)
+    try {
+      const ids = new Set()
+      const pages = Math.ceil(cap / SELECT_ALL_PAGE_SIZE)
+      for (let p = 1; p <= pages; p += 1) {
+        const res = await fetchLeadsPage({
+          ...listFilterParams,
+          page: p,
+          limit: SELECT_ALL_PAGE_SIZE,
+        }).unwrap()
+        for (const row of res?.data || []) {
+          ids.add(row.id)
+          if (ids.size >= cap) break
+        }
+        if (ids.size >= cap) break
+      }
+      setSelectedLeadIds(ids)
+      const added = Math.min(ids.size, cap)
+      toast.success(
+        added === cap && total > cap
+          ? `Selected ${added} leads (max ${DISTRIBUTE_MAX_LEADS} per assignment)`
+          : `Selected ${added} lead${added === 1 ? '' : 's'}`,
+      )
+    } catch (e) {
+      toast.error(e?.data?.error?.message || e?.error || 'Could not select all leads')
+    } finally {
+      setSelectingAll(false)
+    }
   }
 
   function clearSelection() {
@@ -288,11 +315,101 @@ export function LeadDistributionPage() {
   }
 
   const assignDisabled = selectionCount === 0
+  const selectAllCap = Math.min(total, DISTRIBUTE_MAX_LEADS)
+  const stageFilterLabel = stageFilter
+    ? formatStageLabel(stageFilter) || stageFilter
+    : 'All stages'
+  const showStageFilter = recordType !== 'leads' && opportunityStages.length > 0
+
+  const leadDistColumns = useMemo(
+    () => [
+      {
+        field: 'title',
+        headerName: 'Lead',
+        flex: 1,
+        minWidth: 160,
+        renderCell: ({ row }) => {
+          const detailPath = row.isOpportunity ? `/opportunities/${row.id}` : `/leads/${row.id}`
+          return (
+            <button
+              type="button"
+              onClick={() => navigate(detailPath)}
+              className="block min-w-0 max-w-full truncate text-left font-semibold text-ink hover:text-brand-700"
+            >
+              {row.title}
+            </button>
+          )
+        },
+      },
+      {
+        field: 'type',
+        headerName: 'Type',
+        width: 110,
+        renderCell: ({ row }) =>
+          row.isOpportunity ? (
+            <span className="inline-flex rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900">
+              Opportunity
+            </span>
+          ) : (
+            <span className="text-xs text-ink-muted">Lead</span>
+          ),
+      },
+      {
+        field: 'status',
+        headerName: 'Status',
+        width: 120,
+        renderCell: ({ row }) => <LeadStatusBadge status={row.status} />,
+      },
+      {
+        field: 'stage',
+        headerName: 'Stage',
+        width: 120,
+        valueGetter: (_v, row) =>
+          row.isOpportunity ? formatStageLabel(row.opportunityStage) || '—' : '—',
+      },
+      {
+        field: 'company',
+        headerName: 'Company',
+        flex: 1,
+        minWidth: 120,
+        valueGetter: (_v, row) => row.company || '—',
+      },
+      {
+        field: 'email',
+        headerName: 'Email',
+        width: 160,
+        valueGetter: (_v, row) => row.email || '—',
+      },
+      {
+        field: 'createdAt',
+        headerName: 'Created',
+        width: 110,
+        valueGetter: (_v, row) =>
+          row.createdAt ? new Date(row.createdAt).toLocaleDateString() : '—',
+      },
+    ],
+    [navigate],
+  )
+
+  const pageRowSelection = useMemo(
+    () => rows.filter((r) => selectedLeadIds.has(r.id)).map((r) => r.id),
+    [rows, selectedLeadIds],
+  )
+
+  function handleLeadDistSelectionChange(model) {
+    setSelectedLeadIds((prev) => {
+      const next = new Set(prev)
+      const pageIds = rows.map((r) => r.id)
+      for (const id of pageIds) next.delete(id)
+      for (const id of model) next.add(String(id))
+      return next
+    })
+  }
 
   return (
     <PageShell fullWidth>
-      <div className="flex w-full min-w-0 max-w-none flex-col gap-6 px-[13px] pb-6 pt-4 sm:px-[21px] lg:px-[29px]">
-        <div className="w-full min-w-0 rounded-xl border border-surface-border bg-white px-[5px] py-2 shadow-sm sm:px-[9px]">
+      <PageStack>
+        <PageFilterBar className="overflow-x-auto">
           <div className="flex w-full min-w-0 items-center gap-2 sm:gap-3">
             <div className="scrollbar-subtle flex min-w-0 flex-1 flex-nowrap items-center gap-1.5 overflow-x-auto sm:gap-2">
             <span className="shrink-0 pl-1 text-[10px] font-bold uppercase tracking-wide text-ink-muted">Type</span>
@@ -313,7 +430,7 @@ export function LeadDistributionPage() {
                 onClick={() => setStatusDropdownOpen((o) => !o)}
                 className={cn(
                   'inline-flex h-8 max-w-[11rem] items-center gap-1.5 rounded-lg border px-2.5 py-1 text-left text-[11px] font-semibold transition sm:h-9 sm:max-w-[14rem] sm:px-3 sm:text-xs',
-                  statusFilter.length > 0 && statusFilter.length < STATUS_OPTIONS.length
+                  statusFilter.length > 0
                     ? 'border-brand-300 bg-brand-50 text-brand-900'
                     : 'border-surface-border bg-white text-ink-muted hover:border-brand-200 hover:bg-brand-50/40 hover:text-ink',
                 )}
@@ -370,21 +487,80 @@ export function LeadDistributionPage() {
                 </div>
               ) : null}
             </div>
-            {recordType === 'opps' && opportunityStages.length > 0 ? (
+            {showStageFilter ? (
               <>
                 <span className="mx-0.5 h-5 w-px shrink-0 bg-surface-border" aria-hidden />
                 <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-ink-muted">Stage</span>
-                <FilterTab active={!oppStageTab} onClick={() => setOppStageTab('')}>
-                  All
-                </FilterTab>
-                {opportunityStages.map((s) => {
-                  const name = s.name || s.id
-                  return (
-                    <FilterTab key={name} active={oppStageTab === name} onClick={() => setOppStageTab(name)}>
-                      {formatStageLabel(name) || name}
-                    </FilterTab>
-                  )
-                })}
+                <div className="relative shrink-0" ref={stageDropdownRef}>
+                  <button
+                    type="button"
+                    id="lead-dist-stage-trigger"
+                    aria-haspopup="listbox"
+                    aria-expanded={stageDropdownOpen}
+                    aria-controls="lead-dist-stage-listbox"
+                    onClick={() => setStageDropdownOpen((o) => !o)}
+                    className={cn(
+                      'inline-flex h-8 max-w-[11rem] items-center gap-1.5 rounded-lg border px-2.5 py-1 text-left text-[11px] font-semibold transition sm:h-9 sm:max-w-[14rem] sm:px-3 sm:text-xs',
+                      stageFilter
+                        ? 'border-brand-300 bg-brand-50 text-brand-900'
+                        : 'border-surface-border bg-white text-ink-muted hover:border-brand-200 hover:bg-brand-50/40 hover:text-ink',
+                    )}
+                  >
+                    <span className="min-w-0 flex-1 truncate">{stageFilterLabel}</span>
+                    <ChevronDown
+                      className={cn('h-3.5 w-3.5 shrink-0 opacity-60 transition', stageDropdownOpen && 'rotate-180')}
+                      aria-hidden
+                    />
+                  </button>
+                  {stageDropdownOpen ? (
+                    <div
+                      id="lead-dist-stage-listbox"
+                      role="listbox"
+                      aria-labelledby="lead-dist-stage-trigger"
+                      className="absolute left-0 top-[calc(100%+4px)] z-50 w-[min(calc(100vw-2rem),16rem)] rounded-xl border border-surface-border bg-white py-1 shadow-lg ring-1 ring-black/5"
+                      onMouseDown={(e) => e.preventDefault()}
+                    >
+                      <ul className="max-h-56 overflow-y-auto py-1">
+                        <li role="option" aria-selected={!stageFilter}>
+                          <button
+                            type="button"
+                            className={cn(
+                              'flex w-full px-3 py-2 text-left text-sm hover:bg-surface-subtle',
+                              !stageFilter && 'bg-brand-50/60 font-semibold text-brand-900',
+                            )}
+                            onClick={() => {
+                              setStageFilter('')
+                              setStageDropdownOpen(false)
+                            }}
+                          >
+                            All stages
+                          </button>
+                        </li>
+                        {opportunityStages.map((s) => {
+                          const name = s.name || s.id
+                          const active = stageFilter === name
+                          return (
+                            <li key={name} role="option" aria-selected={active}>
+                              <button
+                                type="button"
+                                className={cn(
+                                  'flex w-full px-3 py-2 text-left text-sm hover:bg-surface-subtle',
+                                  active && 'bg-brand-50/60 font-semibold text-brand-900',
+                                )}
+                                onClick={() => {
+                                  setStageFilter(name)
+                                  setStageDropdownOpen(false)
+                                }}
+                              >
+                                {formatStageLabel(name) || name}
+                              </button>
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    </div>
+                  ) : null}
+                </div>
               </>
             ) : null}
             <span className="mx-0.5 h-5 w-px shrink-0 bg-surface-border" aria-hidden />
@@ -403,23 +579,37 @@ export function LeadDistributionPage() {
               />
             </div>
           </div>
-        </div>
+        </PageFilterBar>
 
-        <div className="w-full min-w-0 overflow-hidden rounded-xl border border-surface-border bg-white shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-surface-border px-[13px] py-2.5 sm:px-[17px]">
-            <span className="text-xs text-ink-muted">
-              {selectionCount ? (
-                <span className="font-semibold text-ink">{selectionCount} selected</span>
-              ) : (
-                'None selected'
-              )}
-            </span>
+        <PageContentPanel flush>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-surface-border px-3 py-2.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-ink-muted">
+                {selectionCount ? (
+                  <span className="font-semibold text-ink">{selectionCount} selected</span>
+                ) : (
+                  'None selected'
+                )}
+              </span>
+              {total > 0 ? (
+                <button
+                  type="button"
+                  onClick={selectAllMatching}
+                  disabled={selectingAll || !selectAllCap}
+                  className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-900 hover:bg-brand-100 disabled:opacity-40"
+                >
+                  {selectingAll
+                    ? 'Selecting…'
+                    : `Select all ${selectAllCap.toLocaleString()} lead${selectAllCap === 1 ? '' : 's'}`}
+                </button>
+              ) : null}
+            </div>
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 disabled={assignDisabled}
                 onClick={() => setAssignModalOpen(true)}
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--brand-primary)] px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[var(--brand-primary-dark)] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Users className="h-3.5 w-3.5" />
                 Assign leads
@@ -443,117 +633,31 @@ export function LeadDistributionPage() {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="cx-table cx-table--dense min-w-[720px] text-sm">
-              <thead className="cx-table-sticky-head">
-                <tr>
-                  <th className="cx-table-cell-actions w-10">
-                    <input
-                      type="checkbox"
-                      checked={allPageSelected}
-                      ref={headerCheckboxRef}
-                      onChange={toggleSelectPage}
-                      className="h-4 w-4 rounded border-surface-border text-brand-600 focus:ring-brand-500"
-                      aria-label="Select all on page"
-                    />
-                  </th>
-                  <th className="min-w-[8rem] lg:min-w-[12rem]">Lead</th>
-                  <th className="hidden md:table-cell">Type</th>
-                  <th className="hidden lg:table-cell">Status</th>
-                  <th className="hidden xl:table-cell">Stage</th>
-                  <th className="hidden md:table-cell">Company</th>
-                  <th className="hidden lg:table-cell">Email</th>
-                  <th>Created</th>
-                </tr>
-              </thead>
-              <tbody>
-                {isLoading && !rows.length ? (
-                  <tr>
-                    <td colSpan={8} className="py-16 text-center text-sm text-ink-muted">
-                      Loading…
-                    </td>
-                  </tr>
-                ) : !rows.length ? (
-                  <tr>
-                    <td colSpan={8} className="py-16 text-center">
-                      <div className="mx-auto flex max-w-sm flex-col items-center gap-2">
-                        <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
-                          <Phone className="h-6 w-6" />
-                        </span>
-                        <p className="text-sm font-semibold text-ink">You&apos;re all caught up</p>
-                        <p className="text-xs text-ink-muted">No unassigned leads match these filters.</p>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  rows.map((row) => {
-                    const checked = selectedLeadIds.has(row.id)
-                    const detailPath = row.isOpportunity ? `/opportunities/${row.id}` : `/leads/${row.id}`
-                    return (
-                      <tr
-                        key={row.id}
-                        className={cn(checked && 'bg-brand-50/60')}
-                      >
-                        <td className="cx-table-cell-actions align-middle">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => toggleLead(row.id)}
-                            className="h-4 w-4 rounded border-surface-border text-brand-600 focus:ring-brand-500"
-                            aria-label={`Select ${row.title}`}
-                          />
-                        </td>
-                        <td className="min-w-0 max-w-[40vw] lg:max-w-none">
-                          <button
-                            type="button"
-                            onClick={() => navigate(detailPath)}
-                            className="block min-w-0 max-w-full text-left"
-                          >
-                            <span className="block truncate font-semibold text-ink hover:text-brand-700">{row.title}</span>
-                          </button>
-                        </td>
-                        <td className="hidden md:table-cell">
-                          {row.isOpportunity ? (
-                            <span className="inline-flex rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900">
-                              Opportunity
-                            </span>
-                          ) : (
-                            <span className="text-xs text-ink-muted">Lead</span>
-                          )}
-                        </td>
-                        <td className="hidden lg:table-cell">
-                          <LeadStatusBadge status={row.status} pipelineStage={row.opportunityStage} />
-                        </td>
-                        <td className="hidden text-xs text-ink-muted xl:table-cell">
-                          {row.isOpportunity ? formatStageLabel(row.opportunityStage) || '—' : '—'}
-                        </td>
-                        <td className="hidden min-w-0 max-w-[14rem] truncate text-xs text-ink-muted md:table-cell xl:max-w-[20rem]">
-                          {row.company || '—'}
-                        </td>
-                        <td className="hidden min-w-0 max-w-[14rem] truncate text-xs text-ink-muted lg:table-cell xl:max-w-[22rem]">
-                          {row.email || '—'}
-                        </td>
-                        <td className="whitespace-nowrap text-xs text-ink-muted">
-                          {row.createdAt ? new Date(row.createdAt).toLocaleDateString() : '—'}
-                        </td>
-                      </tr>
-                    )
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="border-t border-surface-border px-[13px] py-3 sm:px-[17px]">
-            <TablePaginationBar
-              variant="surface"
-              page={page}
-              totalPages={totalPages}
-              onPageChange={setPage}
-            />
-          </div>
-        </div>
-      </div>
+          <DataGrid
+            gridColumns
+            columns={leadDistColumns}
+            data={rows}
+            loading={isLoading}
+            searchable={false}
+            showColumnToggle={false}
+            showExportCsv={false}
+            checkboxSelection
+            rowSelectionModel={pageRowSelection}
+            onRowSelectionModelChange={handleLeadDistSelectionChange}
+            paginationMode="server"
+            rowCount={total}
+            paginationModel={{ page: page - 1, pageSize: limit }}
+            onPaginationModelChange={(model) => setPage(model.page + 1)}
+            getRowClassName={(params) =>
+              selectedLeadIds.has(params.row.id) ? '!bg-brand-50/60' : ''
+            }
+            emptyTitle="You're all caught up"
+            emptyDescription="No unassigned leads match these filters."
+            maxHeightClass="max-h-[min(60vh,520px)]"
+            className="rounded-none border-0 shadow-none"
+          />
+        </PageContentPanel>
+      </PageStack>
 
       {assignModalOpen
         ? createPortal(
@@ -611,7 +715,7 @@ export function LeadDistributionPage() {
                           <span
                             className={cn(
                               'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[11px] font-bold',
-                              on ? 'bg-brand-600 text-white' : 'bg-surface-muted text-ink-muted',
+                              on ? 'bg-[var(--brand-primary)] text-white' : 'bg-surface-muted text-ink-muted',
                             )}
                           >
                             {initials(u.name || u.email)}
@@ -688,7 +792,7 @@ export function LeadDistributionPage() {
                     type="button"
                     disabled={distributing || !callerOrder.length || !selectionCount}
                     onClick={runDistribute}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-[var(--brand-primary-dark)] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <Shuffle className="h-4 w-4" />
                     {distributing ? 'Assigning…' : 'Confirm assignment'}

@@ -49,3 +49,18 @@ export const loginSchema = Joi.object({
 export const refreshSchema = Joi.object({
   refreshToken: Joi.string().required(),
 })
+
+export const forgotPasswordSchema = Joi.object({
+  email: Joi.string().email().required(),
+})
+
+export const resetPasswordSchema = Joi.object({
+  email: Joi.string().email().required(),
+  otp: Joi.string().length(6).pattern(/^\d+$/).required().messages({
+    'string.pattern.base': 'OTP must be 6 digits',
+  }),
+  password: Joi.string().required().custom(strongPassword),
+  confirmPassword: Joi.string().valid(Joi.ref('password')).required().messages({
+    'any.only': 'Passwords must match',
+  }),
+})

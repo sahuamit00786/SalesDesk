@@ -6,7 +6,7 @@ import { serializeDealForClient } from './dealsController.js'
 import { allowedWorkspaceIdsForUser } from '../services/userWorkspaceService.js'
 import { leadAccessWhere } from '../services/leadVisibility.js'
 import { resolveListWorkspaceFilterId } from '../utils/resolveListWorkspaceFilter.js'
-import { findDuplicates } from '../services/duplicateDetectionService.js'
+import { findDuplicates, saveDuplicateRecord } from '../services/duplicateDetectionService.js'
 import { logLeadFieldChanges } from '../services/leadFieldChangeActivity.js'
 
 function formatStageLabelForMessage(value) {
@@ -562,9 +562,31 @@ export async function create(req, res, next) {
       phone: dupPhone,
     })
     if (dupes.length) {
-      return res.status(409).json({
-        success: false,
-        error: { code: 'DUPLICATE_LEAD', message: 'A lead with this phone or email already exists in this workspace.' },
+      await saveDuplicateRecord({
+        leadData: {
+          contactName: value.fullName || null,
+          company: value.companyName || null,
+          email: value.email || null,
+          phone: dupPhone,
+          designation: value.jobTitle || null,
+          value: value.dealValue || 0,
+          valueCurrency: value.dealCurrency || 'USD',
+          requirement: value.dealDescription || null,
+          tags: normalizedTags,
+          opportunityStage: value.currentStage || null,
+          isOpportunity: true,
+          source: 'manual',
+        },
+        dupes,
+        source: 'opportunity',
+        workspaceId: String(workspaceId),
+        companyId: req.user.companyId,
+        createdByUserId: req.user.id,
+      })
+      return res.status(202).json({
+        success: true,
+        queued: true,
+        message: 'Potential duplicate detected. Opportunity saved to duplicate review queue.',
         duplicates: dupes,
         meta: {},
       })
@@ -802,6 +824,25 @@ export async function patchStage(req, res, next) {
     err.code = 'NOT_FOUND'
     err.publicMessage = 'Opportunity not found'
     throw err
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function remove(req, res, next) {
+  try {
+    const baseWhere = await leadPipelineBaseWhere(req)
+    const lead = await Lead.findOne({ where: { ...baseWhere, id: req.params.id } })
+    if (!lead) {
+      const err = new Error('Opportunity not found')
+      err.status = 404
+      err.code = 'NOT_FOUND'
+      err.publicMessage = 'Opportunity not found'
+      throw err
+    }
+    await lead.update({ isDeleted: true })
+    await lead.destroy()
+    return res.json({ success: true, data: { id: lead.id }, meta: {} })
   } catch (e) {
     return next(e)
   }

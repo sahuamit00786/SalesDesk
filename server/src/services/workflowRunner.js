@@ -9,8 +9,11 @@ import {
   LeadTaskSubtask,
   LeadFollowup,
   EmailTemplate,
+  User,
 } from '../models/index.js'
 import { runTemplateSendJobInline, enqueueTemplateSendJob, getEmailTemplateQueue } from '../queues/emailTemplateQueue.js'
+import { notifyLeadAssigned, notifyTaskAssigned } from './notification/teamNotificationService.js'
+import { createLeadSystemActivity } from './leadSystemActivity.js'
 
 const TRIGGER_TYPES = {
   triggerLeadCreated: 'lead_created',
@@ -102,7 +105,13 @@ function evalCondition(lead, before, data) {
   const cur = getLeadField(lead, field)
   const prev = before ? getLeadField(before, field) : ''
   const rhs = expected === undefined || expected === null ? '' : String(expected)
-  if (op === 'contains') return cur.toLowerCase().includes(String(rhs).toLowerCase())
+  if (op === 'is_empty') return cur.trim() === ''
+  if (op === 'is_not_empty') return cur.trim() !== ''
+  if (op === 'starts_with') return cur.toLowerCase().startsWith(rhs.toLowerCase())
+  if (op === 'ends_with') return cur.toLowerCase().endsWith(rhs.toLowerCase())
+  if (op === 'contains') return cur.toLowerCase().includes(rhs.toLowerCase())
+  if (op === 'not_contains') return !cur.toLowerCase().includes(rhs.toLowerCase())
+  if (op === 'not_equals') return String(cur) !== String(rhs)
   if (op === 'changed') return String(cur) !== String(prev)
   return String(cur) === String(rhs)
 }
@@ -143,7 +152,7 @@ function resolveTaskDueAt(node) {
     return Number.isNaN(d.getTime()) ? null : d
   }
   const dueDays = Number(node.data?.dueInDays)
-  if (!Number.isFinite(dueDays) || dueDays <= 0) return null
+  if (!Number.isFinite(dueDays) || dueDays < 0) return null
   return new Date(Date.now() + dueDays * 86400000)
 }
 
@@ -202,8 +211,22 @@ async function executeNode(run, workflow, node, context) {
     }
 
     if (node.type === 'actionAssignOwner') {
-      const pool = normalizeAssignOwnerUserIds(node.data)
-      if (!pool.length) throw new Error('Assign owner: select at least one teammate')
+      // Skip if lead already has an assignee — manual assignment takes priority
+      if (lead.assignedTo && String(lead.assignedTo).trim()) {
+        await finishStep(step, 'completed', { skipped: true, reason: 'already_assigned', existingAssignee: lead.assignedTo }, null)
+        return { nextNodeId: pickNextNodeId(def, node, true) }
+      }
+
+      const rawPool = normalizeAssignOwnerUserIds(node.data)
+      if (!rawPool.length) throw new Error('Assign owner: select at least one teammate')
+      // Filter out users who no longer exist or are deactivated
+      const activeUsers = await User.findAll({
+        where: { id: rawPool, companyId: workflow.companyId, isActive: true },
+        attributes: ['id', 'name', 'email'],
+      })
+      const activeIds = new Set(activeUsers.map((u) => u.id))
+      const pool = rawPool.filter((id) => activeIds.has(id))
+      if (!pool.length) throw new Error('Assign owner: all configured users are inactive or removed')
 
       let assignedTo = pool[0]
       if (pool.length > 1) {
@@ -245,6 +268,23 @@ async function executeNode(run, workflow, node, context) {
       }
 
       await finishStep(step, 'completed', { assignedTo, roundRobin: pool.length > 1 }, null)
+      const assignedUser = activeUsers.find((u) => u.id === assignedTo)
+      const assignedName = assignedUser?.name || assignedUser?.email || 'a team member'
+      await createLeadSystemActivity({
+        leadId: lead.id,
+        userId: actorUserId || workflow.createdBy || null,
+        body: `"${workflow.name || 'Automation'}" assigned this lead to ${assignedName}`,
+        metadata: { action: 'workflow_assign_owner', assignedUserId: assignedTo, workflowId: workflow.id, roundRobin: pool.length > 1 },
+      })
+      if (assignedTo && String(assignedTo) !== String(actorUserId || '')) {
+        notifyLeadAssigned({
+          companyId: workflow.companyId,
+          workspaceId: lead.workspaceId,
+          recipientUserId: assignedTo,
+          actorUserId: actorUserId || workflow.createdBy || null,
+          leadCount: 1,
+        }).catch(() => {})
+      }
       return { nextNodeId: pickNextNodeId(def, node, true) }
     }
 
@@ -284,7 +324,22 @@ async function executeNode(run, workflow, node, context) {
           })),
         )
       }
+      if (assignedTo && String(assignedTo) !== String(createdByRaw)) {
+        notifyTaskAssigned({
+          companyId: workflow.companyId,
+          workspaceId: lead.workspaceId,
+          recipientUserId: assignedTo,
+          actorUserId: createdByRaw,
+          tasks: [{ title }],
+        }).catch(() => {})
+      }
       await finishStep(step, 'completed', { taskId: t.id }, null)
+      await createLeadSystemActivity({
+        leadId: lead.id,
+        userId: actorUserId || workflow.createdBy || null,
+        body: `"${workflow.name || 'Automation'}" created a task: "${title}"`,
+        metadata: { action: 'workflow_create_task', taskId: t.id, workflowId: workflow.id },
+      })
       return { nextNodeId: pickNextNodeId(def, node, true) }
     }
 
@@ -296,7 +351,10 @@ async function executeNode(run, workflow, node, context) {
       const remark =
         node.data?.remark != null ? String(node.data.remark).trim().slice(0, 8000) || null : null
       const ownerForFollowup = lead.assignedTo || lead.ownerUserId || actorUserId || workflow.createdBy
-      if (!ownerForFollowup) throw new Error('Create follow-up: no assignee on lead and no actor')
+      if (!ownerForFollowup) {
+        await finishStep(step, 'skipped', { reason: 'no_assignee_for_followup' }, null)
+        return { nextNodeId: pickNextNodeId(def, node, true) }
+      }
       const row = await LeadFollowup.create({
         leadId: lead.id,
         workspaceId: lead.workspaceId,
@@ -308,17 +366,27 @@ async function executeNode(run, workflow, node, context) {
         createdBy: ownerForFollowup,
       })
       await finishStep(step, 'completed', { followupId: row.id, scheduledAt: scheduledAt.toISOString() }, null)
+      await createLeadSystemActivity({
+        leadId: lead.id,
+        userId: actorUserId || workflow.createdBy || null,
+        body: `"${workflow.name || 'Automation'}" scheduled a follow-up for ${scheduledAt.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`,
+        metadata: { action: 'workflow_create_followup', followupId: row.id, scheduledAt: scheduledAt.toISOString(), workflowId: workflow.id },
+      })
       return { nextNodeId: pickNextNodeId(def, node, true) }
     }
 
     if (node.type === 'actionSendEmailTemplate') {
       const templateId = String(node.data?.templateId || '').trim()
       if (!templateId) throw new Error('Send email: missing templateId')
+      if (!lead.email) {
+        await finishStep(step, 'skipped', { reason: 'lead_has_no_email' }, null)
+        return { nextNodeId: pickNextNodeId(def, node, true) }
+      }
       const template = await EmailTemplate.findOne({
         where: { id: templateId, companyId: workflow.companyId, isArchived: false },
       })
       if (!template) throw new Error('Template not found')
-      const payload = { templateId: template.id, leadIds: [lead.id], companyId: workflow.companyId }
+      const payload = { templateId: template.id, leadIds: [lead.id], companyId: workflow.companyId, source: 'workflow' }
       const q = getEmailTemplateQueue()
       if (q) {
         await enqueueTemplateSendJob(payload)
@@ -327,6 +395,12 @@ async function executeNode(run, workflow, node, context) {
         const res = await runTemplateSendJobInline(payload)
         await finishStep(step, 'completed', { inline: true, result: res }, null)
       }
+      await createLeadSystemActivity({
+        leadId: lead.id,
+        userId: actorUserId || workflow.createdBy || null,
+        body: `"${workflow.name || 'Automation'}" sent an email: "${template.name || 'Email template'}"`,
+        metadata: { action: 'workflow_send_email', templateId: template.id, workflowId: workflow.id },
+      })
       return { nextNodeId: pickNextNodeId(def, node, true) }
     }
 
@@ -427,6 +501,15 @@ export async function runLeadWorkflowTriggersForLead({ eventType, lead, before, 
     const def = getDefinition(wf)
     const trigger = findTriggerNode(def, eventType)
     if (!trigger) continue
+    // watchFields: only fire if one of the specified fields actually changed
+    if (eventType === 'lead_updated' && Array.isArray(trigger.data?.watchFields) && trigger.data.watchFields.length > 0) {
+      const anyChanged = trigger.data.watchFields.some((f) => {
+        const cur = getLeadField(leadPlain, f)
+        const prev = beforePlain ? getLeadField(beforePlain, f) : ''
+        return cur !== prev
+      })
+      if (!anyChanged) continue
+    }
     summary.matched += 1
     try {
       await startWorkflowRun({
@@ -476,10 +559,11 @@ export async function emitLeadWorkflowTriggers({ eventType, lead, before, compan
     await createLeadSystemActivity({
       leadId,
       userId: actorUserId || null,
-      body:
-        summary.failed > 0
-          ? `Automation: ${summary.started}/${summary.matched} workflow run(s) started; ${summary.failed} failed.`
-          : `Automation: ${summary.started} workflow run(s) started (${eventType}).`,
+      body: (() => {
+        const trigger = eventType === 'lead_created' ? 'lead was created' : eventType === 'lead_updated' ? 'lead was updated' : eventType.replace(/_/g, ' ')
+        if (summary.failed > 0) return `${summary.started} of ${summary.matched} automation(s) ran when this ${trigger}; ${summary.failed} failed.`
+        return `${summary.started} automation${summary.started === 1 ? '' : 's'} ran when this ${trigger}.`
+      })(),
       metadata: { action: 'workflow_triggers_completed', eventType, viaQueue: false, ...summary },
     })
   }

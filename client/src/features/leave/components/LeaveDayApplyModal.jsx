@@ -16,9 +16,6 @@ import {
 import { clampDateKeyToMin, isPastDateKey, todayDateKey } from '@/features/leave/utils/leaveDateUtils'
 import { formatLeaveDaysPreview } from '@/features/leave/utils/leavePreviewText'
 
-/** Apply modal shows these types only, in order: Casual, Sick, Unpaid. */
-const APPLY_LEAVE_CODES = ['CL', 'SL', 'UL']
-
 function formatDisplayDate(dateStr) {
   if (!dateStr) return ''
   return new Date(`${dateStr}T12:00:00`).toLocaleDateString(undefined, {
@@ -29,11 +26,9 @@ function formatDisplayDate(dateStr) {
   })
 }
 
-function balanceLabel(available, code) {
-  const n = Number(available ?? 0)
-  if (code === 'UL') {
-    return n > 0 ? 'No balance limit' : 'Unavailable'
-  }
+function balanceLabel(balance) {
+  if (!balance) return 'Unlimited'
+  const n = Number(balance.available ?? 0)
   if (n <= 0) return 'No days left'
   if (n === 1) return '1 day left'
   return `${n} days left`
@@ -52,29 +47,27 @@ export function LeaveDayApplyModal({ open, date, onClose, onSuccess, dayLeaves =
   const [leaveTypeId, setLeaveTypeId] = useState('')
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
+  const [isHalfDay, setIsHalfDay] = useState(false)
   const [reason, setReason] = useState('')
 
+  const minDate = todayDateKey()
+
   const leaveChoices = useMemo(() => {
-    return APPLY_LEAVE_CODES.map((code) => {
-      const type = types.find((t) => String(t.code || '').toUpperCase() === code)
-      if (!type) return null
+    return types.map((type) => {
       const balance = balances.find((b) => String(b.leaveTypeId) === String(type.id))
       const available = Number(balance?.available ?? 0)
+      const hasBalance = !balance || available > 0
       const style = getLeaveTypeStyle(type)
-      const disabled = code === 'UL' ? false : available <= 0
       return {
         type,
         balance,
         available,
         style,
-        code,
-        disabled,
-        balanceText: balanceLabel(available, code),
+        disabled: !hasBalance,
+        balanceText: balanceLabel(balance),
       }
-    }).filter(Boolean)
+    })
   }, [types, balances])
-
-  const minDate = todayDateKey()
 
   useEffect(() => {
     if (!open) return
@@ -83,33 +76,45 @@ export function LeaveDayApplyModal({ open, date, onClose, onSuccess, dayLeaves =
     setToDate(initial)
     setLeaveTypeId('')
     setReason('')
+    setIsHalfDay(false)
   }, [open, date, minDate])
 
   function handleFromDateChange(value) {
     const next = clampDateKeyToMin(value, minDate)
     setFromDate(next)
-    setToDate((prev) => clampDateKeyToMin(prev, next))
+    if (isHalfDay) {
+      setToDate(next)
+    } else {
+      setToDate((prev) => clampDateKeyToMin(prev, next))
+    }
   }
 
   function handleToDateChange(value) {
+    if (isHalfDay) return
     const floor = fromDate && fromDate >= minDate ? fromDate : minDate
     setToDate(clampDateKeyToMin(value, floor))
   }
 
+  function handleHalfDayToggle(e) {
+    const checked = e.target.checked
+    setIsHalfDay(checked)
+    if (checked) setToDate(fromDate)
+  }
+
   useEffect(() => {
-    if (!leaveTypeId) return
-    const choice = leaveChoices.find((c) => String(c.type.id) === String(leaveTypeId))
-    if (choice?.disabled) setLeaveTypeId('')
+    if (leaveChoices.length > 0) {
+      const choice = leaveChoices.find((c) => String(c.type.id) === String(leaveTypeId))
+      if (choice?.disabled) setLeaveTypeId('')
+    }
   }, [leaveChoices, leaveTypeId])
 
   useEffect(() => {
-    if (fromDate && toDate) previewDays({ fromDate, toDate })
-  }, [fromDate, toDate, previewDays])
+    if (fromDate && toDate && !isHalfDay) previewDays({ fromDate, toDate })
+  }, [fromDate, toDate, isHalfDay, previewDays])
 
   const selectedChoice = leaveChoices.find((c) => String(c.type.id) === String(leaveTypeId))
   const preview = previewData?.data
-  const days = preview?.days
-  const daysHint = formatLeaveDaysPreview(preview)
+  const daysHint = isHalfDay ? '0.5 days (half day)' : formatLeaveDaysPreview(preview)
 
   async function submit(e) {
     e.preventDefault()
@@ -125,15 +130,15 @@ export function LeaveDayApplyModal({ open, date, onClose, onSuccess, dayLeaves =
       toast.error('This leave type has no balance remaining')
       return
     }
-    if (!fromDate || !toDate) {
+    if (!fromDate) {
       toast.error('Select dates')
       return
     }
-    if (isPastDateKey(fromDate) || isPastDateKey(toDate)) {
+    if (isPastDateKey(fromDate)) {
       toast.error('Leave cannot be applied for past dates')
       return
     }
-    if (fromDate > toDate) {
+    if (!isHalfDay && fromDate > toDate) {
       toast.error('To date must be on or after from date')
       return
     }
@@ -145,8 +150,9 @@ export function LeaveDayApplyModal({ open, date, onClose, onSuccess, dayLeaves =
       const fd = new FormData()
       fd.append('leaveTypeId', leaveTypeId)
       fd.append('fromDate', fromDate)
-      fd.append('toDate', toDate)
+      fd.append('toDate', isHalfDay ? fromDate : toDate)
       fd.append('reason', reason.trim())
+      if (isHalfDay) fd.append('isHalfDay', 'true')
       await applyLeave(fd).unwrap()
       toast.success('Leave request submitted — pending approval')
       onSuccess?.()
@@ -240,17 +246,28 @@ export function LeaveDayApplyModal({ open, date, onClose, onSuccess, dayLeaves =
           )}
           {selectedChoice && !selectedChoice.disabled ? (
             <p className="mt-2 text-xs text-ink-muted">
-              You are applying for <strong className="text-ink">{selectedChoice.style.label}</strong>
-              {selectedChoice.code !== 'UL' ? (
+              Applying for <strong className="text-ink">{selectedChoice.style.label}</strong>
+              {selectedChoice.balance ? (
                 <>
-                  {' '}
-                  — <strong className="text-brand-700">{selectedChoice.available}</strong> day
-                  {selectedChoice.available === 1 ? '' : 's'} available after approval of pending requests
+                  {' '}— <strong className="text-brand-700">{selectedChoice.available}</strong> day
+                  {selectedChoice.available === 1 ? '' : 's'} available
                 </>
               ) : null}
             </p>
           ) : null}
         </div>
+
+        {/* Half-day toggle */}
+        <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-surface-border bg-surface-subtle/50 px-4 py-3 text-sm font-medium text-ink hover:bg-surface-subtle">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-slate-300 accent-brand-600"
+            checked={isHalfDay}
+            onChange={handleHalfDayToggle}
+          />
+          Half day leave
+          <span className="ml-auto text-xs text-ink-muted">0.5 days deducted</span>
+        </label>
 
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
@@ -262,7 +279,8 @@ export function LeaveDayApplyModal({ open, date, onClose, onSuccess, dayLeaves =
             <Input
               type="date"
               min={fromDate && fromDate >= minDate ? fromDate : minDate}
-              value={toDate}
+              value={isHalfDay ? fromDate : toDate}
+              disabled={isHalfDay}
               onChange={(e) => handleToDateChange(e.target.value)}
             />
           </div>

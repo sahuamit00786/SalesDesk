@@ -30,7 +30,11 @@ export const templatesApi = baseApi.injectEndpoints({
     }),
     sendTemplate: build.mutation({
       query: ({ id, leadIds }) => ({ url: `/templates/${id}/send`, method: 'POST', body: { leadIds, confirmed: true } }),
-      invalidatesTags: (_result, _error, arg) => [{ type: 'TemplateHistory', id: arg.id }, { type: 'Template', id: 'LIST' }],
+      invalidatesTags: (_result, _error, arg) => [
+        { type: 'TemplateHistory', id: arg.id },
+        { type: 'Template', id: 'LIST' },
+        { type: 'Lead', id: 'LIST' },
+      ],
     }),
     getTemplateSendHistory: build.query({
       query: ({ id, ...params }) => ({ url: `/templates/${id}/send-history`, params }),

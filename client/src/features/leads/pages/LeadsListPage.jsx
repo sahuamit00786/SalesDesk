@@ -1,21 +1,33 @@
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { ListFilter, Plus } from "lucide-react";
+import { Download, Layers, Plus, ChevronDown } from "lucide-react";
 import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 import { PageShell } from "@/components/layout/PageShell";
+import { PageStack } from "@/components/layout/PageStack";
+import { PageContentPanel } from "@/components/layout/PageContentPanel";
+import { Button } from "@/components/ui/Button";
+import { SkeletonTable } from "@/components/shared/SkeletonLoader";
 import { TablePaginationBar } from "@/components/ui/TablePaginationBar";
 import { AddLeadModal } from "@/features/leads/components/AddLeadModal";
 import { BulkActionsBar } from "@/features/leads/components/BulkActionsBar";
-import { DuplicateWarning } from "@/features/leads/components/DuplicateWarning";
+import { BulkAssignModal } from "@/features/leads/components/BulkAssignModal";
+import { BulkEditModal } from "@/features/leads/components/BulkEditModal";
+import { BulkExportModal } from "@/features/leads/components/BulkExportModal";
+import { BulkEmailModal } from "@/features/leads/components/BulkEmailModal";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { coerceToLeadArray, leadListLabel } from "@/features/leads/utils/leadAssignee";
 import { FilterBuilder } from "@/features/leads/components/FilterBuilder";
 import { LeadsTable } from "@/features/leads/components/LeadsTable";
+import { DuplicateLeadsTab } from "@/features/leads/components/DuplicateLeadsTab";
 import {
   useBulkLeadsMutation,
+  useResolveLeadsByIdsMutation,
   useCreateLeadMutation,
   useDeleteLeadMutation,
   useExportLeadsMutation,
   useGetLeadFormMetaQuery,
+  useGetLeadSetupQuery,
   useGetLeadsQuery,
   useImportLeadsMutation,
   useUpdateLeadMutation,
@@ -23,6 +35,7 @@ import {
 import {
   clearSelected,
   resetFilters,
+  resetListSession,
   setFilters,
   setPagination,
   setSelected,
@@ -37,9 +50,27 @@ import {
   selectLeadSelected,
   selectLeadSort,
 } from "@/features/leads/leadsSelectors";
-import { CreateMeetingModal } from "@/features/meetings/components/CreateMeetingModal";
+import { STATUS_OPTIONS } from "@/features/leads/constants";
 import { CreateOpportunityModal } from "@/features/opportunities/components/CreateOpportunityModal";
 import { useCreateOpportunityMutation } from "@/features/opportunities/opportunitiesApi";
+import {
+  ListSearchToolbar,
+  buildLeadsListQueryParams,
+  countActiveRules,
+  createRootFilter,
+} from "@/features/filters";
+
+/** Inject/update/remove a single-value condition for `field` in the root rules. */
+function upsertTreeRule(tree, field, operator, value) {
+  const current = tree || createRootFilter()
+  const otherRules = (current.rules || []).filter(
+    (r) => !(r.type === 'condition' && r.field === field)
+  )
+  if (value) {
+    return { ...current, rules: [...otherRules, { type: 'condition', field, operator, value: [value] }] }
+  }
+  return { ...current, rules: otherRules.length ? otherRules : [{ type: 'condition', field: 'title', operator: 'contains', value: '' }] }
+}
 
 function downloadJsonAsCsv(name, rows) {
   if (!rows?.length) return;
@@ -66,6 +97,7 @@ export function LeadsListPage({ variant = "leads" }) {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const isOpportunities = variant === "opportunities";
+  const listPath = isOpportunities ? "/opportunities" : "/leads";
   const filters = useSelector(selectLeadFilters);
   const sort = useSelector(selectLeadSort);
   const pagination = useSelector(selectLeadPagination);
@@ -73,44 +105,73 @@ export function LeadsListPage({ variant = "leads" }) {
   const user = useSelector((s) => s.auth.user);
   const workspaceList = useSelector(selectWorkspaceList);
   const isCompanyAdmin = Boolean(user?.isCompanyAdmin);
+  const userRoleKind = user?.companyRole?.userRoleKind;
+  const canSwitchWorkspace =
+    isCompanyAdmin || userRoleKind === "workspace_admin" || userRoleKind === "manager";
   const [addOpen, setAddOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [viewMode, setViewMode] = useState('unique');
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignUserIds, setAssignUserIds] = useState([]);
   const [editLead, setEditLead] = useState(null);
-  const [dupeState, setDupeState] = useState({
-    open: false,
-    attemptedPhone: "",
-    duplicates: [],
-  });
-  const [meetingOpen, setMeetingOpen] = useState(false);
-  const [selectedLeadForMeeting, setSelectedLeadForMeeting] = useState(null);
   const [createOppOpen, setCreateOppOpen] = useState(false);
+  const [bulkEmailOpen, setBulkEmailOpen] = useState(false);
+  const [bulkEmailLeads, setBulkEmailLeads] = useState([]);
+  const [bulkEmailLoading, setBulkEmailLoading] = useState(false);
+  const [assignLeads, setAssignLeads] = useState([]);
+  const [exportModalLeads, setExportModalLeads] = useState([]);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [assigning, setAssigning] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [bulkEditing, setBulkEditing] = useState(false);
 
-  const query = {
-    ...filters,
-    sort: sort.field,
-    order: sort.order,
-    page: pagination.page,
-    limit: pagination.limit,
-    isOpportunity: isOpportunities ? true : false,
-  };
-  if (!query.workspaceId) delete query.workspaceId;
+  const query = buildLeadsListQueryParams({
+    filters,
+    sort,
+    pagination,
+    isOpportunity: isOpportunities,
+  });
+  if (!isOpportunities && !filters.assignedTo?.length) query.assignedOnly = true;
   const { data, isLoading, refetch } = useGetLeadsQuery(query);
   const { data: formMetaData } = useGetLeadFormMetaQuery();
+  const { data: setupData } = useGetLeadSetupQuery();
   const [createLead] = useCreateLeadMutation();
   const [updateLead] = useUpdateLeadMutation();
   const [deleteLead] = useDeleteLeadMutation();
   const [bulkLeads] = useBulkLeadsMutation();
+  const [resolveLeadsByIds] = useResolveLeadsByIdsMutation();
   const [importLeads] = useImportLeadsMutation();
   const [exportLeads] = useExportLeadsMutation();
   const [createOpportunity, { isLoading: creatingOpp }] = useCreateOpportunityMutation();
 
-  const rows = data?.data || [];
+  const rows = coerceToLeadArray(data?.data ?? data);
   const total = data?.meta?.total || 0;
   const pages = Math.max(1, Math.ceil(total / pagination.limit));
   const users = formMetaData?.data?.users || [];
   const opportunityStages = formMetaData?.data?.opportunityStages || [];
+  const stageOptions = opportunityStages.map((s) => ({
+    value: s.name || s.key || s.id,
+    label: s.name || s.key || "Stage",
+  }));
+  const advancedRuleCount = countActiveRules(filters.filterTree);
+  const filterCount = advancedRuleCount ||
+    (filters.status?.length || 0) +
+    (filters.assignedTo?.length || 0) +
+    (filters.source?.length || 0) +
+    (filters.stage?.length || 0) +
+    (filters.workspaceId ? 1 : 0) +
+    (filters.valueMin != null ? 1 : 0) +
+    (filters.valueMax != null ? 1 : 0) +
+    (filters.unassignedOnly ? 1 : 0);
+
+  /** Fresh list each time user opens Leads or Opportunities (not when returning from same route). */
+  useEffect(() => {
+    dispatch(resetListSession());
+    setFilterOpen(false);
+  }, [dispatch, listPath]);
 
   useEffect(() => {
     dispatch(setTotal(total));
@@ -125,23 +186,30 @@ export function LeadsListPage({ variant = "leads" }) {
     const fn = editLead ? updateLead : createLead;
     const body = editLead ? { id: editLead.id, ...payload } : { ...payload };
     try {
-      await fn(body).unwrap();
+      const result = await fn(body).unwrap();
+      if (result?.queued) {
+        refetch();
+        return result;
+      }
       setEditLead(null);
       toast.success(editLead ? "Lead updated" : "Lead saved");
       refetch();
+      return result;
     } catch (err) {
-      if (err?.data?.error?.code === "DUPLICATE_LEAD") {
-        const attemptedPhone =
-          `${payload.phoneCountryCode || ""} ${payload.phone || ""}`.trim();
-        setDupeState({
-          open: true,
-          attemptedPhone,
-          duplicates: err?.data?.duplicates || [],
-        });
-        return;
-      }
       throw err;
     }
+  }
+
+  async function resolveSelectedLeads() {
+    const fromPage = rows.filter((r) => selected.includes(r.id));
+    const missingIds = selected.filter((id) => !fromPage.some((r) => r.id === id));
+    let resolved = [...fromPage];
+    if (missingIds.length) {
+      const extra = await resolveLeadsByIds(missingIds).unwrap();
+      resolved = [...fromPage, ...coerceToLeadArray(extra)];
+    }
+    const byId = new Map(resolved.map((l) => [l.id, l]));
+    return selected.map((id) => byId.get(id)).filter(Boolean);
   }
 
   async function handleBulk(action, payload = {}) {
@@ -151,104 +219,312 @@ export function LeadsListPage({ variant = "leads" }) {
     refetch();
   }
 
+  async function submitBulkEdit(patch) {
+    setBulkEditing(true);
+    try {
+      await bulkLeads({ ids: selected, action: 'update', payload: patch }).unwrap();
+      toast.success(`Updated ${selected.length} ${isOpportunities ? (selected.length === 1 ? 'opportunity' : 'opportunities') : selected.length === 1 ? 'lead' : 'leads'}`);
+      setBulkEditOpen(false);
+      dispatch(clearSelected());
+      refetch();
+    } catch (err) {
+      toast.error(err?.data?.error?.message || 'Bulk update failed');
+    } finally {
+      setBulkEditing(false);
+    }
+  }
+
+  async function openBulkAssign() {
+    if (!selected.length) {
+      toast.error("Select at least one lead");
+      return;
+    }
+    try {
+      setAssignLeads(await resolveSelectedLeads());
+      setAssignUserIds([]);
+      setAssignOpen(true);
+    } catch {
+      toast.error("Could not load selected leads");
+    }
+  }
+
+  async function openBulkExport() {
+    if (!selected.length) {
+      toast.error("Select at least one lead");
+      return;
+    }
+    try {
+      setExportModalLeads(await resolveSelectedLeads());
+      setExportOpen(true);
+    } catch {
+      toast.error("Could not load selected leads");
+    }
+  }
+
+  async function submitBulkExport() {
+    if (!selected.length) return;
+    setExporting(true);
+    try {
+      const result = await bulkLeads({ ids: selected, action: "export" }).unwrap();
+      const exportRows = result?.data?.rows || [];
+      if (!exportRows.length) {
+        toast.error("Nothing to export");
+        return;
+      }
+      downloadJsonAsCsv(
+        isOpportunities ? "opportunities-selected" : "leads-selected",
+        exportRows,
+      );
+      toast.success(`Exported ${exportRows.length} record(s)`);
+      setExportOpen(false);
+      setExportModalLeads([]);
+      dispatch(clearSelected());
+    } catch {
+      toast.error("Export failed");
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function confirmBulkDelete() {
+    if (!selected.length) return;
+    setDeleting(true);
+    try {
+      await handleBulk("delete");
+      setDeleteConfirm(null);
+      toast.success(isOpportunities ? "Opportunities deleted" : "Leads deleted");
+    } catch {
+      toast.error("Delete failed");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  async function confirmSingleDelete(lead) {
+    if (!lead?.id) return;
+    setDeleting(true);
+    try {
+      await deleteLead(lead.id).unwrap();
+      toast.success(isOpportunities ? "Opportunity deleted" : "Lead deleted");
+      setDeleteConfirm(null);
+      refetch();
+    } catch {
+      toast.error("Delete failed");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  async function openBulkEmail() {
+    if (!selected.length) {
+      toast.error("Select at least one lead");
+      return;
+    }
+    setBulkEmailLoading(true);
+    try {
+      setBulkEmailLeads(await resolveSelectedLeads());
+      setBulkEmailOpen(true);
+    } catch {
+      toast.error("Could not load selected leads");
+    } finally {
+      setBulkEmailLoading(false);
+    }
+  }
+
   async function submitBulkAssign() {
     if (!selected.length) return;
     if (!assignUserIds.length) {
       toast.error("Please select at least one user");
       return;
     }
-    await handleBulk("assign", {
-      assignedTo: assignUserIds[0],
-      assignedUserIds: assignUserIds,
-    });
-    setAssignOpen(false);
-    setAssignUserIds([]);
-    toast.success("Leads assigned");
+    setAssigning(true);
+    try {
+      await handleBulk("assign", {
+        assignedTo: assignUserIds[0],
+        assignedUserIds: assignUserIds,
+      });
+      setAssignOpen(false);
+      setAssignUserIds([]);
+      setAssignLeads([]);
+      toast.success(isOpportunities ? "Opportunities assigned" : "Leads assigned");
+    } catch {
+      toast.error("Assign failed");
+    } finally {
+      setAssigning(false);
+    }
   }
 
   return (
     <PageShell fullWidth>
-      <div className="space-y-4 px-4 py-4 sm:px-6 sm:py-5">
-        <div className="flex items-center justify-end gap-2 overflow-x-auto">
-          <div className="flex min-w-max items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setFilterOpen(true)}
-              className="inline-flex h-9 items-center gap-2 rounded-lg border border-surface-border bg-white px-4 text-sm"
-            >
-              <ListFilter className="h-3.5 w-3.5" />
-              Filters
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                exportAndDownload(isOpportunities ? "opportunities-all" : "leads-all", {
-                  filters: {
-                    isOpportunity: isOpportunities ? true : false,
-                    ...(filters.workspaceId ? { workspaceId: filters.workspaceId } : {}),
-                  },
-                })
-              }
-              className="h-9 rounded-lg border border-surface-border bg-white px-4 text-sm"
-            >
-              Export all
-            </button>
-            {isOpportunities ? (
-              <button
-                type="button"
-                onClick={() => setCreateOppOpen(true)}
-                className="inline-flex h-9 items-center gap-2 rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                New opportunity
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  setEditLead(null);
-                  setAddOpen(true);
-                }}
-                className="inline-flex h-9 items-center gap-2 rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Add Lead
-              </button>
-            )}
-            {/* <button
-              type="button"
-              onClick={() => setMeetingOpen(true)}
-              className="inline-flex h-9 items-center gap-2 rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Create Meeting
-            </button> */}
-            <button
-              type="button"
-              onClick={() => {
-                if (!selected.length) {
-                  toast.error("Select at least one lead");
-                  return;
-                }
-                setSelectedLeadForMeeting(selected[0]); // 👈 take first selected lead
-                setMeetingOpen(true);
-              }}
-              className="inline-flex h-9 items-center gap-2 rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Create Meeting
-            </button>
-          </div>
-        </div>
+      <PageStack>
+        <ListSearchToolbar
+          search={filters.search || ""}
+          onSearchChange={(search) => dispatch(setFilters({ search }))}
+          searchPlaceholder={
+            isOpportunities
+              ? "Search opportunities by name, company, email…"
+              : "Search leads by name, company, email…"
+          }
+          filterOpen={filterOpen}
+          onFilterOpenChange={setFilterOpen}
+          filterCount={filterCount}
+          filterPanel={
+            <FilterBuilder
+              filters={filters}
+              workspaceOptions={canSwitchWorkspace ? workspaceList : null}
+              users={users}
+              stageOptions={stageOptions}
+              isOpportunities={isOpportunities}
+              onChange={(delta) => dispatch(setFilters(delta))}
+              onReset={() => dispatch(resetFilters())}
+              onDraftApply={(tree) => dispatch(setFilters({ filterTree: tree }))}
+            />
+          }
+          onClearAll={() => dispatch(resetFilters())}
+          children={
+            <>
+              {/* View mode toggle */}
+              <div className="flex shrink-0 items-center rounded-xl border border-surface-border bg-white p-1">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('unique')}
+                  className={`h-8 rounded-lg px-3 text-xs font-medium transition-colors ${viewMode === 'unique' ? 'bg-[var(--brand-primary)] text-white shadow-sm' : 'text-ink-muted hover:text-ink'}`}
+                >
+                  Unique Leads
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('duplicates')}
+                  className={`h-8 rounded-lg px-3 text-xs font-medium transition-colors ${viewMode === 'duplicates' ? 'bg-amber-500 text-white shadow-sm' : 'text-ink-muted hover:text-ink'}`}
+                >
+                  Duplicate Leads
+                </button>
+              </div>
 
-        {isLoading ? (
-          <div className="rounded-xl border border-surface-border bg-white p-3">
-            {Array.from({ length: 6 }).map((_, idx) => (
-              <div
-                key={idx}
-                className="mb-1.5 h-10 animate-pulse rounded-lg bg-surface-subtle"
-              />
-            ))}
+              {selected.length > 0 && viewMode === 'unique' ? (
+                <button
+                  type="button"
+                  disabled={bulkEmailLoading}
+                  onClick={openBulkEmail}
+                  className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-3 text-sm font-semibold text-brand-900 hover:bg-brand-100 disabled:opacity-60"
+                >
+                  <Layers className="h-3.5 w-3.5" />
+                  Bulk actions
+                  <span className="rounded-full bg-[var(--brand-primary)] px-1.5 py-0.5 text-[10px] font-bold text-white">
+                    {selected.length}
+                  </span>
+                </button>
+              ) : null}
+            </>
+          }
+          chips={[]}
+          onRemoveChip={(id) => {
+            if (id.startsWith("status-")) {
+              const s = id.replace("status-", "");
+              dispatch(
+                setFilters({
+                  status: (filters.status || []).filter((x) => x !== s),
+                }),
+              );
+            }
+            if (id === "advanced") dispatch(setFilters({ filterTree: null }));
+          }}
+          actions={
+            <>
+              {/* Status quick filter */}
+              <div className="relative shrink-0">
+                <select
+                  value={filters.status?.length === 1 ? filters.status[0] : ""}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    dispatch(setFilters({
+                      status: val ? [val] : [],
+                      filterTree: upsertTreeRule(filters.filterTree, 'status', 'is_any_of', val),
+                    }));
+                    dispatch(setPagination({ page: 1 }));
+                  }}
+                  className="h-9 appearance-none rounded-xl border border-surface-border bg-white pl-3 pr-8 text-xs font-medium text-ink outline-none focus:border-brand-400"
+                >
+                  <option value="">All statuses</option>
+                  {STATUS_OPTIONS.map((s) => (
+                    <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-muted" />
+              </div>
+
+              {/* Assignee quick filter */}
+              <div className="relative shrink-0">
+                <select
+                  value={filters.assignedTo?.length === 1 ? filters.assignedTo[0] : ""}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    dispatch(setFilters({
+                      assignedTo: val ? [val] : [],
+                      filterTree: upsertTreeRule(filters.filterTree, 'assignedTo', 'is', val),
+                    }));
+                    dispatch(setPagination({ page: 1 }));
+                  }}
+                  className="h-9 w-36 appearance-none rounded-xl border border-surface-border bg-white pl-3 pr-8 text-xs font-medium text-ink outline-none focus:border-brand-400"
+                >
+                  <option value="">All assignees</option>
+                  {users.map((u) => (
+                    <option key={u.id} value={u.id}>{u.name}</option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-muted" />
+              </div>
+
+              <Button
+                type="button"
+                variant="secondary"
+                title={isOpportunities ? "Export filtered opportunities" : "Export filtered leads"}
+                onClick={() =>
+                  exportAndDownload(isOpportunities ? "opportunities" : "leads", {
+                    filters: {
+                      isOpportunity: isOpportunities,
+                      ...(filters.workspaceId ? { workspaceId: filters.workspaceId } : {}),
+                      ...(filters.status?.length ? { status: filters.status } : {}),
+                      ...(filters.assignedTo?.length ? { assignedTo: filters.assignedTo } : {}),
+                      ...(filters.search?.trim() ? { search: filters.search.trim() } : {}),
+                    },
+                  })
+                }
+                className="shrink-0"
+              >
+                <Download className="h-3.5 w-3.5" />
+              </Button>
+
+              {isOpportunities ? (
+                <Button type="button" onClick={() => setCreateOppOpen(true)} className="shrink-0 whitespace-nowrap">
+                  <Plus className="h-3.5 w-3.5" />
+                  New opportunity
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  onClick={() => {
+                    setEditLead(null);
+                    setAddOpen(true);
+                  }}
+                  className="shrink-0 whitespace-nowrap"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add Lead
+                </Button>
+              )}
+            </>
+          }
+        />
+
+        <PageContentPanel flush>
+        {viewMode === 'duplicates' ? (
+          <div className="p-4">
+            <DuplicateLeadsTab />
+          </div>
+        ) : isLoading ? (
+          <div className="p-3">
+            <SkeletonTable cols={6} rows={8} />
           </div>
         ) : (
           <>
@@ -278,14 +554,14 @@ export function LeadsListPage({ variant = "leads" }) {
                 setEditLead(lead);
                 setAddOpen(true);
               }}
-              onDelete={async (lead) => {
-                await deleteLead(lead.id).unwrap();
-                toast.success("Lead deleted");
-              }}
+              onDelete={(lead) =>
+                setDeleteConfirm({ type: "single", lead })
+              }
             />
-            <div className="border-t border-surface-border px-1 pt-3">
+            <div className="cx-data-grid-footer px-3 py-1.5">
               <TablePaginationBar
-                variant="surface"
+                compact
+                variant="brand"
                 page={pagination.page}
                 totalPages={pages}
                 onPageChange={(p) => dispatch(setPagination({ page: p }))}
@@ -299,17 +575,104 @@ export function LeadsListPage({ variant = "leads" }) {
             </div>
           </>
         )}
-      </div>
+        </PageContentPanel>
+      </PageStack>
+
+      <BulkEmailModal
+        open={bulkEmailOpen}
+        onClose={() => {
+          setBulkEmailOpen(false);
+          setBulkEmailLeads([]);
+        }}
+        leads={bulkEmailLeads}
+        onSent={() => {
+          dispatch(clearSelected());
+          refetch();
+        }}
+      />
 
       <BulkActionsBar
         count={selected.length}
-        onAssign={() => setAssignOpen(true)}
-        onStatus={() => handleBulk("status", { status: "qualified" })}
-        onTag={() => handleBulk("tag", { tags: ["hot"] })}
-        onExport={() => handleBulk("export")}
-        onDelete={() => handleBulk("delete")}
+        onBulkEmail={openBulkEmail}
+        onEdit={() => setBulkEditOpen(true)}
+        onAssign={openBulkAssign}
+        onExport={openBulkExport}
+        onDelete={() => setDeleteConfirm({ type: "bulk", count: selected.length })}
         onClear={() => dispatch(clearSelected())}
       />
+
+      <BulkAssignModal
+        open={assignOpen}
+        onClose={() => {
+          setAssignOpen(false);
+          setAssignUserIds([]);
+          setAssignLeads([]);
+        }}
+        leads={assignLeads}
+        users={users}
+        assignUserIds={assignUserIds}
+        onAssignUserIdsChange={setAssignUserIds}
+        onSubmit={submitBulkAssign}
+        submitting={assigning}
+      />
+
+      <BulkEditModal
+        open={bulkEditOpen}
+        onClose={() => setBulkEditOpen(false)}
+        count={selected.length}
+        sources={formMetaData?.data?.sources || []}
+        opportunityStages={opportunityStages}
+        opportunityStatuses={setupData?.data?.opportunityStatuses || []}
+        isOpportunities={isOpportunities}
+        onSubmit={submitBulkEdit}
+        submitting={bulkEditing}
+      />
+
+      <BulkExportModal
+        open={exportOpen}
+        onClose={() => {
+          setExportOpen(false);
+          setExportModalLeads([]);
+        }}
+        leads={exportModalLeads}
+        onExport={submitBulkExport}
+        exporting={exporting}
+        entityLabel={isOpportunities ? "opportunities" : "leads"}
+      />
+
+      <ConfirmDialog
+        open={deleteConfirm?.type === "bulk"}
+        onClose={() => setDeleteConfirm(null)}
+        onConfirm={confirmBulkDelete}
+        title={isOpportunities ? "Delete opportunities?" : "Delete leads?"}
+        description="This cannot be undone."
+        confirmLabel="Delete"
+        loading={deleting}
+      >
+        <p>
+          You are about to permanently delete{" "}
+          <span className="font-semibold text-ink">{deleteConfirm?.count ?? 0}</span> selected{" "}
+          {isOpportunities ? "opportunities" : "leads"}.
+        </p>
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={deleteConfirm?.type === "single"}
+        onClose={() => setDeleteConfirm(null)}
+        onConfirm={() => confirmSingleDelete(deleteConfirm?.lead)}
+        title={isOpportunities ? "Delete opportunity?" : "Delete lead?"}
+        description="This cannot be undone."
+        confirmLabel="Delete"
+        loading={deleting}
+      >
+        <p>
+          Delete{" "}
+          <span className="font-semibold text-ink">
+            {leadListLabel(deleteConfirm?.lead)}
+          </span>
+          ?
+        </p>
+      </ConfirmDialog>
 
       <AddLeadModal
         open={addOpen}
@@ -318,91 +681,13 @@ export function LeadsListPage({ variant = "leads" }) {
           setEditLead(null);
         }}
         initialLead={editLead}
-        defaultIsOpportunity={false}
+        defaultIsOpportunity={isOpportunities}
         onSubmit={(payload) => submitLead(payload)}
         onBulkImport={async (rowsForImport) =>
           importLeads(rowsForImport).unwrap()
         }
       />
 
-      {/* <CreateMeetingModal
-        open={meetingOpen}
-        onClose={() => setMeetingOpen(false)}
-        users={users}
-      /> */}
-      <CreateMeetingModal
-        open={meetingOpen}
-        onClose={() => setMeetingOpen(false)}
-        users={users}
-        leadId={selectedLeadForMeeting} // ✅ FIX
-      />
-      {assignOpen ? (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-ink/40 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-surface-border bg-white p-4 shadow-2xl">
-            <h3 className="text-base font-semibold text-ink">
-              Assign selected leads
-            </h3>
-            <p className="mt-1 text-xs text-ink-muted">
-              Select one or more users to assign {selected.length} lead(s).
-            </p>
-            <div className="mt-3 max-h-64 space-y-1 overflow-y-auto rounded-xl border border-surface-border p-2">
-              {users.map((user) => {
-                const checked = assignUserIds.includes(user.id);
-                return (
-                  <label
-                    key={user.id}
-                    className="flex cursor-pointer items-center justify-between gap-3 rounded-lg px-2 py-2 hover:bg-brand-50"
-                  >
-                    <span className="min-w-0">
-                      <p className="truncate text-sm text-ink">
-                        {user.name || "Unnamed user"}
-                      </p>
-                      <p className="truncate text-xs text-ink-muted">
-                        {user.email}
-                      </p>
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={(e) => {
-                        setAssignUserIds((prev) =>
-                          e.target.checked
-                            ? [...prev, user.id]
-                            : prev.filter((id) => id !== user.id),
-                        );
-                      }}
-                    />
-                  </label>
-                );
-              })}
-              {!users.length ? (
-                <p className="px-2 py-3 text-xs text-ink-muted">
-                  No users available.
-                </p>
-              ) : null}
-            </div>
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setAssignOpen(false);
-                  setAssignUserIds([]);
-                }}
-                className="h-9 rounded-lg border border-surface-border px-4 text-sm"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={submitBulkAssign}
-                className="h-9 rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white"
-              >
-                Assign
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
       <CreateOpportunityModal
         open={createOppOpen}
         onClose={() => setCreateOppOpen(false)}
@@ -410,42 +695,27 @@ export function LeadsListPage({ variant = "leads" }) {
         opportunityStages={opportunityStages}
         saving={creatingOpp}
         onSave={async (payload) => {
-          await createOpportunity(payload).unwrap();
-          toast.success("Opportunity added");
+          const result = await createOpportunity(payload).unwrap();
+          if (result?.queued) {
+            toast('Duplicate detected — saved to review queue in Add Lead → Duplicate Leads tab', { icon: '⚠️' });
+          } else {
+            toast.success("Opportunity added");
+          }
           setCreateOppOpen(false);
           refetch();
         }}
         onSaveAndAddAnother={async (payload, reset) => {
-          await createOpportunity(payload).unwrap();
-          toast.success("Opportunity added");
+          const result = await createOpportunity(payload).unwrap();
+          if (result?.queued) {
+            toast('Duplicate detected — saved to review queue', { icon: '⚠️' });
+          } else {
+            toast.success("Opportunity added");
+          }
           reset();
           refetch();
         }}
       />
 
-      <DuplicateWarning
-        open={dupeState.open}
-        duplicates={dupeState.duplicates}
-        attemptedPhone={dupeState.attemptedPhone}
-        onCancel={() =>
-          setDupeState({ open: false, attemptedPhone: "", duplicates: [] })
-        }
-        onViewLead={(lead) => {
-          setDupeState({ open: false, attemptedPhone: "", duplicates: [] });
-          setAddOpen(false);
-          setEditLead(null);
-          if (lead?.id) navigate(`/leads/${lead.id}`);
-        }}
-      />
-      <FilterBuilder
-        open={filterOpen}
-        onClose={() => setFilterOpen(false)}
-        filters={filters}
-        workspaceOptions={isCompanyAdmin ? workspaceList : null}
-        onChange={(delta) => dispatch(setFilters(delta))}
-        onApply={() => setFilterOpen(false)}
-        onReset={() => dispatch(resetFilters())}
-      />
     </PageShell>
   );
 }

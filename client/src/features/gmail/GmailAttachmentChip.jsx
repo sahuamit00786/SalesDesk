@@ -56,7 +56,7 @@ export default function GmailAttachmentChip({
               e.stopPropagation()
               onRequestSaveToLead(messageId, attachment)
             }}
-            className="flex h-7 w-7 items-center justify-center rounded-full border border-violet-200 bg-white text-violet-700 shadow-md hover:bg-violet-50"
+            className="flex h-7 w-7 items-center justify-center rounded-full border border-brand-200 bg-white text-brand-700 shadow-md hover:bg-slate-50"
           >
             <FolderInput className="h-3.5 w-3.5" aria-hidden />
           </button>

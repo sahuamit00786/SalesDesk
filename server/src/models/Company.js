@@ -67,6 +67,24 @@ export const Company = sequelize.define(
       allowNull: true,
       field: 'leave_weekly_off_days',
     },
+    lateThresholdHour: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: 10,
+      field: 'late_threshold_hour',
+    },
+    lateThresholdMinute: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: 0,
+      field: 'late_threshold_minute',
+    },
+    /** Per-event email/in-app toggles and digest timing — see notificationPreferencesService. */
+    notificationEmailSettings: {
+      type: DataTypes.JSON,
+      allowNull: true,
+      field: 'notification_email_settings',
+    },
   },
   {
     tableName: 'companies',

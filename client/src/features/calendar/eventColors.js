@@ -46,13 +46,13 @@ export function getEventColor(kind, status, meta = {}) {
 export function getKindBgClass(kind) {
   switch (kind) {
     case 'meeting':
-      return 'bg-indigo-100 text-indigo-700'
+      return 'bg-brand-100 text-brand-700'
     case 'task':
       return 'bg-amber-100 text-amber-700'
     case 'followup':
       return 'bg-emerald-100 text-emerald-700'
     case 'opportunity':
-      return 'bg-violet-100 text-violet-700'
+      return 'bg-slate-100 text-brand-700'
     case 'reminder':
       return 'bg-rose-100 text-rose-700'
     default:

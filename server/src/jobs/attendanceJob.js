@@ -16,7 +16,7 @@ export function startAttendanceJob() {
       // eslint-disable-next-line no-console
       console.error('[attendance-cron] mark absent failed', err)
     }
-  })
+  }, { timezone: 'UTC' })
 
   cron.schedule('0 0 1 1 *', async () => {
     try {
@@ -28,5 +28,5 @@ export function startAttendanceJob() {
       // eslint-disable-next-line no-console
       console.error('[attendance-cron] yearly reset failed', err)
     }
-  })
+  }, { timezone: 'UTC' })
 }

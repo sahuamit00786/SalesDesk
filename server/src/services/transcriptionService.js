@@ -1,18 +1,23 @@
-import fs from "fs"
-import OpenAI from "openai"
-const client = new OpenAI({
-  apiKey: process.env.GROQ_API_KEY,
-  baseURL: "https://api.groq.com/openai/v1",
-})
+import fs from 'fs'
+import OpenAI from 'openai'
+import { withRetry } from '../utils/withRetry.js'
 
-const transcribeModel =
-  process.env.GROQ_TRANSCRIBE_MODEL?.trim() || "whisper-large-v3-turbo"
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
+/**
+ * Transcribe audio file using OpenAI whisper-1.
+ * Returns { text: string, segments: Array<{start, end, text, avg_logprob}> }
+ */
 export async function transcribeAudio(audioPath) {
-  const transcription = await client.audio.transcriptions.create({
-    file: fs.createReadStream(audioPath),
-    model: transcribeModel,
+  return withRetry(async () => {
+    const response = await openai.audio.transcriptions.create({
+      file: fs.createReadStream(audioPath),
+      model: 'whisper-1',
+      response_format: 'verbose_json',
+    })
+    return {
+      text: response.text ?? '',
+      segments: Array.isArray(response.segments) ? response.segments : [],
+    }
   })
-
-  return transcription.text
 }

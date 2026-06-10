@@ -1,9 +1,47 @@
+import { useMemo } from 'react'
 import { Users } from 'lucide-react'
+import { DataGrid } from '@/components/shared/DataGrid'
 import { HrCard } from '@/features/hr/components/HrCard'
 import { HrEmptyState } from '@/features/hr/components/HrEmptyState'
-import { HrDataTable, HrTableBody, HrTableHead, HrTd, HrTh, HrTr } from '@/features/hr/components/HrDataTable'
 
-export function MonthlySummaryTable({ summary = [] }) {
+export function MonthlySummaryTable({ summary = [], onUserSelect }) {
+  const columns = useMemo(
+    () => [
+      {
+        accessorKey: 'name',
+        header: 'Employee',
+        size: 140,
+        cell: ({ getValue }) => <span className="font-semibold">{getValue()}</span>,
+      },
+      {
+        accessorKey: 'department',
+        header: 'Department',
+        size: 120,
+        cell: ({ getValue }) => getValue() || '—',
+      },
+      { accessorKey: 'daysPresent', header: 'Present', size: 90 },
+      { accessorKey: 'daysAbsent', header: 'Absent', size: 90 },
+      { accessorKey: 'daysLate', header: 'Late', size: 80 },
+      { accessorKey: 'daysHalfDay', header: 'Half day', size: 90 },
+      {
+        accessorKey: 'totalHours',
+        header: 'Total hours',
+        size: 110,
+        cell: ({ getValue }) => `${Number(getValue() || 0).toFixed(1)}h`,
+      },
+    ],
+    [],
+  )
+
+  const rows = useMemo(
+    () =>
+      summary.map((r) => ({
+        ...r,
+        id: String(r.userId ?? r.id),
+      })),
+    [summary],
+  )
+
   return (
     <HrCard
       title="Monthly summary"
@@ -12,38 +50,26 @@ export function MonthlySummaryTable({ summary = [] }) {
       flush
       bodyClassName="p-0"
     >
-      {!summary.length ? (
+      {!rows.length ? (
         <HrEmptyState
           icon={Users}
-          title="No summary data"
+          title="No results"
           description="There is no team attendance data for this month yet."
           className="m-5 border-0 bg-transparent"
         />
       ) : (
-        <HrDataTable minWidth="720px">
-          <HrTableHead>
-            <HrTh>Employee</HrTh>
-            <HrTh>Department</HrTh>
-            <HrTh>Present</HrTh>
-            <HrTh>Absent</HrTh>
-            <HrTh>Late</HrTh>
-            <HrTh>Half day</HrTh>
-            <HrTh>Total hours</HrTh>
-          </HrTableHead>
-          <HrTableBody>
-            {summary.map((row) => (
-              <HrTr key={row.userId}>
-                <HrTd className="font-semibold">{row.name}</HrTd>
-                <HrTd muted>{row.department || '—'}</HrTd>
-                <HrTd>{row.daysPresent}</HrTd>
-                <HrTd>{row.daysAbsent}</HrTd>
-                <HrTd>{row.daysLate}</HrTd>
-                <HrTd>{row.daysHalfDay}</HrTd>
-                <HrTd className="font-medium tabular-nums">{Number(row.totalHours || 0).toFixed(1)}h</HrTd>
-              </HrTr>
-            ))}
-          </HrTableBody>
-        </HrDataTable>
+        <DataGrid
+          columns={columns}
+          data={rows}
+          searchable
+          showColumnToggle={false}
+          defaultPageSize={15}
+          onRowClick={onUserSelect ? (params) => onUserSelect(params.row.userId) : undefined}
+          getRowId={(row) => String(row.userId ?? row.id)}
+          maxHeightClass="max-h-[min(60vh,480px)]"
+          emptyTitle="No results"
+          className="border-0 shadow-none"
+        />
       )}
     </HrCard>
   )

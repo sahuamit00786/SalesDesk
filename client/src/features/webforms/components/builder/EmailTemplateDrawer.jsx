@@ -98,7 +98,7 @@ export function EmailTemplateDrawer({
               onApplyTemplate(payload)
               onClose()
             }}
-            className="h-9 rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white"
+            className="h-9 rounded-xl bg-[var(--brand-primary)] px-4 text-sm font-semibold text-white"
           >
             Apply template
           </button>

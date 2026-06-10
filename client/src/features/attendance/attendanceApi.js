@@ -33,6 +33,17 @@ export const attendanceApi = baseApi.injectEndpoints({
         responseHandler: (response) => response.text(),
       }),
     }),
+    editAttendanceLog: build.mutation({
+      query: ({ id, ...body }) => ({ url: `/attendance/logs/${id}`, method: 'PUT', body }),
+      invalidatesTags: (_r, _e, { id }) => [
+        { type: 'Attendance', id: 'TEAM' },
+        { type: 'Attendance', id: `LOG-${id}` },
+      ],
+    }),
+    createAttendanceLog: build.mutation({
+      query: (body) => ({ url: '/attendance/logs', method: 'POST', body }),
+      invalidatesTags: [{ type: 'Attendance', id: 'TEAM' }],
+    }),
   }),
 })
 
@@ -44,4 +55,6 @@ export const {
   useGetTeamAttendanceQuery,
   useGetAttendanceDayDetailQuery,
   useLazyExportAttendanceCsvQuery,
+  useEditAttendanceLogMutation,
+  useCreateAttendanceLogMutation,
 } = attendanceApi

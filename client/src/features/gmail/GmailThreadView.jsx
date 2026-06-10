@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { EllipsisVertical, Reply } from 'lucide-react'
+import { EllipsisVertical, Reply, UserRound } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import GmailMessageCard from '@/features/gmail/GmailMessageCard'
 
 function EmptyThreadState() {
@@ -16,6 +17,7 @@ export default function GmailThreadView({
   showReplyButton = true,
   onOpenAttachment,
   onSaveAttachmentToLead,
+  viewLeadId = null,
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
   if (!thread) return <EmptyThreadState />
@@ -31,17 +33,26 @@ export default function GmailThreadView({
           </p>
         </div>
         <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
+          {viewLeadId ? (
+            <Link
+              to={`/leads/${viewLeadId}`}
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-green-300 bg-green-50 px-3 text-xs font-semibold text-green-700 hover:bg-green-100"
+            >
+              <UserRound size={13} />
+              View lead
+            </Link>
+          ) : null}
           {showReplyButton && onReply ? (
             <button
               type="button"
-              className="inline-flex h-8 items-center rounded-lg bg-brand-600 px-3 text-xs font-semibold text-white hover:bg-brand-700"
+              className="inline-flex h-8 items-center rounded-lg bg-[var(--brand-primary)] px-3 text-xs font-semibold text-white hover:bg-[var(--brand-primary-dark)]"
               onClick={() => onReply(thread)}
             >
               <Reply size={13} className="mr-1" />
               Reply
             </button>
           ) : null}
-          <button type="button" onClick={onCreateEmail} className="h-8 rounded-lg bg-brand-600 px-2.5 text-xs font-medium text-white hover:bg-brand-700">
+          <button type="button" onClick={onCreateEmail} className="h-8 rounded-lg bg-[var(--brand-primary)] px-2.5 text-xs font-medium text-white hover:bg-[var(--brand-primary-dark)]">
             + Create email
           </button>
           <div className="relative">

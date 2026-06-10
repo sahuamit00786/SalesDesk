@@ -5,18 +5,13 @@ import { SmoothScrollProvider } from '@/features/leadflow-landing/SmoothScrollPr
 import { usePrefersReducedMotion } from '@/features/leadflow-landing/hooks/usePrefersReducedMotion'
 import { LandingNav } from '@/features/leadflow-landing/components/LandingNav'
 import { HeroSection } from '@/features/leadflow-landing/sections/HeroSection'
-import { TourSection } from '@/features/leadflow-landing/sections/TourSection'
-import { TrustedMarquee } from '@/features/leadflow-landing/sections/TrustedMarquee'
-import { ProblemSolutionSection } from '@/features/leadflow-landing/sections/ProblemSolutionSection'
+import { StatsStripSection } from '@/features/leadflow-landing/sections/StatsStripSection'
+import { ScreenshotShowcaseSection } from '@/features/leadflow-landing/sections/ScreenshotShowcaseSection'
 import { FeaturesSection } from '@/features/leadflow-landing/sections/FeaturesSection'
-import { PipelineDemoSection } from '@/features/leadflow-landing/sections/PipelineDemoSection'
 import { AutomationSection } from '@/features/leadflow-landing/sections/AutomationSection'
-import { OmnichannelSection } from '@/features/leadflow-landing/sections/OmnichannelSection'
-import { ReportingSection } from '@/features/leadflow-landing/sections/ReportingSection'
-import { TestimonialsSection } from '@/features/leadflow-landing/sections/TestimonialsSection'
-import { PricingSection } from '@/features/leadflow-landing/sections/PricingSection'
+import { ModulesMarquee } from '@/features/leadflow-landing/sections/ModulesMarquee'
 import { FaqSection } from '@/features/leadflow-landing/sections/FaqSection'
-import { FinalCtaSection } from '@/features/leadflow-landing/sections/FinalCtaSection'
+import { ContactCtaSection } from '@/features/leadflow-landing/sections/ContactCtaSection'
 import { FooterSection } from '@/features/leadflow-landing/sections/FooterSection'
 
 export function LeadFlowLandingPage() {
@@ -25,11 +20,11 @@ export function LeadFlowLandingPage() {
 
   useEffect(() => {
     const prev = document.title
-    document.title = 'LeadFlow AI — Turn conversations into revenue'
+    document.title = 'LeadFlow CRM — Lead management, pipeline, and team workspace'
     let meta = document.querySelector('meta[name="description"]')
     let created = false
     const desc =
-      'LeadFlow AI: AI-powered lead management and CRM with omnichannel inbox, workflows, meetings, pipeline, and analytics.'
+      'LeadFlow CRM: full lifecycle lead management with pipeline, email inbox, workflow automation, campaigns, quotations, invoices, HR, and team roles.'
     if (!meta) {
       meta = document.createElement('meta')
       meta.setAttribute('name', 'description')
@@ -52,22 +47,17 @@ export function LeadFlowLandingPage() {
 
   return (
     <SmoothScrollProvider disabled={reduced}>
-      <div className="leadflow-landing min-h-screen bg-lf-page text-lf-ink">
+      <div className="leadflow-landing min-h-screen bg-[#050510] text-white">
         <LandingNav />
         <main>
           <HeroSection />
-          <TourSection />
-          <TrustedMarquee />
-          <ProblemSolutionSection />
+          <StatsStripSection />
+          <ScreenshotShowcaseSection />
           <FeaturesSection />
-          <PipelineDemoSection />
           <AutomationSection />
-          <OmnichannelSection />
-          <ReportingSection />
-          <TestimonialsSection />
-          <PricingSection />
+          <ModulesMarquee />
           <FaqSection />
-          <FinalCtaSection />
+          <ContactCtaSection />
         </main>
         <FooterSection />
       </div>

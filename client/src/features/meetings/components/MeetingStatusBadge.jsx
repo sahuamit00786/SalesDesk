@@ -15,7 +15,7 @@ export function MeetingStatusBadge({
           "bg-green-100 text-green-700",
 
         status === "scheduled" &&
-          "bg-blue-100 text-blue-700",
+          "bg-brand-100 text-brand-700",
 
         status === "cancelled" &&
           "bg-gray-200 text-gray-700",

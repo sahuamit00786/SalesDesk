@@ -108,7 +108,6 @@ export function defaultNodeData(type) {
         assignedToUserId: '',
         dueMode: 'relative_days',
         dueInDays: 3,
-        dueAtIso: '',
         subtasks: [],
       }
     case 'actionCreateFollowup':

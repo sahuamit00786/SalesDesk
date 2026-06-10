@@ -4,11 +4,12 @@ import { Building2, MoreHorizontal } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { cn } from '@/utils/cn'
+import { SkeletonCards } from '@/components/shared/SkeletonLoader'
 import { usePatchDealStageMutation } from '@/features/deals/dealsApi'
 import { formatStageLabel } from '@/features/opportunities/components/OpportunitiesKanban'
 import { formatDealMoney, normalizeDealCurrency } from '@/features/deals/dealCurrencies'
 
-const ACCENT_PALETTE = ['#F97316', '#8B5CF6', '#EA580C', '#3B82F6']
+const ACCENT_PALETTE = ['var(--brand-primary)', 'var(--brand-primary-dark)', '#7C3AED', '#6D28D9']
 
 function initials(name) {
   return String(name || 'NA')
@@ -205,7 +206,7 @@ function DealKanbanCard({ opp, onOpen, onOpenClient, onEdit }) {
       {...attributes}
       className={cn(
         'cursor-grab touch-none overflow-hidden rounded-lg border border-neutral-200/90 bg-white shadow-sm transition-shadow active:cursor-grabbing',
-        isDragging && 'opacity-50 ring-2 ring-orange-500/40',
+        isDragging && 'opacity-50 ring-2 ring-brand-500/40',
       )}
     >
       <DealCardBody opp={opp} interactive onOpen={onOpen} onOpenClient={onOpenClient} onEdit={onEdit} />
@@ -230,8 +231,8 @@ function DealColumn({ stageName, displayLabel, opportunities, isWonColumn, onOpe
       ref={setNodeRef}
       className={cn(
         'flex h-full min-h-0 w-[280px] shrink-0 flex-col rounded-lg border border-neutral-200/60',
-        isWonColumn ? 'bg-[#f0fae0]' : 'bg-[#f7f7f7]',
-        isOver && 'ring-2 ring-orange-500/50 ring-offset-1',
+        isWonColumn ? 'bg-emerald-50/80' : 'bg-brand-50/60',
+        isOver && 'ring-2 ring-brand-500/50 ring-offset-1',
       )}
     >
       <div className="flex shrink-0 items-start justify-between gap-2 rounded-t-lg border-b border-neutral-200/70 bg-white px-3 py-2.5">
@@ -339,11 +340,7 @@ export function DealsPipelineKanban({
   }
 
   if (isLoading && !opportunities.length) {
-    return (
-      <div className="flex flex-1 items-center justify-center py-16 text-sm text-neutral-500">
-        Loading pipeline…
-      </div>
-    )
+    return <SkeletonCards count={5} cols="grid-cols-1 sm:grid-cols-2 xl:grid-cols-3" cardHeight="h-44" />
   }
 
   if (!stageOrder.length) {

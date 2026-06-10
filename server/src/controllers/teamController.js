@@ -17,7 +17,7 @@ import { userAuthIncludes } from '../queries/userIncludes.js'
 import { serializeUser } from '../serializers/userSerializer.js'
 import { generateInvitePlainToken, hashInviteToken, inviteExpiresAt, verifyInviteToken } from '../services/inviteTokenService.js'
 import { sendTeamInviteEmail } from '../services/mailService.js'
-import { signAccessToken, signRefreshToken } from '../services/tokenService.js'
+import { signAccessToken, signRefreshToken, refreshTokenPayloadForUser } from '../services/tokenService.js'
 import {
   acceptInvitationSchema,
   createInvitationSchema,
@@ -37,6 +37,7 @@ import {
   allowedWorkspaceIdsForUser,
   hydrateWorkspaceSummaryForUsers,
   listWorkspaceIdsForUser,
+  addWorkspaceMembershipsForUser,
   setWorkspaceMembershipsForUser,
 } from '../services/userWorkspaceService.js'
 
@@ -349,17 +350,20 @@ export async function patchCompanyRole(req, res, next) {
         err.publicMessage = 'Select valid menus'
         throw err
       }
-      await CompanyRoleMenu.destroy({ where: { companyRoleId: role.id } })
-      await CompanyRoleMenu.bulkCreate(
-        menuPermissions.map((p) => ({
-          companyRoleId: role.id,
-          menuId: p.menuId,
-          canView: p.canView,
-          canEdit: p.canEdit,
-          canUpdate: p.canUpdate,
-          canDelete: p.canDelete,
-        })),
-      )
+      await sequelize.transaction(async (t) => {
+        await CompanyRoleMenu.destroy({ where: { companyRoleId: role.id }, transaction: t })
+        await CompanyRoleMenu.bulkCreate(
+          menuPermissions.map((p) => ({
+            companyRoleId: role.id,
+            menuId: p.menuId,
+            canView: p.canView,
+            canEdit: p.canEdit,
+            canUpdate: p.canUpdate,
+            canDelete: p.canDelete,
+          })),
+          { transaction: t },
+        )
+      })
     }
     return res.json({
       success: true,
@@ -509,11 +513,39 @@ export async function createInvitation(req, res, next) {
 
     const dupUser = await User.unscoped().findOne({ where: { email: normEmail, companyId } })
     if (dupUser?.emailVerified) {
-      const err = new Error('Already a member')
-      err.status = 409
-      err.code = 'CONFLICT'
-      err.publicMessage = 'This user is already in your workspace'
-      throw err
+      const workspaceIds = uniqueIds(value.workspaceIds)
+      const validWorkspaces = await Workspace.findAll({
+        where: { companyId, id: { [Op.in]: workspaceIds } },
+        attributes: ['id', 'name'],
+      })
+      if (validWorkspaces.length !== workspaceIds.length) {
+        const err = new Error('Invalid workspace assignment')
+        err.status = 400
+        err.code = 'VALIDATION'
+        err.publicMessage = 'Select valid workspaces from your company'
+        throw err
+      }
+      if (value.companyRoleId && value.companyRoleId !== dupUser.companyRoleId) {
+        dupUser.companyRoleId = value.companyRoleId
+        await dupUser.save()
+      }
+      const mergedIds = await addWorkspaceMembershipsForUser({
+        userId: dupUser.id,
+        companyId,
+        workspaceIds,
+      })
+      return res.status(200).json({
+        success: true,
+        data: {
+          userId: dupUser.id,
+          email: dupUser.email,
+          workspaceIds: mergedIds,
+          addedToWorkspaces: workspaceIds,
+          existingMember: true,
+          message: 'User already exists — added to selected workspace(s).',
+        },
+        meta: {},
+      })
     }
 
     const company = await Company.findByPk(companyId)
@@ -703,8 +735,12 @@ export async function acceptInvitation(req, res, next) {
       await inv.save({ transaction: t })
 
       const invitedWorkspaceIds = uniqueIds(inv.invitedWorkspaceIds)
+      const hadMemberships = (await listWorkspaceIdsForUser(user.id)).length > 0
       if (invitedWorkspaceIds.length) {
-        await setWorkspaceMembershipsForUser({
+        const assignWorkspaces = hadMemberships
+          ? addWorkspaceMembershipsForUser
+          : setWorkspaceMembershipsForUser
+        await assignWorkspaces({
           userId: user.id,
           companyId: inv.companyId,
           workspaceIds: invitedWorkspaceIds,
@@ -738,7 +774,7 @@ export async function acceptInvitation(req, res, next) {
         isCompanyAdmin: Boolean(user.isCompanyAdmin),
         companyId: user.companyId ?? null,
       }),
-      refreshToken: signRefreshToken({ sub: user.id }),
+      refreshToken: signRefreshToken(refreshTokenPayloadForUser(user)),
     }
 
     return res.json({
@@ -980,6 +1016,14 @@ export async function patchUserProfile(req, res, next) {
       err.status = 404
       err.code = 'NOT_FOUND'
       err.publicMessage = 'User not found'
+      throw err
+    }
+
+    if (req.user.id !== targetId && !req.user.isCompanyAdmin) {
+      const err = new Error('Forbidden')
+      err.status = 403
+      err.code = 'FORBIDDEN'
+      err.publicMessage = 'You can only edit your own profile'
       throw err
     }
 

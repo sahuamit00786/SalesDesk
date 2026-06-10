@@ -15,7 +15,7 @@ export function BotStatusBadge({
           "bg-yellow-100 text-yellow-700",
 
         status === "processing" &&
-          "bg-purple-100 text-purple-700",
+          "bg-slate-100 text-brand-700",
 
         status === "completed" &&
           "bg-green-100 text-green-700",

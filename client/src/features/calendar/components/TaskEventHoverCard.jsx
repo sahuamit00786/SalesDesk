@@ -274,7 +274,7 @@ export function TaskEventHoverCard({ event, anchorRect, onMouseEnter, onMouseLea
             {event?.leadName ? (
               <Link
                 to={`/leads/${leadId}`}
-                className="inline-flex items-center gap-1 font-medium text-indigo-600 hover:underline"
+                className="inline-flex items-center gap-1 font-medium text-brand-600 hover:underline"
               >
                 <Briefcase className="h-3 w-3 shrink-0" />
                 {event.leadName}

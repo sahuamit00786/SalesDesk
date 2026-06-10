@@ -69,6 +69,22 @@ export const leadsApi = baseApi.injectEndpoints({
       query: (id) => ({ url: `/leads/setup/opportunity-stages/${id}`, method: 'DELETE' }),
       invalidatesTags: [{ type: 'Lead', id: 'SETUP' }, { type: 'Lead', id: 'FORM_META' }],
     }),
+    createOpportunityStatus: build.mutation({
+      query: (body) => ({ url: '/leads/setup/opportunity-statuses', method: 'POST', body }),
+      invalidatesTags: [{ type: 'Lead', id: 'SETUP' }, { type: 'Lead', id: 'FORM_META' }],
+    }),
+    updateOpportunityStatus: build.mutation({
+      query: ({ id, ...body }) => ({ url: `/leads/setup/opportunity-statuses/${id}`, method: 'PATCH', body }),
+      invalidatesTags: [{ type: 'Lead', id: 'SETUP' }, { type: 'Lead', id: 'FORM_META' }],
+    }),
+    deleteOpportunityStatus: build.mutation({
+      query: (id) => ({ url: `/leads/setup/opportunity-statuses/${id}`, method: 'DELETE' }),
+      invalidatesTags: [{ type: 'Lead', id: 'SETUP' }, { type: 'Lead', id: 'FORM_META' }],
+    }),
+    reorderOpportunityStatuses: build.mutation({
+      query: (body) => ({ url: '/leads/setup/opportunity-statuses/reorder', method: 'POST', body }),
+      invalidatesTags: [{ type: 'Lead', id: 'SETUP' }, { type: 'Lead', id: 'FORM_META' }],
+    }),
     createDealStatus: build.mutation({
       query: (body) => ({ url: '/leads/setup/deal-statuses', method: 'POST', body }),
       invalidatesTags: [{ type: 'Lead', id: 'SETUP' }, { type: 'Lead', id: 'FORM_META' }],
@@ -120,6 +136,9 @@ export const leadsApi = baseApi.injectEndpoints({
       query: (body) => ({ url: '/leads/bulk', method: 'POST', body }),
       invalidatesTags: [{ type: 'Lead', id: 'LIST' }],
     }),
+    resolveLeadsByIds: build.mutation({
+      query: (ids) => ({ url: '/leads/resolve-by-ids', method: 'POST', body: { ids } }),
+    }),
     distributeLeadsRoundRobin: build.mutation({
       query: (body) => ({ url: '/leads/distribute-round-robin', method: 'POST', body }),
       invalidatesTags: [{ type: 'Lead', id: 'LIST' }, { type: 'Lead', id: 'ACTIVITIES_FEED' }, { type: 'Pipeline', id: 'LIST' }],
@@ -149,7 +168,10 @@ export const leadsApi = baseApi.injectEndpoints({
     }),
     getLeadEmailThread: build.query({
       query: ({ id, threadId }) => `/leads/${id}/email-threads/${threadId}`,
-      providesTags: (_r, _e, arg) => [{ type: 'Lead', id: `${arg.id}-email-thread-${arg.threadId}` }],
+      providesTags: (_r, _e, arg) => [
+        { type: 'Lead', id: `${arg.id}-email-thread-${arg.threadId}` },
+        { type: 'Lead', id: `${arg.id}-email-threads` },
+      ],
     }),
     sendLeadEmail: build.mutation({
       query: ({ id, ...body }) => ({ url: `/leads/${id}/emails/send`, method: 'POST', body }),
@@ -329,6 +351,7 @@ export const leadsApi = baseApi.injectEndpoints({
 
 export const {
   useGetLeadsQuery,
+  useLazyGetLeadsQuery,
   useGetLeadQuery,
   useGetLeadFormMetaQuery,
   useGetLeadSetupQuery,
@@ -342,6 +365,10 @@ export const {
   useUpdateOpportunityStageMutation,
   useReorderOpportunityStagesMutation,
   useDeleteOpportunityStageMutation,
+  useCreateOpportunityStatusMutation,
+  useUpdateOpportunityStatusMutation,
+  useDeleteOpportunityStatusMutation,
+  useReorderOpportunityStatusesMutation,
   useCreateDealStatusMutation,
   useUpdateDealStatusMutation,
   useDeleteDealStatusMutation,
@@ -351,6 +378,7 @@ export const {
   usePatchLeadStatusMutation,
   useDeleteLeadMutation,
   useBulkLeadsMutation,
+  useResolveLeadsByIdsMutation,
   useDistributeLeadsRoundRobinMutation,
   useGetLeadActivitiesQuery,
   useGetGoogleEmailStatusQuery,

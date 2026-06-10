@@ -2,15 +2,26 @@ import bcrypt from 'bcrypt'
 import { Company, sequelize, User } from '../models/index.js'
 import { userAuthIncludes } from '../queries/userIncludes.js'
 import { ensureCompanyWorkspace } from '../services/workspaceService.js'
-import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../services/tokenService.js'
 import {
+  signAccessToken,
+  signRefreshToken,
+  verifyRefreshToken,
+  refreshTokenPayloadForUser,
+} from '../services/tokenService.js'
+import {
+  forgotPasswordSchema,
   loginSchema,
   refreshSchema,
   registerSchema,
   resendVerificationSchema,
+  resetPasswordSchema,
   verifyEmailSchema,
 } from '../validations/auth.js'
-import { sendRegistrationEmails, sendResendOtpEmail } from '../services/mailService.js'
+import {
+  sendPasswordResetOtpEmail,
+  sendRegistrationEmails,
+  sendResendOtpEmail,
+} from '../services/mailService.js'
 import {
   generateOtpDigits,
   hashOtp,
@@ -37,13 +48,23 @@ function tokensForUser(user) {
     email: user.email,
     role: user.isCompanyAdmin ? 'company_admin' : 'member',
     companyRoleId: user.companyRoleId ?? null,
+    userRoleKind: user.companyRole?.userRoleKind ?? null,
     isCompanyAdmin: Boolean(user.isCompanyAdmin),
     companyId: user.companyId ?? null,
   }
   return {
     accessToken: signAccessToken(payload),
-    refreshToken: signRefreshToken({ sub: user.id }),
+    refreshToken: signRefreshToken(refreshTokenPayloadForUser(user)),
   }
+}
+
+async function assignPasswordResetOtp(user) {
+  const plain = generateOtpDigits()
+  const otpHash = await hashOtp(plain)
+  user.passwordResetOtpHash = otpHash
+  user.passwordResetOtpExpiresAt = otpExpiresAt()
+  await user.save()
+  return plain
 }
 
 async function assignVerificationOtp(user) {
@@ -415,6 +436,24 @@ export async function refresh(req, res, next) {
       throw err
     }
 
+    if (!user.isActive) {
+      const err = new Error('Account disabled')
+      err.status = 403
+      err.code = 'ACCOUNT_DISABLED'
+      err.publicMessage = 'Your account has been deactivated.'
+      throw err
+    }
+
+    const tokenVersion = decoded.rtv === undefined ? 0 : Number(decoded.rtv)
+    const userVersion = Number(user.refreshTokenVersion) || 0
+    if (!Number.isFinite(tokenVersion) || tokenVersion !== userVersion) {
+      const err = new Error('Invalid refresh token')
+      err.status = 401
+      err.code = 'UNAUTHORIZED'
+      err.publicMessage = 'Session expired — please sign in again'
+      throw err
+    }
+
     const tokens = tokensForUser(user)
     return res.json({
       success: true,
@@ -423,6 +462,93 @@ export async function refresh(req, res, next) {
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
       },
+      meta: {},
+    })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function logout(req, res, next) {
+  try {
+    const user = await User.unscoped().findByPk(req.user.id)
+    if (user) {
+      user.refreshTokenVersion = (Number(user.refreshTokenVersion) || 0) + 1
+      await user.save()
+    }
+    return res.json({ success: true, data: { ok: true }, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function forgotPassword(req, res, next) {
+  try {
+    const { error, value } = forgotPasswordSchema.validate(req.body, { abortEarly: false })
+    if (error) {
+      const err = new Error('Validation failed')
+      err.status = 400
+      err.code = 'VALIDATION'
+      err.publicMessage = joiPublicMessages(error)
+      throw err
+    }
+
+    const user = await User.unscoped().findOne({ where: { email: value.email } })
+    if (user?.isActive && user.emailVerified) {
+      const otpPlain = await assignPasswordResetOtp(user)
+      await sendPasswordResetOtpEmail({ to: user.email, name: user.name, otpPlain })
+    }
+
+    return res.json({
+      success: true,
+      data: { message: 'If an account exists for that email, a reset code has been sent.' },
+      meta: {},
+    })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function resetPassword(req, res, next) {
+  try {
+    const { error, value } = resetPasswordSchema.validate(req.body, { abortEarly: false })
+    if (error) {
+      const err = new Error('Validation failed')
+      err.status = 400
+      err.code = 'VALIDATION'
+      err.publicMessage = joiPublicMessages(error)
+      throw err
+    }
+
+    const user = await User.unscoped().findOne({ where: { email: value.email }, include: userAuthIncludes })
+    if (!user?.isActive) {
+      const err = new Error('Invalid reset request')
+      err.status = 400
+      err.code = 'VALIDATION'
+      err.publicMessage = 'Invalid or expired reset code'
+      throw err
+    }
+
+    const expired =
+      !user.passwordResetOtpExpiresAt || new Date(user.passwordResetOtpExpiresAt).getTime() < Date.now()
+    const otpOk = !expired && (await verifyOtp(value.otp, user.passwordResetOtpHash))
+    if (!otpOk) {
+      const err = new Error('Invalid reset code')
+      err.status = 400
+      err.code = 'VALIDATION'
+      err.publicMessage = 'Invalid or expired reset code'
+      throw err
+    }
+
+    user.password = await bcrypt.hash(value.password, 10)
+    user.passwordResetOtpHash = null
+    user.passwordResetOtpExpiresAt = null
+    user.refreshTokenVersion = (Number(user.refreshTokenVersion) || 0) + 1
+    await user.save()
+
+    return res.json({
+      success: true,
+      data: { message: 'Password updated. You can sign in with your new password.' },
       meta: {},
     })
   } catch (e) {

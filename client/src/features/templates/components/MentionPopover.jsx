@@ -23,13 +23,13 @@ export function MentionPopover({ open, anchor, options, onPick, onClose, query =
   return createPortal(
     <div
       role="listbox"
-      className="fixed z-[160] w-60 overflow-hidden rounded-xl border border-orange-200 bg-white shadow-xl ring-1 ring-orange-50 animate-in fade-in zoom-in-95 duration-100"
+      className="fixed z-[160] w-60 overflow-hidden rounded-xl border border-brand-200 bg-white shadow-xl ring-1 ring-brand-50 animate-in fade-in zoom-in-95 duration-100"
       style={{ top: anchor?.top ?? 0, left: anchor?.left ?? 0 }}
       onMouseDown={(e) => e.preventDefault()}
     >
-      <div className="flex items-center justify-between border-b border-surface-border bg-orange-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-orange-700">
+      <div className="flex items-center justify-between border-b border-surface-border bg-brand-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-brand-700">
         <span>Lead variables</span>
-        <span className="text-orange-500">@{query}</span>
+        <span className="text-brand-600">@{query}</span>
       </div>
       <div className="scrollbar-subtle max-h-56 overflow-y-auto py-1">
         {options?.length ? (
@@ -39,7 +39,7 @@ export function MentionPopover({ open, anchor, options, onPick, onClose, query =
               type="button"
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => onPick?.(field)}
-              className="flex w-full items-center justify-between px-3 py-1.5 text-left text-xs text-ink hover:bg-orange-50"
+              className="flex w-full items-center justify-between px-3 py-1.5 text-left text-xs text-ink hover:bg-brand-50"
             >
               <span className="font-medium">@{field}</span>
             </button>

@@ -114,7 +114,7 @@ export function EventChip({ event, onClick, view = 'week' }) {
     if (view === 'month') {
       return (
         <>
-          <span className="h-2.5 w-2.5 rounded-full bg-indigo-500/80 shrink-0" />
+          <span className="h-2.5 w-2.5 rounded-full bg-[var(--brand-primary)]/80 shrink-0" />
           <span className="truncate">{event.title}</span>
         </>
       )
@@ -137,7 +137,7 @@ export function EventChip({ event, onClick, view = 'week' }) {
             <Video className="w-3.5 h-3.5 shrink-0" />
             <span className="truncate">{event.title}</span>
           </div>
-          <span className="text-[10px] rounded bg-indigo-100 px-1.5 py-0.5 text-indigo-700">Meet</span>
+          <span className="text-[10px] rounded bg-brand-100 px-1.5 py-0.5 text-brand-700">Meet</span>
         </div>
         <div className="text-[10px] font-medium opacity-90">{compactTime}</div>
         {event.leadName && <div className="text-[10px] opacity-80 truncate">{event.leadName}</div>}

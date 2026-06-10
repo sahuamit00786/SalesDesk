@@ -1,8 +1,9 @@
+import { useMemo } from 'react'
 import { ClipboardList } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import { DataGrid } from '@/components/shared/DataGrid'
 import { HrCard } from '@/features/hr/components/HrCard'
 import { HrEmptyState } from '@/features/hr/components/HrEmptyState'
-import { HrDataTable, HrTableBody, HrTableHead, HrTd, HrTh, HrTr } from '@/features/hr/components/HrDataTable'
 import { HrStatusPill } from '@/features/hr/components/HrStatusPill'
 
 export function LeaveRequestTable({
@@ -19,6 +20,100 @@ export function LeaveRequestTable({
   description,
   embedded = false,
 }) {
+  const columns = useMemo(() => {
+    const cols = []
+    if (showEmployee) {
+      cols.push({
+        field: 'employee',
+        headerName: 'Employee',
+        flex: 1,
+        minWidth: 140,
+        valueGetter: (_v, row) => row.user?.name,
+      })
+    }
+    cols.push(
+      { field: 'leaveType', headerName: 'Type', flex: 1, minWidth: 100, valueGetter: (_v, row) => row.leaveType?.name },
+      { field: 'fromDate', headerName: 'From', width: 110 },
+      { field: 'toDate', headerName: 'To', width: 110 },
+      { field: 'days', headerName: 'Days', width: 70 },
+      {
+        field: 'reason',
+        headerName: 'Reason',
+        flex: 1,
+        minWidth: 120,
+        renderCell: ({ row }) => (
+          <span className="block max-w-[200px] truncate text-ink-muted" title={row.reason || ''}>
+            {row.reason || '—'}
+          </span>
+        ),
+      },
+      {
+        field: 'status',
+        headerName: 'Status',
+        width: 110,
+        renderCell: ({ row }) => <HrStatusPill status={row.status} />,
+      },
+      {
+        field: 'appliedAt',
+        headerName: 'Applied',
+        width: 110,
+        valueGetter: (_v, row) =>
+          row.appliedAt ? new Date(row.appliedAt).toLocaleDateString() : '—',
+      },
+    )
+    if (showActions) {
+      cols.push({
+        field: 'reviewActions',
+        headerName: 'Actions',
+        width: 160,
+        sortable: false,
+        filterable: false,
+        renderCell: ({ row }) =>
+          row.status === 'pending' ? (
+            <div className="flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
+              <Button type="button" className="!h-8 !px-3 !text-xs" onClick={() => onApprove?.(row)}>
+                Approve
+              </Button>
+              <Button
+                type="button"
+                className="!h-8 !px-3 !text-xs"
+                variant="secondary"
+                onClick={() => onReject?.(row)}
+              >
+                Reject
+              </Button>
+            </div>
+          ) : (
+            '—'
+          ),
+      })
+    }
+    if (onCancel) {
+      cols.push({
+        field: 'cancelAction',
+        headerName: '',
+        width: 100,
+        sortable: false,
+        filterable: false,
+        renderCell: ({ row }) =>
+          row.status === 'pending' || row.status === 'approved' ? (
+            <Button
+              type="button"
+              className="!h-8 !px-3 !text-xs"
+              variant="secondary"
+              onClick={(e) => {
+                e.stopPropagation()
+                onCancel(row)
+              }}
+            >
+              Cancel
+            </Button>
+          ) : null,
+      })
+    }
+    return cols
+  }, [showEmployee, showActions, onApprove, onReject, onCancel])
+
   const table = !rows.length ? (
     <HrEmptyState
       icon={ClipboardList}
@@ -27,82 +122,32 @@ export function LeaveRequestTable({
       className={embedded ? 'border-0 bg-transparent py-10' : 'm-5 border-0 bg-transparent'}
     />
   ) : (
-    <HrDataTable minWidth="880px">
-      <HrTableHead>
-        {selectable ? <HrTh className="w-10" /> : null}
-        {showEmployee ? <HrTh>Employee</HrTh> : null}
-        <HrTh>Type</HrTh>
-        <HrTh>From</HrTh>
-        <HrTh>To</HrTh>
-        <HrTh>Days</HrTh>
-        <HrTh>Reason</HrTh>
-        <HrTh>Status</HrTh>
-        <HrTh>Applied</HrTh>
-        {showActions ? <HrTh>Actions</HrTh> : null}
-        {onCancel ? <HrTh className="w-24" /> : null}
-      </HrTableHead>
-      <HrTableBody>
-        {rows.map((row) => (
-          <HrTr key={row.id}>
-            {selectable ? (
-              <HrTd>
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500/30"
-                  checked={selectedIds.includes(row.id)}
-                  onChange={() => onToggleSelect?.(row.id)}
-                  disabled={row.status !== 'pending'}
-                />
-              </HrTd>
-            ) : null}
-            {showEmployee ? <HrTd className="font-semibold">{row.user?.name}</HrTd> : null}
-            <HrTd>{row.leaveType?.name}</HrTd>
-            <HrTd className="tabular-nums">{row.fromDate}</HrTd>
-            <HrTd className="tabular-nums">{row.toDate}</HrTd>
-            <HrTd className="font-medium tabular-nums">{row.days}</HrTd>
-            <HrTd className="max-w-[200px] truncate" muted title={row.reason || ''}>
-              {row.reason || '—'}
-            </HrTd>
-            <HrTd>
-              <HrStatusPill status={row.status} />
-            </HrTd>
-            <HrTd muted className="tabular-nums">
-              {row.appliedAt ? new Date(row.appliedAt).toLocaleDateString() : '—'}
-            </HrTd>
-            {showActions ? (
-              <HrTd>
-                {row.status === 'pending' ? (
-                  <div className="flex flex-wrap gap-2">
-                    <Button type="button" className="!h-8 !px-3 !text-xs" onClick={() => onApprove?.(row)}>
-                      Approve
-                    </Button>
-                    <Button
-                      type="button"
-                      className="!h-8 !px-3 !text-xs"
-                      variant="secondary"
-                      onClick={() => onReject?.(row)}
-                    >
-                      Reject
-                    </Button>
-                  </div>
-                ) : (
-                  '—'
-                )}
-              </HrTd>
-            ) : null}
-            {onCancel ? (
-              <HrTd>
-                {(row.status === 'pending' || row.status === 'approved') && (
-                  <Button type="button" className="!h-8 !px-3 !text-xs" variant="secondary" onClick={() => onCancel(row)}>
-                    Cancel
-                  </Button>
-                )}
-              </HrTd>
-            ) : null}
-          </HrTr>
-        ))}
-      </HrTableBody>
-    </HrDataTable>
+    <DataGrid
+      gridColumns
+      columns={columns}
+      data={rows}
+      searchable={false}
+      showColumnToggle={false}
+      showExportCsv={false}
+      checkboxSelection={selectable}
+      rowSelectionModel={selectedIds.map(String)}
+      onRowSelectionModelChange={(model) => {
+        const next = new Set(model.map(String))
+        const prev = new Set(selectedIds.map(String))
+        for (const id of next) {
+          if (!prev.has(id)) onToggleSelect?.(id)
+        }
+        for (const id of prev) {
+          if (!next.has(id)) onToggleSelect?.(id)
+        }
+      }}
+      isRowSelectable={(params) => params.row.status === 'pending'}
+      defaultPageSize={15}
+      hideFooter={rows.length <= 15}
+      maxHeightClass="max-h-[min(60vh,520px)]"
+      emptyTitle="No leave requests"
+      className="border-0 shadow-none"
+    />
   )
 
   if (embedded) return table

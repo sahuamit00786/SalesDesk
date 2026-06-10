@@ -1,9 +1,12 @@
-import { Pencil, Trash2 } from 'lucide-react'
+import { useState } from 'react'
+import { Pencil, Trash2, Info } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { LeadScorePill } from '@/features/leads/components/LeadScorePill'
 import { LeadSourceTag } from '@/features/leads/components/LeadSourceTag'
 import { LeadStatusBadge } from '@/features/leads/components/LeadStatusBadge'
+import { LeadEngagementPopover } from '@/features/leads/components/LeadEngagementPopover'
 import { formatStageLabel } from '@/features/opportunities/components/OpportunitiesKanban'
+import { cn } from '@/utils/cn'
 
 function formatINR(value) {
   return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(Number(value || 0))
@@ -20,6 +23,49 @@ function fromNow(dateValue) {
   return `${days} days ago`
 }
 
+function EmailSentBadge({ sent }) {
+  if (sent) {
+    return (
+      <span className="inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800">
+        Sent
+      </span>
+    )
+  }
+  return <span className="text-[10px] text-ink-faint">—</span>
+}
+
+function ContactedCell({ lead, onHoverInfo }) {
+  const contacted = Boolean(lead.contacted)
+  return (
+    <div className="flex items-center justify-center gap-1">
+      <span
+        className={cn(
+          'inline-flex rounded-md px-1.5 py-0.5 text-[10px] font-semibold',
+          contacted ? 'bg-sky-50 text-sky-800 border border-sky-200' : 'text-ink-faint',
+        )}
+      >
+        {contacted ? 'Yes' : 'No'}
+      </span>
+      <button
+        type="button"
+        className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-transparent text-ink-muted hover:border-surface-border hover:bg-white hover:text-brand-700"
+        aria-label="Engagement breakdown"
+        onMouseEnter={(e) => onHoverInfo(lead, e)}
+        onMouseLeave={() => onHoverInfo(null, null)}
+        onFocus={(e) => onHoverInfo(lead, e)}
+        onBlur={() => onHoverInfo(null, null)}
+      >
+        <Info className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  )
+}
+
+const ENGAGEMENT_COLUMNS = [
+  { key: 'emailSent', label: 'Email sent', sortable: false },
+  { key: 'contacted', label: 'Contacted', sortable: false },
+]
+
 /** @param {{ variant?: 'leads' | 'opportunities' }} props */
 export function LeadsTable({
   rows = [],
@@ -33,8 +79,10 @@ export function LeadsTable({
   variant = 'leads',
 }) {
   const isOpp = variant === 'opportunities'
+  const [hoverLead, setHoverLead] = useState(null)
+  const [hoverAnchor, setHoverAnchor] = useState(null)
 
-  const columns = isOpp
+  const baseColumns = isOpp
     ? [
         { key: 'opportunity', label: 'Opportunity', sortable: true, sortField: 'title' },
         { key: 'pipelineStatus', label: 'Pipeline status', sortable: true, sortField: 'opportunityStage' },
@@ -50,147 +98,179 @@ export function LeadsTable({
         { key: 'score', label: 'Score', sortable: true, sortField: 'score' },
         { key: 'source', label: 'Source', sortable: true, sortField: 'source' },
         { key: 'value', label: 'Value', sortable: true, sortField: 'value' },
-        { key: 'pipeline', label: 'Pipeline', sortable: false, sortField: null },
         { key: 'owner', label: 'Owner', sortable: true, sortField: 'assignedTo' },
         { key: 'last', label: 'Last Activity', sortable: true, sortField: 'updatedAt' },
       ]
 
+  const columns = [...baseColumns, ...ENGAGEMENT_COLUMNS]
   const colCount = columns.length + 2
+  const focusedId = hoverLead?.id
+
+  const handleHoverInfo = (lead, event) => {
+    if (!lead || !event) {
+      setHoverLead(null)
+      setHoverAnchor(null)
+      return
+    }
+    const rect = event.currentTarget.getBoundingClientRect()
+    setHoverLead(lead)
+    setHoverAnchor({ x: rect.right, y: rect.bottom })
+  }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-surface-border bg-white">
-      <div className="overflow-x-auto">
-        <table className="cx-table min-w-[1000px] text-xs">
-          <thead className="cx-table-sticky-head">
-            <tr>
-              <th className="w-12 align-middle">
-                <input
-                  type="checkbox"
-                  checked={rows.length > 0 && selected.length === rows.length}
-                  onChange={(e) => onToggleAll(e.target.checked)}
-                />
-              </th>
-              {columns.map((col) => (
-                <th key={col.key} className="align-middle">
-                  {!col.sortable ? (
-                    <span className="inline-flex items-center gap-1">{col.label}</span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => onSort(col.sortField)}
-                      className="inline-flex items-center gap-1 text-left text-inherit hover:text-brand-600"
-                    >
-                      {col.label}{' '}
-                      <span className="opacity-40">
-                        {sort.field === col.sortField ? (sort.order === 'asc' ? '↑' : '↓') : '↕'}
-                      </span>
-                    </button>
-                  )}
-                </th>
-              ))}
-              <th className="cx-table-cell-actions text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 ? (
+    <>
+      <div className="overflow-hidden rounded-none border-0 bg-white">
+        <div className="overflow-x-auto">
+          <table className="cx-table cx-data-grid min-w-[1100px] text-xs">
+            <thead className="cx-table-sticky-head">
               <tr>
-                <td colSpan={colCount} className="py-10 text-center align-middle">
-                  <p className="text-sm font-medium text-ink">{isOpp ? 'No opportunities yet' : 'No leads yet'}</p>
-                  <p className="mt-1 text-xs text-ink-muted">
-                    {isOpp
-                      ? 'Convert a lead or add one from Opportunities to see it here.'
-                      : 'Add your first lead to populate this table.'}
-                  </p>
-                </td>
-              </tr>
-            ) : (
-              rows.map((lead) => (
-                <tr key={lead.id} className="group">
-                  <td className="align-middle">
-                    <input type="checkbox" checked={selected.includes(lead.id)} onChange={() => onToggleRow(lead.id)} />
-                  </td>
-                  {isOpp ? (
-                    <>
-                      <td>
-                        <Link className="font-semibold text-ink hover:underline" to={`/opportunities/${lead.id}`}>
-                          {lead.contactName || lead.title}
-                        </Link>
-                        <p className="mt-0.5 text-xs text-ink-muted">{lead.company || '-'}</p>
-                      </td>
-                      <td>
-                        <span className="inline-flex rounded-md border border-surface-border bg-surface-subtle px-1.5 py-0.5 text-[10px] font-semibold text-ink">
-                          {formatStageLabel(lead.opportunityStage) || '—'}
+                <th className="w-12 align-middle">
+                  <input
+                    type="checkbox"
+                    checked={rows.length > 0 && selected.length === rows.length}
+                    onChange={(e) => onToggleAll(e.target.checked)}
+                  />
+                </th>
+                {columns.map((col) => (
+                  <th key={col.key} className="align-middle">
+                    {!col.sortable ? (
+                      <span className="inline-flex items-center gap-1">{col.label}</span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onSort(col.sortField)}
+                        className="inline-flex items-center gap-1 text-left text-inherit hover:text-brand-100"
+                      >
+                        {col.label}{' '}
+                        <span className="opacity-40">
+                          {sort.field === col.sortField ? (sort.order === 'asc' ? '↑' : '↓') : '↕'}
                         </span>
-                      </td>
-                      <td>
-                        <LeadScorePill score={lead.score || 0} />
-                      </td>
-                      <td>
-                        <LeadSourceTag source={lead.source} />
-                      </td>
-                      <td className="font-semibold text-ink">{formatINR(lead.value)}</td>
-                      <td className="text-ink-muted">{lead.assignee?.name || '-'}</td>
-                      <td className="text-ink-muted">{fromNow(lead.updatedAt)}</td>
-                    </>
-                  ) : (
-                    <>
-                      <td>
-                        <Link className="font-semibold text-ink hover:underline" to={`/leads/${lead.id}`}>
-                          {lead.contactName || lead.title}
-                        </Link>
-                        <p className="mt-0.5 text-xs text-ink-muted">{lead.company || '-'}</p>
-                      </td>
-                      <td>
-                        <LeadStatusBadge status={lead.status} pipelineStage={lead.opportunityStage} />
-                      </td>
-                      <td>
-                        <LeadScorePill score={lead.score || 0} />
-                      </td>
-                      <td>
-                        <LeadSourceTag source={lead.source} />
-                      </td>
-                      <td className="font-semibold text-ink">{formatINR(lead.value)}</td>
-                      <td>
-                        {lead.isOpportunity ? (
-                          <span className="inline-flex rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900">
-                            Opportunity
-                          </span>
-                        ) : (
-                          <span className="text-ink-muted">—</span>
-                        )}
-                      </td>
-                      <td className="text-ink-muted">{lead.assignee?.name || '-'}</td>
-                      <td className="text-ink-muted">{fromNow(lead.updatedAt)}</td>
-                    </>
-                  )}
-                  <td className="cx-table-cell-actions text-right">
-                    <div className="inline-flex gap-1 opacity-100 transition">
-                      <button
-                        type="button"
-                        onClick={() => onEdit(lead)}
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-brand-200 bg-brand-50 text-brand-700"
-                        aria-label="Edit lead"
-                        title="Edit lead"
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => onDelete(lead)}
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-danger"
-                        aria-label="Delete lead"
-                        title="Delete lead"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
+                    )}
+                  </th>
+                ))}
+                <th className="cx-table-cell-actions text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 ? (
+                <tr>
+                  <td colSpan={colCount} className="py-10 text-center align-middle">
+                    <p className="text-sm font-medium text-ink">{isOpp ? 'No opportunities yet' : 'No leads yet'}</p>
+                    <p className="mt-1 text-xs text-ink-muted">
+                      {isOpp
+                        ? 'Convert a lead or add one from Opportunities to see it here.'
+                        : 'Add your first lead to populate this table.'}
+                    </p>
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                rows.map((lead) => {
+                  const isFocused = focusedId === lead.id
+                  const isDimmed = focusedId && !isFocused
+                  return (
+                    <tr
+                      key={lead.id}
+                      className={cn(
+                        'group transition-[filter,opacity,background]',
+                        isDimmed && 'opacity-35 blur-[0.4px] pointer-events-none',
+                        isFocused && 'relative z-[2] bg-brand-50/90 opacity-100 blur-0 shadow-sm',
+                      )}
+                    >
+                      <td className="align-middle">
+                        <input type="checkbox" checked={selected.includes(lead.id)} onChange={() => onToggleRow(lead.id)} />
+                      </td>
+                      {isOpp ? (
+                        <>
+                          <td>
+                            <Link className="font-semibold text-ink hover:underline" to={`/opportunities/${lead.id}`}>
+                              {lead.contactName || lead.title}
+                            </Link>
+                            <p className="mt-0.5 text-xs text-ink-muted">{lead.company || '-'}</p>
+                          </td>
+                          <td>
+                            <span className="inline-flex rounded-md border border-surface-border bg-surface-subtle px-1.5 py-0.5 text-[10px] font-semibold text-ink">
+                              {formatStageLabel(lead.opportunityStage) || '—'}
+                            </span>
+                          </td>
+                          <td>
+                            <LeadScorePill score={lead.score || 0} />
+                          </td>
+                          <td>
+                            <LeadSourceTag source={lead.source} />
+                          </td>
+                          <td className="font-semibold text-ink">{formatINR(lead.value)}</td>
+                          <td className="text-ink-muted">{lead.assignee?.name || '-'}</td>
+                          <td className="text-ink-muted">{fromNow(lead.updatedAt)}</td>
+                        </>
+                      ) : (
+                        <>
+                          <td>
+                            <Link className="font-semibold text-ink hover:underline" to={`/leads/${lead.id}`}>
+                              {lead.contactName || lead.title}
+                            </Link>
+                            <p className="mt-0.5 text-xs text-ink-muted">{lead.company || '-'}</p>
+                          </td>
+                          <td>
+                            <LeadStatusBadge status={lead.status} />
+                          </td>
+                          <td>
+                            <LeadScorePill score={lead.score || 0} />
+                          </td>
+                          <td>
+                            <LeadSourceTag source={lead.source} />
+                          </td>
+                          <td className="font-semibold text-ink">{formatINR(lead.value)}</td>
+                          <td className="text-ink-muted">{lead.assignee?.name || '-'}</td>
+                          <td className="text-ink-muted">{fromNow(lead.updatedAt)}</td>
+                        </>
+                      )}
+                      <td className="text-center align-middle">
+                        <EmailSentBadge sent={lead.emailSent} />
+                      </td>
+                      <td className="align-middle">
+                        <ContactedCell lead={lead} onHoverInfo={handleHoverInfo} />
+                      </td>
+                      <td className="cx-table-cell-actions text-right">
+                        <div className="inline-flex gap-1 opacity-100 transition">
+                          <button
+                            type="button"
+                            onClick={() => onEdit(lead)}
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-brand-200 bg-brand-50 text-brand-700"
+                            aria-label="Edit lead"
+                            title="Edit lead"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onDelete(lead)}
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-danger"
+                            aria-label="Delete lead"
+                            title="Delete lead"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+
+      <LeadEngagementPopover
+        open={Boolean(hoverLead && hoverAnchor)}
+        anchor={hoverAnchor}
+        lead={hoverLead}
+        onClose={() => {
+          setHoverLead(null)
+          setHoverAnchor(null)
+        }}
+      />
+    </>
   )
 }

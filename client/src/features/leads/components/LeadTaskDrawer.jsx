@@ -111,7 +111,7 @@ export function taskTypeLabel(value) {
 function StatusPill({ value }) {
   const map = {
     pending: 'border-slate-200 bg-slate-50 text-slate-700',
-    in_progress: 'border-indigo-200 bg-indigo-50 text-indigo-700',
+    in_progress: 'border-brand-200 bg-brand-50 text-brand-700',
     completed: 'border-emerald-200 bg-emerald-50 text-emerald-700',
     cancelled: 'border-slate-200 bg-slate-100 text-slate-500',
   }
@@ -225,7 +225,7 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
     setCommentDraft('')
     setInternalDraft('')
     setAttachmentPreview(null)
-  }, [open, task?.id])
+  }, [open, task])
 
   const subPayload = useMemo(
     () =>
@@ -338,7 +338,7 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
           <button
             type="button"
             disabled={saving}
-            className="h-10 rounded-xl bg-brand-600 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700 disabled:opacity-60"
+            className="h-10 rounded-xl bg-[var(--brand-primary)] px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--brand-primary-dark)] disabled:opacity-60"
             onClick={handleSave}
           >
             {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Create task'}
@@ -523,7 +523,7 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
           </div>
           <button
             type="button"
-            className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-brand-300 bg-brand-50/50 px-3 py-2 text-xs font-semibold text-brand-800 hover:bg-brand-50"
+            className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-brand-300 bg-slate-50 px-3 py-2 text-xs font-semibold text-brand-800 hover:bg-slate-50"
             onClick={() =>
               setReminders((prev) => [
                 ...prev,
@@ -595,7 +595,7 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
                       }
                       className={`h-8 w-8 rounded-full text-xs font-semibold transition ${
                         active
-                          ? 'border border-brand-500 bg-brand-50 text-brand-700'
+                          ? 'border border-brand-500 bg-slate-100 text-brand-700'
                           : 'border border-surface-border bg-white text-ink-muted hover:border-brand-300'
                       }`}
                     >
@@ -623,13 +623,13 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
               attachments.map((a, idx) => (
                 <div
                   key={`${a.url}-${idx}`}
-                  className="flex items-center gap-1.5 rounded-lg border border-orange-200 bg-orange-50 px-2.5 py-1.5 text-xs"
+                  className="flex items-center gap-1.5 rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1.5 text-xs"
                 >
-                  <FileText className="h-3.5 w-3.5 shrink-0 text-orange-700" />
+                  <FileText className="h-3.5 w-3.5 shrink-0 text-brand-700" />
                   <button
                     type="button"
                     disabled={!a.url}
-                    className="min-w-0 flex-1 truncate text-left font-medium text-orange-900 hover:text-orange-700 disabled:opacity-50"
+                    className="min-w-0 flex-1 truncate text-left font-medium text-brand-900 hover:text-brand-700 disabled:opacity-50"
                     onClick={() => {
                       const row = normalizeTaskAttachmentForPreview(
                         { filename: a.filename, fileUrl: a.url, url: a.url, size: a.size },
@@ -645,7 +645,7 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
                       href={a.url}
                       target="_blank"
                       rel="noreferrer"
-                      className="shrink-0 rounded-md p-1 text-orange-800/80 hover:bg-orange-100"
+                      className="shrink-0 rounded-md p-1 text-brand-800/80 hover:bg-brand-100"
                       title="Open in new tab"
                       aria-label="Open in new tab"
                       onClick={(e) => e.stopPropagation()}
@@ -656,7 +656,7 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
                   <button
                     type="button"
                     aria-label="Remove attachment"
-                    className="rounded-md p-1 text-orange-700/80 hover:bg-red-50 hover:text-red-600"
+                    className="rounded-md p-1 text-brand-700/80 hover:bg-red-50 hover:text-red-600"
                     onClick={() => setAttachments((prev) => prev.filter((_, i) => i !== idx))}
                   >
                     <X className="h-3.5 w-3.5" />
@@ -667,7 +667,7 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
           </div>
           <button
             type="button"
-            className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-brand-300 bg-brand-50/50 px-3 py-2 text-xs font-semibold text-brand-800 hover:bg-brand-50"
+            className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-brand-300 bg-slate-50 px-3 py-2 text-xs font-semibold text-brand-800 hover:bg-slate-50"
             onClick={() => setPickerOpen(true)}
           >
             <Plus className="h-3.5 w-3.5" /> Add attachment
@@ -707,7 +707,7 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
           </div>
           <button
             type="button"
-            className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-brand-300 bg-brand-50/50 px-3 py-2 text-xs font-semibold text-brand-800 hover:bg-brand-50"
+            className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-brand-300 bg-slate-50 px-3 py-2 text-xs font-semibold text-brand-800 hover:bg-slate-50"
             onClick={() =>
               setSubtasks((prev) => [...prev, { key: crypto.randomUUID(), title: '', done: false }])
             }
@@ -918,7 +918,7 @@ export function TaskPriorityIcon({ priority }) {
   const map = {
     low: 'text-slate-400',
     medium: 'text-amber-500',
-    high: 'text-orange-600',
+    high: 'text-brand-700',
     urgent: 'text-red-600',
   }
   return <Flag className={`h-3.5 w-3.5 fill-current ${map[priority] || map.medium}`} strokeWidth={1.5} />
@@ -944,7 +944,7 @@ export function TaskRecurrenceIcon({ rule, className = '' }) {
           ? interval === 1 ? 'Monthly' : `Every ${interval} months`
           : 'Recurring'
   return (
-    <span title={label} className={`inline-flex items-center gap-1 text-[10px] font-semibold text-indigo-700 ${className}`}>
+    <span title={label} className={`inline-flex items-center gap-1 text-[10px] font-semibold text-brand-700 ${className}`}>
       <Repeat className="h-3 w-3" />
       {label}
     </span>

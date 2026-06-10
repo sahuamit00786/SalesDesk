@@ -6,14 +6,18 @@ const initialState = {
     status: [],
     source: [],
     assignedTo: [],
-    scoreMin: 0,
-    scoreMax: 100,
+    scoreMin: null,
+    scoreMax: null,
     valueMin: null,
     valueMax: null,
     tags: [],
     savedViewId: null,
     /** Company admin: set to a workspace id to narrow the list; empty = all company workspaces. */
     workspaceId: '',
+    /** Advanced query-builder filter tree for GET /leads?filters= */
+    filterTree: null,
+    stage: [],
+    unassignedOnly: false,
   },
   sort: { field: 'createdAt', order: 'desc' },
   pagination: { page: 1, limit: 20, total: 0 },
@@ -52,6 +56,12 @@ const leadsSlice = createSlice({
     clearSelected(state) {
       state.selected = []
     },
+    /** Reset list filters, selection, and page when entering a fresh list view. */
+    resetListSession(state) {
+      state.filters = { ...initialState.filters }
+      state.pagination = { ...initialState.pagination, total: state.pagination.total }
+      state.selected = []
+    },
     setViewMode(state, action) {
       state.viewMode = action.payload
     },
@@ -67,6 +77,7 @@ export const {
   setSelected,
   toggleSelected,
   clearSelected,
+  resetListSession,
   setViewMode,
 } = leadsSlice.actions
 export default leadsSlice.reducer

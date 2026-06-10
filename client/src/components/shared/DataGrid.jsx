@@ -62,6 +62,41 @@ function headerLabel(column) {
   return column.columnDef.meta?.title ?? column.id
 }
 
+/**
+ * Normalise a MUI-DataGrid-style column def to a TanStack Table column def.
+ * Supports: field → accessorKey/id, headerName → header, renderCell → cell,
+ * valueGetter → accessorFn, width/minWidth → size/minSize.
+ * If the column already uses TanStack format (has accessorKey/accessorFn/id)
+ * it is returned unchanged.
+ */
+function normalizeMuiColumn(col) {
+  if (col == null || typeof col !== 'object') return null
+  // Already TanStack format
+  if ('accessorKey' in col || 'accessorFn' in col) return col
+  // Has an explicit TanStack id but no MUI field → treat as display column
+  if ('id' in col && !('field' in col)) return col
+  // MUI format — must have field
+  if (!('field' in col)) return col
+  const { field, headerName, renderCell, valueGetter, width, minWidth, flex: _flex, ...rest } = col
+  const normalized = {
+    id: String(field),
+    header: headerName ?? String(field),
+    ...(width != null && { size: width }),
+    ...(minWidth != null && { minSize: minWidth }),
+  }
+  if (valueGetter) {
+    normalized.accessorFn = (row) => valueGetter(row[field], row)
+  } else {
+    normalized.accessorKey = String(field)
+  }
+  if (renderCell) {
+    normalized.cell = ({ row, getValue }) =>
+      renderCell({ value: getValue(), row: row.original, field })
+  }
+  // Spread remaining known TanStack props; ignore MUI-only ones already destructured
+  return { ...normalized, ...rest }
+}
+
 function SelectAllCheckbox({ table }) {
   const ref = useRef(null)
   const some = table.getIsSomePageRowsSelected()
@@ -87,6 +122,10 @@ function SelectAllCheckbox({ table }) {
  * Full-featured data grid: sort, search, paginate, row selection, column visibility, CSV export,
  * loading + empty states, sticky header, keyboard-friendly controls.
  *
+ * Accepts both TanStack Table column defs (accessorKey/accessorFn) and legacy
+ * MUI DataGrid column defs (field/headerName/renderCell/valueGetter) — the latter
+ * are automatically normalised to TanStack format.
+ *
  * @param {import('@tanstack/react-table').ColumnDef<any>[]} columns
  * @param {any[]} data
  * @param {string} [className]
@@ -97,7 +136,9 @@ function SelectAllCheckbox({ table }) {
  * @param {boolean} [showExportCsv=true]
  * @param {number[]} [pageSizeOptions]
  * @param {number} [defaultPageSize=10]
- * @param {string} [maxHeightClass] Tailwind max-height for scroll region
+ * @param {string} [maxHeightClass] Max height + inner scroll (only when autoHeight=false)
+ * @param {boolean} [autoHeight=true] Grow with all rows on the page; footer sits below the table
+ * @param {string} [minHeightClass] Minimum grid height when autoHeight (default min-h-[280px])
  * @param {string} [emptyTitle]
  * @param {string} [emptyDescription]
  * @param {import('lucide-react').LucideIcon} [emptyIcon]
@@ -115,21 +156,40 @@ export function DataGrid({
   loading = false,
   searchable = true,
   selectable = false,
+  checkboxSelection: checkboxSelectionProp,
   showColumnToggle = true,
   showExportCsv = true,
   pageSizeOptions = [10, 20, 50, 100],
   defaultPageSize = 10,
   maxHeightClass = 'max-h-[min(70vh,560px)]',
+  autoHeight = true,
+  minHeightClass = 'min-h-[280px]',
   emptyTitle = 'No data',
   emptyDescription = 'There is nothing to display yet.',
   emptyIcon: EmptyIcon = Inbox,
   onSelectionChange,
+  rowSelectionModel: controlledRowSelection,
+  onRowSelectionModelChange,
   getRowId,
   striped = false,
   compact = false,
+  density,
   toolbarRight,
   csvFilename = 'export.csv',
+  gridColumns: _gridColumns,
+  hideFooter = false,
+  paginationMode = 'client',
+  rowCount,
+  paginationModel: controlledPaginationModel,
+  onPaginationModelChange,
+  onRowClick,
+  getRowClassName,
+  disableRowSelectionOnClick,
+  sortingMode = 'client',
+  sortModel: controlledSortModel,
+  onSortModelChange,
 }) {
+  const checkboxSelection = checkboxSelectionProp ?? selectable
   const menuId = useId()
   const sizeChoices = useMemo(() => {
     const s = new Set(pageSizeOptions)
@@ -142,9 +202,24 @@ export function DataGrid({
   const [columnVisibility, setColumnVisibility] = useState({})
   const [rowSelection, setRowSelection] = useState({})
   const [pagination, setPagination] = useState({
-    pageIndex: 0,
-    pageSize: defaultPageSize,
+    pageIndex: controlledPaginationModel?.page ?? 0,
+    pageSize: controlledPaginationModel?.pageSize ?? defaultPageSize,
   })
+
+  useEffect(() => {
+    if (!controlledPaginationModel) return
+    setPagination({
+      pageIndex: controlledPaginationModel.page ?? 0,
+      pageSize: controlledPaginationModel.pageSize ?? defaultPageSize,
+    })
+  }, [controlledPaginationModel])
+
+  useEffect(() => {
+    if (!controlledRowSelection) return
+    const sel = {}
+    for (const id of controlledRowSelection) sel[String(id)] = true
+    setRowSelection(sel)
+  }, [controlledRowSelection])
 
   const [columnMenuOpen, setColumnMenuOpen] = useState(false)
   const columnMenuRef = useRef(null)
@@ -174,30 +249,77 @@ export function DataGrid({
     [],
   )
 
+  // Normalise columns: convert MUI-format defs → TanStack format, strip nullish entries.
   const tableColumns = useMemo(() => {
-    if (!selectable) return columns
-    return [selectionColumn, ...columns]
-  }, [columns, selectable, selectionColumn])
+    const cols = (columns ?? [])
+      .map(normalizeMuiColumn)
+      .filter((c) => c != null && typeof c === 'object')
+    if (!checkboxSelection) return cols
+    return [selectionColumn, ...cols]
+  }, [columns, checkboxSelection, selectionColumn])
 
   // TanStack Table: stable at runtime; React Compiler skips memo here (expected).
   // eslint-disable-next-line react-hooks/incompatible-library -- useReactTable
+  const handlePaginationChange = useCallback(
+    (updater) => {
+      setPagination((prev) => {
+        const next = typeof updater === 'function' ? updater(prev) : updater
+        onPaginationModelChange?.({ page: next.pageIndex, pageSize: next.pageSize })
+        return next
+      })
+    },
+    [onPaginationModelChange],
+  )
+
+  const handleSortingChange = useCallback(
+    (updater) => {
+      setSorting((prev) => {
+        const next = typeof updater === 'function' ? updater(prev) : updater
+        onSortModelChange?.(next)
+        return next
+      })
+    },
+    [onSortModelChange],
+  )
+
+  const activeSorting = controlledSortModel ?? sorting
+
   const table = useReactTable({
     data,
     columns: tableColumns,
-    state: { sorting, globalFilter, columnVisibility, rowSelection, pagination },
-    onSortingChange: setSorting,
+    state: {
+      sorting: activeSorting,
+      globalFilter,
+      columnVisibility,
+      rowSelection,
+      pagination,
+    },
+    onSortingChange: onSortModelChange ? handleSortingChange : setSorting,
     onGlobalFilterChange: setGlobalFilter,
     onColumnVisibilityChange: setColumnVisibility,
-    onRowSelectionChange: setRowSelection,
-    onPaginationChange: setPagination,
+    onRowSelectionChange: (updater) => {
+      setRowSelection((prev) => {
+        const next = typeof updater === 'function' ? updater(prev) : updater
+        const ids = Object.keys(next).filter((k) => next[k])
+        onRowSelectionModelChange?.(ids)
+        return next
+      })
+    },
+    onPaginationChange: onPaginationModelChange ? handlePaginationChange : setPagination,
     getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
+    getSortedRowModel: sortingMode === 'client' ? getSortedRowModel() : undefined,
     getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
+    getPaginationRowModel: paginationMode === 'client' ? getPaginationRowModel() : undefined,
+    manualPagination: paginationMode === 'server',
+    manualSorting: sortingMode === 'server',
+    pageCount:
+      paginationMode === 'server' && rowCount != null
+        ? Math.max(1, Math.ceil(rowCount / pagination.pageSize))
+        : undefined,
     globalFilterFn: defaultGlobalFilterFn,
     getRowId: getRowId ?? ((row, i) => (row?.id != null ? String(row.id) : String(i))),
     enableSortingRemoval: true,
-    enableRowSelection: selectable,
+    enableRowSelection: checkboxSelection,
     defaultColumn: {
       minSize: 48,
       size: 160,
@@ -207,13 +329,17 @@ export function DataGrid({
   const tableRef = useRef(table)
   tableRef.current = table
 
+  // Whether the table instance has been fully initialised with real columns.
+  const tableReady = tableColumns.length > 0
+
   useEffect(() => {
-    if (!onSelectionChange) return
+    if (!onSelectionChange || !tableReady) return
     const rows = tableRef.current.getSelectedRowModel().flatRows.map((r) => r.original)
     onSelectionChange(rows)
-  }, [rowSelection, onSelectionChange])
+  }, [rowSelection, onSelectionChange, tableReady])
 
   const exportCsv = useCallback(() => {
+    if (!tableReady) return
     const leaf = table.getVisibleLeafColumns().filter((c) => {
       if (c.id === '__select') return false
       return c.columnDef.accessorKey != null || typeof c.accessorFn === 'function'
@@ -227,10 +353,17 @@ export function DataGrid({
       }),
     )
     downloadCsv(csvFilename, rows, headers)
-  }, [csvFilename, table])
+  }, [csvFilename, table, tableReady])
 
-  const filteredCount = table.getFilteredRowModel().rows.length
-  const pageRows = table.getRowModel().rows
+  // Derive pagination counts only when table is ready to avoid calling table methods
+  // with an uninitialized column set.
+  const filteredCount =
+    paginationMode === 'server' && rowCount != null
+      ? rowCount
+      : tableReady
+        ? (table.getFilteredRowModel()?.rows?.length ?? 0)
+        : 0
+  const pageRows = tableReady ? (table.getRowModel()?.rows ?? []) : []
   const pageIndex = table.getState().pagination.pageIndex
   const pageSize = table.getState().pagination.pageSize
   const from = filteredCount ? pageIndex * pageSize + 1 : 0
@@ -239,6 +372,15 @@ export function DataGrid({
   const showToolbar = searchable || showColumnToggle || showExportCsv || toolbarRight
   const hasRows = data.length > 0
   const noResults = hasRows && filteredCount === 0
+  const isCompact = compact || density === 'compact'
+  const rowCountOnPage = pageRows.length
+
+  const scrollRegionClass = autoHeight
+    ? cn(
+        'relative w-full overflow-x-auto',
+        rowCountOnPage === 0 && cn('flex items-center justify-center', minHeightClass),
+      )
+    : cn('relative min-h-[280px] overflow-auto scrollbar-subtle', maxHeightClass)
 
   if (!hasRows && !loading) {
     return (
@@ -255,7 +397,8 @@ export function DataGrid({
     return (
       <div
         className={cn(
-          'flex min-h-[280px] flex-col items-center justify-center rounded-2xl border border-surface-border bg-white p-8',
+          'flex flex-col items-center justify-center rounded-2xl border border-surface-border bg-white p-8',
+          !autoHeight && 'min-h-[280px]',
           className,
         )}
       >
@@ -267,46 +410,13 @@ export function DataGrid({
   return (
     <div
       className={cn(
-        'flex flex-col overflow-hidden rounded-2xl border border-surface-border bg-white shadow-sm',
+        'flex flex-col rounded-2xl border border-surface-border bg-white shadow-sm',
+        !autoHeight && 'overflow-hidden',
         className,
       )}
     >
       {showToolbar ? (
-        <div className="flex flex-col gap-3 border-b border-surface-border bg-surface-muted/40 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center">
-            {searchable ? (
-              <div className="relative min-w-0 max-w-md flex-1">
-                <Search
-                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint"
-                  aria-hidden
-                />
-                <Input
-                  value={globalFilter ?? ''}
-                  onChange={(e) => {
-                    setGlobalFilter(e.target.value)
-                    table.setPageIndex(0)
-                  }}
-                  placeholder="Search all columns…"
-                  className="h-10 pl-9"
-                  aria-label="Search table"
-                />
-              </div>
-            ) : null}
-            {noResults ? (
-              <Button
-                type="button"
-                variant="secondary"
-                className="h-10 shrink-0 whitespace-nowrap px-4 text-sm"
-                onClick={() => {
-                  setGlobalFilter('')
-                  table.setPageIndex(0)
-                }}
-              >
-                Clear search
-              </Button>
-            ) : null}
-          </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2 border-b border-brand-100 bg-brand-50/30 px-4 py-3">
             {toolbarRight}
             {showColumnToggle ? (
               <div className="relative" ref={columnMenuRef}>
@@ -322,7 +432,7 @@ export function DataGrid({
                   <SlidersHorizontal className="h-4 w-4" aria-hidden />
                   Columns
                 </Button>
-                {columnMenuOpen ? (
+                {columnMenuOpen && tableReady ? (
                   <div
                     id={menuId}
                     role="menu"
@@ -365,19 +475,60 @@ export function DataGrid({
                 Export CSV
               </Button>
             ) : null}
-          </div>
+            {searchable ? (
+              <div className="flex items-center gap-2">
+                {noResults ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="h-10 shrink-0 whitespace-nowrap px-4 text-sm"
+                    onClick={() => {
+                      setGlobalFilter('')
+                      table.setPageIndex(0)
+                    }}
+                  >
+                    Clear search
+                  </Button>
+                ) : null}
+                <div className="relative w-full min-w-[200px] max-w-[280px] sm:w-72">
+                  <Search
+                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint"
+                    aria-hidden
+                  />
+                  <Input
+                    value={globalFilter ?? ''}
+                    onChange={(e) => {
+                      setGlobalFilter(e.target.value)
+                      table.setPageIndex(0)
+                    }}
+                    placeholder="Search all columns…"
+                    className="h-10 pl-9"
+                    aria-label="Search table"
+                  />
+                </div>
+              </div>
+            ) : null}
         </div>
       ) : null}
 
-      <div className={cn('relative overflow-auto scrollbar-subtle', maxHeightClass)}>
+      <div className={scrollRegionClass}>
         {loading ? (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/75 backdrop-blur-[1px]">
-            <Loader label="Loading data…" className="py-16" />
+          <div
+            className={cn(
+              'flex items-center justify-center bg-white/75 backdrop-blur-[1px]',
+              autoHeight ? 'py-12' : 'absolute inset-0 z-10 py-16',
+            )}
+          >
+            <Loader label="Loading data…" />
           </div>
         ) : null}
 
-        {noResults ? (
-          <div className="flex min-h-[240px] items-center justify-center p-8">
+        {!tableReady ? (
+          <div className={cn('flex items-center justify-center p-8', !autoHeight && 'min-h-[200px]')}>
+            <Loader label="Loading…" />
+          </div>
+        ) : noResults ? (
+          <div className={cn('flex items-center justify-center p-8', !autoHeight && 'min-h-[200px]')}>
             <EmptyState
               icon={LayoutList}
               title="No matching rows"
@@ -391,10 +542,10 @@ export function DataGrid({
           </div>
         ) : (
           <table
-            className={cn('cx-table min-w-[720px]', compact && 'cx-table--dense')}
+            className={cn('cx-table cx-data-grid min-w-[720px]', isCompact && 'cx-table--dense')}
             role="grid"
           >
-            <thead className="cx-table-sticky-head">
+            <thead className={cn(!autoHeight && 'cx-table-sticky-head')}>
               {table.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id} role="row">
                   {headerGroup.headers.map((header) => {
@@ -415,18 +566,18 @@ export function DataGrid({
                           <button
                             type="button"
                             className={cn(
-                              'inline-flex items-center gap-1.5 rounded-lg text-left outline-none transition-colors',
-                              'hover:text-brand-600 focus-visible:ring-2 focus-visible:ring-brand-500/25',
+                              'inline-flex items-center gap-1.5 rounded-lg text-left text-white outline-none transition-colors',
+                              'hover:text-brand-100 focus-visible:ring-2 focus-visible:ring-white/30',
                             )}
                             onClick={header.column.getToggleSortingHandler()}
                           >
                             {flexRender(header.column.columnDef.header, header.getContext())}
                             {sorted === 'asc' ? (
-                              <ArrowUp className="h-3.5 w-3.5 shrink-0 text-brand-600" aria-hidden />
+                              <ArrowUp className="h-3.5 w-3.5 shrink-0 text-white" aria-hidden />
                             ) : sorted === 'desc' ? (
-                              <ArrowDown className="h-3.5 w-3.5 shrink-0 text-brand-600" aria-hidden />
+                              <ArrowDown className="h-3.5 w-3.5 shrink-0 text-white" aria-hidden />
                             ) : (
-                              <ArrowUpDown className="h-3.5 w-3.5 shrink-0 opacity-40" aria-hidden />
+                              <ArrowUpDown className="h-3.5 w-3.5 shrink-0 text-white/70" aria-hidden />
                             )}
                           </button>
                         ) : (
@@ -446,8 +597,18 @@ export function DataGrid({
                   aria-rowindex={pageIndex * pageSize + idx + 2}
                   className={cn(
                     striped && idx % 2 === 1 && 'bg-slate-50/60',
-                    row.getIsSelected() && 'bg-brand-500/[0.08] hover:bg-brand-500/12',
+                    row.getIsSelected() && 'bg-brand-50 hover:bg-brand-100',
+                    getRowClassName?.({ row: row.original, id: row.id }),
+                    onRowClick && 'cursor-pointer',
                   )}
+                  onClick={
+                    onRowClick
+                      ? (e) => {
+                          if (e.target.closest('button, a, input, label')) return
+                          onRowClick({ row: row.original, id: row.id })
+                        }
+                      : undefined
+                  }
                 >
                   {row.getVisibleCells().map((cell) => (
                     <td
@@ -465,10 +626,11 @@ export function DataGrid({
         )}
       </div>
 
-      {!noResults && hasRows ? (
-        <div className="flex flex-col gap-3 border-t border-surface-border bg-surface-muted/30 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+      {!hideFooter && !noResults && hasRows ? (
+        <div className="cx-data-grid-footer shrink-0 px-3 py-1.5">
           <TablePaginationBar
-            variant="surface"
+            compact
+            variant="brand"
             page={pageIndex + 1}
             totalPages={Math.max(1, table.getPageCount())}
             onPageChange={(p) => table.setPageIndex(p - 1)}
@@ -479,7 +641,7 @@ export function DataGrid({
                   Showing <span className="font-medium text-ink">{from}</span>–
                   <span className="font-medium text-ink">{to}</span> of{' '}
                   <span className="font-medium text-ink">{filteredCount}</span>
-                  {selectable && Object.keys(rowSelection).length > 0 ? (
+                  {checkboxSelection && Object.keys(rowSelection).length > 0 ? (
                     <span className="ml-1 text-brand-600">
                       ({Object.keys(rowSelection).length} selected)
                     </span>
@@ -490,10 +652,10 @@ export function DataGrid({
               )
             }
             beforeNav={
-              <label className="flex items-center gap-2 text-xs font-medium text-ink-muted">
+              <label className="flex items-center gap-1.5 text-[11px] font-medium text-ink-muted">
                 <span className="hidden sm:inline">Rows per page</span>
                 <Select
-                  className="h-9 w-[4.5rem] rounded-lg text-xs"
+                  className="h-[1.6875rem] w-[4rem] rounded-md px-1.5 text-[11px]"
                   value={String(pageSize)}
                   onChange={(e) => {
                     table.setPageSize(Number(e.target.value))

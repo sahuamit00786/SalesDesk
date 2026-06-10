@@ -6,7 +6,7 @@ export default function GmailReplyBox({ toLabel, onCreateEmail }) {
     <div className="border-t border-surface-border bg-white px-6 py-4">
       <div className="mb-3 flex items-center gap-2 text-[12px] text-ink-muted">
         <span>Reply to</span>
-        <span className="rounded-full border border-brand-200 bg-brand-50 px-2.5 py-0.5 font-medium text-brand-700">{toLabel || 'recipient'}</span>
+        <span className="rounded-full border border-brand-200 bg-white px-2.5 py-0.5 font-medium text-brand-700">{toLabel || 'recipient'}</span>
       </div>
       <textarea
         value={body}
@@ -18,7 +18,7 @@ export default function GmailReplyBox({ toLabel, onCreateEmail }) {
         <button type="button" className="h-8 rounded-xl border border-surface-border px-4 text-[12px] text-ink-muted hover:bg-surface-subtle">
           Save draft
         </button>
-        <button type="button" onClick={onCreateEmail} className="h-8 rounded-xl bg-brand-600 px-5 text-[12px] font-medium text-white hover:bg-brand-700">
+        <button type="button" onClick={onCreateEmail} className="h-8 rounded-xl bg-[var(--brand-primary)] px-5 text-[12px] font-medium text-white hover:bg-[var(--brand-primary-dark)]">
           Send reply →
         </button>
       </div>

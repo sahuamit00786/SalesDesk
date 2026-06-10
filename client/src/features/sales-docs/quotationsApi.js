@@ -18,6 +18,10 @@ export const quotationsApi = baseApi.injectEndpoints({
       query: ({ id, ...body }) => ({ url: `/quotations/${id}`, method: 'PATCH', body }),
       invalidatesTags: (_r, _e, arg) => [{ type: 'Quotation', id: arg.id }, { type: 'Quotation', id: 'LIST' }],
     }),
+    deleteQuotation: build.mutation({
+      query: (id) => ({ url: `/quotations/${id}`, method: 'DELETE' }),
+      invalidatesTags: [{ type: 'Quotation', id: 'LIST' }, { type: 'Invoice', id: 'LIST' }],
+    }),
     convertQuotationToInvoice: build.mutation({
       query: ({ id, ...body }) => ({ url: `/quotations/${id}/convert-to-invoice`, method: 'POST', body }),
       invalidatesTags: (_r, _e, arg) => [
@@ -57,6 +61,7 @@ export const {
   useGetQuotationQuery,
   useCreateQuotationMutation,
   usePatchQuotationMutation,
+  useDeleteQuotationMutation,
   useConvertQuotationToInvoiceMutation,
   useGetQuotationTemplatesQuery,
   useGetQuotationTemplateQuery,

@@ -5,6 +5,7 @@ import path from 'node:path'
 import { Op, fn, col, where as sqlWhere } from 'sequelize'
 import { getCountries, getCountryCallingCode } from 'libphonenumber-js/min'
 import { google } from 'googleapis'
+import { getGoogleOAuthClient } from '../services/google/googleEnv.js'
 import { sequelize } from '../models/index.js'
 import {
   Activity,
@@ -20,6 +21,7 @@ import {
   LeadFollowup,
   LeadSource,
   OpportunityStage,
+  OpportunityStatus,
   DealStatus,
   CountryPhoneCode,
   CompanyGoogleToken,
@@ -31,12 +33,14 @@ import {
 } from '../models/index.js'
 import { getRedis } from '../config/redis.js'
 import { autoAssignLead } from '../services/assignmentRulesService.js'
-import { findDuplicates } from '../services/duplicateDetectionService.js'
+import { findDuplicates, saveDuplicateRecord } from '../services/duplicateDetectionService.js'
 import { exportLeads, importLeads } from '../services/importExportService.js'
 import { recalculateScore } from '../services/leadScoringService.js'
 import { leadAccessWhere } from '../services/leadVisibility.js'
 import { allowedWorkspaceIdsForUser } from '../services/userWorkspaceService.js'
 import { resolveListWorkspaceFilterId } from '../utils/resolveListWorkspaceFilter.js'
+import { buildAdvancedListWhere, parseFiltersParam } from '../services/listFilterService.js'
+import { LEAD_FILTER_FIELDS } from '../services/filterSchemas/leadFilterSchema.js'
 import {
   maybePromotePendingTaskFromSubtasks,
   promotePendingTasksByDueOrStartMany,
@@ -44,8 +48,18 @@ import {
 import { createLeadSystemActivity as createSystemActivity } from '../services/leadSystemActivity.js'
 import { logLeadFieldChanges, logLeadCollaboratorsChange } from '../services/leadFieldChangeActivity.js'
 import { emitLeadWorkflowTriggers, emitLeadWorkflowTriggersBulkImport } from '../services/workflowRunner.js'
+import { attachLeadListEngagement } from '../services/leadListEngagementService.js'
+import {
+  collectBulkAssignRecipients,
+  collectRoundRobinRecipients,
+  notifyLeadAssigned,
+  notifyLeadAssignedBatch,
+  notifyTaskAssigned,
+  notifyLeadEmailReply,
+} from '../services/notification/teamNotificationService.js'
 import { htmlToText, parseGmailMessage } from '../services/gmail/gmailMessageParse.js'
 import { registerGmailWatchForTokenRow, isGmailPushConfigured } from '../services/gmail/gmailPushService.js'
+import { injectTrackingPixel } from '../services/emailTemplateService.js'
 
 const LEAD_TASK_TYPES = [
   'call',
@@ -373,12 +387,15 @@ function buildListWhere(query) {
   const source = parseCsvList(query.source).filter((v) => sourceValues.includes(v))
   const assignedTo = parseCsvList(query.assignedTo)
   const unassignedOnly = ['true', '1', 'yes'].includes(String(query.unassignedOnly ?? '').trim().toLowerCase())
+  const assignedOnly = ['true', '1', 'yes'].includes(String(query.assignedOnly ?? '').trim().toLowerCase())
   if (status.length) where.status = { [Op.in]: status }
   if (source.length) where.source = { [Op.in]: source }
   if (unassignedOnly && !assignedTo.length) {
     where.assignedTo = { [Op.or]: [{ [Op.is]: null }, { [Op.eq]: '' }] }
   } else if (assignedTo.length) {
     where.assignedTo = { [Op.in]: assignedTo }
+  } else if (assignedOnly) {
+    where.assignedTo = { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] }
   }
   const parseNumericQuery = (value) => {
     if (value === undefined || value === null) return null
@@ -416,9 +433,26 @@ function buildListWhere(query) {
   if (iso === 'false' || iso === '0') where.isOpportunity = false
 
   const oppStageFilter = parseCsvList(query.stage)
-  if (oppStageFilter.length && (iso === 'true' || iso === '1')) {
+  const isoFalse = iso === 'false' || iso === '0'
+  if (oppStageFilter.length && !isoFalse) {
     if (oppStageFilter.length === 1) where.opportunityStage = oppStageFilter[0]
     else where.opportunityStage = { [Op.in]: oppStageFilter }
+  }
+
+  const createdFrom = query.createdFrom ? String(query.createdFrom).slice(0, 10) : null
+  const createdTo = query.createdTo ? String(query.createdTo).slice(0, 10) : null
+  if (createdFrom || createdTo) {
+    where.createdAt = {}
+    if (createdFrom) where.createdAt[Op.gte] = new Date(`${createdFrom}T00:00:00.000Z`)
+    if (createdTo) where.createdAt[Op.lte] = new Date(`${createdTo}T23:59:59.999Z`)
+  }
+
+  const closingFrom = query.closingFrom ? String(query.closingFrom).slice(0, 10) : null
+  const closingTo = query.closingTo ? String(query.closingTo).slice(0, 10) : null
+  if (closingFrom || closingTo) {
+    where.closingDate = {}
+    if (closingFrom) where.closingDate[Op.gte] = closingFrom
+    if (closingTo) where.closingDate[Op.lte] = closingTo
   }
 
   return where
@@ -516,21 +550,33 @@ async function normalizeDealStatusOrder(workspaceId, companyId, transaction) {
   }
 }
 
-async function findCompanyLead(req, id) {
-  return Lead.findOne({ where: { id, isDeleted: false, companyId: req.user.companyId } })
+/** List/detail/bulk scope: company + workspace header (same rules as GET /leads). */
+async function buildLeadListAccessWhere(req) {
+  const accessWhere = await leadAccessWhere(req.user)
+  const selectedWorkspaceId = resolveListWorkspaceFilterId(req)
+  const allowedWorkspaceIds = await allowedWorkspaceIdsForUser(req.user)
+  if (selectedWorkspaceId) {
+    if (
+      !req.user.isCompanyAdmin &&
+      allowedWorkspaceIds.length &&
+      !allowedWorkspaceIds.includes(String(selectedWorkspaceId))
+    ) {
+      const err = new Error('You do not have access to this workspace')
+      err.status = 403
+      err.code = 'FORBIDDEN'
+      err.publicMessage = 'You do not have access to this workspace'
+      throw err
+    }
+    accessWhere.workspaceId = String(selectedWorkspaceId)
+  } else if (allowedWorkspaceIds.length && !req.user.isCompanyAdmin) {
+    accessWhere.workspaceId = allowedWorkspaceIds
+  }
+  return accessWhere
 }
 
-function getGoogleOAuthClient() {
-  const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID
-  const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET
-  const redirectUri = process.env.GOOGLE_OAUTH_REDIRECT_URI
-  if (!clientId || !clientSecret || !redirectUri) {
-    const err = new Error('Google OAuth is not configured')
-    err.status = 500
-    err.code = 'GOOGLE_OAUTH_NOT_CONFIGURED'
-    throw err
-  }
-  return new google.auth.OAuth2(clientId, clientSecret, redirectUri)
+async function findCompanyLead(req, id) {
+  const accessWhere = await buildLeadListAccessWhere(req)
+  return Lead.findOne({ where: { ...accessWhere, id, isDeleted: false } })
 }
 
 function normalizeRecipients(value) {
@@ -708,12 +754,14 @@ async function syncRepliesForLead({ lead, tokenRow, userId }) {
     const hasLead = fromEmail === leadEmail || recipients.includes(leadEmail)
     const hasMailbox = mailboxEmail ? fromEmail === mailboxEmail || recipients.includes(mailboxEmail) : true
     if (!hasLead || !hasMailbox) continue
+    const direction = mailboxEmail && fromEmail === mailboxEmail ? 'outbound' : 'inbound'
     await LeadEmail.create({
       leadId: lead.id,
       workspaceId: lead.workspaceId,
       companyId: lead.companyId,
       createdBy: userId,
-      direction: 'inbound',
+      fromEmail: parsed.from?.email || fromEmail || null,
+      direction,
       status: 'sent',
       subject: parsed.subject,
       bodyHtml: parsed.bodyHtml || parsed.snippet || '',
@@ -728,6 +776,17 @@ async function syncRepliesForLead({ lead, tokenRow, userId }) {
       sentAt: parsed.sentAt,
     })
     created += 1
+
+    if (direction === 'inbound' && lead.assignedTo) {
+      notifyLeadEmailReply({
+        companyId: lead.companyId,
+        workspaceId: lead.workspaceId,
+        recipientUserId: lead.assignedTo,
+        leadId: lead.id,
+        leadName: lead.contactName || lead.name || lead.title || 'Lead',
+        senderEmail: fromEmail,
+      }).catch(() => {})
+    }
   }
   return { created }
 }
@@ -804,22 +863,25 @@ export async function list(req, res, next) {
     const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20))
     const offset = (page - 1) * limit
 
-    const accessWhere = await leadAccessWhere(req.user)
-    const selectedWorkspaceId = resolveListWorkspaceFilterId(req)
-    const allowedWorkspaceIds = await allowedWorkspaceIdsForUser(req.user)
-    if (selectedWorkspaceId) {
-      if (!allowedWorkspaceIds.includes(String(selectedWorkspaceId))) {
+    let accessWhere
+    try {
+      accessWhere = await buildLeadListAccessWhere(req)
+    } catch (e) {
+      if (e.status === 403) {
         return res.status(403).json({
           success: false,
-          error: { code: 'FORBIDDEN', message: 'You do not have access to this workspace' },
+          error: { code: 'FORBIDDEN', message: e.publicMessage || e.message },
         })
       }
-      accessWhere.workspaceId = String(selectedWorkspaceId)
-    } else if (allowedWorkspaceIds.length && !req.user.isCompanyAdmin) {
-      accessWhere.workspaceId = allowedWorkspaceIds
+      throw e
     }
 
-    const where = { ...accessWhere, ...buildListWhere(req.query) }
+    const flatWhere = buildListWhere(req.query)
+    const advancedWhere = buildAdvancedListWhere(parseFiltersParam(req.query.filters), LEAD_FILTER_FIELDS)
+    let where = { ...accessWhere, ...flatWhere }
+    if (advancedWhere) {
+      where = { [Op.and]: [where, advancedWhere] }
+    }
 
     const sort = [
       'createdAt',
@@ -854,9 +916,11 @@ export async function list(req, res, next) {
       include,
     })
 
+    const data = await attachLeadListEngagement(rows, req.user.companyId)
+
     return res.json({
       success: true,
-      data: rows,
+      data,
       meta: {
         page,
         limit,
@@ -899,12 +963,17 @@ export async function getOne(req, res, next) {
         required: false,
       },
     ]
+    include.push({ model: User, as: 'assignee', attributes: ['id', 'name', 'email'], required: false })
     if (await hasLeadAssignmentsTable()) {
       include.unshift({ model: User, as: 'assignedUsers', attributes: ['id', 'name', 'email'], through: { attributes: [] }, required: false })
     }
 
+    const scoped = await findCompanyLead(req, req.params.id)
+    if (!scoped) {
+      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Lead not found' } })
+    }
     const lead = await Lead.findOne({
-      where: { id: req.params.id, isDeleted: false, companyId: req.user.companyId },
+      where: { id: scoped.id },
       include,
     })
     if (!lead) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Lead not found' } })
@@ -936,9 +1005,18 @@ export async function create(req, res, next) {
 
     const dupes = await findDuplicates(workspaceId, { email: value.email, phone: value.phone })
     if (dupes.length) {
-      return res.status(409).json({
-        success: false,
-        error: { code: 'DUPLICATE_LEAD', message: 'A lead with this phone or email already exists. You cannot create a duplicate.' },
+      await saveDuplicateRecord({
+        leadData: { ...value, isOpportunity: value.isOpportunity || false },
+        dupes,
+        source: 'manual',
+        workspaceId,
+        companyId: req.user.companyId,
+        createdByUserId: req.user.id,
+      })
+      return res.status(202).json({
+        success: true,
+        queued: true,
+        message: 'Potential duplicate detected. Lead saved to duplicate review queue.',
         duplicates: dupes,
         meta: {},
       })
@@ -962,8 +1040,13 @@ export async function create(req, res, next) {
       workspaceId,
       isDeleted: false,
     }
-    payload.opportunityStage =
-      requestedOpp || (await resolveInitialOpportunityStageForLead(String(workspaceId), req.user.companyId, null))
+    const isOpp = Boolean(value.isOpportunity)
+    if (isOpp) {
+      payload.opportunityStage =
+        requestedOpp || (await resolveInitialOpportunityStageForLead(String(workspaceId), req.user.companyId, null))
+    } else {
+      payload.opportunityStage = null
+    }
     const lead = await Lead.create(payload)
     if (value.assignedUserIds?.length && (await hasLeadAssignmentsTable())) {
       await LeadAssignment.bulkCreate(
@@ -983,7 +1066,31 @@ export async function create(req, res, next) {
       await lead.setTags(tags)
     }
 
-    await autoAssignLead(lead)
+    await autoAssignLead(lead, { suppressNotification: true })
+    await lead.reload()
+    if (lead.assignedTo && String(lead.assignedTo) !== String(req.user.id)) {
+      notifyLeadAssigned({
+        companyId: req.user.companyId,
+        workspaceId: lead.workspaceId,
+        recipientUserId: lead.assignedTo,
+        actorUserId: req.user.id,
+        leadCount: 1,
+        immediate: true,
+      }).catch(() => {})
+    }
+    if (value.assignedUserIds?.length && (await hasLeadAssignmentsTable())) {
+      for (const uid of value.assignedUserIds) {
+        if (String(uid) === String(req.user.id) || String(uid) === String(lead.assignedTo)) continue
+        notifyLeadAssigned({
+          companyId: req.user.companyId,
+          workspaceId: lead.workspaceId,
+          recipientUserId: uid,
+          actorUserId: req.user.id,
+          leadCount: 1,
+          immediate: true,
+        }).catch(() => {})
+      }
+    }
     await createSystemActivity({
       leadId: lead.id,
       userId: req.user.id,
@@ -1139,6 +1246,34 @@ export async function update(req, res, next) {
       userId: req.user.id,
       actorName,
     })
+    const afterPlain = lead.get({ plain: true })
+    const beforePrimary = before.assignedTo ? String(before.assignedTo) : null
+    const afterPrimary = afterPlain.assignedTo ? String(afterPlain.assignedTo) : null
+    if (afterPrimary && afterPrimary !== beforePrimary && afterPrimary !== String(req.user.id)) {
+      notifyLeadAssigned({
+        companyId: req.user.companyId,
+        workspaceId: lead.workspaceId,
+        recipientUserId: afterPrimary,
+        actorUserId: req.user.id,
+        leadCount: 1,
+        immediate: true,
+      }).catch(() => {})
+    }
+    if (hasAssignedUserIdsField) {
+      const beforeSet = new Set(collaboratorIdsBefore)
+      for (const uid of (value.assignedUserIds || []).map(String)) {
+        if (!beforeSet.has(uid) && uid !== String(req.user.id) && uid !== afterPrimary) {
+          notifyLeadAssigned({
+            companyId: req.user.companyId,
+            workspaceId: lead.workspaceId,
+            recipientUserId: uid,
+            actorUserId: req.user.id,
+            leadCount: 1,
+            immediate: true,
+          }).catch(() => {})
+        }
+      }
+    }
     await recalculateScore(lead.id)
     await clearLeadListCache(lead.workspaceId)
     await emitLeadWorkflowTriggers({
@@ -1301,11 +1436,45 @@ export async function remove(req, res, next) {
   }
 }
 
+/** Fetch leads by id for bulk actions (same access rules as list). */
+export async function resolveByIds(req, res, next) {
+  try {
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(String).filter(Boolean) : []
+    if (!ids.length) {
+      return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'ids required' } })
+    }
+
+    const accessWhere = await buildLeadListAccessWhere(req)
+    const include = [
+      { model: User, as: 'assignee', attributes: ['id', 'name', 'email'], required: false },
+    ]
+    if (await hasLeadAssignmentsTable()) {
+      include.push({
+        model: User,
+        as: 'assignedUsers',
+        attributes: ['id', 'name', 'email'],
+        through: { attributes: [] },
+        required: false,
+      })
+    }
+
+    const rows = await Lead.findAll({
+      where: { ...accessWhere, id: { [Op.in]: ids }, isDeleted: false },
+      include,
+    })
+    const data = await attachLeadListEngagement(rows, req.user.companyId)
+    return res.json({ success: true, data })
+  } catch (e) {
+    return next(e)
+  }
+}
+
 export async function bulk(req, res, next) {
   try {
     const { ids, action, payload = {} } = req.body || {}
     if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'ids required' } })
-    const leads = await Lead.findAll({ where: { id: { [Op.in]: ids }, isDeleted: false } })
+    const accessWhere = await buildLeadListAccessWhere(req)
+    const leads = await Lead.findAll({ where: { ...accessWhere, id: { [Op.in]: ids }, isDeleted: false } })
     if (!leads.length) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'No leads found' } })
 
     const needsFieldHistory = action === 'assign' || action === 'status'
@@ -1337,6 +1506,39 @@ export async function bulk(req, res, next) {
     }
     if (action === 'status') await Lead.update({ status: payload.status || 'new' }, { where: { id: { [Op.in]: ids } } })
     if (action === 'delete') await Lead.update({ isDeleted: true }, { where: { id: { [Op.in]: ids } } })
+    if (action === 'update') {
+      const ALLOWED = ['status', 'opportunityStatus', 'sourceId', 'opportunityStage', 'value', 'country', 'city', 'state']
+      const patch = {}
+      for (const key of ALLOWED) {
+        if (Object.prototype.hasOwnProperty.call(payload, key) && payload[key] !== undefined && payload[key] !== '') {
+          patch[key] = payload[key]
+        }
+      }
+      if (payload.isOpportunity === true) {
+        await Lead.update({ isOpportunity: true }, { where: { id: { [Op.in]: ids }, isOpportunity: false } })
+      }
+      if (Object.prototype.hasOwnProperty.call(patch, 'opportunityStage')) {
+        await Lead.update(
+          { opportunityStage: patch.opportunityStage },
+          { where: { id: { [Op.in]: ids }, isOpportunity: true } },
+        )
+        delete patch.opportunityStage
+      }
+      if (Object.prototype.hasOwnProperty.call(patch, 'opportunityStatus')) {
+        await Lead.update(
+          { opportunityStatus: patch.opportunityStatus },
+          { where: { id: { [Op.in]: ids }, isOpportunity: true } },
+        )
+        delete patch.opportunityStatus
+      }
+      if (Object.prototype.hasOwnProperty.call(patch, 'status')) {
+        await Lead.update({ status: patch.status }, { where: { id: { [Op.in]: ids }, isOpportunity: false } })
+        delete patch.status
+      }
+      if (Object.keys(patch).length) {
+        await Lead.update(patch, { where: { id: { [Op.in]: ids } } })
+      }
+    }
     if (action === 'tag') {
       for (const lead of leads) {
         const tags = await Promise.all(
@@ -1392,6 +1594,21 @@ export async function bulk(req, res, next) {
           actorName,
         })
       }
+      if (action === 'assign') {
+        const counts = collectBulkAssignRecipients(
+          payload,
+          beforePlainById,
+          leads,
+          bulkCollabBeforeByLeadId,
+          req.user.id,
+        )
+        notifyLeadAssignedBatch({
+          companyId: req.user.companyId,
+          workspaceId: leads[0]?.workspaceId,
+          actorUserId: req.user.id,
+          countByUserId: counts,
+        }).catch(() => {})
+      }
     }
 
     await clearLeadListCache(leads[0].workspaceId)
@@ -1445,8 +1662,7 @@ export async function distributeRoundRobin(req, res, next) {
       })
     }
 
-    const accessWhere = await leadAccessWhere(req.user)
-    accessWhere.workspaceId = String(workspaceId)
+    const accessWhere = await leadAccessWhere(req.user, { workspaceId: String(workspaceId) })
 
     const rows = await Lead.findAll({
       where: {
@@ -1499,6 +1715,13 @@ export async function distributeRoundRobin(req, res, next) {
 
     await clearLeadListCache(String(workspaceId))
     const skipped = value.leadIds.length - orderedLeads.length
+    const rrCounts = collectRoundRobinRecipients(assignments, req.user.id)
+    notifyLeadAssignedBatch({
+      companyId: req.user.companyId,
+      workspaceId: String(workspaceId),
+      actorUserId: req.user.id,
+      countByUserId: rrCounts,
+    }).catch(() => {})
     return res.json({
       success: true,
       data: {
@@ -1734,11 +1957,38 @@ function mergeGoogleOAuthScopes(existing, incoming) {
   return [...set].join(' ')
 }
 
+function isInvalidGrant(err) {
+  const msg = String(err?.message || err?.error || '').toLowerCase()
+  const code = String(err?.response?.data?.error || err?.code || '').toLowerCase()
+  return msg.includes('invalid_grant') || code === 'invalid_grant'
+}
+
 export async function getGoogleEmailAuthStatus(req, res, next) {
   try {
     const token = await companyGoogleEmailToken(req.user.companyId)
     const connected = hasGoogleMailboxRefreshToken(token)
     const readMailbox = connected ? googleTokenAllowsMailboxRead(token?.scope) : null
+
+    if (connected) {
+      try {
+        const oauth2Client = getGoogleOAuthClient()
+        oauth2Client.setCredentials({
+          access_token: token.accessToken || undefined,
+          refresh_token: token.refreshToken,
+          expiry_date: token.expiryDate || undefined,
+        })
+        await oauth2Client.getAccessToken()
+      } catch (verifyErr) {
+        if (isInvalidGrant(verifyErr)) {
+          return res.json({
+            success: true,
+            data: { connected: false, tokenExpired: true, email: token?.email || null, gmailPushConfigured: isGmailPushConfigured() },
+            meta: {},
+          })
+        }
+      }
+    }
+
     return res.json({
       success: true,
       data: {
@@ -1860,13 +2110,15 @@ export async function listLeadEmailThreads(req, res, next) {
     for (const row of filteredRows) {
       const threadKey = row.threadId || `single:${row.id}`
       if (!threadsMap.has(threadKey)) {
-        threadsMap.set(threadKey, { threadId: row.threadId || null, subject: row.subject || '(No subject)', lastMessageAt: row.sentAt || row.createdAt, count: 0, preview: row.bodyText || row.bodyHtml || '', status: row.status, messages: [] })
+        threadsMap.set(threadKey, { threadId: row.threadId || null, subject: row.subject || '(No subject)', lastMessageAt: row.sentAt || row.createdAt, lastFromEmail: row.fromEmail || null, lastDirection: row.direction, count: 0, preview: row.bodyText || row.bodyHtml || '', status: row.status, messages: [] })
       }
       const current = threadsMap.get(threadKey)
       current.count += 1
       current.messages.push(row)
       if (new Date(row.sentAt || row.createdAt).getTime() > new Date(current.lastMessageAt).getTime()) {
         current.lastMessageAt = row.sentAt || row.createdAt
+        current.lastFromEmail = row.fromEmail || null
+        current.lastDirection = row.direction
         current.preview = row.bodyText || row.bodyHtml || ''
         current.status = row.status
       }
@@ -1925,11 +2177,13 @@ export async function sendLeadEmail(req, res, next) {
       })
     }
 
+    const trackingId = randomUUID()
     const emailRow = await LeadEmail.create({
       leadId: lead.id,
       workspaceId: lead.workspaceId,
       companyId: lead.companyId,
       createdBy: req.user.id,
+      fromEmail: tokenRow.email || req.user.email || null,
       direction: 'outbound',
       status: 'queued',
       subject: value.subject || '',
@@ -1940,6 +2194,7 @@ export async function sendLeadEmail(req, res, next) {
       bccRecipients,
       attachments: value.attachments || [],
       provider: 'google',
+      trackingId,
     })
 
     try {
@@ -1963,13 +2218,18 @@ export async function sendLeadEmail(req, res, next) {
       const attachmentFooter = (value.attachments || []).length
         ? `<hr /><p>Attachments:</p><ul>${value.attachments.map((a) => `<li>${a.fileName}${a.fileUrl ? ` - ${a.fileUrl}` : ''}</li>`).join('')}</ul>`
         : ''
+      const apiBase = process.env.API_BASE_URL || `http://localhost:${process.env.PORT || 4000}/api/v1`
+      const rawBodyHtml = (value.bodyHtml || '') + attachmentFooter
+      const clickPfx = `${apiBase}/track/click?id=${encodeURIComponent(trackingId)}&t=d&url=`
+      let trackedBodyHtml = rawBodyHtml.replace(/href=(["'])(https?:\/\/[^"']+)\1/gi, (_m, q, url) => `href=${q}${clickPfx}${encodeURIComponent(url)}${q}`)
+      trackedBodyHtml = injectTrackingPixel(trackedBodyHtml, `${apiBase}/track/open?id=${encodeURIComponent(trackingId)}&t=d`)
       const raw = buildRawEmail({
         from: fromEmail,
         to: toRecipients,
         cc: ccRecipients,
         bcc: bccRecipients,
         subject: value.subject || '',
-        bodyHtml: `${value.bodyHtml || ''}${attachmentFooter}`,
+        bodyHtml: trackedBodyHtml,
       })
       const requestBody = { raw }
       if (value.threadId) requestBody.threadId = value.threadId
@@ -2000,6 +2260,12 @@ export async function sendLeadEmail(req, res, next) {
       return res.status(201).json({ success: true, data: emailRow, meta: {} })
     } catch (sendError) {
       await emailRow.update({ status: 'failed', errorMessage: String(sendError?.message || sendError) })
+      if (isInvalidGrant(sendError)) {
+        return res.status(401).json({
+          success: false,
+          error: { code: 'GOOGLE_TOKEN_INVALID', message: 'Google account token expired. Please reconnect your Google account.' },
+        })
+      }
       return res.status(502).json({
         success: false,
         error: { code: 'EMAIL_SEND_FAILED', message: 'Email could not be sent through Google.' },
@@ -2024,8 +2290,18 @@ export async function syncLeadEmailReplies(req, res, next) {
       })
     }
 
-    const { created } = await syncRepliesForLead({ lead, tokenRow, userId: req.user.id })
-    return res.json({ success: true, data: { created }, meta: {} })
+    try {
+      const { created } = await syncRepliesForLead({ lead, tokenRow, userId: req.user.id })
+      return res.json({ success: true, data: { created }, meta: {} })
+    } catch (syncErr) {
+      if (isInvalidGrant(syncErr)) {
+        return res.status(401).json({
+          success: false,
+          error: { code: 'GOOGLE_TOKEN_INVALID', message: 'Google account token expired. Please reconnect your Google account.' },
+        })
+      }
+      throw syncErr
+    }
   } catch (e) {
     return next(e)
   }
@@ -2268,13 +2544,23 @@ export async function listTasks(req, res, next) {
 export async function listAllTasks(req, res, next) {
   try {
     const workspaceIds = await allowedWorkspaceIdsForUser(req.user)
-    if (!workspaceIds.length) return res.json({ success: true, data: [], meta: {} })
+    const page = Math.max(1, parseInt(req.query.page) || 1)
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit) || 50))
+    const offset = (page - 1) * limit
+    const SORTABLE = ['dueAt', 'createdAt', 'title', 'status', 'priority']
+    const sortField = SORTABLE.includes(req.query.sort) ? req.query.sort : 'dueAt'
+    const sortDir = req.query.sortDir === 'desc' ? 'DESC' : 'ASC'
+    if (!workspaceIds.length) return res.json({ success: true, data: [], meta: { page, limit, total: 0 } })
     const statusFilters = parseCsvList(req.query.status)
       .map((v) => String(v || '').trim().toLowerCase())
       .map((v) => (v === 'open' ? 'pending' : v))
     const priorityFilters = parseCsvList(req.query.priority).map((v) => String(v || '').trim().toLowerCase())
     const taskTypeFilters = parseCsvList(req.query.taskType).map((v) => String(v || '').trim().toLowerCase())
-    const wantsOverdue = statusFilters.includes('overdue')
+    const overdueParam = String(req.query.overdue || '').trim().toLowerCase()
+    const wantsOverdue =
+      statusFilters.includes('overdue') || overdueParam === 'true' || overdueParam === 'yes' || overdueParam === '1'
+    const wantsNotOverdue =
+      overdueParam === 'false' || overdueParam === 'no' || overdueParam === '0' || statusFilters.includes('not_overdue')
     const realStatuses = statusFilters.filter((v) => LEAD_TASK_STATUSES.includes(v))
     const q = String(req.query.search || '').trim()
     const horizon = String(req.query.horizon || '').trim().toLowerCase()
@@ -2283,11 +2569,13 @@ export async function listAllTasks(req, res, next) {
     const dueFrom = req.query.dueFrom ? new Date(req.query.dueFrom) : null
     const dueTo = req.query.dueTo ? new Date(req.query.dueTo) : null
     const now = new Date()
+    const startOfToday = new Date(now)
+    startOfToday.setHours(0, 0, 0, 0)
     const endOfToday = new Date(now)
     endOfToday.setHours(23, 59, 59, 999)
-    const endOfTomorrow = new Date(now)
-    endOfTomorrow.setDate(endOfTomorrow.getDate() + 1)
-    endOfTomorrow.setHours(23, 59, 59, 999)
+    const startOfTomorrow = new Date(now)
+    startOfTomorrow.setDate(startOfTomorrow.getDate() + 1)
+    startOfTomorrow.setHours(0, 0, 0, 0)
 
     const leadWhere = {
       companyId: req.user.companyId,
@@ -2298,6 +2586,11 @@ export async function listAllTasks(req, res, next) {
     const taskWhere = {
       companyId: req.user.companyId,
       workspaceId: { [Op.in]: workspaceIds },
+    }
+    const taskRoleKind = req.user.userRoleKind
+    const isSalesOnlyTask = !req.user.isCompanyAdmin && taskRoleKind !== 'workspace_admin' && taskRoleKind !== 'manager'
+    if (isSalesOnlyTask) {
+      taskWhere.assignedTo = req.user.id
     }
     if (realStatuses.length) {
       taskWhere.status = realStatuses.length === 1 ? realStatuses[0] : { [Op.in]: realStatuses }
@@ -2314,13 +2607,26 @@ export async function listAllTasks(req, res, next) {
     }
     const assignedToParam = req.query.assignedTo ? String(req.query.assignedTo).trim() : ''
     if (/^[0-9a-fA-F-]{36}$/.test(assignedToParam)) taskWhere.assignedTo = assignedToParam
+    const leadIdParam = req.query.leadId ? String(req.query.leadId).trim() : ''
+    if (/^[0-9a-fA-F-]{36}$/.test(leadIdParam)) taskWhere.leadId = leadIdParam
     if (horizon === 'today') {
-      taskWhere.dueAt = { [Op.ne]: null, [Op.lte]: endOfToday }
+      taskWhere.dueAt = { [Op.ne]: null, [Op.gte]: startOfToday, [Op.lte]: endOfToday }
     } else if (horizon === 'upcoming') {
-      taskWhere.dueAt = { [Op.ne]: null, [Op.gt]: endOfTomorrow }
+      taskWhere.dueAt = { [Op.ne]: null, [Op.gte]: startOfTomorrow }
     }
-    if (wantsOverdue) {
+    if (wantsOverdue && !wantsNotOverdue) {
       taskWhere.dueAt = { ...(taskWhere.dueAt || {}), [Op.ne]: null, [Op.lt]: now }
+    } else if (wantsNotOverdue && !wantsOverdue) {
+      const notOverdueClause = {
+        [Op.or]: [
+          { status: { [Op.in]: ['completed', 'cancelled'] } },
+          { dueAt: null },
+          { dueAt: { [Op.gte]: now } },
+        ],
+      }
+      taskWhere[Op.and] = taskWhere[Op.and]
+        ? [...(Array.isArray(taskWhere[Op.and]) ? taskWhere[Op.and] : [taskWhere[Op.and]]), notOverdueClause]
+        : [notOverdueClause]
     }
     if ((createdFrom && !Number.isNaN(createdFrom.getTime())) || (createdTo && !Number.isNaN(createdTo.getTime()))) {
       taskWhere.createdAt = {}
@@ -2333,7 +2639,11 @@ export async function listAllTasks(req, res, next) {
       if (dueTo && !Number.isNaN(dueTo.getTime())) taskWhere.dueAt[Op.lte] = dueTo
     }
 
-    const rows = await LeadTask.findAll({
+    if (q) {
+      taskWhere[Op.and] = taskWhere[Op.and] ? [...(Array.isArray(taskWhere[Op.and]) ? taskWhere[Op.and] : [taskWhere[Op.and]]), { [Op.or]: [{ title: { [Op.like]: `%${q}%` } }, { description: { [Op.like]: `%${q}%` } }] }] : [{ [Op.or]: [{ title: { [Op.like]: `%${q}%` } }, { description: { [Op.like]: `%${q}%` } }] }]
+    }
+
+    const { count, rows } = await LeadTask.findAndCountAll({
       where: taskWhere,
       include: [
         { model: Lead, as: 'lead', required: true, where: leadWhere, attributes: ['id', 'title', 'contactName', 'email'] },
@@ -2344,25 +2654,18 @@ export async function listAllTasks(req, res, next) {
           as: 'subtasks',
           required: false,
           separate: true,
-          order: [
-            ['position', 'ASC'],
-            ['createdAt', 'ASC'],
-          ],
+          order: [['position', 'ASC'], ['createdAt', 'ASC']],
         },
       ],
-      order: [['dueAt', 'ASC'], ['createdAt', 'DESC']],
+      order: [[sortField, sortDir], ['createdAt', 'DESC']],
+      limit,
+      offset,
+      distinct: true,
     })
 
-    const filtered = q
-      ? rows.filter((row) => {
-          const hay = `${row.title || ''} ${row.description || ''} ${row.lead?.title || ''} ${row.assignee?.name || ''} ${row.creator?.name || ''}`.toLowerCase()
-          return hay.includes(q.toLowerCase())
-        })
-      : rows
-
-    await promotePendingTasksByDueOrStartMany(filtered)
-    const decorated = filtered.map((row) => decorateTaskRow(row))
-    return res.json({ success: true, data: decorated, meta: {} })
+    await promotePendingTasksByDueOrStartMany(rows)
+    const decorated = rows.map((row) => decorateTaskRow(row))
+    return res.json({ success: true, data: decorated, meta: { page, limit, total: count } })
   } catch (e) {
     return next(e)
   }
@@ -2413,7 +2716,31 @@ export async function createTask(req, res, next) {
       body: 'Task created',
       metadata: { action: 'task_created', taskId: row.id, title: row.title },
     })
+    if (row.assignedTo && String(row.assignedTo) !== String(req.user.id)) {
+      notifyTaskAssigned({
+        companyId: lead.companyId,
+        workspaceId: lead.workspaceId,
+        recipientUserId: row.assignedTo,
+        actorUserId: req.user.id,
+        tasks: [{ title: row.title }],
+      }).catch(() => {})
+    }
     return res.status(201).json({ success: true, data: decorateTaskRow(row), meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function patchTaskById(req, res, next) {
+  try {
+    const row = await LeadTask.findOne({
+      where: { id: req.params.taskId, companyId: req.user.companyId },
+    })
+    if (!row) {
+      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Task not found' } })
+    }
+    req.params.id = row.leadId
+    return patchTask(req, res, next)
   } catch (e) {
     return next(e)
   }
@@ -2524,6 +2851,15 @@ export async function patchTask(req, res, next) {
         body: after.assignedTo ? 'Task reassigned' : 'Task unassigned',
         metadata: { action: 'task_assigned', taskId: row.id, fromUserId: before.assignedTo, toUserId: after.assignedTo },
       })
+      if (after.assignedTo && String(after.assignedTo) !== String(req.user.id)) {
+        notifyTaskAssigned({
+          companyId: row.companyId,
+          workspaceId: row.workspaceId,
+          recipientUserId: after.assignedTo,
+          actorUserId: req.user.id,
+          tasks: [{ title: row.title }],
+        }).catch(() => {})
+      }
     }
     if (before.dueAt !== after.dueAt) {
       await createSystemActivity({
@@ -3027,9 +3363,10 @@ export async function exportRows(req, res, next) {
 export async function getLeadSetup(req, res, next) {
   try {
     const workspaceId = req.headers['x-workspace-id']
-    const [oppStageCount, dealStatusCount] = await Promise.all([
+    const [oppStageCount, dealStatusCount, oppStatusCount] = await Promise.all([
       OpportunityStage.count({ where: { workspaceId, companyId: req.user.companyId } }),
       DealStatus.count({ where: { workspaceId, companyId: req.user.companyId } }),
+      OpportunityStatus.count({ where: { workspaceId, companyId: req.user.companyId } }),
     ])
     if (oppStageCount === 0) {
       const seedStages = [
@@ -3060,25 +3397,33 @@ export async function getLeadSetup(req, res, next) {
         { name: 'lost', isDealCompleteStatus: false, isInitial: false, sortOrder: 5, workspaceId, companyId: req.user.companyId },
       ])
     }
-    const [sources, tags, opportunityStages, dealStatuses] = await Promise.all([
+    if (oppStatusCount === 0) {
+      await OpportunityStatus.bulkCreate([
+        { name: 'New', isInitial: true, sortOrder: 0, workspaceId, companyId: req.user.companyId },
+        { name: 'Qualified', isInitial: false, sortOrder: 1, workspaceId, companyId: req.user.companyId },
+        { name: 'Proposal Sent', isInitial: false, sortOrder: 2, workspaceId, companyId: req.user.companyId },
+        { name: 'Negotiation', isInitial: false, sortOrder: 3, workspaceId, companyId: req.user.companyId },
+        { name: 'Won', isInitial: false, sortOrder: 4, workspaceId, companyId: req.user.companyId },
+        { name: 'Lost', isInitial: false, sortOrder: 5, workspaceId, companyId: req.user.companyId },
+      ])
+    }
+    const [sources, tags, opportunityStages, dealStatuses, opportunityStatuses] = await Promise.all([
       LeadSource.findAll({ where: { workspaceId, companyId: req.user.companyId }, order: [['createdAt', 'ASC']] }),
       Tag.findAll({ where: { companyId: req.user.companyId }, order: [['name', 'ASC'], ['createdAt', 'ASC']] }),
       OpportunityStage.findAll({
         where: { workspaceId, companyId: req.user.companyId },
-        order: [
-          ['sortOrder', 'ASC'],
-          ['createdAt', 'ASC'],
-        ],
+        order: [['sortOrder', 'ASC'], ['createdAt', 'ASC']],
       }),
       DealStatus.findAll({
         where: { workspaceId, companyId: req.user.companyId },
-        order: [
-          ['sortOrder', 'ASC'],
-          ['createdAt', 'ASC'],
-        ],
+        order: [['sortOrder', 'ASC'], ['createdAt', 'ASC']],
+      }),
+      OpportunityStatus.findAll({
+        where: { workspaceId, companyId: req.user.companyId },
+        order: [['sortOrder', 'ASC'], ['createdAt', 'ASC']],
       }),
     ])
-    return res.json({ success: true, data: { sources, tags, opportunityStages, dealStatuses }, meta: {} })
+    return res.json({ success: true, data: { sources, tags, opportunityStages, dealStatuses, opportunityStatuses }, meta: {} })
   } catch (e) {
     return next(e)
   }
@@ -3362,4 +3707,78 @@ export async function reorderOpportunityStages(req, res, next) {
   } catch (e) {
     return next(e)
   }
+}
+
+// ─── Opportunity Status CRUD ──────────────────────────────────────────────────
+
+async function normalizeOpportunityStatusOrder(workspaceId, companyId, transaction) {
+  const rows = await OpportunityStatus.findAll({
+    where: { workspaceId, companyId },
+    order: [['sortOrder', 'ASC'], ['createdAt', 'ASC']],
+    transaction,
+  })
+  for (let i = 0; i < rows.length; i++) {
+    if (rows[i].sortOrder !== i) await rows[i].update({ sortOrder: i }, { transaction })
+  }
+  // first row is always isInitial
+  for (let i = 0; i < rows.length; i++) {
+    const shouldBeInitial = i === 0
+    if (Boolean(rows[i].isInitial) !== shouldBeInitial) {
+      await rows[i].update({ isInitial: shouldBeInitial }, { transaction })
+    }
+  }
+}
+
+export async function createOpportunityStatus(req, res, next) {
+  try {
+    const workspaceId = req.headers['x-workspace-id']
+    const name = String(req.body?.name || '').trim()
+    if (!name) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Name is required' } })
+    const row = await sequelize.transaction(async (t) => {
+      const maxOrder = await OpportunityStatus.max('sortOrder', { where: { workspaceId, companyId: req.user.companyId }, transaction: t })
+      const sortOrder = Number.isFinite(Number(maxOrder)) ? Number(maxOrder) + 1 : 0
+      return OpportunityStatus.create({ name, isInitial: false, sortOrder, workspaceId, companyId: req.user.companyId }, { transaction: t })
+    })
+    return res.status(201).json({ success: true, data: row, meta: {} })
+  } catch (e) { return next(e) }
+}
+
+export async function updateOpportunityStatus(req, res, next) {
+  try {
+    const workspaceId = req.headers['x-workspace-id']
+    const row = await OpportunityStatus.findOne({ where: { id: req.params.id, workspaceId, companyId: req.user.companyId } })
+    if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Opportunity status not found' } })
+    const name = String(req.body?.name ?? row.name).trim()
+    if (!name) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Name is required' } })
+    await row.update({ name })
+    return res.json({ success: true, data: row, meta: {} })
+  } catch (e) { return next(e) }
+}
+
+export async function deleteOpportunityStatus(req, res, next) {
+  try {
+    const workspaceId = req.headers['x-workspace-id']
+    const row = await OpportunityStatus.findOne({ where: { id: req.params.id, workspaceId, companyId: req.user.companyId } })
+    if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Opportunity status not found' } })
+    await row.destroy()
+    await sequelize.transaction(async (t) => normalizeOpportunityStatusOrder(workspaceId, req.user.companyId, t))
+    return res.json({ success: true, data: {}, meta: {} })
+  } catch (e) { return next(e) }
+}
+
+export async function reorderOpportunityStatuses(req, res, next) {
+  try {
+    const workspaceId = req.headers['x-workspace-id']
+    const { ids } = req.body || {}
+    if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'ids required' } })
+    await sequelize.transaction(async (t) => {
+      for (let i = 0; i < ids.length; i++) {
+        await OpportunityStatus.update(
+          { sortOrder: i, isInitial: i === 0 },
+          { where: { id: ids[i], workspaceId, companyId: req.user.companyId }, transaction: t },
+        )
+      }
+    })
+    return res.json({ success: true, data: { reordered: ids.length }, meta: {} })
+  } catch (e) { return next(e) }
 }

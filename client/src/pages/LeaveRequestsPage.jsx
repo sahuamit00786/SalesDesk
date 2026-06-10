@@ -7,7 +7,7 @@ import { Select } from '@/components/ui/Select'
 import { LeaveRequestTable } from '@/features/leave/components/LeaveRequestTable'
 import { HrToolbar, HrToolbarGroup } from '@/features/hr/components/HrToolbar'
 import { HrCard } from '@/features/hr/components/HrCard'
-import { Loader } from '@/components/shared/Loader'
+import { SkeletonList } from '@/components/shared/SkeletonLoader'
 import { useCancelLeaveMutation, useGetMyLeavesQuery } from '@/features/leave/leaveApi'
 
 const STATUS_OPTIONS = [
@@ -19,16 +19,22 @@ const STATUS_OPTIONS = [
 ]
 
 export function LeaveRequestsPage() {
+  const now = new Date()
   const [statusFilter, setStatusFilter] = useState('')
+  const [yearFilter, setYearFilter] = useState(now.getFullYear())
   const { data, refetch, isLoading } = useGetMyLeavesQuery()
   const [cancelLeave] = useCancelLeaveMutation()
 
   const rows = data?.data || []
+  const yearOptions = [now.getFullYear() - 2, now.getFullYear() - 1, now.getFullYear()]
 
   const filtered = useMemo(() => {
-    if (!statusFilter) return rows
-    return rows.filter((r) => r.status === statusFilter)
-  }, [rows, statusFilter])
+    return rows.filter((r) => {
+      if (statusFilter && r.status !== statusFilter) return false
+      if (yearFilter && new Date(r.fromDate).getFullYear() !== yearFilter) return false
+      return true
+    })
+  }, [rows, statusFilter, yearFilter])
 
   async function onCancel(row) {
     if (!window.confirm('Cancel this leave request?')) return
@@ -62,6 +68,14 @@ export function LeaveRequestsPage() {
         >
           <div className="border-b border-surface-border/70 px-5 py-3">
             <HrToolbar className="!mb-0 border-0 !p-0">
+              <HrToolbarGroup label="Year">
+                <Select className="h-10 w-28" value={yearFilter} onChange={(e) => setYearFilter(Number(e.target.value))}>
+                  <option value="">All years</option>
+                  {yearOptions.map((y) => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </Select>
+              </HrToolbarGroup>
               <HrToolbarGroup label="Status">
                 <Select className="h-10 w-44" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
                   {STATUS_OPTIONS.map((o) => (
@@ -75,9 +89,7 @@ export function LeaveRequestsPage() {
           </div>
 
           {isLoading ? (
-            <div className="flex justify-center py-16">
-              <Loader />
-            </div>
+            <SkeletonList rows={5} />
           ) : (
             <LeaveRequestTable embedded rows={filtered} onCancel={onCancel} />
           )}

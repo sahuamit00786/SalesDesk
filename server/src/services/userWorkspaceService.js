@@ -25,6 +25,40 @@ export async function allowedWorkspaceIdsForUser(user) {
   return listWorkspaceIdsForUser(user.id)
 }
 
+/** Add workspaces without removing existing memberships (same user row in DB). */
+export async function addWorkspaceMembershipsForUser({ userId, companyId, workspaceIds, transaction }) {
+  const uniqueIds = dedupeIds(workspaceIds)
+  if (!uniqueIds.length) return listWorkspaceIdsForUser(userId)
+
+  const valid = await Workspace.findAll({
+    where: {
+      id: { [Op.in]: uniqueIds },
+      companyId,
+    },
+    attributes: ['id'],
+    transaction,
+  })
+  const validIds = dedupeIds(valid.map((w) => w.id))
+  if (validIds.length !== uniqueIds.length) {
+    const err = new Error('Invalid workspace assignment')
+    err.status = 400
+    err.code = 'VALIDATION'
+    err.publicMessage = 'All workspaceIds must belong to your company'
+    throw err
+  }
+
+  const existing = await UserWorkspace.findAll({
+    where: { userId },
+    attributes: ['workspaceId'],
+    transaction,
+  })
+  await UserWorkspace.bulkCreate(
+    validIds.map((workspaceId) => ({ userId, workspaceId })),
+    { ignoreDuplicates: true, transaction },
+  )
+  return dedupeIds([...existing.map((r) => r.workspaceId), ...validIds])
+}
+
 export async function setWorkspaceMembershipsForUser({ userId, companyId, workspaceIds, transaction }) {
   const uniqueIds = dedupeIds(workspaceIds)
   if (!uniqueIds.length) {

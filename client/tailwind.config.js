@@ -8,7 +8,7 @@ export default {
     extend: {
       fontFamily: {
         sans: ['Plus Jakarta Sans', 'sans-serif'],
-        display: ['Plus Jakarta Sans', 'sans-serif'],
+        display: ['Space Grotesk', 'Plus Jakarta Sans', 'sans-serif'],
       },
       colors: {
         lf: {
@@ -33,23 +33,25 @@ export default {
           glow: '#38bdf8',
         },
         brand: {
-          50: '#eef5ff',
-          100: '#daeaff',
-          200: '#bdd8ff',
-          300: '#90bdff',
-          400: '#5c98ff',
-          500: '#3b73f5',
-          600: '#2451eb',
-          700: '#1d3fd6',
-          800: '#1e35ae',
-          900: '#1e318a',
-          950: '#161f54',
+          DEFAULT: '#5B21B6',
+          50: '#F5F3FF',
+          100: '#EDE9FE',
+          200: '#DDD6FE',
+          300: '#C4B5FD',
+          400: '#A78BFA',
+          500: '#5B21B6',
+          600: '#5B21B6',
+          700: '#4C1D95',
+          800: '#3B1578',
+          900: '#2E1065',
+          950: '#1E1040',
         },
         surface: {
           DEFAULT: '#ffffff',
-          muted: '#f7f8fc',
-          subtle: '#f0f2f8',
-          border: '#e3e7f0',
+          muted: '#F9F7FC',
+          subtle: '#EDE9FE',
+          border: '#C4B5D9',
+          field: '#5B21B6',
         },
         ink: {
           DEFAULT: '#0f1117',
@@ -59,7 +61,7 @@ export default {
         success: '#16a34a',
         warning: '#d97706',
         danger: '#dc2626',
-        info: '#0891b2',
+        info: '#5B21B6',
       },
       keyframes: {
         'lf-marquee': {
@@ -102,11 +104,11 @@ export default {
       },
       backgroundImage: {
         'lf-grid':
-          'linear-gradient(rgba(124,58,246,0.11) 1px, transparent 1px), linear-gradient(90deg, rgba(14,165,233,0.07) 1px, transparent 1px)',
+          'linear-gradient(rgba(147,51,234,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(147,51,234,0.08) 1px, transparent 1px)',
         'lf-page':
-          'radial-gradient(ellipse 120% 80% at 50% -30%, rgba(167,139,250,0.35), transparent 55%), radial-gradient(ellipse 80% 60% at 100% 20%, rgba(244,114,182,0.12), transparent 50%), radial-gradient(ellipse 70% 50% at 0% 80%, rgba(56,189,248,0.12), transparent 45%), linear-gradient(180deg, #faf5ff 0%, #ffffff 38%, #f8fafc 100%)',
+          'radial-gradient(ellipse 120% 80% at 50% -20%, rgba(167,139,250,0.22), transparent 55%), linear-gradient(180deg, #faf5ff 0%, #ffffff 42%, #ffffff 100%)',
         'lf-cta-mesh':
-          'radial-gradient(ellipse 100% 80% at 20% 0%, rgba(168,85,247,0.45), transparent 55%), radial-gradient(ellipse 80% 70% at 100% 30%, rgba(34,211,238,0.22), transparent 50%), radial-gradient(ellipse 60% 50% at 50% 100%, rgba(217,70,239,0.2), transparent 45%)',
+          'radial-gradient(ellipse 100% 80% at 20% 0%, rgba(147,51,234,0.18), transparent 55%), radial-gradient(ellipse 70% 50% at 80% 100%, rgba(124,58,237,0.12), transparent 45%)',
       },
     },
   },

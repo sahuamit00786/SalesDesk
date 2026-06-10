@@ -161,7 +161,7 @@ export function AttachmentPickerModal({ open, onClose, onConfirm, existing = [],
         {tab === 'documents' ? (
           <div className="flex min-h-0 flex-1 flex-col">
             <div className="flex items-center gap-2 border-b border-surface-border px-5 py-3">
-              <div className="flex flex-1 items-center gap-2 rounded-lg border border-surface-border px-3 py-1.5 focus-within:border-orange-500 focus-within:ring-2 focus-within:ring-orange-200">
+              <div className="flex flex-1 items-center gap-2 rounded-lg border border-surface-border px-3 py-1.5 focus-within:border-brand-600 focus-within:ring-2 focus-within:ring-brand-200">
                 <Search className="h-4 w-4 text-ink-muted" />
                 <input
                   value={search}
@@ -184,17 +184,17 @@ export function AttachmentPickerModal({ open, onClose, onConfirm, existing = [],
                         <label
                           className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2 transition-colors ${
                             checked
-                              ? 'border-orange-300 bg-orange-50'
+                              ? 'border-brand-300 bg-brand-50'
                               : 'border-surface-border bg-white hover:bg-surface-muted'
                           }`}
                         >
                           <input
                             type="checkbox"
-                            className="accent-orange-500"
+                            className="accent-brand-600"
                             checked={checked}
                             onChange={() => toggleDoc(d.id)}
                           />
-                          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-50 text-orange-600">
+                          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
                             <Icon className="h-4 w-4" />
                           </div>
                           <div className="min-w-0 flex-1">
@@ -221,7 +221,7 @@ export function AttachmentPickerModal({ open, onClose, onConfirm, existing = [],
         ) : (
           <div className="flex min-h-0 flex-1 flex-col">
             <div className="border-b border-surface-border px-5 py-3">
-              <label className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-orange-300 bg-orange-50 px-4 py-6 text-sm font-semibold text-orange-700 transition-colors hover:bg-orange-100">
+              <label className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-brand-300 bg-brand-50 px-4 py-6 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand-100">
                 <Upload className="h-4 w-4" />
                 {uploadState.isLoading ? 'Uploading...' : 'Choose files from your computer'}
                 <input type="file" multiple className="hidden" onChange={handleUpload} disabled={uploadState.isLoading} />
@@ -241,17 +241,17 @@ export function AttachmentPickerModal({ open, onClose, onConfirm, existing = [],
                         <label
                           className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2 transition-colors ${
                             checked
-                              ? 'border-orange-300 bg-orange-50'
+                              ? 'border-brand-300 bg-brand-50'
                               : 'border-surface-border bg-white hover:bg-surface-muted'
                           }`}
                         >
                           <input
                             type="checkbox"
-                            className="accent-orange-500"
+                            className="accent-brand-600"
                             checked={checked}
                             onChange={() => toggleUpload(i)}
                           />
-                          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-50 text-orange-600">
+                          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
                             <Icon className="h-4 w-4" />
                           </div>
                           <div className="min-w-0 flex-1">
@@ -291,7 +291,7 @@ export function AttachmentPickerModal({ open, onClose, onConfirm, existing = [],
               type="button"
               onClick={handleDone}
               disabled={overLimit || totalSelected === 0}
-              className="h-9 rounded-lg bg-orange-500 px-4 text-xs font-semibold text-white transition-colors hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+              className="h-9 rounded-lg bg-[var(--brand-primary)] px-4 text-xs font-semibold text-white transition-colors hover:bg-[var(--brand-primary-dark)] disabled:cursor-not-allowed disabled:opacity-60"
             >
               Done
             </button>
@@ -310,7 +310,7 @@ function TabButton({ active, onClick, children }) {
       onClick={onClick}
       className={`rounded-t-md px-3 py-2 text-xs font-semibold transition-colors ${
         active
-          ? 'border-b-2 border-orange-500 text-orange-700'
+          ? 'border-b-2 border-brand-600 text-brand-700'
           : 'border-b-2 border-transparent text-ink-muted hover:text-ink'
       }`}
     >

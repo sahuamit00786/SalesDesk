@@ -1,41 +1,59 @@
-# UI Conventions
+# UI Conventions — Purple CRM
 
-## Team & Roles Pattern Baseline
+## Page layout (all authenticated CRM list pages)
 
-Use `Team & Roles` page as the reference style for tabbed top controls and page spacing.
+Use **`PageShell fullWidth`** + **`PageStack`**:
 
-## Tabs Standard
+```
+Topbar (route title — white, unchanged)
+└─ PageStack (px-3 sm:px-4 py-3, space-y-3)
+   ├─ PageFilterBar — all filters, search, tabs, primary actions (one card, h-10 controls)
+   └─ PageContentPanel — tables, grids, kanban (rounded-xl border, white; use flush + p-0 for DataGrid)
+```
 
-- All top-level page tabs should use the same container pattern:
-  - wrapper: rounded border card, `bg-white/90`, compact `px-3 py-2`
-  - tab button: `h-8`, `rounded-lg`, `px-3`, `text-xs`
-  - active tab: brand filled (`bg-brand-600 text-white`)
-  - inactive tab: neutral chip (`bg-surface-subtle text-ink-muted`)
-- Action buttons placed on the right of the same top bar should match:
-  - `h-8`, `rounded-lg`, compact icon + text sizing (`text-xs`, icon `h-3.5 w-3.5`)
+| Component | Path |
+|-----------|------|
+| `PageStack` | `client/src/components/layout/PageStack.jsx` |
+| `PageFilterBar` | `client/src/components/layout/PageFilterBar.jsx` |
+| `PageContentPanel` | `client/src/components/layout/PageContentPanel.jsx` |
+| `PageTabButton` | `client/src/components/layout/PageTabButton.jsx` |
 
-## Icon-Only Action Button Standard
+**DataGrid inside panel:** `className="rounded-none border-0 shadow-none"` to avoid double borders.
 
-- Use icon-only buttons in **table row action columns** by default (no visible text labels in row actions).
-- For top toolbars / page-level controls, keep text labels unless there is a specific design exception.
-- Accessibility is required for icon-only actions:
-  - add `aria-label`
-  - add `title` tooltip
-- Color treatment must be hue-matched:
-  - icon color, border color, and light background should use the same color family.
-  - examples:
-    - brand action: `text-brand-700 border-brand-200 bg-brand-50`
-    - danger action: `text-danger border-red-200 bg-red-50`
-- Hover should stay in the same hue family with a slightly stronger tint (for example `bg-brand-100`, `bg-red-100`).
-- Disabled icon-only actions should remain visible with reduced emphasis (`disabled:opacity-50`) instead of being hidden.
+## Purple usage matrix
 
-## Padding / Spacing Standard
+| Element | Style |
+|---------|--------|
+| Sidebar | `bg-brand-900`, active `bg-brand-800/80`, `border-brand-400` |
+| Primary buttons | `bg-brand-600 hover:bg-brand-700` (`<Button variant="primary">`) |
+| Secondary buttons | white + border; hover `border-brand-300 bg-brand-50` |
+| DataGrid header | `.cx-data-grid` → `bg-brand-600`, white header text |
+| DataGrid footer | `bg-brand-50/50`, `border-brand-200` |
+| Active tabs | `PageTabButton` active = `bg-brand-600 text-white` |
+| Focus rings | `focus:border-brand-500 focus:ring-brand-500/15` |
 
-- For pages following this pattern, use `PageShell fullWidth`.
-- Primary page stack spacing should be `space-y-4` for compact, consistent vertical rhythm.
-- Content cards should prefer `rounded-xl` and avoid oversized internal paddings unless needed for readability.
+**Not purple:** Topbar, table body rows, status badges (success/danger/warning), delete actions (red).
 
-## Workspace Alignment Rule
+## Form controls
 
-- `Workspace` tab controls and spacing must match this exact Team & Roles tab/padding standard.
-- New pages introducing tabbed toolbars should follow the same baseline unless there is a documented exception.
+- Height: **`h-10`** via `fieldTokens` / `inputFieldClassName`
+- Radius: **`rounded-xl`**
+- Import from `@/components/ui/fieldTokens` or `@/components/ui/Input`
+
+## List search + filters
+
+Use **`ListSearchToolbar`** (wraps `PageFilterBar`) on leads/tasks-style pages.
+
+## HR pages
+
+Use **`HrToolbar`** (also uses `PageFilterBar`) for leave/attendance filter rows.
+
+## Tabs (Team, Workspace, Settings)
+
+Tabs + right actions live in **`PageFilterBar`**. Member-specific filters in a second `PageFilterBar` when needed.
+
+## Icon-only row actions
+
+- `aria-label` + `title` required
+- Brand actions: `text-brand-700 border-brand-200 bg-brand-50`
+- Danger: `text-danger border-red-200 bg-red-50`

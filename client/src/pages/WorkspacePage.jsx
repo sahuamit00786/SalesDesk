@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
+import { DataGrid } from '@/components/shared/DataGrid'
 import toast from 'react-hot-toast'
 import { useSearchParams } from 'react-router-dom'
-import { Archive, ArchiveRestore, AlignLeft, Building2, CheckCircle2, IdCard, Pencil, Plus, Trash2, Users } from 'lucide-react'
+import { Archive, ArchiveRestore, AlignLeft, Bell, Building2, CheckCircle2, IdCard, Pencil, Plus, Trash2, Users } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
 import { Modal } from '@/components/ui/Modal'
 import { RightDrawer } from '@/components/ui/RightDrawer'
@@ -14,125 +15,31 @@ import {
 } from '@/features/workspace/workspaceApi'
 import { cn } from '@/utils/cn'
 import { WorkspaceCompanyTab } from '@/pages/workspace/WorkspaceCompanyTab'
+import { NotificationEmailSettingsTab } from '@/pages/workspace/NotificationEmailSettingsTab'
 
 const DESCRIPTION_MAX = 199
+
+function resolveHex(val, cssVar, fallback) {
+  if (val && /^#[0-9A-Fa-f]{6}$/.test(val)) return val
+  const computed = getComputedStyle(document.documentElement).getPropertyValue(cssVar).trim()
+  return /^#[0-9A-Fa-f]{6}$/.test(computed) ? computed : fallback
+}
 
 const SETTINGS_TABS = [
   { id: 'workspaces', label: 'Workspaces', icon: Building2 },
   { id: 'company', label: 'Company information', icon: IdCard },
+  { id: 'notifications', label: 'Email notifications', icon: Bell },
 ]
 
 function apiErrorMessage(err) {
   return err?.data?.error?.message ?? err?.error ?? 'Something went wrong'
 }
 
-function WorkspaceTableRow({ row, busy, onEdit, onToggleArchive, onDelete }) {
-  const archived = Boolean(row.archived)
-  return (
-    <tr className={cn('group', archived ? 'text-ink-muted' : '')}>
-      <td className="max-w-[280px] sm:max-w-[360px]">
-        <div className="flex items-start gap-2">
-          <span
-            className={cn(
-              'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl',
-              archived ? 'bg-surface-border/50 text-ink-faint' : 'bg-surface-subtle text-brand-600',
-            )}
-          >
-            <Building2 className="h-4 w-4" aria-hidden />
-          </span>
-          <div className="min-w-0">
-            <p className={cn('font-medium', archived ? 'text-ink-faint' : 'text-ink')}>{row.name}</p>
-            {row.description ? (
-              <p
-                className={cn(
-                  'mt-0.5 line-clamp-2 text-xs leading-snug',
-                  archived ? 'text-ink-faint' : 'text-ink-muted',
-                )}
-              >
-                {row.description}
-              </p>
-            ) : null}
-          </div>
-        </div>
-      </td>
-      <td className={cn('tabular-nums', archived ? 'text-ink-faint' : 'text-ink-muted')}>
-        {row.leadCount}
-      </td>
-      <td>
-        <span
-          className={cn(
-            'inline-flex items-center gap-1.5 tabular-nums',
-            archived ? 'text-ink-faint' : 'text-ink-muted',
-          )}
-        >
-          <Users className="h-3.5 w-3.5 text-ink-faint" aria-hidden />
-          {row.memberCount}
-        </span>
-      </td>
-      <td>
-        <span
-          className={cn(
-            'inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium',
-            archived ? 'bg-surface-border/40 text-ink-faint' : 'bg-brand-50 text-brand-800',
-          )}
-        >
-          {archived ? 'Archived' : 'Active'}
-        </span>
-      </td>
-      <td className="cx-table-cell-actions">
-        <div className="flex items-center justify-end gap-1 opacity-100 transition">
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => onEdit(row)}
-            className={cn(
-              'inline-flex h-8 w-8 items-center justify-center rounded-lg border border-brand-200 bg-brand-50 text-brand-700 transition hover:bg-brand-100 disabled:opacity-50',
-              archived
-                ? 'border-surface-border bg-surface-muted text-ink-faint hover:bg-surface-muted/80'
-                : '',
-            )}
-            aria-label="Edit workspace"
-            title="Edit workspace"
-          >
-            <Pencil className="h-4 w-4" aria-hidden />
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => onToggleArchive(row)}
-            className={cn(
-              'inline-flex h-8 w-8 items-center justify-center rounded-lg border border-brand-200 bg-brand-50 text-brand-700 transition hover:bg-brand-100 disabled:opacity-50',
-              archived
-                ? 'border-surface-border bg-surface-muted text-ink-faint hover:bg-surface-muted/80'
-                : '',
-            )}
-            aria-label={archived ? 'Restore workspace' : 'Archive workspace'}
-            title={archived ? 'Restore workspace' : 'Archive workspace'}
-          >
-            {archived ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => onDelete(row)}
-            className={cn(
-              'inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-danger transition hover:bg-red-100 disabled:opacity-50',
-              archived ? 'text-danger/70' : '',
-            )}
-            aria-label="Delete workspace"
-            title="Delete workspace"
-          >
-            <Trash2 className="h-4 w-4" aria-hidden />
-          </button>
-        </div>
-      </td>
-    </tr>
-  )
-}
-
 export function WorkspacePage() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const settingsTab = searchParams.get('tab') === 'company' ? 'company' : 'workspaces'
+  const tabParam = searchParams.get('tab')
+  const settingsTab =
+    tabParam === 'company' ? 'company' : tabParam === 'notifications' ? 'notifications' : 'workspaces'
 
   const setSettingsTab = (id) => {
     const next = new URLSearchParams(searchParams)
@@ -151,6 +58,8 @@ export function WorkspacePage() {
   const [editingId, setEditingId] = useState(null)
   const [formName, setFormName] = useState('')
   const [formDescription, setFormDescription] = useState('')
+  const [formThemeColor, setFormThemeColor] = useState('#5b21b6')
+  const [formSidebarText, setFormSidebarText] = useState('#ffffff')
   const [statusFilter, setStatusFilter] = useState('active')
   const [deleteDialog, setDeleteDialog] = useState({ open: false, row: null })
 
@@ -174,6 +83,8 @@ export function WorkspacePage() {
     setEditingId(null)
     setFormName('')
     setFormDescription('')
+    setFormThemeColor('#5b21b6')
+    setFormSidebarText('#ffffff')
   }
 
   function openCreate() {
@@ -181,6 +92,8 @@ export function WorkspacePage() {
     setEditingId(null)
     setFormName('')
     setFormDescription('')
+    setFormThemeColor('#5b21b6')
+    setFormSidebarText('#ffffff')
     setDrawerOpen(true)
   }
 
@@ -189,6 +102,8 @@ export function WorkspacePage() {
     setEditingId(row.id)
     setFormName(row.name ?? '')
     setFormDescription(row.description ?? '')
+    setFormThemeColor(resolveHex(row.themeColor, '--brand-primary', '#5b21b6'))
+    setFormSidebarText(resolveHex(row.sidebarTextColor, '--sidebar-text', '#ffffff'))
     setDrawerOpen(true)
   }
 
@@ -206,6 +121,8 @@ export function WorkspacePage() {
           id: editingId,
           name,
           description: descTrim || null,
+          themeColor: formThemeColor,
+          sidebarTextColor: formSidebarText,
         }).unwrap()
         toast.success('Workspace updated')
       } else {
@@ -248,6 +165,139 @@ export function WorkspacePage() {
   const busy = patching || deleting
   const saving = (drawerMode === 'create' && creating) || (drawerMode === 'edit' && patching)
 
+  const workspaceColumns = useMemo(
+    () => [
+      {
+        field: 'name',
+        headerName: 'Workspace',
+        flex: 1,
+        minWidth: 200,
+        renderCell: ({ row }) => {
+          const archived = Boolean(row.archived)
+          return (
+            <div className="flex items-start gap-2">
+              <span
+                className={cn(
+                  'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl',
+                  archived ? 'bg-surface-border/50 text-ink-faint' : 'bg-surface-subtle text-brand-600',
+                )}
+              >
+                <Building2 className="h-4 w-4" aria-hidden />
+              </span>
+              <div className="min-w-0">
+                <p className={cn('font-medium', archived ? 'text-ink-faint' : 'text-ink')}>{row.name}</p>
+                {row.description ? (
+                  <p
+                    className={cn(
+                      'mt-0.5 line-clamp-2 text-xs leading-snug',
+                      archived ? 'text-ink-faint' : 'text-ink-muted',
+                    )}
+                  >
+                    {row.description}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          )
+        },
+      },
+      {
+        field: 'leadCount',
+        headerName: 'Leads',
+        width: 90,
+        renderCell: ({ row }) => (
+          <span className={cn('tabular-nums', row.archived ? 'text-ink-faint' : 'text-ink-muted')}>
+            {row.leadCount}
+          </span>
+        ),
+      },
+      {
+        field: 'memberCount',
+        headerName: 'Team',
+        width: 90,
+        renderCell: ({ row }) => (
+          <span
+            className={cn(
+              'inline-flex items-center gap-1.5 tabular-nums',
+              row.archived ? 'text-ink-faint' : 'text-ink-muted',
+            )}
+          >
+            <Users className="h-3.5 w-3.5 text-ink-faint" aria-hidden />
+            {row.memberCount}
+          </span>
+        ),
+      },
+      {
+        field: 'archived',
+        headerName: 'Status',
+        width: 100,
+        renderCell: ({ row }) => (
+          <span
+            className={cn(
+              'inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium',
+              row.archived ? 'bg-surface-border/40 text-ink-faint' : 'bg-slate-100 text-brand-800',
+            )}
+          >
+            {row.archived ? 'Archived' : 'Active'}
+          </span>
+        ),
+      },
+      {
+        field: 'actions',
+        headerName: 'Actions',
+        width: 140,
+        sortable: false,
+        filterable: false,
+        align: 'right',
+        headerAlign: 'right',
+        renderCell: ({ row }) => {
+          const archived = Boolean(row.archived)
+          return (
+            <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => openEdit(row)}
+                className={cn(
+                  'inline-flex h-8 w-8 items-center justify-center rounded-lg border border-brand-200 bg-white text-brand-700 hover:bg-slate-100 disabled:opacity-50',
+                  archived && 'border-surface-border bg-surface-muted text-ink-faint',
+                )}
+                aria-label="Edit workspace"
+                title="Edit workspace"
+              >
+                <Pencil className="h-4 w-4" aria-hidden />
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => toggleArchive(row)}
+                className={cn(
+                  'inline-flex h-8 w-8 items-center justify-center rounded-lg border border-brand-200 bg-white text-brand-700 hover:bg-slate-100 disabled:opacity-50',
+                  archived && 'border-surface-border bg-surface-muted text-ink-faint',
+                )}
+                aria-label={archived ? 'Restore workspace' : 'Archive workspace'}
+                title={archived ? 'Restore workspace' : 'Archive workspace'}
+              >
+                {archived ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => removeWorkspace(row)}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-danger hover:bg-red-100 disabled:opacity-50"
+                aria-label="Delete workspace"
+                title="Delete workspace"
+              >
+                <Trash2 className="h-4 w-4" aria-hidden />
+              </button>
+            </div>
+          )
+        },
+      },
+    ],
+    [busy],
+  )
+
   return (
     <PageShell fullWidth>
       <div className="space-y-4 px-2 py-3 sm:px-4">
@@ -266,7 +316,7 @@ export function WorkspacePage() {
                   className={cn(
                     'inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition',
                     active
-                      ? 'border-brand-200 bg-brand-50 text-brand-700'
+                      ? 'border-brand-200 bg-white text-brand-700'
                       : 'border-surface-border bg-surface-subtle text-ink-muted hover:bg-surface-muted',
                   )}
                 >
@@ -287,7 +337,7 @@ export function WorkspacePage() {
                 className={cn(
                   'inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition',
                   statusFilter === 'active'
-                    ? 'border-brand-200 bg-brand-50 text-brand-700'
+                    ? 'border-brand-200 bg-white text-brand-700'
                     : 'border-surface-border bg-surface-subtle text-ink-muted hover:bg-surface-muted',
                 )}
               >
@@ -302,7 +352,7 @@ export function WorkspacePage() {
                 className={cn(
                   'inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition',
                   statusFilter === 'archived'
-                    ? 'border-brand-200 bg-brand-50 text-brand-700'
+                    ? 'border-brand-200 bg-white text-brand-700'
                     : 'border-surface-border bg-surface-subtle text-ink-muted hover:bg-surface-muted',
                 )}
               >
@@ -314,7 +364,7 @@ export function WorkspacePage() {
                 onClick={openCreate}
                 aria-label="New workspace"
                 title="New workspace"
-                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-brand-200 bg-brand-50 px-3 text-xs font-medium text-brand-700 hover:bg-brand-100"
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-brand-200 bg-white px-3 text-xs font-medium text-brand-700 hover:bg-slate-100"
               >
                 <Plus className="h-3.5 w-3.5" aria-hidden />
                 Add workspace
@@ -329,6 +379,8 @@ export function WorkspacePage() {
 
         {settingsTab === 'company' ? <WorkspaceCompanyTab /> : null}
 
+        {settingsTab === 'notifications' ? <NotificationEmailSettingsTab /> : null}
+
         {settingsTab === 'workspaces' ? (
           <>
         {isError ? (
@@ -340,49 +392,27 @@ export function WorkspacePage() {
           </div>
         ) : null}
 
-        <div className="overflow-hidden rounded-xl border border-surface-border bg-white">
-          <div className="scrollbar-subtle overflow-x-auto">
-            <table className="cx-table min-w-[840px] text-xs">
-              <thead className="cx-table-sticky-head">
-                <tr>
-                  <th>Workspace</th>
-                  <th>Leads</th>
-                  <th>Team</th>
-                  <th>Status</th>
-                  <th className="cx-table-cell-actions text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {isLoading ? (
-                  <tr>
-                    <td colSpan={5} className="px-3 py-8 text-center text-ink-muted">
-                      Loading workspaces…
-                    </td>
-                  </tr>
-                ) : !Array.isArray(items) || orderedRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-3 py-8 text-center text-ink-muted">
-                      {statusFilter === 'archived'
-                        ? 'No archived workspaces.'
-                        : 'No active workspaces yet. Create one to get started.'}
-                    </td>
-                  </tr>
-                ) : (
-                  orderedRows.map((row) => (
-                    <WorkspaceTableRow
-                      key={row.id}
-                      row={row}
-                      busy={busy}
-                      onEdit={openEdit}
-                      onToggleArchive={toggleArchive}
-                      onDelete={removeWorkspace}
-                    />
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <DataGrid
+          gridColumns
+          columns={workspaceColumns}
+          data={orderedRows}
+          loading={isLoading}
+          searchable={false}
+          showColumnToggle={false}
+          showExportCsv={false}
+          defaultPageSize={25}
+          emptyTitle={
+            statusFilter === 'archived'
+              ? 'No archived workspaces'
+              : 'No active workspaces yet'
+          }
+          emptyDescription={
+            statusFilter === 'archived'
+              ? 'Archived workspaces will appear here.'
+              : 'Create one to get started.'
+          }
+          maxHeightClass="max-h-[min(65vh,560px)]"
+        />
           </>
         ) : null}
       </div>
@@ -409,7 +439,7 @@ export function WorkspacePage() {
               type="submit"
               form="workspace-form"
               disabled={saving}
-              className="h-10 rounded-xl bg-brand-600 px-4 text-sm font-medium text-white shadow-sm transition hover:bg-brand-700 disabled:opacity-60"
+              className="h-10 rounded-xl bg-slate-800 px-4 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-60"
             >
               {saving ? (drawerMode === 'edit' ? 'Saving…' : 'Creating…') : drawerMode === 'edit' ? 'Save changes' : 'Create workspace'}
             </button>
@@ -450,6 +480,57 @@ export function WorkspacePage() {
               maxLength={DESCRIPTION_MAX}
               placeholder="What this workspace is for (optional)"
             />
+          </div>
+          <div className="space-y-4 rounded-2xl border border-surface-border p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Theme colors</p>
+            <p className="text-xs text-ink-muted">
+              Changes apply instantly as a preview. Save to persist across sessions.
+            </p>
+            <div className="flex flex-col gap-3 sm:flex-row sm:gap-4">
+              <div className="flex flex-1 flex-col gap-1.5">
+                <label htmlFor="ws-theme-color" className="text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+                  Theme color
+                </label>
+                <p className="text-[11px] leading-snug text-ink-faint">Sidebar background, buttons, table header</p>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="ws-theme-color"
+                    type="color"
+                    value={formThemeColor}
+                    onChange={(e) => {
+                      setFormThemeColor(e.target.value)
+                      document.documentElement.style.setProperty('--brand-primary', e.target.value)
+                      const n = parseInt(e.target.value.slice(1), 16)
+                      const r = Math.max(0, (n >> 16) - 18).toString(16).padStart(2, '0')
+                      const g = Math.max(0, ((n >> 8) & 0xff) - 18).toString(16).padStart(2, '0')
+                      const b = Math.max(0, (n & 0xff) - 18).toString(16).padStart(2, '0')
+                      document.documentElement.style.setProperty('--brand-primary-dark', `#${r}${g}${b}`)
+                    }}
+                    className="h-10 w-10 cursor-pointer rounded-lg border border-surface-border p-0.5"
+                  />
+                  <span className="font-mono text-xs text-ink-muted">{formThemeColor}</span>
+                </div>
+              </div>
+              <div className="flex flex-1 flex-col gap-1.5">
+                <label htmlFor="ws-sidebar-text" className="text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+                  Text color
+                </label>
+                <p className="text-[11px] leading-snug text-ink-faint">Sidebar nav text and button text</p>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="ws-sidebar-text"
+                    type="color"
+                    value={formSidebarText}
+                    onChange={(e) => {
+                      setFormSidebarText(e.target.value)
+                      document.documentElement.style.setProperty('--sidebar-text', e.target.value)
+                    }}
+                    className="h-10 w-10 cursor-pointer rounded-lg border border-surface-border p-0.5"
+                  />
+                  <span className="font-mono text-xs text-ink-muted">{formSidebarText}</span>
+                </div>
+              </div>
+            </div>
           </div>
           {drawerMode === 'create' ? (
             <p className="rounded-xl bg-surface-subtle px-4 py-3 text-xs leading-relaxed text-ink-muted">

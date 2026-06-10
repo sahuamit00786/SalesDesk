@@ -39,6 +39,8 @@ async function serializeWorkspaceList(companyId) {
       createdAt: w.createdAt ? w.createdAt.toISOString() : null,
       leadCount: await leadCountForWorkspace(w.id),
       memberCount,
+      themeColor: w.themeColor ?? null,
+      sidebarTextColor: w.sidebarTextColor ?? null,
     })),
   )
   return items
@@ -178,6 +180,9 @@ export async function patchWorkspace(req, res, next) {
         workspace.description = t ? t : null
       }
     }
+
+    if (value.themeColor !== undefined) workspace.themeColor = value.themeColor
+    if (value.sidebarTextColor !== undefined) workspace.sidebarTextColor = value.sidebarTextColor
 
     if (value.archived === true) {
       const nonArchivedCount = await Workspace.count({

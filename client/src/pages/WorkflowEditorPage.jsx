@@ -17,6 +17,8 @@ import {
   ZoomOut,
 } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
+import { SkeletonForm } from '@/components/shared/SkeletonLoader'
+import { DataGrid } from '@/components/shared/DataGrid'
 import { RightDrawer } from '@/components/ui/RightDrawer'
 import { WorkflowCanvas } from '@/features/workflows/components/WorkflowCanvas'
 import {
@@ -92,7 +94,7 @@ function TestRunModal({ open, onClose, workflowId, onRan }) {
             <button
               type="submit"
               disabled={isLoading}
-              className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-900 disabled:opacity-60"
             >
               {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
               Run test
@@ -207,7 +209,7 @@ function WorkflowEditorLoaded({ wf, refetchWorkflow, teamUsers, templates, leadS
             Library
           </Link>
           <input
-            className="min-w-0 flex-1 rounded-xl border border-transparent bg-transparent px-2 py-1 text-base font-semibold text-ink hover:border-surface-border focus:border-violet-400 focus:outline-none sm:max-w-md"
+            className="min-w-0 flex-1 rounded-xl border border-transparent bg-transparent px-2 py-1 text-base font-semibold text-ink hover:border-surface-border focus:border-brand-400 focus:outline-none sm:max-w-md"
             value={name}
             onChange={(e) => setName(e.target.value)}
             onBlur={() => {
@@ -313,7 +315,7 @@ function WorkflowEditorLoaded({ wf, refetchWorkflow, teamUsers, templates, leadS
               type="button"
               disabled={publishing}
               onClick={onPublish}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-violet-600 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-700 disabled:opacity-60"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-slate-800 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-900 disabled:opacity-60"
             >
               {publishing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Rocket className="h-3.5 w-3.5" />}
               Publish
@@ -367,7 +369,7 @@ function WorkflowEditorLoaded({ wf, refetchWorkflow, teamUsers, templates, leadS
                   setFollowLatest(true)
                   setSelectedRunId(null)
                 }}
-                className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-900 hover:bg-violet-100"
+                className="rounded-lg border border-brand-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-brand-900 hover:bg-slate-100"
               >
                 Follow latest
               </button>
@@ -406,8 +408,8 @@ function WorkflowEditorLoaded({ wf, refetchWorkflow, teamUsers, templates, leadS
                       className={cn(
                         'w-full rounded-xl border p-3 text-left text-sm transition-colors',
                         isSelected || isFollowHighlight
-                          ? 'border-violet-300 bg-violet-50/90 dark:border-violet-500/50 dark:bg-violet-950/30'
-                          : 'border-surface-border bg-surface-muted/50 hover:border-violet-200 dark:bg-ink/40',
+                          ? 'border-brand-300 bg-slate-50 dark:border-violet-500/50 dark:bg-violet-950/30'
+                          : 'border-surface-border bg-surface-muted/50 hover:border-brand-200 dark:bg-ink/40',
                       )}
                     >
                       <div className="flex items-center justify-between gap-2">
@@ -439,33 +441,51 @@ function WorkflowEditorLoaded({ wf, refetchWorkflow, teamUsers, templates, leadS
           {effectiveWatchId && stepRows.length > 0 ? (
             <div className="border-t border-surface-border pt-4">
               <h3 className="text-xs font-bold uppercase tracking-wide text-ink-muted">Steps</h3>
-              <div className="mt-2 overflow-x-auto rounded-xl border border-surface-border">
-                <table className="cx-table cx-table--dense min-w-[280px] text-[11px]">
-                  <thead>
-                    <tr>
-                      <th>Node</th>
-                      <th>Status</th>
-                      <th>Finished</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {stepRows.map((step) => {
-                      const nid = String(step.nodeId ?? step.node_id ?? '')
-                      const fin = step.finishedAt ?? step.finished_at
-                      return (
-                        <tr key={step.id ?? `${nid}-${step.startedAt}`}>
-                          <td className="max-w-[120px] truncate font-mono text-ink" title={nid}>
-                            {nid.slice(0, 10)}…
-                          </td>
-                          <td className="font-semibold">{step.status}</td>
-                          <td className="text-ink-muted">
-                            {fin ? formatDistanceToNow(new Date(fin), { addSuffix: true }) : '—'}
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
+              <div className="mt-2">
+                <DataGrid
+                  gridColumns
+                  columns={[
+                    {
+                      field: 'nodeId',
+                      headerName: 'Node',
+                      flex: 1,
+                      minWidth: 100,
+                      valueGetter: (_v, row) => {
+                        const nid = String(row.nodeId ?? row.node_id ?? '')
+                        return `${nid.slice(0, 10)}…`
+                      },
+                    },
+                    {
+                      field: 'status',
+                      headerName: 'Status',
+                      width: 90,
+                      renderCell: ({ row }) => (
+                        <span className="font-semibold">{row.status}</span>
+                      ),
+                    },
+                    {
+                      field: 'finishedAt',
+                      headerName: 'Finished',
+                      flex: 1,
+                      minWidth: 100,
+                      valueGetter: (_v, row) => {
+                        const fin = row.finishedAt ?? row.finished_at
+                        return fin ? formatDistanceToNow(new Date(fin), { addSuffix: true }) : '—'
+                      },
+                    },
+                  ]}
+                  data={stepRows.map((step, i) => ({
+                    ...step,
+                    id: step.id ?? `${String(step.nodeId ?? step.node_id ?? '')}-${i}`,
+                  }))}
+                  density="compact"
+                  searchable={false}
+                  showColumnToggle={false}
+                  showExportCsv={false}
+                  hideFooter
+                  maxHeightClass="max-h-[240px]"
+                  className="border border-surface-border shadow-none"
+                />
               </div>
               {stepRows.some((s) => s.errorMessage ?? s.error_message) ? (
                 <div className="mt-2 space-y-1">
@@ -515,9 +535,7 @@ export function WorkflowEditorPage() {
   if (isLoading) {
     return (
       <PageShell fullWidth flush>
-        <div className="flex flex-1 items-center justify-center py-24 text-ink-muted">
-          <Loader2 className="h-8 w-8 animate-spin" aria-hidden />
-        </div>
+        <div className="p-6"><SkeletonForm rows={8} /></div>
       </PageShell>
     )
   }
@@ -526,7 +544,7 @@ export function WorkflowEditorPage() {
     return (
       <PageShell>
         <p className="text-sm text-rose-600">Workflow not found or you do not have access.</p>
-        <Link to="/automation" className="mt-4 inline-block text-sm font-medium text-violet-600 hover:underline">
+        <Link to="/automation" className="mt-4 inline-block text-sm font-medium text-brand-600 hover:underline">
           Back to automation
         </Link>
       </PageShell>

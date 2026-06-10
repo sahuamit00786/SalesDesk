@@ -12,7 +12,7 @@ import {
   sendTemplateSchema,
   updateTemplateSchema,
 } from '../validations/emailTemplates.js'
-import { enqueueTemplateSendJob } from '../queues/emailTemplateQueue.js'
+import { enqueueTemplateSendJob, getEmailTemplateQueue, runTemplateSendJobInline } from '../queues/emailTemplateQueue.js'
 import { generateLeadEmailTemplate, OpenAiServiceError } from '../services/openAiService.js'
 
 function currentScope(req) {
@@ -218,15 +218,25 @@ export async function sendTemplate(req, res, next) {
       leadIds: value.leadIds,
       companyId,
     })
-    const job = await enqueueTemplateSendJob({
+    const payload = {
       templateId: template.id,
       companyId,
       workspaceId,
       leadIds: summary.willSend,
       requestedBy: req.user.id,
       scheduleAt: template.scheduleAt,
-    })
-    return res.json({ data: { jobId: job.id, ...summary } })
+      source: 'bulk',
+    }
+
+    const q = getEmailTemplateQueue()
+    if (q) {
+      const job = await enqueueTemplateSendJob(payload)
+      return res.json({ data: { jobId: job.id, queued: true, ...summary } })
+    }
+
+    // Dev / no-Redis: send immediately (same path as workflow automation fallback)
+    const result = await runTemplateSendJobInline(payload)
+    return res.json({ data: { jobId: null, queued: false, inline: true, result, ...summary } })
   } catch (err) {
     return next(err)
   }

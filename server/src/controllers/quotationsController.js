@@ -9,6 +9,8 @@ import {
   WorkspaceBillingProfile,
   Invoice,
   InvoiceItem,
+  Lead,
+  Deal,
 } from '../models/index.js'
 import { requireWorkspaceFromRequest } from '../services/workspaceScope.js'
 import { aggregateQuotationTotals } from '../services/salesTotals.js'
@@ -16,6 +18,12 @@ import { buildInvoiceNumber, buildQuotationNumber } from '../services/docNumberF
 import { buildCustomerSnapshotFromLead, mergeBillingIntoPaymentSnapshot } from '../services/salesCustomerSnapshot.js'
 import { recordQuotationCreatedOnLead, recordInvoiceCreatedOnLead } from '../services/leadSalesDocActivity.js'
 import { resolveLeadAndDealForSalesDoc } from '../services/salesDocLeadDealResolve.js'
+import { enrichSalesDocListRow } from '../services/salesDocListSerialize.js'
+
+const listIncludes = [
+  { model: Lead, as: 'lead', attributes: ['id', 'title', 'contactName', 'company', 'email'], required: false },
+  { model: Deal, as: 'deal', attributes: ['id', 'name', 'stage'], required: false },
+]
 
 const documentThemeSchema = Joi.object({
   accentColor: Joi.string().trim().max(32).allow('', null),
@@ -66,6 +74,7 @@ const createSchema = Joi.object({
   })
 
 const patchSchema = Joi.object({
+  dealId: Joi.string().uuid().allow(null),
   quotationTemplateId: Joi.string().uuid().allow(null),
   ownerUserId: Joi.string().uuid().allow(null),
   issueDate: Joi.string().isoDate(),
@@ -111,12 +120,13 @@ export async function listQuotations(req, res, next) {
       limit,
       offset,
       order: [['createdAt', 'DESC']],
+      include: listIncludes,
     })
 
     return res.json({
       success: true,
       data: {
-        items: rows.map((r) => serializeQuotation(r)),
+        items: rows.map((r) => enrichSalesDocListRow(serializeQuotation(r), r)),
         total: count,
         page,
         limit,
@@ -319,6 +329,12 @@ export async function patchQuotation(req, res, next) {
         error: { code: 'INVALID_STATE', message: 'Cannot edit converted quotation' },
       })
     }
+    if (value.status === 'converted') {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_STATE', message: 'Status cannot be set to converted directly' },
+      })
+    }
 
     let totals = null
     if (value.items) {
@@ -328,8 +344,25 @@ export async function patchQuotation(req, res, next) {
       })
     }
 
+    let resolvedDeal = null
+    if (value.dealId) {
+      resolvedDeal = await resolveLeadAndDealForSalesDoc({
+        dealId: value.dealId,
+        companyId: req.user.companyId,
+        workspaceId,
+        user: req.user,
+      })
+    }
+
     await sequelize.transaction(async (transaction) => {
       const updates = {}
+      if (resolvedDeal) {
+        updates.dealId = resolvedDeal.resolvedDealId
+        updates.leadId = resolvedDeal.resolvedLeadId
+        let snap = buildCustomerSnapshotFromLead(resolvedDeal.lead)
+        if (resolvedDeal.dealRow?.name) snap = { ...snap, dealName: String(resolvedDeal.dealRow.name).trim() }
+        updates.customerSnapshot = snap
+      }
       if (value.issueDate) updates.issueDate = value.issueDate.slice(0, 10)
       if (value.expiryDate !== undefined) updates.expiryDate = value.expiryDate ? value.expiryDate.slice(0, 10) : null
       if (value.reference !== undefined) updates.reference = value.reference || null
@@ -482,7 +515,7 @@ export async function convertQuotationToInvoice(req, res, next) {
           taxPct: it.taxPct,
           taxType: it.taxType,
         })),
-        { shipping: 0, adjustment: 0 },
+        { shipping: Number(quotation.shipping) || 0, adjustment: Number(quotation.adjustment) || 0 },
       )
 
       const inv = await Invoice.create(
@@ -502,6 +535,8 @@ export async function convertQuotationToInvoice(req, res, next) {
           customerSnapshot: quotation.customerSnapshot,
           subtotal: totals.subtotal,
           discountTotal: totals.discountTotal,
+          shipping: totals.shipping,
+          adjustment: totals.adjustment,
           roundOff: 0,
           grandTotal: totals.grandTotal,
           taxFinancial: totals.taxBreakdown,
@@ -571,6 +606,33 @@ export async function convertQuotationToInvoice(req, res, next) {
       },
       meta: {},
     })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function deleteQuotation(req, res, next) {
+  try {
+    const { workspaceId } = await requireWorkspaceFromRequest(req)
+    const row = await Quotation.findOne({
+      where: { id: req.params.id, workspaceId, companyId: req.user.companyId },
+    })
+    if (!row) {
+      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Not found' } })
+    }
+
+    await sequelize.transaction(async (transaction) => {
+      await QuotationItem.destroy({ where: { quotationId: row.id }, transaction })
+      if (row.convertedInvoiceId) {
+        await Invoice.update(
+          { quotationId: null },
+          { where: { id: row.convertedInvoiceId, workspaceId, companyId: req.user.companyId }, transaction },
+        )
+      }
+      await row.destroy({ transaction })
+    })
+
+    return res.json({ success: true, data: { id: req.params.id }, meta: {} })
   } catch (e) {
     return next(e)
   }

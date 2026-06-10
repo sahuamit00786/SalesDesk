@@ -20,6 +20,8 @@ export const Invoice = sequelize.define(
     customerSnapshot: { type: DataTypes.JSON, allowNull: false, field: 'customer_snapshot' },
     subtotal: { type: DataTypes.DECIMAL(14, 2), allowNull: false, defaultValue: 0 },
     discountTotal: { type: DataTypes.DECIMAL(14, 2), allowNull: false, defaultValue: 0, field: 'discount_total' },
+    shipping: { type: DataTypes.DECIMAL(14, 2), allowNull: false, defaultValue: 0 },
+    adjustment: { type: DataTypes.DECIMAL(14, 2), allowNull: false, defaultValue: 0 },
     roundOff: { type: DataTypes.DECIMAL(14, 2), allowNull: false, defaultValue: 0, field: 'round_off' },
     grandTotal: { type: DataTypes.DECIMAL(14, 2), allowNull: false, defaultValue: 0, field: 'grand_total' },
     taxFinancial: { type: DataTypes.JSON, allowNull: true, field: 'tax_financial' },

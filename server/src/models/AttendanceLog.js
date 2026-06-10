@@ -45,6 +45,21 @@ export const AttendanceLog = sequelize.define(
       allowNull: false,
       defaultValue: 'present',
     },
+    note: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    editedByUserId: {
+      type: DataTypes.CHAR(36),
+      allowNull: true,
+      field: 'edited_by_user_id',
+      references: { model: 'users', key: 'id' },
+    },
+    editedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'edited_at',
+    },
   },
   {
     tableName: 'attendance_logs',

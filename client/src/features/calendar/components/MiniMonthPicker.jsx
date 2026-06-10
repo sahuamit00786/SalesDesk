@@ -24,6 +24,7 @@ export function MiniMonthPicker({
   rangeEnd,
   onRangePick,
   events = [],
+  dayStatusByDate = null,
 }) {
   const monthStart = startOfMonth(currentDate)
   const monthEnd = endOfMonth(currentDate)
@@ -99,6 +100,8 @@ export function MiniMonthPicker({
           const isToday = isSameDay(day, new Date())
           const dayEvents = getDayEvents(day)
           const hasEvents = dayEvents.length > 0
+          const dateKey = format(day, 'yyyy-MM-dd')
+          const isAbsent = dayStatusByDate?.[dateKey] === 'absent'
 
           return (
             <button
@@ -107,10 +110,13 @@ export function MiniMonthPicker({
               className={cn(
                 'relative h-8 w-8 flex items-center justify-center text-sm rounded-lg transition-all',
                 !isCurrentMonth && 'text-gray-300',
-                isCurrentMonth && !isSelected && 'text-gray-700 hover:bg-gray-100',
-                inRange && !isRangeStart && !isRangeEnd && 'bg-indigo-100 text-indigo-700 rounded-md',
-                (isRangeStart || isRangeEnd) && 'bg-indigo-600 text-white font-medium shadow-sm',
-                isToday && !isSelected && 'text-indigo-600 font-semibold bg-indigo-50',
+                isCurrentMonth && !isSelected && !isAbsent && 'text-gray-700 hover:bg-gray-100',
+                isAbsent && isCurrentMonth && !isRangeStart && !isRangeEnd && 'bg-red-300 text-red-950 font-semibold',
+                inRange && !isRangeStart && !isRangeEnd && !isAbsent && 'bg-brand-100 text-brand-700 rounded-md',
+                (isRangeStart || isRangeEnd) && !isAbsent && 'bg-[var(--brand-primary)] text-white font-medium shadow-sm',
+                (isRangeStart || isRangeEnd) && isAbsent && 'bg-red-500 text-white font-medium shadow-sm',
+                isToday && !isSelected && !isAbsent && 'text-brand-600 font-semibold bg-brand-50',
+                isToday && isAbsent && 'bg-red-400 text-white font-semibold',
               )}
             >
               {format(day, 'd')}

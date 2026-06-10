@@ -115,6 +115,7 @@ export async function listActivities(req, res, next) {
     const createdAtRange = normalizeDateRange(req.query.from, req.query.to)
     const leadWhere = {
       workspaceId: { [Op.in]: workspaceIds },
+      isDeleted: false,
       ...(await leadAccessWhere(req.user)),
     }
     if (scope === 'lead' && leadId) leadWhere.id = leadId
@@ -208,7 +209,13 @@ export async function listActivities(req, res, next) {
 
     const merged = [...normalizedActivities, ...normalizedTasks]
 
+    const fromMs = createdAtRange?.[Op.gte]?.getTime() ?? null
+    const toMs = createdAtRange?.[Op.lte]?.getTime() ?? null
+
     const filtered = merged.filter((row) => {
+      const rowMs = new Date(row.createdAt).getTime()
+      if (fromMs !== null && rowMs < fromMs) return false
+      if (toMs !== null && rowMs > toMs) return false
       const meta = row.metadata || {}
       const typeKey = meta.activityTypeKey || row.type
       if (typeKeys.length && !typeKeys.includes(typeKey) && !typeKeys.includes(row.type)) return false

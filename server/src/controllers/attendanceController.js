@@ -1,13 +1,16 @@
 import { Op } from 'sequelize'
-import { AttendanceLog, LeaveRequest, User } from '../models/index.js'
+import {
+  AttendanceLog,
+  AttendanceSession,
+  LeaveRequest,
+  User,
+} from '../models/index.js'
 import {
   companyUserScopeWhere,
   isHrManagerOrAdmin,
   resolveHrRole,
 } from '../services/hrRoleService.js'
-
-const LATE_AFTER_HOUR = 10
-const LATE_AFTER_MINUTE = 0
+import { getLateThreshold } from '../services/leaveCalculatorService.js'
 
 function todayDateOnly() {
   return new Date().toISOString().slice(0, 10)
@@ -17,10 +20,22 @@ function formatTime12(d) {
   return new Date(d).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
 }
 
-function computeTotalHours(checkIn, checkOut) {
-  const ms = new Date(checkOut).getTime() - new Date(checkIn).getTime()
+function computeDurationHours(start, end) {
+  const ms = new Date(end).getTime() - new Date(start).getTime()
   if (ms <= 0) return 0
   return Math.round((ms / 3600000) * 100) / 100
+}
+
+function sumSessionHours(sessions) {
+  return sessions
+    .filter((s) => s.checkOutTime)
+    .reduce((acc, s) => acc + Number(s.durationHours || 0), 0)
+}
+
+function formatDurationHours(hours) {
+  const h = Math.floor(hours)
+  const m = Math.round((hours - h) * 60)
+  return `${h}h ${m}m`
 }
 
 function eachDateInRange(fromDate, toDate, cb) {
@@ -42,7 +57,7 @@ async function approvedLeavesInRange(companyId, userIds, rangeStart, rangeEnd) {
       fromDate: { [Op.lte]: rangeEnd },
       toDate: { [Op.gte]: rangeStart },
     },
-    attributes: ['userId', 'fromDate', 'toDate'],
+    attributes: ['userId', 'fromDate', 'toDate', 'isHalfDay'],
   })
 }
 
@@ -58,12 +73,6 @@ function countOnLeaveByDate(leaves, rangeStart, rangeEnd) {
   return Object.fromEntries(Object.entries(byDate).map(([d, set]) => [d, set.size]))
 }
 
-function formatDurationHours(hours) {
-  const h = Math.floor(hours)
-  const m = Math.round((hours - h) * 60)
-  return { text: `${h}h ${m}m`, hours, h, m }
-}
-
 function monthRange(year, month) {
   const y = Number(year)
   const m = Number(month)
@@ -73,30 +82,37 @@ function monthRange(year, month) {
   return { start, end }
 }
 
-function deriveStatusFromCheckIn(checkInTime) {
+async function deriveStatus(checkInTime, companyId) {
+  const { hour, minute } = await getLateThreshold(companyId)
   const d = new Date(checkInTime)
   const lateCutoff = new Date(d)
-  lateCutoff.setHours(LATE_AFTER_HOUR, LATE_AFTER_MINUTE, 0, 0)
+  lateCutoff.setHours(hour, minute, 0, 0)
   return d > lateCutoff ? 'late' : 'present'
 }
 
 export async function getTodayStatus(req, res, next) {
   try {
     const date = todayDateOnly()
-    const row = await AttendanceLog.findOne({
-      where: { userId: req.user.id, companyId: req.user.companyId, date },
-    })
+    const [log, sessions] = await Promise.all([
+      AttendanceLog.findOne({
+        where: { userId: req.user.id, companyId: req.user.companyId, date },
+      }),
+      AttendanceSession.findAll({
+        where: { userId: req.user.id, companyId: req.user.companyId, date },
+        order: [['checkInTime', 'ASC']],
+      }),
+    ])
+    const openSession = sessions.find((s) => !s.checkOutTime) || null
     return res.json({
       success: true,
       data: {
         date,
-        checkedIn: Boolean(row?.checkInTime),
-        checkedOut: Boolean(row?.checkOutTime),
-        checkInTime: row?.checkInTime || null,
-        checkOutTime: row?.checkOutTime || null,
-        totalHours: row?.totalHours != null ? Number(row.totalHours) : null,
-        status: row?.status || null,
-        checkInLabel: row?.checkInTime ? formatTime12(row.checkInTime) : null,
+        log: log ? log.get({ plain: true }) : null,
+        sessions: sessions.map((s) => s.get({ plain: true })),
+        hasOpenSession: Boolean(openSession),
+        openSession: openSession ? openSession.get({ plain: true }) : null,
+        totalHours: log?.totalHours != null ? Number(log.totalHours) : null,
+        status: log?.status || null,
       },
       meta: {},
     })
@@ -108,37 +124,44 @@ export async function getTodayStatus(req, res, next) {
 export async function checkIn(req, res, next) {
   try {
     const date = todayDateOnly()
-    const existing = await AttendanceLog.findOne({
-      where: { userId: req.user.id, companyId: req.user.companyId, date },
+
+    const openSession = await AttendanceSession.findOne({
+      where: { userId: req.user.id, companyId: req.user.companyId, date, checkOutTime: null },
     })
-    if (existing?.checkInTime) {
+    if (openSession) {
       return res.status(400).json({
         success: false,
-        error: {
-          code: 'ALREADY_CHECKED_IN',
-          message: 'You have already checked in today.',
-        },
+        error: { code: 'SESSION_OPEN', message: 'Please check out before checking in again.' },
       })
     }
+
     const now = new Date()
-    const status = deriveStatusFromCheckIn(now)
-    let row
-    if (existing) {
-      await existing.update({ checkInTime: now, status })
-      row = existing
-    } else {
-      row = await AttendanceLog.create({
-        userId: req.user.id,
-        companyId: req.user.companyId,
-        date,
-        checkInTime: now,
-        status,
-      })
-    }
+    const status = await deriveStatus(now, req.user.companyId)
+    const [log] = await AttendanceLog.findOrCreate({
+      where: { userId: req.user.id, companyId: req.user.companyId, date },
+      defaults: { checkInTime: now, status },
+    })
+
+    const session = await AttendanceSession.create({
+      userId: req.user.id,
+      companyId: req.user.companyId,
+      logId: log.id,
+      date,
+      checkInTime: now,
+    })
+
+    const allSessions = await AttendanceSession.findAll({
+      where: { userId: req.user.id, companyId: req.user.companyId, date },
+      order: [['checkInTime', 'ASC']],
+    })
+
     return res.json({
       success: true,
       data: {
-        ...row.get({ plain: true }),
+        log: log.get({ plain: true }),
+        session: session.get({ plain: true }),
+        sessions: allSessions.map((s) => s.get({ plain: true })),
+        hasOpenSession: true,
         checkInLabel: formatTime12(now),
       },
       meta: {},
@@ -151,31 +174,43 @@ export async function checkIn(req, res, next) {
 export async function checkOut(req, res, next) {
   try {
     const date = todayDateOnly()
-    const row = await AttendanceLog.findOne({
+
+    const openSession = await AttendanceSession.findOne({
+      where: { userId: req.user.id, companyId: req.user.companyId, date, checkOutTime: null },
+    })
+    if (!openSession) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'NO_OPEN_SESSION', message: 'No active session. Please check in first.' },
+      })
+    }
+
+    const now = new Date()
+    const durationHours = computeDurationHours(openSession.checkInTime, now)
+    await openSession.update({ checkOutTime: now, durationHours })
+
+    const allSessions = await AttendanceSession.findAll({
       where: { userId: req.user.id, companyId: req.user.companyId, date },
     })
-    if (!row?.checkInTime) {
-      return res.status(400).json({
-        success: false,
-        error: { code: 'NOT_CHECKED_IN', message: 'You must check in before checking out.' },
-      })
+    const totalHours = sumSessionHours(allSessions)
+
+    const log = await AttendanceLog.findOne({
+      where: { userId: req.user.id, companyId: req.user.companyId, date },
+    })
+    if (log) {
+      await log.update({ checkOutTime: now, totalHours })
     }
-    if (row.checkOutTime) {
-      return res.status(400).json({
-        success: false,
-        error: { code: 'ALREADY_CHECKED_OUT', message: 'You have already checked out today.' },
-      })
-    }
-    const now = new Date()
-    const totalHours = computeTotalHours(row.checkInTime, now)
-    await row.update({ checkOutTime: now, totalHours })
-    const summary = formatDurationHours(Number(totalHours))
+
     return res.json({
       success: true,
       data: {
-        ...row.get({ plain: true }),
-        summaryText: `You worked ${summary.text} today`,
-        totalHours: Number(totalHours),
+        log: log ? log.get({ plain: true }) : null,
+        session: openSession.get({ plain: true }),
+        sessions: allSessions.map((s) => s.get({ plain: true })),
+        hasOpenSession: false,
+        totalHours,
+        summaryText: `You worked ${formatDurationHours(totalHours)} today`,
+        checkOutLabel: formatTime12(now),
       },
       meta: {},
     })
@@ -252,12 +287,7 @@ export async function getTeamAttendance(req, res, next) {
       else if (log.status === 'half_day') calendar[d].half_day += 1
     }
 
-    const approvedLeaves = await approvedLeavesInRange(
-      req.user.companyId,
-      userIds,
-      start,
-      end,
-    )
+    const approvedLeaves = await approvedLeavesInRange(req.user.companyId, userIds, start, end)
     const onLeaveCounts = countOnLeaveByDate(approvedLeaves, start, end)
     for (const [d, count] of Object.entries(onLeaveCounts)) {
       if (!calendar[d]) calendar[d] = { present: 0, absent: 0, late: 0, half_day: 0, on_leave: 0 }
@@ -301,10 +331,7 @@ export async function getDayDetail(req, res, next) {
   try {
     const hrRole = await resolveHrRole(req.user)
     if (!isHrManagerOrAdmin(hrRole)) {
-      return res.status(403).json({
-        success: false,
-        error: { code: 'FORBIDDEN', message: 'Not allowed' },
-      })
+      return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Not allowed' } })
     }
     const date = String(req.params.date || '').slice(0, 10)
     const userWhere = await companyUserScopeWhere(req, hrRole)
@@ -329,7 +356,10 @@ export async function getDayDetail(req, res, next) {
     )
     const onLeaveIds = new Set(
       approvedLeaves
-        .filter((l) => String(l.fromDate).slice(0, 10) <= date && String(l.toDate).slice(0, 10) >= date)
+        .filter(
+          (l) =>
+            String(l.fromDate).slice(0, 10) <= date && String(l.toDate).slice(0, 10) >= date,
+        )
         .map((l) => String(l.userId)),
     )
     const rows = users.map((u) => {
@@ -337,14 +367,86 @@ export async function getDayDetail(req, res, next) {
       let status = log?.status || 'absent'
       if (!log && onLeaveIds.has(String(u.id))) status = 'on_leave'
       return {
+        logId: log?.id || null,
         user: u,
         status,
         checkInTime: log?.checkInTime || null,
         checkOutTime: log?.checkOutTime || null,
         totalHours: log?.totalHours != null ? Number(log.totalHours) : null,
+        note: log?.note || null,
+        editedByUserId: log?.editedByUserId || null,
+        editedAt: log?.editedAt || null,
       }
     })
     return res.json({ success: true, data: { date, rows }, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function editAttendanceLog(req, res, next) {
+  try {
+    const hrRole = await resolveHrRole(req.user)
+    if (!isHrManagerOrAdmin(hrRole)) {
+      return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'HR only' } })
+    }
+    const log = await AttendanceLog.findOne({
+      where: { id: req.params.id, companyId: req.user.companyId },
+    })
+    if (!log) {
+      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Log not found' } })
+    }
+    const { status, checkInTime, checkOutTime, totalHours, note } = req.body || {}
+    const updates = { editedByUserId: req.user.id, editedAt: new Date() }
+    if (status) updates.status = status
+    if (checkInTime !== undefined) updates.checkInTime = checkInTime || null
+    if (checkOutTime !== undefined) updates.checkOutTime = checkOutTime || null
+    if (totalHours !== undefined) updates.totalHours = totalHours !== null ? Number(totalHours) : null
+    if (note !== undefined) updates.note = note
+    await log.update(updates)
+    return res.json({ success: true, data: log.get({ plain: true }), meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function createAttendanceLog(req, res, next) {
+  try {
+    const hrRole = await resolveHrRole(req.user)
+    if (!isHrManagerOrAdmin(hrRole)) {
+      return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'HR only' } })
+    }
+    const { userId, date, status, checkInTime, checkOutTime, totalHours, note } = req.body || {}
+    if (!userId || !date || !status) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VALIDATION', message: 'userId, date, and status are required' },
+      })
+    }
+    const targetUser = await User.findOne({ where: { id: userId, companyId: req.user.companyId } })
+    if (!targetUser) {
+      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } })
+    }
+    const existing = await AttendanceLog.findOne({ where: { userId, date } })
+    if (existing) {
+      return res.status(409).json({
+        success: false,
+        error: { code: 'CONFLICT', message: 'Attendance log already exists for this user and date' },
+      })
+    }
+    const log = await AttendanceLog.create({
+      userId,
+      companyId: req.user.companyId,
+      date,
+      status,
+      checkInTime: checkInTime || null,
+      checkOutTime: checkOutTime || null,
+      totalHours: totalHours != null ? Number(totalHours) : null,
+      note: note || null,
+      editedByUserId: req.user.id,
+      editedAt: new Date(),
+    })
+    return res.status(201).json({ success: true, data: log.get({ plain: true }), meta: {} })
   } catch (e) {
     return next(e)
   }

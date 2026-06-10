@@ -1,6 +1,10 @@
 import { useState } from 'react'
 import toast from 'react-hot-toast'
+import { cn } from '@/utils/cn'
 import { PageShell } from '@/components/layout/PageShell'
+import { PageStack } from '@/components/layout/PageStack'
+import { Button } from '@/components/ui/Button'
+import { inputFieldClassName } from '@/components/ui/Input'
 import { RightDrawer } from '@/components/ui/RightDrawer'
 import { SalesDocTemplateGallery } from '@/features/sales-docs/components/SalesDocTemplateGallery'
 import {
@@ -76,66 +80,67 @@ export function QuotationTemplatesPage() {
     }
   }
 
+  const fieldLabel = 'text-xs font-medium text-ink-muted'
+  const fieldInput = cn(inputFieldClassName, 'mt-1')
+
   return (
     <PageShell fullWidth>
-      <SalesDocTemplateGallery
-        variant="quotation"
-        items={rows}
-        presetLabels={QUOTATION_PRESET_LABELS}
-        isLibraryCode={isLibraryQuotationCode}
-        createHref="/quotations/new"
-        listHref="/quotations"
-        listLabel="← Quotations list"
-        title="Quotation template"
-        subtitle={{
-          lead: 'Create or re-use an existing quotation',
-          hint: 'Select a quotation template to use — or start blank.',
-        }}
-        onEdit={openEdit}
-        onDelete={(row) => {
-          if (!confirm('Delete this template?')) return
-          deleteTpl(row.id)
-            .unwrap()
-            .then(() => {
-              toast.success('Deleted')
-              refetch()
-            })
-            .catch(() => toast.error('Could not delete'))
-        }}
-        toolbarExtra={
-          <button
-            type="button"
-            className="rounded-lg bg-[#534AB7] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#483fa3]"
-            onClick={openNew}
-          >
-            New template
-          </button>
-        }
-      />
+      <PageStack>
+        <SalesDocTemplateGallery
+          variant="quotation"
+          items={rows}
+          presetLabels={QUOTATION_PRESET_LABELS}
+          isLibraryCode={isLibraryQuotationCode}
+          createHref="/quotations/new"
+          listHref="/quotations"
+          listLabel="Quotations list"
+          title="Quotation templates"
+          subtitle={{
+            lead: 'Create or re-use an existing quotation',
+            hint: 'Select a template to start, or create from scratch.',
+          }}
+          onEdit={openEdit}
+          onDelete={(row) => {
+            if (!confirm('Delete this template?')) return
+            deleteTpl(row.id)
+              .unwrap()
+              .then(() => {
+                toast.success('Deleted')
+                refetch()
+              })
+              .catch(() => toast.error('Could not delete'))
+          }}
+          toolbarExtra={
+            <Button type="button" className="shrink-0 whitespace-nowrap" onClick={openNew}>
+              New template
+            </Button>
+          }
+        />
+      </PageStack>
 
       <RightDrawer open={open} onClose={() => setOpen(false)} title={editingId ? 'Edit template' : 'New template'}>
         <div className="flex flex-col gap-3 px-1 pb-8 pt-2">
-          <label className="text-xs font-medium text-neutral-600">
+          <label className={fieldLabel}>
             Name
             <input
-              className="mt-1 w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm"
+              className={fieldInput}
               value={form.name}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
             />
           </label>
-          <label className="text-xs font-medium text-neutral-600">
+          <label className={fieldLabel}>
             Code (unique per workspace)
             <input
-              className="mt-1 w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm"
+              className={fieldInput}
               value={form.code}
               onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
               disabled={Boolean(editingId)}
             />
           </label>
-          <label className="text-xs font-medium text-neutral-600">
+          <label className={fieldLabel}>
             Status
             <select
-              className="mt-1 w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm"
+              className={fieldInput}
               value={form.status}
               onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
             >
@@ -144,10 +149,10 @@ export function QuotationTemplatesPage() {
               <option value="draft">Draft</option>
             </select>
           </label>
-          <label className="text-xs font-medium text-neutral-600">
+          <label className={fieldLabel}>
             Layout preset
             <select
-              className="mt-1 w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm"
+              className={fieldInput}
               value={form.layoutPreset}
               onChange={(e) => setForm((f) => ({ ...f, layoutPreset: Number(e.target.value) }))}
             >
@@ -159,32 +164,32 @@ export function QuotationTemplatesPage() {
             </select>
           </label>
           <div className="grid grid-cols-2 gap-3">
-            <label className="text-xs font-medium text-neutral-600">
+            <label className={fieldLabel}>
               Currency
               <input
-                className="mt-1 w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm uppercase"
+                className={cn(fieldInput, 'uppercase')}
                 maxLength={3}
                 value={form.defaultCurrency}
                 onChange={(e) => setForm((f) => ({ ...f, defaultCurrency: e.target.value.toUpperCase().slice(0, 3) }))}
               />
             </label>
-            <label className="text-xs font-medium text-neutral-600">
+            <label className={fieldLabel}>
               Validity (days)
               <input
                 type="number"
-                className="mt-1 w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm"
+                className={fieldInput}
                 value={form.defaultValidityDays}
                 onChange={(e) => setForm((f) => ({ ...f, defaultValidityDays: Number(e.target.value) }))}
               />
             </label>
           </div>
           <div className="flex justify-end gap-2 pt-4">
-            <button type="button" className="rounded-lg border border-neutral-200 px-4 py-2 text-sm" onClick={() => setOpen(false)}>
+            <Button type="button" variant="secondary" onClick={() => setOpen(false)}>
               Cancel
-            </button>
-            <button type="button" className="rounded-lg bg-[#534AB7] px-4 py-2 text-sm font-semibold text-white" onClick={save}>
+            </Button>
+            <Button type="button" onClick={save}>
               Save
-            </button>
+            </Button>
           </div>
         </div>
       </RightDrawer>

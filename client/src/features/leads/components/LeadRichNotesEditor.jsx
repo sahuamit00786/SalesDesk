@@ -344,7 +344,7 @@ export function LeadRichNotesEditor({
               const html = stripEditorChromeForSave(editorRef.current)
               onSave({ title, html })
             }}
-            className="ml-1 h-9 shrink-0 rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:opacity-60"
+            className="ml-1 h-9 shrink-0 rounded-lg bg-[var(--brand-primary)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--brand-primary-dark)] disabled:opacity-60"
           >
             {saving ? 'Saving…' : isEditing ? 'Save note' : 'Add note'}
           </button>

@@ -115,7 +115,7 @@ export function MeetingNotificationBell() {
                       }}
                       className={`inline-flex items-center gap-1 px-3 py-2 rounded-lg text-xs ${
                         hasLink
-                          ? "bg-brand-600 text-white"
+                          ? "bg-[var(--brand-primary)] text-white"
                           : "bg-gray-300 text-gray-500 cursor-not-allowed"
                       }`}
                     >

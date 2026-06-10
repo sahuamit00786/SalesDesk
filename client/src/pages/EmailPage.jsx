@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { ChevronDown, ChevronUp, Filter, RefreshCcw, X } from 'lucide-react'
+import { SkeletonEmailList } from '@/components/shared/SkeletonLoader'
 import { PageShell } from '@/components/layout/PageShell'
 import { Select } from '@/components/ui/Select'
 import GmailThreadList from '@/features/gmail/GmailThreadList'
@@ -18,7 +19,7 @@ import {
 } from '@/features/email/emailApi'
 import { buildReplyQuoteHtml } from '@/features/email/buildReplyQuoteHtml'
 import { EmailComposerDrawer } from '@/features/email/EmailComposerDrawer'
-import { useGetGoogleEmailStatusQuery, useGetLeadsQuery } from '@/features/leads/leadsApi'
+import { useGetGoogleEmailStatusQuery, useGetLeadsQuery, useSyncLeadEmailsMutation } from '@/features/leads/leadsApi'
 import { readAuthFromStorage } from '@/features/auth/authSlice'
 import { useAppSelector } from '@/app/hooks'
 import { selectResolvedActiveWorkspaceId } from '@/features/workspace/workspaceSlice'
@@ -43,15 +44,26 @@ export function EmailPage() {
   const { data: googleEmailStatus } = useGetGoogleEmailStatusQuery()
   const googleEmailConnected = Boolean(googleEmailStatus?.data?.connected)
   const googleReadMailbox = googleEmailStatus?.data?.readMailbox
-  /** Gmail read scope missing — mailbox API will 403. Lead-only CRM mail may still work. */
   const googleInboxScopeMissing = googleEmailConnected && googleReadMailbox === false
-  const skipMailboxApi = !googleEmailConnected || leadOnly || googleInboxScopeMissing
+  const skipMailboxApi = !googleEmailConnected || googleInboxScopeMissing || leadOnly
   const showInboxScopeWarning = googleInboxScopeMissing && !leadOnly
+  const fetchLeadCrmThreads = leadOnly && Boolean(leadId)
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 350)
     return () => window.clearTimeout(t)
   }, [search])
+
+  useEffect(() => {
+    if (leadOnly) {
+      setMailboxTab('inbox')
+      setSelectedThreadId(null)
+    }
+  }, [leadOnly])
+
+  useEffect(() => {
+    setSelectedThreadId(null)
+  }, [leadId])
 
   const mailboxParams = useMemo(
     () => ({
@@ -66,7 +78,7 @@ export function EmailPage() {
     () => ({
       search: debouncedSearch || undefined,
       direction: direction || undefined,
-      leadId: leadId || undefined,
+      leadId,
       hasAttachments: hasAttachments || undefined,
       limit: 80,
     }),
@@ -84,31 +96,58 @@ export function EmailPage() {
     refetchOnFocus: true,
     refetchOnReconnect: true,
   })
+
   const { data: threadsRes, isFetching: loadingLeadThreads } = useGetEmailThreadsQuery(leadQuery, {
-    skip: !googleEmailConnected || !leadOnly,
-    pollingInterval: googleEmailConnected && leadOnly ? 20000 : 0,
-    refetchOnFocus: true,
-    refetchOnReconnect: true,
+    skip: !fetchLeadCrmThreads || !googleEmailConnected,
   })
 
-  const threads = useMemo(() => {
-    if (leadOnly) return Array.isArray(threadsRes?.data) ? threadsRes.data : []
-    return Array.isArray(mailboxThreadsRes?.data) ? mailboxThreadsRes.data : []
-  }, [leadOnly, threadsRes?.data, mailboxThreadsRes?.data])
+  const rawMailboxThreads = useMemo(
+    () => (Array.isArray(mailboxThreadsRes?.data) ? mailboxThreadsRes.data : []),
+    [mailboxThreadsRes?.data],
+  )
+
+  const rawLeadThreads = useMemo(
+    () => (Array.isArray(threadsRes?.data) ? threadsRes.data : []),
+    [threadsRes?.data],
+  )
 
   const { data: leadThreadRes, isFetching: loadingLeadThread } = useGetEmailThreadQuery(
     { threadId: selectedThreadId },
-    { skip: !selectedThreadId || !googleEmailConnected || !leadOnly },
+    { skip: !fetchLeadCrmThreads || !selectedThreadId || !googleEmailConnected },
   )
   const { data: mailboxThreadRes, isFetching: loadingMailboxThread } = useGetMailboxThreadQuery(selectedThreadId, {
-    skip: !selectedThreadId || !googleEmailConnected || leadOnly || googleInboxScopeMissing,
+    skip: !selectedThreadId || !googleEmailConnected || googleInboxScopeMissing || leadOnly,
   })
 
-  const [syncReplies, { isLoading: syncing }] = useSyncEmailRepliesMutation()
+  const [syncReplies, { isLoading: syncingAll }] = useSyncEmailRepliesMutation()
+  const [syncLeadEmails, { isLoading: syncingLead }] = useSyncLeadEmailsMutation()
+  const syncing = syncingAll || syncingLead
   const [markMailboxThreadRead] = useMarkMailboxThreadReadMutation()
   const [saveAttachment, { isLoading: savingAtt }] = useSaveMailboxAttachmentToLeadMutation()
   const { data: leadsData } = useGetLeadsQuery({ page: 1, limit: 400, search: '' }, { skip: !googleEmailConnected })
   const leads = Array.isArray(leadsData?.data) ? leadsData.data : []
+
+  const leadByEmail = useMemo(() => {
+    const m = new Map()
+    for (const l of leads) {
+      const e = String(l.email || '').toLowerCase().trim()
+      if (e) m.set(e, l)
+    }
+    return m
+  }, [leads])
+
+  const threads = useMemo(() => {
+    if (fetchLeadCrmThreads) return rawLeadThreads
+    let list = rawMailboxThreads.map((t) => {
+      if (t.lead?.id) return t
+      const senderEmail = String(t.lastMessage?.from?.email || '').toLowerCase().trim()
+      const matched = senderEmail ? leadByEmail.get(senderEmail) : null
+      if (!matched) return t
+      return { ...t, lead: { id: matched.id } }
+    })
+    if (hasAttachments) list = list.filter((t) => t.hasAttachments)
+    return list
+  }, [fetchLeadCrmThreads, rawLeadThreads, rawMailboxThreads, leadByEmail, hasAttachments])
 
   useEffect(() => {
     if (!googleEmailConnected) setSelectedThreadId(null)
@@ -121,38 +160,27 @@ export function EmailPage() {
     }
   }, [threads, selectedThreadId])
 
-  /** Opening a mailbox thread clears UNREAD in Gmail (matches Gmail web). */
   useEffect(() => {
     if (leadOnly || googleInboxScopeMissing || !googleEmailConnected || !selectedThreadId) return
     const row = threads.find((t) => t.threadId === selectedThreadId)
     if (!row?.isUnread) return
     markMailboxThreadRead(selectedThreadId).catch(() => {})
-  }, [
-    selectedThreadId,
-    leadOnly,
-    googleInboxScopeMissing,
-    googleEmailConnected,
-    threads,
-    markMailboxThreadRead,
-  ])
+  }, [selectedThreadId, leadOnly, googleInboxScopeMissing, googleEmailConnected, threads, markMailboxThreadRead])
 
   const parsedThread = useMemo(() => {
     if (!selectedThreadId) return null
-    if (leadOnly) {
-      const rows = leadThreadRes?.data || []
-      if (!rows.length) return null
-      const rowKey = rows[0].threadId ? String(rows[0].threadId) : `single:${rows[0].id}`
-      if (rowKey !== String(selectedThreadId)) return null
-      return parseStoredThread(rows)
+    if (fetchLeadCrmThreads) {
+      if (!leadThreadRes?.data) return null
+      return parseStoredThread(leadThreadRes.data)
     }
     const raw = mailboxThreadRes?.data
     if (!raw?.id || String(raw.id) !== String(selectedThreadId) || !raw.messages?.length) return null
     return parseGmailThread(raw)
-  }, [leadOnly, leadThreadRes?.data, mailboxThreadRes?.data, selectedThreadId])
+  }, [fetchLeadCrmThreads, leadThreadRes?.data, mailboxThreadRes?.data, selectedThreadId])
 
-  const selectedLead = leadThreadRes?.data?.[0]?.lead || null
-  const loadingThread = leadOnly ? loadingLeadThread : loadingMailboxThread
-  const isFetching = leadOnly ? loadingLeadThreads : loadingMailbox
+  const viewLeadId = fetchLeadCrmThreads ? leadId : (threads.find((t) => t.threadId === selectedThreadId)?.lead?.id || null)
+  const loadingThread = fetchLeadCrmThreads ? loadingLeadThread : loadingMailboxThread
+  const isFetching = fetchLeadCrmThreads ? loadingLeadThreads : loadingMailbox
   const detailPlaceholder = loadingThread && !parsedThread
 
   const openAttachmentPreview = useCallback(
@@ -202,9 +230,10 @@ export function EmailPage() {
   }, [saveAttachment, saveLeadId, saveTarget])
 
   const openNewCompose = useCallback(() => {
-    setComposeInitial(null)
+    const selected = leadId ? leads.find((l) => String(l.id) === String(leadId)) : null
+    setComposeInitial(selected ? { leadId: selected.id, to: selected.email || '' } : null)
     setComposeOpen(true)
-  }, [])
+  }, [leadId, leads])
 
   const openReplyCompose = useCallback(() => {
     const last = parsedThread?.lastMessage
@@ -212,22 +241,28 @@ export function EmailPage() {
     const fromEmail = String(last.from?.email || '').trim().toLowerCase()
     const matchedLead = fromEmail ? leads.find((l) => String(l.email || '').trim().toLowerCase() === fromEmail) : null
     setComposeInitial({
-      leadId: matchedLead?.id || selectedLead?.id || '',
-      to: last.from?.email || '',
+      leadId: matchedLead?.id || viewLeadId || leadId || '',
+      to: matchedLead?.email || last.from?.email || '',
       subject: parsedThread?.subject ? `Re: ${parsedThread.subject}` : 'Re:',
       threadId: selectedThreadId,
       bodyHtml: buildReplyQuoteHtml(last),
     })
     setComposeOpen(true)
-  }, [parsedThread, selectedLead?.id, selectedThreadId, leads])
+  }, [parsedThread, viewLeadId, leadId, selectedThreadId, leads])
 
-  const listTitle = leadOnly ? 'Lead mail' : mailboxTab === 'sent' ? 'Outbox' : 'Inbox'
+  const listTitle = leadOnly
+    ? (leadId ? 'Lead emails' : 'Select a lead')
+    : mailboxTab === 'sent'
+      ? 'Outbox'
+      : 'Inbox'
 
   const listEmptyHint = leadOnly
-    ? 'Lead mail only shows threads already linked in CRM. Clear filters or run Sync CRM mail. It does not pull your whole Gmail inbox.'
+    ? (leadId
+      ? 'No CRM emails for this lead yet. Send from the lead page or sync replies.'
+      : 'Enable Lead only, then pick a lead in Filters to load their emails.')
     : mailboxTab === 'sent'
-      ? 'Outbox lists mail in Gmail Sent with the same date range as Inbox. If nothing appears, nothing was sent from this mailbox after Google was connected.'
-      : 'This list reads your live Gmail Inbox: only threads that still have the Inbox label and whose last activity is on or after the day Google was connected for this workspace. Archived or older mail will not appear. The list refreshes about every 20 seconds while this page is open, and when you return to this browser tab.'
+      ? 'Outbox lists mail in Gmail Sent since Google was connected.'
+      : 'Reads your live Gmail Inbox since Google was connected. Refreshes every 20 seconds.'
 
   const mailboxErrorMessage = (() => {
     if (!mailboxThreadsError) return ''
@@ -244,6 +279,19 @@ export function EmailPage() {
     return 'Could not load mailbox from Google. Try reconnecting Google under Integrations.'
   })()
 
+  const handleSync = useCallback(async () => {
+    if (fetchLeadCrmThreads && leadId) {
+      try {
+        await syncLeadEmails({ id: leadId }).unwrap()
+        toast.success('Replies synced for this lead')
+      } catch (err) {
+        toast.error(err?.data?.error?.message || 'Sync failed')
+      }
+      return
+    }
+    await syncReplies().unwrap()
+  }, [fetchLeadCrmThreads, leadId, syncLeadEmails, syncReplies])
+
   return (
     <PageShell fullWidth>
       <div className="h-full px-2 py-2.5 lg:px-3">
@@ -259,7 +307,7 @@ export function EmailPage() {
                 disabled={!googleEmailConnected || leadOnly}
                 onClick={() => setMailboxTab('inbox')}
                 className={`rounded-md px-3 py-1 text-xs font-semibold transition ${
-                  !leadOnly && mailboxTab === 'inbox' ? 'bg-brand-600 text-white' : 'text-ink-muted hover:bg-surface-muted hover:text-ink'
+                  !leadOnly && mailboxTab === 'inbox' ? 'bg-[var(--brand-primary)] text-white' : 'text-ink-muted hover:bg-surface-muted hover:text-ink'
                 }`}
               >
                 Inbox
@@ -269,7 +317,7 @@ export function EmailPage() {
                 disabled={!googleEmailConnected || leadOnly}
                 onClick={() => setMailboxTab('sent')}
                 className={`rounded-md px-3 py-1 text-xs font-semibold transition ${
-                  !leadOnly && mailboxTab === 'sent' ? 'bg-brand-600 text-white' : 'text-ink-muted hover:bg-surface-muted hover:text-ink'
+                  !leadOnly && mailboxTab === 'sent' ? 'bg-[var(--brand-primary)] text-white' : 'text-ink-muted hover:bg-surface-muted hover:text-ink'
                 }`}
               >
                 Outbox
@@ -290,17 +338,15 @@ export function EmailPage() {
             <button
               type="button"
               className="ml-auto inline-flex h-8 items-center gap-1 rounded-lg border border-surface-border bg-white px-2.5 text-xs text-ink hover:bg-surface-muted disabled:opacity-50"
-              onClick={async () => {
-                await syncReplies().unwrap()
-              }}
-              disabled={syncing || !googleEmailConnected}
+              onClick={handleSync}
+              disabled={syncing || !googleEmailConnected || (leadOnly && !leadId)}
             >
               <RefreshCcw size={12} className={syncing ? 'animate-spin' : ''} />
               Sync CRM mail
             </button>
             <button
               type="button"
-              className="h-8 rounded-lg bg-brand-600 px-3 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+              className="h-8 rounded-lg bg-slate-800 px-3 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
               onClick={openNewCompose}
               disabled={!googleEmailConnected}
             >
@@ -310,33 +356,35 @@ export function EmailPage() {
 
           {filtersOpen && googleEmailConnected ? (
             <div className="flex flex-wrap items-center gap-2 border-b border-surface-border bg-surface-muted/50 px-3 py-2 sm:px-4">
+              <Select className="h-8 min-w-[180px] rounded-lg px-2 text-xs" value={leadId} onChange={(e) => setLeadId(e.target.value)}>
+                <option value="">All leads</option>
+                {leads.filter((l) => l.email).map((lead) => (
+                  <option key={lead.id} value={lead.id}>
+                    {lead.title || lead.contactName || lead.email}
+                    {lead.isOpportunity ? ' (Opportunity)' : ''}
+                  </option>
+                ))}
+              </Select>
               {leadOnly ? (
-                <>
-                  <Select
-                    className="h-8 min-w-[160px] rounded-lg px-2 text-xs"
-                    value={direction}
-                    onChange={(e) => setDirection(e.target.value)}
-                  >
-                    <option value="">All directions</option>
-                    <option value="inbound">Received</option>
-                    <option value="outbound">Sent</option>
-                  </Select>
-                  <Select className="h-8 min-w-[180px] rounded-lg px-2 text-xs" value={leadId} onChange={(e) => setLeadId(e.target.value)}>
-                    <option value="">All leads</option>
-                    {leads.filter((l) => l.email).map((lead) => (
-                      <option key={lead.id} value={lead.id}>
-                        {lead.title || lead.contactName || lead.email}
-                      </option>
-                    ))}
-                  </Select>
-                  <label className="inline-flex items-center gap-1 text-xs text-ink-muted">
-                    <input type="checkbox" checked={hasAttachments} onChange={(e) => setHasAttachments(e.target.checked)} />
-                    Has files
-                  </label>
-                </>
-              ) : (
-                <p className="text-xs text-ink-muted">All mailbox threads since Google was connected. Turn on Lead only to filter CRM-linked mail.</p>
-              )}
+                <Select className="h-8 min-w-[140px] rounded-lg px-2 text-xs" value={direction} onChange={(e) => setDirection(e.target.value)}>
+                  <option value="">All directions</option>
+                  <option value="inbound">Inbound</option>
+                  <option value="outbound">Outbound</option>
+                </Select>
+              ) : null}
+              <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-ink-muted">
+                <input type="checkbox" checked={hasAttachments} onChange={(e) => setHasAttachments(e.target.checked)} />
+                Has attachments
+              </label>
+              {(leadId || hasAttachments || direction) ? (
+                <button
+                  type="button"
+                  className="text-xs text-brand-600 hover:underline"
+                  onClick={() => { setLeadId(''); setHasAttachments(false); setDirection('') }}
+                >
+                  Clear filters
+                </button>
+              ) : null}
             </div>
           ) : null}
 
@@ -348,7 +396,7 @@ export function EmailPage() {
               </p>
               <button
                 type="button"
-                className="h-10 rounded-lg bg-brand-600 px-5 text-sm font-semibold text-white hover:bg-brand-700"
+                className="h-10 rounded-lg bg-slate-800 px-5 text-sm font-semibold text-white hover:bg-slate-800"
                 onClick={() => navigate('/integrations?tab=google')}
               >
                 Open Google Settings
@@ -358,7 +406,7 @@ export function EmailPage() {
             <div className="flex flex-1 flex-col justify-center gap-3 border-t border-amber-200/80 bg-amber-50/90 px-4 py-8 text-sm text-amber-950 sm:px-6">
               <p className="font-semibold">Inbox cannot load with the current Google permissions</p>
               <p className="max-w-xl text-xs leading-relaxed text-amber-900/90">
-                This workspace&apos;s Google link can send mail but does not include Gmail <strong>read</strong> access. Open Integrations, click <strong>Reconnect Google</strong>, and approve the Gmail read scope on the consent screen.
+                This workspace&apos;s Google link can send mail but does not include Gmail <strong>read</strong> access. Open Integrations, click <strong>Reconnect Google</strong>, and approve the Gmail read scope on the consent screen. You can still use <strong>Lead only</strong> with a selected lead.
               </p>
               <button
                 type="button"
@@ -384,21 +432,20 @@ export function EmailPage() {
                 emptyHint={listEmptyHint}
               />
               <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-muted/30">
-                {isFetching && !threads.length ? <div className="p-4 text-xs text-ink-muted">Loading…</div> : null}
-                {detailPlaceholder ? <div className="p-4 text-xs text-ink-muted">Loading conversation…</div> : null}
+                {isFetching && !threads.length ? <SkeletonEmailList rows={8} /> : null}
+                {detailPlaceholder ? <SkeletonEmailList rows={4} /> : null}
                 {!detailPlaceholder ? (
                   <GmailThreadView
                     thread={selectedThreadId ? parsedThread : null}
-                    mailboxMode={!leadOnly}
-                    showReplyButton={leadOnly || mailboxTab === 'inbox'}
-                    onOpenAttachment={!leadOnly ? openAttachmentPreview : undefined}
-                    onSaveAttachmentToLead={!leadOnly ? openSaveModal : undefined}
+                    mailboxMode={!fetchLeadCrmThreads}
+                    showReplyButton={fetchLeadCrmThreads || mailboxTab === 'inbox'}
+                    onOpenAttachment={fetchLeadCrmThreads ? undefined : openAttachmentPreview}
+                    onSaveAttachmentToLead={fetchLeadCrmThreads ? undefined : openSaveModal}
                     onBack={() => setSelectedThreadId(null)}
-                    onSync={async () => {
-                      await syncReplies().unwrap()
-                    }}
+                    onSync={handleSync}
                     onCreateEmail={openNewCompose}
                     onReply={openReplyCompose}
+                    viewLeadId={viewLeadId}
                   />
                 ) : null}
               </div>
@@ -435,7 +482,7 @@ export function EmailPage() {
               <button
                 type="button"
                 disabled={!saveLeadId || savingAtt}
-                className="h-9 rounded-lg bg-violet-600 px-4 text-sm font-semibold text-white disabled:opacity-50"
+                className="h-9 rounded-lg bg-slate-800 px-4 text-sm font-semibold text-white disabled:opacity-50"
                 onClick={() => submitSaveToLead()}
               >
                 {savingAtt ? 'Saving…' : 'Save'}

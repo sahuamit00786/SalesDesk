@@ -13,14 +13,13 @@ import {
   usePatchInvoiceMutation,
 } from '@/features/sales-docs/invoicesApi'
 import { useGetLeadsQuery, useGetLeadQuery } from '@/features/leads/leadsApi'
-import { useGetDealQuery } from '@/features/deals/dealsApi'
-import { INVOICE_PRESET_LABELS } from '@/features/sales-docs/presetLabels'
+import { useGetDealQuery, useGetDealsQuery } from '@/features/deals/dealsApi'
+
 import { buildCustomerSnapshotFromLead, formatAddressLines } from '@/features/sales-docs/customerSnapshot'
 import { aggregateInvoiceTotals } from '@/features/sales-docs/previewTotals'
 import { suggestedInvoiceNumber } from '@/features/sales-docs/suggestedDocNumber'
 import { cn } from '@/utils/cn'
 import { pickTemplateIdFromSearch } from '@/utils/docTemplateQuery'
-import { shortDealId } from '@/utils/shortDealId'
 
 const emptyLine = () => ({
   name: '',
@@ -67,6 +66,16 @@ function toIsoDate(d) {
   }
 }
 
+function resolveCssColor(value, fallback = '#059669') {
+  if (!value || typeof value !== 'string') return fallback
+  if (value.startsWith('#') || value.startsWith('rgb')) return value
+  try {
+    const varName = value.replace(/^var\(/, '').replace(/\)$/, '').trim()
+    const resolved = getComputedStyle(document.documentElement).getPropertyValue(varName).trim()
+    return resolved || fallback
+  } catch { return fallback }
+}
+
 export function NewInvoicePage() {
   const location = useLocation()
   const [, setSearchParams] = useSearchParams()
@@ -103,7 +112,8 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
   const hydratedInvoiceIdRef = useRef('')
   const isEditingExisting = Boolean(invoiceId)
 
-  const [leadId, setLeadId] = useState(initialLeadId)
+  const [clientLeadId, setClientLeadId] = useState(initialLeadId)
+  const [dealLeadId, setDealLeadId] = useState('')
   const [invoiceTemplateId, setInvoiceTemplateId] = useState(templateId)
   const [layoutPreset, setLayoutPreset] = useState(1)
   const [currency, setCurrency] = useState('USD')
@@ -114,6 +124,8 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
   const [addressLine, setAddressLine] = useState('')
   const [notes, setNotes] = useState('')
   const [termsSnapshot, setTermsSnapshot] = useState('')
+  const [shipping, setShipping] = useState('0')
+  const [adjustment, setAdjustment] = useState('0')
   const [lines, setLines] = useState([emptyLine()])
   const [documentTheme, setDocumentTheme] = useState({ accentColor: '#059669', headerTone: 'light' })
   const [savedId, setSavedId] = useState(null)
@@ -137,16 +149,42 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
 
   const { data: leadsRes } = useGetLeadsQuery({ page: 1, limit: 400, search: '' })
   const leads = leadsRes?.data || []
-  const dealOptions = useMemo(() => {
-    const onlyDeals = leads.filter((l) =>
-      Boolean(l?.isOpportunity) || Boolean(l?.opportunityStage) || Boolean(l?.pipelineStage) || Boolean(l?.dealValue),
-    )
-    return onlyDeals.length ? onlyDeals : leads
-  }, [leads])
 
-  function applyLeadSelection(id) {
-    setLeadId(id)
+  const { data: dealsRes } = useGetDealsQuery({ page: 1, limit: 400 })
+  const allDeals = dealsRes?.data || []
+
+  const filteredDealOptions = useMemo(() => {
+    if (!clientLeadId) return allDeals
+    const client = leads.find((l) => l.id === clientLeadId)
+    if (!client?.company) return allDeals
+    return allDeals.filter(
+      (d) =>
+        d.parentOpportunityLeadId === clientLeadId ||
+        d.companyName === client.company,
+    )
+  }, [allDeals, clientLeadId, leads])
+
+  function applyClientSelection(id) {
+    setClientLeadId(id)
     const lead = leads.find((l) => l.id === id)
+    if (lead) setAddressLine(formatAddressLines(buildCustomerSnapshotFromLead(lead)))
+    if (dealLeadId) {
+      const deal = allDeals.find((d) => d.id === dealLeadId)
+      const newClient = leads.find((l) => l.id === id)
+      if (deal && newClient && deal.companyName !== newClient.company) {
+        setDealLeadId('')
+      }
+    }
+  }
+
+  function applyDealSelection(dealId) {
+    setDealLeadId(dealId)
+    const deal = allDeals.find((d) => d.id === dealId)
+    if (!deal) return
+    const oppLeadId = deal.parentOpportunityLeadId || ''
+    setClientLeadId(oppLeadId)
+    const lead = leads.find((l) => l.id === oppLeadId) ||
+      (deal ? { contactName: deal.fullName, company: deal.companyName, email: deal.email } : null)
     if (lead) setAddressLine(formatAddressLines(buildCustomerSnapshotFromLead(lead)))
   }
 
@@ -160,7 +198,9 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
     if (savedId) return
     const seq = billing?.invoiceNextSeq
     if (seq == null) return
-    setPreviewNumber(suggestedInvoiceNumber(issueDate, seq))
+    const num = suggestedInvoiceNumber(issueDate, seq)
+    setPreviewNumber(num)
+    setPurchaseOrderRef((prev) => prev || num)
   }, [savedId, billing?.invoiceNextSeq, issueDate])
 
   useEffect(() => {
@@ -179,7 +219,8 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
     hydratedInvoiceIdRef.current = invoiceId
 
     setSavedId(existingInvoice.id || null)
-    setLeadId(existingInvoice.leadId || '')
+    setClientLeadId(existingInvoice.leadId || '')
+    setDealLeadId(existingInvoice.dealId || '')
     setInvoiceTemplateId(existingInvoice.invoiceTemplateId || '')
     setLayoutPreset(Number(existingInvoice.layoutPreset) || 1)
     setCurrency(normalizeCurrencyCode(existingInvoice.currency))
@@ -190,6 +231,8 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
     setAddressLine(addressFromSnapshot(existingInvoice.customerSnapshot))
     setNotes(existingInvoice.notes || '')
     setTermsSnapshot(existingInvoice.termsSnapshot || '')
+    setShipping(String(existingInvoice.shipping ?? 0))
+    setAdjustment(String(existingInvoice.adjustment ?? 0))
     setPreviewNumber(existingInvoice.invoiceNumber || 'Invoice')
 
     const fetchedItems = Array.isArray(existingInvoice.items) ? existingInvoice.items : []
@@ -207,7 +250,7 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
     const t = existingInvoice.documentTheme
     if (t && typeof t === 'object') {
       setDocumentTheme({
-        accentColor: String(t.accentColor || '#059669'),
+        accentColor: resolveCssColor(String(t.accentColor || '')),
         headerTone: t.headerTone === 'dark' ? 'dark' : 'light',
       })
     }
@@ -216,13 +259,19 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
   useEffect(() => {
     if (activeDealId) return
     if (!initialLeadId || !leads.length) return
-    if (!leadId) applyLeadSelection(initialLeadId)
-  }, [activeDealId, initialLeadId, leads, leadId])
+    if (!clientLeadId) applyClientSelection(initialLeadId)
+  }, [activeDealId, initialLeadId, leads, clientLeadId])
+
+  useEffect(() => {
+    if (!activeDealId || !dealParentLead || addressLine) return
+    const addr = formatAddressLines(buildCustomerSnapshotFromLead(dealParentLead))
+    if (addr) setAddressLine(addr)
+  }, [activeDealId, dealParentLead])
 
   const selectedLead = useMemo(() => {
     if (activeDealId && dealParentLead) return dealParentLead
-    return leads.find((l) => l.id === leadId)
-  }, [leads, leadId, activeDealId, dealParentLead])
+    return leads.find((l) => l.id === clientLeadId)
+  }, [leads, clientLeadId, activeDealId, dealParentLead])
 
   const customerSnapshot = useMemo(() => {
     const base = buildCustomerSnapshotFromLead(selectedLead)
@@ -262,8 +311,8 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
       taxPct: l.taxPct === '' || l.taxPct == null ? null : Number(l.taxPct),
       discountPct: l.discountPct === '' || l.discountPct == null ? null : Number(l.discountPct),
     }))
-    return aggregateInvoiceTotals(raw, { roundOff: 0 })
-  }, [lines])
+    return aggregateInvoiceTotals(raw, { roundOff: 0, shipping: Number(shipping) || 0, adjustment: Number(adjustment) || 0 })
+  }, [lines, shipping, adjustment])
 
   const previewLines = totals.items.filter((l) => String(l.name || '').trim())
 
@@ -281,7 +330,7 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
 
   async function saveDraft() {
     const items = buildItemsPayload()
-    if (!activeDealId && !leadId) {
+    if (!activeDealId && !clientLeadId) {
       toast.error('Select a client')
       return
     }
@@ -300,7 +349,7 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
 
     const normalizedCurrency = normalizeCurrencyCode(currency)
     const createBody = {
-      ...(activeDealId ? { dealId: activeDealId } : { leadId }),
+      ...(activeDealId ? { dealId: activeDealId } : dealLeadId ? { dealId: dealLeadId, leadId: clientLeadId } : { leadId: clientLeadId }),
       invoiceTemplateId: invoiceTemplateId || null,
       issueDate: toIsoDate(issueDate),
       dueDate: dueDate ? toIsoDate(dueDate) : null,
@@ -313,6 +362,8 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
       termsSnapshot: termsSnapshot.trim() || null,
       status: 'draft',
       items,
+      shipping: Number(shipping) || 0,
+      adjustment: Number(adjustment) || 0,
       documentTheme: themePayload,
     }
 
@@ -329,6 +380,8 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
       termsSnapshot: termsSnapshot.trim() || null,
       status: 'draft',
       items,
+      shipping: Number(shipping) || 0,
+      adjustment: Number(adjustment) || 0,
       documentTheme: themePayload,
     }
 
@@ -336,7 +389,7 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
       if (savedId) {
         const res = await patchInvoice({ id: savedId, ...patchBody }).unwrap()
         const inv = res?.data ?? res
-        toast.success('Draft saved')
+        toast.success(isEditingExisting ? 'Invoice updated' : 'Draft saved')
         setPreviewNumber(inv.invoiceNumber || previewNumber)
       } else {
         const res = await createInvoice(createBody).unwrap()
@@ -352,7 +405,7 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
 
   async function sendInvoice() {
     const items = buildItemsPayload()
-    if (!activeDealId && !leadId) {
+    if (!activeDealId && !clientLeadId) {
       toast.error('Select a client')
       return
     }
@@ -384,13 +437,15 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
           notes: notes.trim() || null,
           termsSnapshot: termsSnapshot.trim() || null,
           items,
+          shipping: Number(shipping) || 0,
+          adjustment: Number(adjustment) || 0,
           documentTheme: themePayload,
         }).unwrap()
         toast.success('Invoice issued')
         navigate(`/invoices/${savedId}/print`)
       } else {
         const res = await createInvoice({
-          ...(activeDealId ? { dealId: activeDealId } : { leadId }),
+          ...(activeDealId ? { dealId: activeDealId } : dealLeadId ? { dealId: dealLeadId, leadId: clientLeadId } : { leadId: clientLeadId }),
           invoiceTemplateId: invoiceTemplateId || null,
           issueDate: toIsoDate(issueDate),
           dueDate: dueDate ? toIsoDate(dueDate) : null,
@@ -403,6 +458,8 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
           termsSnapshot: termsSnapshot.trim() || null,
           status: 'issued',
           items,
+          shipping: Number(shipping) || 0,
+          adjustment: Number(adjustment) || 0,
           documentTheme: themePayload,
         }).unwrap()
         const inv = res?.data ?? res
@@ -418,11 +475,15 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
 
   return (
     <PageShell fullWidth>
-      <div className="flex min-h-0 w-full min-w-0 flex-col gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-neutral-200 pb-4">
+      <div className="sales-doc-editor flex min-h-0 w-full min-w-0 flex-col gap-3 px-3 pt-2 pb-3 sm:px-4 sm:pt-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-200 pb-3">
           <div>
-            <h1 className="text-xl font-semibold text-neutral-900">New invoice</h1>
-            <p className="text-xs text-neutral-500">{INVOICE_PRESET_LABELS[layoutPreset - 1] || 'Invoice'}</p>
+            <h1 className="text-xl font-semibold text-neutral-900">
+              {isEditingExisting ? 'Edit invoice' : 'New invoice'}
+            </h1>
+            <p className="text-xs text-neutral-500">
+              {isEditingExisting ? previewNumber : 'Invoice'}
+            </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <label className="flex cursor-pointer items-center gap-2 text-sm text-neutral-600 lg:hidden">
@@ -434,7 +495,7 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
                 to={`/invoices/${savedId}/print`}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-2 rounded-lg border border-neutral-200 bg-white px-4 py-2 text-sm font-medium text-neutral-800 shadow-sm hover:bg-neutral-50"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-sm font-medium text-neutral-800 shadow-sm hover:bg-neutral-50"
               >
                 <Printer className="h-4 w-4" />
                 Print / PDF
@@ -444,42 +505,46 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
               type="button"
               disabled={busy}
               onClick={saveDraft}
-              className="rounded-lg border border-neutral-200 bg-white px-4 py-2 text-sm font-semibold text-neutral-800 shadow-sm hover:bg-neutral-50 disabled:opacity-50"
+              className="rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-sm font-semibold text-neutral-800 shadow-sm hover:bg-neutral-50 disabled:opacity-50"
             >
-              {creating || patching ? 'Saving…' : 'Save as draft'}
+              {creating || patching ? 'Saving…' : isEditingExisting ? 'Update draft' : 'Save as draft'}
             </button>
             <button
               type="button"
               disabled={busy}
               onClick={sendInvoice}
-              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
+              className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
             >
-              Send invoice
+              {isEditingExisting ? 'Update & issue' : 'Send invoice'}
             </button>
           </div>
         </div>
 
-        <div className="grid min-h-0 w-full flex-1 grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start lg:gap-6">
-          <div className="flex min-w-0 flex-col gap-4">
-            <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+        <div className="grid min-h-0 w-full flex-1 grid-cols-1 gap-3 lg:grid-cols-2 lg:items-start lg:gap-4">
+          <div className="flex min-w-0 flex-col gap-3">
+            <section className="sde-card">
               <h2 className="text-sm font-semibold text-neutral-900">Invoice details</h2>
-              <div className="mt-4 space-y-4">
+              <div className="sde-field-stack">
                 <label className="block text-xs font-medium text-neutral-600">
-                  Deal
+                  Deal <span className="font-normal text-neutral-400">(optional)</span>
                   <select
                     className="mt-1 w-full rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-xs"
-                    value={leadId}
+                    value={dealLeadId}
                     disabled={Boolean(activeDealId)}
-                    onChange={(e) => applyLeadSelection(e.target.value)}
+                    onChange={(e) => {
+                      if (!e.target.value) {
+                        setDealLeadId('')
+                      } else {
+                        applyDealSelection(e.target.value)
+                      }
+                    }}
                   >
-                    <option value="">Select deal…</option>
-                    {dealOptions.map((l) => {
-                      const who = (l.contactName || l.title || 'Lead').trim()
-                      const co = (l.company || '').trim() || '—'
-                      const stage = String(l.opportunityStage || l.pipelineStage || l.currentStage || 'Open')
+                    <option value="">No deal / select later…</option>
+                    {filteredDealOptions.map((d) => {
+                      const who = (d.fullName || '').trim() || '—'
                       return (
-                        <option key={l.id} value={l.id}>
-                          Deal #{shortDealId(l)} · {who} · {co} · {stage}
+                        <option key={d.id} value={d.id}>
+                          {d.dealName || who}
                         </option>
                       )
                     })}
@@ -490,9 +555,9 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
                   Bill to
                   <select
                     className="mt-1 w-full rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-xs"
-                    value={leadId}
+                    value={clientLeadId}
                     disabled={Boolean(activeDealId)}
-                    onChange={(e) => applyLeadSelection(e.target.value)}
+                    onChange={(e) => applyClientSelection(e.target.value)}
                   >
                     <option value="">Select client…</option>
                     {leads.map((l) => (
@@ -503,7 +568,7 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
                   </select>
                 </label>
 
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="sde-field-grid">
                   <label className="block text-xs font-medium text-neutral-600">
                     Invoice number
                     <input
@@ -523,7 +588,7 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
                   </label>
                 </div>
 
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="sde-field-grid">
                   <label className="block text-xs font-medium text-neutral-600">
                     Issue date
                     <input
@@ -560,7 +625,7 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
                   />
                 </label>
 
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="sde-field-grid">
                   <label className="block text-xs font-medium text-neutral-600">
                     Reference
                     <input
@@ -578,26 +643,49 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
                     />
                   </label>
                 </div>
+
+                <div className="sde-field-grid">
+                  <label className="block text-xs font-medium text-neutral-600">
+                    Shipping
+                    <input
+                      type="number"
+                      step="any"
+                      className="mt-1 w-full rounded-lg border border-neutral-200 px-2.5 py-1.5 text-xs"
+                      value={shipping}
+                      onChange={(e) => setShipping(e.target.value)}
+                    />
+                  </label>
+                  <label className="block text-xs font-medium text-neutral-600">
+                    Adjustment
+                    <input
+                      type="number"
+                      step="any"
+                      className="mt-1 w-full rounded-lg border border-neutral-200 px-2.5 py-1.5 text-xs"
+                      value={adjustment}
+                      onChange={(e) => setAdjustment(e.target.value)}
+                    />
+                  </label>
+                </div>
               </div>
             </section>
 
-            <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+            <section className="sde-card">
               <div className="flex items-center justify-between gap-2">
                 <h2 className="text-sm font-semibold text-neutral-900">Line items</h2>
                 <button
                   type="button"
-                  className="text-sm font-medium text-[#534AB7] hover:underline"
+                  className="text-sm font-medium text-brand-600 hover:underline"
                   onClick={() => setLines((prev) => [...prev, emptyLine()])}
                 >
                   + Add item
                 </button>
               </div>
-              <div className="mt-4 space-y-3">
+              <div className="sde-line-stack">
                 {lines.map((line, idx) => (
-                  <div key={idx} className="rounded-xl border border-neutral-100 bg-neutral-50/80 p-3">
+                  <div key={idx} className="sde-line-card">
                     <input
                       placeholder="Description"
-                      className="mb-2 w-full rounded-lg border border-neutral-200 px-2.5 py-1.5 text-xs font-medium"
+                      className="mb-1.5 w-full rounded-lg border border-neutral-200 px-2.5 py-1.5 text-xs font-medium"
                       value={line.name}
                       onChange={(e) => {
                         const v = e.target.value
@@ -662,9 +750,9 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
               </div>
             </section>
 
-            <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+            <section className="sde-card">
               <h2 className="text-sm font-semibold text-neutral-900">Appearance</h2>
-              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <label className="block text-xs font-medium text-neutral-600">
                   Accent color
                   <div className="mt-1 flex items-center gap-2">
@@ -692,24 +780,10 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
                     <option value="dark">Dark band</option>
                   </select>
                 </label>
-                <label className="block text-xs font-medium text-neutral-600 sm:col-span-2">
-                  Layout preset
-                  <select
-                    className="mt-1 w-full rounded-lg border border-neutral-200 px-2.5 py-1.5 text-xs"
-                    value={layoutPreset}
-                    onChange={(e) => setLayoutPreset(Number(e.target.value))}
-                  >
-                    {INVOICE_PRESET_LABELS.map((label, i) => (
-                      <option key={label} value={i + 1}>
-                        {i + 1}. {label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
               </div>
             </section>
 
-            <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+            <section className="sde-card">
               <label className="block text-xs font-medium text-neutral-600">
                 Terms (shown on PDF)
                 <textarea
@@ -719,7 +793,7 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
                   onChange={(e) => setTermsSnapshot(e.target.value)}
                 />
               </label>
-              <label className="mt-4 block text-xs font-medium text-neutral-600">
+              <label className="mt-2.5 block text-xs font-medium text-neutral-600">
                 Notes
                 <textarea
                   rows={3}
@@ -737,7 +811,7 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
               !showPreviewMobile && 'hidden lg:flex',
             )}
           >
-            <div className="flex min-h-0 flex-1 flex-col rounded-2xl bg-neutral-100 p-2 lg:p-3">
+            <div className="flex min-h-0 flex-1 flex-col rounded-xl bg-neutral-100 p-1 lg:p-2">
               <ScaledA4PreviewViewport fit="width" className="min-h-[280px]">
                 <SalesDocumentPreview
                   embedded
@@ -754,8 +828,8 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
                   lines={previewLines.length ? previewLines : [{ name: 'Sample item', quantity: 1, unitPrice: 0, lineTotal: 0 }]}
                   subtotal={totals.subtotal}
                   discountTotal={totals.discountTotal}
-                  shipping={0}
-                  adjustment={0}
+                  shipping={totals.shipping}
+                  adjustment={totals.adjustment}
                   grandTotal={totals.grandTotal}
                   taxBreakdown={totals.taxBreakdown}
                   terms={termsSnapshot || null}

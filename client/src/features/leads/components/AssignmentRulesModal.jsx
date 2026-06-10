@@ -21,7 +21,7 @@ export function AssignmentRulesModal({ open, onClose, rules = [], draftRule, onD
               <option value="tag">By Tag</option>
               <option value="capacity">By Capacity</option>
             </select>
-            <button type="button" onClick={onSaveRule} className="h-10 rounded-xl bg-brand-600 px-5 text-sm font-semibold text-white">Save Rule</button>
+            <button type="button" onClick={onSaveRule} className="h-10 rounded-xl bg-[var(--brand-primary)] px-5 text-sm font-semibold text-white">Save Rule</button>
           </div>
         </div>
         {rules.map((rule) => (

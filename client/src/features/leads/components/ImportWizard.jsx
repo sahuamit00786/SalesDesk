@@ -24,7 +24,7 @@ export function ImportWizard({ open, onClose, onImport }) {
           <button type="button" onClick={onClose} className="h-10 rounded-xl border border-surface-border px-5">Close</button>
           <button
             type="button"
-            className="h-10 rounded-xl bg-brand-600 px-5 text-white"
+            className="h-10 rounded-xl bg-[var(--brand-primary)] px-5 text-white"
             disabled={busy || !rows.length}
             onClick={async () => {
               setBusy(true)

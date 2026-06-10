@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useSelector } from 'react-redux'
 import DOMPurify from 'dompurify'
 import { Link } from 'react-router-dom'
 import {
@@ -7,7 +8,6 @@ import {
   CalendarCheck2,
   CheckCircle2,
   ClipboardCheck,
-  Filter,
   FileText,
   Mail,
   MapPin,
@@ -19,24 +19,14 @@ import {
   Sparkles,
   UserRoundCheck,
 } from 'lucide-react'
-import toast from 'react-hot-toast'
 import { PageShell } from '@/components/layout/PageShell'
-import { Select } from '@/components/ui/Select'
-import { Input } from '@/components/ui/Input'
-import { IconInput } from '@/components/ui/IconInput'
 import {
-  useCreateActivityReminderMutation,
   useGetActivitiesFeedQuery,
   useGetActivityTypesQuery,
 } from '@/features/activities/activitiesApi'
 import { useGetLeadsQuery } from '@/features/leads/leadsApi'
+import { useTeamUsersQuery } from '@/features/team/teamApi'
 
-const PRESET_OPTIONS = [
-  { id: 'today', label: 'Today' },
-  { id: 'week', label: 'This week' },
-  { id: 'month', label: 'This month' },
-  { id: 'custom', label: 'Custom' },
-]
 
 const NOTE_SANITIZE = {
   ALLOWED_TAGS: ['b', 'strong', 'i', 'em', 'u', 'br', 'p', 'div', 'span', 'ul', 'ol', 'li', 'a', 'img'],
@@ -180,7 +170,7 @@ function rangeFromPreset(preset) {
   return { from: '', to: '' }
 }
 
-function ActivityTimelineItem({ activity, typeMeta, onSetReminder, nowMs }) {
+function ActivityTimelineItem({ activity, typeMeta, nowMs }) {
   const key = activity.metadata?.activityTypeKey || activity.type
   const meta = typeMeta[key] || FALLBACK_TYPE_META[key] || FALLBACK_TYPE_META.note
   const Icon = meta.icon || Sparkles
@@ -195,11 +185,8 @@ function ActivityTimelineItem({ activity, typeMeta, onSetReminder, nowMs }) {
   const followUpText = `${headline} ${detailRaw}`.toLowerCase()
   const looksLikeFollowUp = followUpText.includes('follow-up') || followUpText.includes('follow up') || followUpText.includes('reminder')
   const isFollowUp = key === 'follow_up' || key === 'task' || looksLikeFollowUp
-  const isEmail = key === 'email'
   const isNote = !isFollowUp && key === 'note'
   const followUpAt = isFollowUp ? parseFollowUpTime(activity, headline, detailRaw) : null
-  const isFollowUpExpired = Boolean(isFollowUp && followUpAt && followUpAt.getTime() < nowMs)
-  const canSetReminder = !isNote && !isEmail && !isFollowUpExpired
   const displayHeadline = isFollowUp && followUpAt
     ? headline.replace(
         /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z/,
@@ -262,16 +249,6 @@ function ActivityTimelineItem({ activity, typeMeta, onSetReminder, nowMs }) {
           {activity.metadata?.outcome ? <span className="rounded bg-white px-1.5 py-0.5">Outcome: {activity.metadata.outcome}</span> : null}
           {activity.metadata?.scheduled ? <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-emerald-700">Scheduled</span> : null}
         </div>
-        {canSetReminder ? (
-          <button
-            type="button"
-            className="mt-2 inline-flex h-7 items-center gap-1 rounded-lg border border-surface-border bg-white px-2 text-xs text-ink-muted hover:bg-surface-subtle"
-            onClick={() => onSetReminder(activity.id)}
-          >
-            <Bell size={13} />
-            Set follow-up reminder
-          </button>
-        ) : null}
         <p className="mt-2 text-right text-[11px] font-medium text-ink-muted">by {actorName}</p>
       </div>
     </article>
@@ -293,53 +270,67 @@ function ActivitySkeleton() {
 }
 
 export function ActivitiesPage() {
-  const [scope, setScope] = useState('global')
   const [leadId, setLeadId] = useState('')
-  const [search, setSearch] = useState('')
+  const [leadRecord, setLeadRecord] = useState(null)
+  const [leadSearch, setLeadSearch] = useState('')
+  const [debouncedLeadSearch, setDebouncedLeadSearch] = useState('')
+  const leadDebounceRef = useRef(null)
   const [typeFilter, setTypeFilter] = useState([])
-  const [datePreset, setDatePreset] = useState('week')
-  const [customFrom, setCustomFrom] = useState('')
-  const [customTo, setCustomTo] = useState('')
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
+  const [userId, setUserId] = useState('')
   const [page, setPage] = useState(1)
-  const [showFiltersModal, setShowFiltersModal] = useState(false)
   const [nowMs, setNowMs] = useState(Date.now())
 
-  const [showReminderModal, setShowReminderModal] = useState(false)
-  const [selectedReminderActivityId, setSelectedReminderActivityId] = useState(null)
+  useEffect(() => {
+    clearTimeout(leadDebounceRef.current)
+    leadDebounceRef.current = setTimeout(() => setDebouncedLeadSearch(leadSearch), 300)
+    return () => clearTimeout(leadDebounceRef.current)
+  }, [leadSearch])
 
-  const [reminderForm, setReminderForm] = useState({
-    remindAt: '',
-    channelPush: true,
-    channelEmail: true,
-  })
+  const leadQueryParams = useMemo(() => {
+    const p = { limit: 100, sort: 'createdAt', order: 'desc' }
+    if (debouncedLeadSearch.trim()) p.search = debouncedLeadSearch.trim()
+    return p
+  }, [debouncedLeadSearch])
 
-  const { data: leadsData } = useGetLeadsQuery({ page: 1, limit: 200, search: '' })
+  const { data: leadsData, isFetching: leadsFetching } = useGetLeadsQuery(leadQueryParams)
   const { data: typesData } = useGetActivityTypesQuery()
-  const presetRange = useMemo(
-    () => (datePreset === 'custom' ? { from: customFrom, to: customTo } : rangeFromPreset(datePreset)),
-    [datePreset, customFrom, customTo],
-  )
-  const effectiveScope = scope === 'lead' && !leadId ? 'global' : scope
-  const feedParams = {
-    page,
-    limit: 30,
-    scope: effectiveScope,
-    leadId: effectiveScope === 'lead' ? leadId : undefined,
-    types: typeFilter.join(','),
-    from: presetRange.from || undefined,
-    to: presetRange.to || undefined,
-    search: search || undefined,
-  }
-  const { data: feedData, isFetching: loadingFeed } = useGetActivitiesFeedQuery(feedParams, { pollingInterval: 60000 })
+  const { data: teamData } = useTeamUsersQuery()
 
-  const [createReminder, { isLoading: creatingReminder }] = useCreateActivityReminderMutation()
+  const feedParams = useMemo(() => {
+    const p = { page, limit: 30, scope: leadId ? 'lead' : 'global' }
+    if (leadId) p.leadId = leadId
+    if (typeFilter.length) p.types = typeFilter.join(',')
+    if (fromDate) {
+      const [fy, fm, fd] = fromDate.split('-').map(Number)
+      p.from = new Date(fy, fm - 1, fd, 0, 0, 0, 0).toISOString()
+    }
+    if (toDate) {
+      const [ty, tm, td] = toDate.split('-').map(Number)
+      p.to = new Date(ty, tm - 1, td, 23, 59, 59, 999).toISOString()
+    }
+    if (userId) p.userId = userId
+    return p
+  }, [page, leadId, typeFilter, fromDate, toDate, userId])
+
+  const { data: feedData, isFetching: loadingFeed } = useGetActivitiesFeedQuery(feedParams, { pollingInterval: 60000 })
 
   useEffect(() => {
     const t = setInterval(() => setNowMs(Date.now()), 30000)
     return () => clearInterval(t)
   }, [])
 
-  const leads = Array.isArray(leadsData?.data) ? leadsData.data : Array.isArray(leadsData) ? leadsData : []
+  const currentUser = useSelector((s) => s.auth.user)
+
+  const leads = useMemo(() => (Array.isArray(leadsData?.data) ? leadsData.data : Array.isArray(leadsData) ? leadsData : []), [leadsData])
+  const teamUsers = useMemo(() => {
+    const items = Array.isArray(teamData?.data?.items) ? teamData.data.items : []
+    if (currentUser && !items.some((u) => u.id === currentUser.id)) {
+      return [{ id: currentUser.id, name: currentUser.name || currentUser.email }, ...items]
+    }
+    return items
+  }, [teamData, currentUser])
   const typeRows = typesData?.data || []
   const activities = feedData?.data || []
   const total = feedData?.meta?.total || 0
@@ -361,38 +352,22 @@ export function ActivitiesPage() {
 
   const activeFilterCount = useMemo(() => {
     let n = typeFilter.length
-    if (search.trim()) n += 1
-    if (datePreset !== 'week') n += 1
-    if (scope === 'lead' && leadId) n += 1
+    if (fromDate || toDate) n += 1
+    if (leadId) n += 1
+    if (userId) n += 1
     return n
-  }, [scope, leadId, datePreset, search, typeFilter])
+  }, [leadId, fromDate, toDate, typeFilter, userId])
 
   function clearAllFilters() {
-    setScope('global')
     setLeadId('')
-    setSearch('')
+    setLeadRecord(null)
+    setLeadSearch('')
+    setDebouncedLeadSearch('')
     setTypeFilter([])
-    setDatePreset('week')
-    setCustomFrom('')
-    setCustomTo('')
+    setFromDate('')
+    setToDate('')
+    setUserId('')
     setPage(1)
-  }
-
-  async function submitReminder() {
-    if (!selectedReminderActivityId || !reminderForm.remindAt) {
-      toast.error('Reminder date-time is required.')
-      return
-    }
-    await createReminder({
-      activityId: selectedReminderActivityId,
-      remindAt: reminderForm.remindAt,
-      channelPush: reminderForm.channelPush,
-      channelEmail: reminderForm.channelEmail,
-    }).unwrap()
-    toast.success('Reminder scheduled')
-    setShowReminderModal(false)
-    setReminderForm({ remindAt: '', channelPush: true, channelEmail: true })
-    setSelectedReminderActivityId(null)
   }
 
   return (
@@ -400,65 +375,109 @@ export function ActivitiesPage() {
       <div className="h-full pr-[2px] pl-3 py-2.5 lg:pr-[2px] lg:pl-3">
         <div className="grid h-full gap-[2px]">
           <section className="flex h-full min-h-[calc(100dvh-90px)] flex-col rounded-2xl border border-surface-border bg-white p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h1 className="text-lg font-semibold text-ink">Lead Activities</h1>
-                <p className="text-xs text-ink-muted">Calls, emails, meetings, and notes in one timeline</p>
-              </div>
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                <IconInput
-                  icon={Search}
-                  className="h-9 min-h-0 min-w-[220px] rounded-lg text-xs"
-                  placeholder="Search title or notes"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+            {/* Single filter row */}
+            <div className="flex items-center gap-2">
+
+              {/* Lead / Opp search — takes remaining space */}
+              <div className="relative flex-1 min-w-0">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-ink-muted" />
+                <input
+                  className="h-9 w-full rounded-lg border border-surface-border bg-white pl-7 pr-6 text-xs outline-none focus:border-brand-400"
+                  placeholder={leadRecord ? (leadRecord.title || leadRecord.contactName || 'Selected') : 'Search lead or opportunity…'}
+                  value={leadSearch}
+                  onChange={(e) => { setLeadSearch(e.target.value); if (!e.target.value) { setLeadId(''); setLeadRecord(null) } setPage(1) }}
                 />
-                <Select
-                  className="h-9 min-w-[170px] rounded-lg px-2 text-xs"
-                  value=""
-                  onChange={(e) => {
-                    const v = e.target.value
-                    if (v && !typeFilter.includes(v)) setTypeFilter((prev) => [...prev, v])
-                  }}
-                >
-                  <option value="">Activity type</option>
-                  {typeRows.map((type) => (
-                    <option key={type.key} value={type.key}>
-                      {type.name}
-                    </option>
-                  ))}
-                </Select>
+                {leadRecord && (
+                  <button type="button" className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink" onClick={() => { setLeadId(''); setLeadRecord(null); setLeadSearch('') }}>×</button>
+                )}
+                {leadSearch && (
+                  <div className="absolute left-0 top-10 z-30 max-h-56 w-72 overflow-y-auto rounded-xl border border-surface-border bg-white shadow-lg">
+                    {leadsFetching ? (
+                      <p className="p-3 text-xs text-ink-muted">Loading…</p>
+                    ) : leads.length === 0 ? (
+                      <p className="p-3 text-xs text-ink-muted">No results</p>
+                    ) : leads.map((r) => (
+                      <button
+                        key={r.id}
+                        type="button"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-surface-subtle"
+                        onClick={() => { setLeadId(r.id); setLeadRecord(r); setLeadSearch(''); setPage(1) }}
+                      >
+                        <span className={`shrink-0 rounded px-1 py-0.5 text-[9px] font-bold uppercase ${r.isOpportunity ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                          {r.isOpportunity ? 'OPP' : 'LEAD'}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block truncate text-xs font-medium text-ink">{r.title || r.contactName || '—'}</span>
+                          {r.company && <span className="block truncate text-[10px] text-ink-muted">{r.company}</span>}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <input
+                type="date"
+                className="h-9 shrink-0 rounded-lg border border-surface-border bg-white px-3 text-xs outline-none focus:border-brand-400"
+                value={fromDate}
+                onChange={(e) => { setFromDate(e.target.value); setPage(1) }}
+              />
+
+              <input
+                type="date"
+                className="h-9 shrink-0 rounded-lg border border-surface-border bg-white px-3 text-xs outline-none focus:border-brand-400"
+                value={toDate}
+                onChange={(e) => { setToDate(e.target.value); setPage(1) }}
+              />
+
+              <select
+                className="h-9 shrink-0 rounded-lg border border-surface-border bg-white px-3 text-xs text-ink outline-none focus:border-brand-400"
+                value=""
+                onChange={(e) => { const v = e.target.value; if (v && !typeFilter.includes(v)) { setTypeFilter((prev) => [...prev, v]); setPage(1) } }}
+              >
+                <option value="">Activity type</option>
+                {typeRows.map((type) => <option key={type.key} value={type.key}>{type.name}</option>)}
+              </select>
+
+              {/* By whom */}
+              <select
+                className="h-9 shrink-0 rounded-lg border border-surface-border bg-white px-3 text-xs text-ink outline-none focus:border-brand-400"
+                value={userId}
+                onChange={(e) => { setUserId(e.target.value); setPage(1) }}
+              >
+                <option value="">By whom</option>
+                {teamUsers.map((u) => (
+                  <option key={u.id} value={u.id}>{u.name || u.email}</option>
+                ))}
+              </select>
+
+              {activeFilterCount > 0 && (
                 <button
                   type="button"
-                  className="relative inline-flex h-9 items-center gap-2 rounded-lg border border-surface-border bg-white px-3 text-xs font-medium text-ink hover:bg-surface-subtle"
-                  onClick={() => setShowFiltersModal(true)}
+                  className="h-9 shrink-0 rounded-lg border border-surface-border bg-white px-3 text-xs text-ink-muted hover:bg-surface-subtle hover:text-ink"
+                  onClick={clearAllFilters}
                 >
-                  <Filter size={14} aria-hidden />
-                  Filters
-                  {activeFilterCount > 0 ? (
-                    <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-600 px-1 text-[10px] font-semibold text-white">{activeFilterCount}</span>
-                  ) : null}
+                  Clear
                 </button>
-              </div>
+              )}
+
             </div>
-            {typeFilter.length ? (
-              <div className="mt-2 flex flex-wrap gap-1.5">
+
+            {/* Active type chips */}
+            {typeFilter.length > 0 && (
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
                 {typeFilter.map((id) => (
                   <button
                     key={`head-type-${id}`}
                     type="button"
-                    className="rounded-full border border-surface-border bg-white px-2 py-0.5 text-[11px]"
+                    className="rounded-full border border-surface-border bg-white px-2 py-0.5 text-[11px] hover:bg-surface-subtle"
                     onClick={() => setTypeFilter((prev) => prev.filter((x) => x !== id))}
                   >
-                    {typeRows.find((t) => t.key === id)?.name || id} x
+                    {typeRows.find((t) => t.key === id)?.name || id} ×
                   </button>
                 ))}
               </div>
-            ) : null}
-
-            {scope === 'lead' && !leadId ? (
-              <p className="mt-2 text-[11px] text-amber-700">Select a lead in Filters to narrow this page to one lead. Showing global activities for now.</p>
-            ) : null}
+            )}
 
             <div className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
               {loadingFeed ? <ActivitySkeleton /> : null}
@@ -473,10 +492,6 @@ export function ActivitiesPage() {
                   activity={row}
                   typeMeta={typeMeta}
                   nowMs={nowMs}
-                  onSetReminder={(activityId) => {
-                    setSelectedReminderActivityId(activityId)
-                    setShowReminderModal(true)
-                  }}
                 />
               ))}
             </div>
@@ -493,91 +508,7 @@ export function ActivitiesPage() {
         </div>
       </div>
 
-      {showFiltersModal ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-surface-border bg-white p-4 shadow-lg">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <p className="text-sm font-semibold text-ink">Filters</p>
-                <p className="mt-0.5 text-xs text-ink-muted">Narrow the activity timeline</p>
-              </div>
-              <button type="button" className="text-xs text-ink-muted hover:text-ink" onClick={() => setShowFiltersModal(false)}>
-                Close
-              </button>
-            </div>
-            <div className="mt-4 grid gap-2">
-              <label className="text-[11px] font-medium text-ink-muted">View</label>
-              <Select className="h-9 rounded-lg text-xs" value={scope} onChange={(e) => setScope(e.target.value)}>
-                <option value="global">Global view</option>
-                <option value="lead">Per-lead view</option>
-              </Select>
-              <label className="mt-2 text-[11px] font-medium text-ink-muted">Lead</label>
-              <Select className="h-9 rounded-lg text-xs" value={leadId} onChange={(e) => setLeadId(e.target.value)} disabled={scope !== 'lead'}>
-                <option value="">Select linked lead</option>
-                {leads.map((lead) => (
-                  <option key={lead.id} value={lead.id}>
-                    {lead.title || lead.contactName || lead.email}
-                  </option>
-                ))}
-              </Select>
-              <label className="mt-2 text-[11px] font-medium text-ink-muted">Date range</label>
-              <Select className="h-9 rounded-lg text-xs" value={datePreset} onChange={(e) => setDatePreset(e.target.value)}>
-                {PRESET_OPTIONS.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.label}
-                  </option>
-                ))}
-              </Select>
-              {datePreset === 'custom' ? (
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <Input type="datetime-local" className="h-9 min-h-0 rounded-lg px-2 text-xs" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} />
-                  <Input type="datetime-local" className="h-9 min-h-0 rounded-lg px-2 text-xs" value={customTo} onChange={(e) => setCustomTo(e.target.value)} />
-                </div>
-              ) : null}
-            </div>
-            <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-surface-border pt-3">
-              <button
-                type="button"
-                className="h-9 rounded-lg border border-surface-border px-3 text-xs text-ink-muted hover:bg-surface-subtle"
-                onClick={() => {
-                  clearAllFilters()
-                  toast.success('Filters cleared')
-                }}
-              >
-                Clear all
-              </button>
-              <button type="button" className="h-9 rounded-lg bg-brand-600 px-4 text-xs font-semibold text-white hover:bg-brand-700" onClick={() => setShowFiltersModal(false)}>
-                Done
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
 
-      {showReminderModal ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-surface-border bg-white p-4">
-            <p className="text-sm font-semibold text-ink">Set activity reminder</p>
-            <div className="mt-3 space-y-2">
-              <Input type="datetime-local" className="h-9 min-h-0 w-full rounded-lg px-2 text-xs" value={reminderForm.remindAt} onChange={(e) => setReminderForm((f) => ({ ...f, remindAt: e.target.value }))} />
-              <label className="flex items-center gap-2 text-xs text-ink-muted">
-                <input type="checkbox" checked={reminderForm.channelPush} onChange={(e) => setReminderForm((f) => ({ ...f, channelPush: e.target.checked }))} />
-                Push notification
-              </label>
-              <label className="flex items-center gap-2 text-xs text-ink-muted">
-                <input type="checkbox" checked={reminderForm.channelEmail} onChange={(e) => setReminderForm((f) => ({ ...f, channelEmail: e.target.checked }))} />
-                Email notification
-              </label>
-            </div>
-            <div className="mt-4 flex justify-end gap-2">
-              <button type="button" className="h-8 rounded-lg border border-surface-border px-3 text-xs" onClick={() => setShowReminderModal(false)}>Cancel</button>
-              <button type="button" className="h-8 rounded-lg bg-brand-600 px-3 text-xs font-semibold text-white disabled:opacity-50" onClick={submitReminder} disabled={creatingReminder}>
-                {creatingReminder ? 'Saving...' : 'Save reminder'}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </PageShell>
   )
 }

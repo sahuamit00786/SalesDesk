@@ -31,6 +31,16 @@ export const Workspace = sequelize.define(
       allowNull: true,
       field: 'archived_at',
     },
+    themeColor: {
+      type: DataTypes.STRING(7),
+      allowNull: true,
+      field: 'theme_color',
+    },
+    sidebarTextColor: {
+      type: DataTypes.STRING(7),
+      allowNull: true,
+      field: 'sidebar_text_color',
+    },
   },
   {
     tableName: 'workspaces',

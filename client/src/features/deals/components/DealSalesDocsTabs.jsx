@@ -283,14 +283,14 @@ function DealSalesDocPreviewModal({ detail, onClose }) {
             <iframe title={title} src={fileUrl} className="h-[min(72vh,760px)] min-h-[240px] w-full rounded-lg border border-neutral-200 bg-white shadow-inner" />
           ) : fileUrl ? (
             <div className="mx-auto max-w-md rounded-xl border border-dashed border-neutral-300 bg-white p-8 text-center shadow-sm">
-              <FileText className="mx-auto h-10 w-10 text-violet-400" />
+              <FileText className="mx-auto h-10 w-10 text-brand-400" />
               <p className="mt-3 text-sm font-medium text-neutral-800">Preview not available</p>
               <p className="mt-1 text-xs text-neutral-500">Open this file in a new tab to view it.</p>
               <a
                 href={fileUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-4 inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-violet-700"
+                className="mt-4 inline-flex items-center gap-2 rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[var(--brand-primary-dark)]"
               >
                 <ExternalLink className="h-4 w-4" />
                 Open file
@@ -336,7 +336,7 @@ export function DealQuotationsPanel({
                 ? `/quotations/new?dealId=${encodeURIComponent(dealId)}`
                 : `/quotations/new?leadId=${encodeURIComponent(leadId)}`
             }
-            className="inline-flex items-center gap-1.5 rounded-md border border-orange-200 bg-orange-50 px-3 py-1.5 text-xs font-semibold text-orange-900 shadow-sm hover:bg-orange-100"
+            className="inline-flex items-center gap-1.5 rounded-md border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-900 shadow-sm hover:bg-brand-100"
           >
             <Plus className="h-3.5 w-3.5" />
             New quotation
@@ -345,7 +345,7 @@ export function DealQuotationsPanel({
             <label
               htmlFor={inputId}
               className={cn(
-                'inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-900 shadow-sm transition hover:bg-violet-100',
+                'inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-brand-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-brand-900 shadow-sm transition hover:bg-slate-100',
                 uploadingProposal ? 'pointer-events-none opacity-50' : '',
               )}
             >
@@ -383,7 +383,7 @@ export function DealQuotationsPanel({
               <p className="text-center text-xs text-neutral-400">Loading quotations…</p>
             ) : rows.length === 0 ? (
               <div className="rounded-xl border border-dashed border-neutral-300 bg-white p-5 text-center shadow-sm">
-                <FileText className="mx-auto h-7 w-7 text-orange-200" />
+                <FileText className="mx-auto h-7 w-7 text-brand-200" />
                 <p className="mt-2 text-xs font-medium text-neutral-700">None yet</p>
                 <p className="mt-0.5 text-[11px] text-neutral-400">Create with line items and print layout.</p>
               </div>
@@ -394,11 +394,11 @@ export function DealQuotationsPanel({
                     key={q.id}
                     type="button"
                     onClick={() => setDetail({ kind: 'quotation', id: q.id })}
-                    className="group flex h-full min-h-[240px] flex-col gap-2.5 rounded-xl border border-neutral-200 bg-white p-3 text-left shadow-sm ring-orange-300/0 transition hover:border-orange-200 hover:ring-2 hover:ring-orange-200/60"
+                    className="group flex h-full min-h-[240px] flex-col gap-2.5 rounded-xl border border-neutral-200 bg-white p-3 text-left shadow-sm ring-brand-300/0 transition hover:border-brand-200 hover:ring-2 hover:ring-brand-200/60"
                   >
                     <QuotationCardMini quotationId={q.id} />
                     <div className="flex items-start justify-between gap-2 px-0.5">
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-orange-200 bg-orange-50 text-orange-600">
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-brand-200 bg-brand-50 text-brand-700">
                         <FileText className="h-3 w-3" />
                       </span>
                       <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase', statusPillClass(q.status))}>
@@ -422,7 +422,7 @@ export function DealQuotationsPanel({
           <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 scrollbar-subtle md:px-5">
             {proposalDocs.length === 0 ? (
               <div className="rounded-xl border border-dashed border-neutral-300 bg-white p-5 text-center shadow-sm">
-                <FileText className="mx-auto h-7 w-7 text-violet-200" />
+                <FileText className="mx-auto h-7 w-7 text-brand-200" />
                 <p className="mt-2 text-xs font-medium text-neutral-700">No files yet</p>
                 <p className="mt-0.5 text-[11px] text-neutral-400">
                   {showFileUpload ? 'Use Upload quotation file in the header.' : 'Attachments appear here.'}
@@ -437,7 +437,7 @@ export function DealQuotationsPanel({
                       key={doc.id}
                       type="button"
                       onClick={() => setDetail({ kind: 'file', doc })}
-                      className="group flex h-full min-h-[240px] flex-col gap-2.5 rounded-xl border border-neutral-200 bg-white p-3 text-left shadow-sm ring-violet-300/0 transition hover:border-violet-200 hover:ring-2 hover:ring-violet-200/60"
+                      className="group flex h-full min-h-[240px] flex-col gap-2.5 rounded-xl border border-neutral-200 bg-white p-3 text-left shadow-sm ring-brand-300/0 transition hover:border-brand-200 hover:ring-2 hover:ring-brand-200/60"
                     >
                       {fileUrl && isPdfDoc(doc) ? (
                         <PdfAttachmentMini fileUrl={fileUrl} />
@@ -452,7 +452,7 @@ export function DealQuotationsPanel({
                         </div>
                       )}
                       <div className="flex items-start justify-between gap-2 px-0.5">
-                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-violet-200 bg-violet-50 text-violet-600">
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-brand-200 bg-slate-50 text-brand-600">
                           <FileText className="h-3 w-3" />
                         </span>
                         {isPdfDoc(doc) ? (
@@ -517,7 +517,7 @@ export function DealInvoicesPanel({
             <label
               htmlFor={inputId}
               className={cn(
-                'inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-900 shadow-sm transition hover:bg-violet-100',
+                'inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-brand-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-brand-900 shadow-sm transition hover:bg-slate-100',
                 uploadingInvoiceFile ? 'pointer-events-none opacity-50' : '',
               )}
             >
@@ -597,7 +597,7 @@ export function DealInvoicesPanel({
           <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 scrollbar-subtle md:px-5">
             {invoiceFileDocs.length === 0 ? (
               <div className="rounded-xl border border-dashed border-neutral-300 bg-white p-5 text-center shadow-sm">
-                <FileText className="mx-auto h-7 w-7 text-violet-200" />
+                <FileText className="mx-auto h-7 w-7 text-brand-200" />
                 <p className="mt-2 text-xs font-medium text-neutral-700">No files yet</p>
                 <p className="mt-0.5 text-[11px] text-neutral-400">
                   {showFileUpload ? 'Use Upload invoice file in the header.' : 'Attachments appear here.'}
@@ -612,7 +612,7 @@ export function DealInvoicesPanel({
                       key={doc.id}
                       type="button"
                       onClick={() => setDetail({ kind: 'file', doc })}
-                      className="group flex h-full min-h-[240px] flex-col gap-2.5 rounded-xl border border-neutral-200 bg-white p-3 text-left shadow-sm ring-violet-300/0 transition hover:border-violet-200 hover:ring-2 hover:ring-violet-200/60"
+                      className="group flex h-full min-h-[240px] flex-col gap-2.5 rounded-xl border border-neutral-200 bg-white p-3 text-left shadow-sm ring-brand-300/0 transition hover:border-brand-200 hover:ring-2 hover:ring-brand-200/60"
                     >
                       {fileUrl && isPdfDoc(doc) ? (
                         <PdfAttachmentMini fileUrl={fileUrl} />
@@ -627,7 +627,7 @@ export function DealInvoicesPanel({
                         </div>
                       )}
                       <div className="flex items-start justify-between gap-2 px-0.5">
-                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-violet-200 bg-violet-50 text-violet-600">
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-brand-200 bg-slate-50 text-brand-600">
                           <FileText className="h-3 w-3" />
                         </span>
                         {isPdfDoc(doc) ? (

@@ -31,7 +31,7 @@ export function buildPaginationItems(current, total) {
   return out
 }
 
-const pageNumBtn = 'min-w-[2.25rem] tabular-nums'
+const pageNumBtn = 'tabular-nums'
 
 /**
  * @param {{
@@ -41,7 +41,8 @@ const pageNumBtn = 'min-w-[2.25rem] tabular-nums'
  *   subLabel?: import('react').ReactNode
  *   beforeNav?: import('react').ReactNode
  *   className?: string
- *   variant?: 'surface' | 'neutral'
+ *   variant?: 'surface' | 'neutral' | 'brand'
+ *   compact?: boolean
  * }} props
  */
 export function TablePaginationBar({
@@ -52,6 +53,7 @@ export function TablePaginationBar({
   beforeNav,
   className,
   variant = 'surface',
+  compact = false,
 }) {
   const safeTotal = Math.max(1, totalPages)
   const safePage = Math.min(Math.max(1, page), safeTotal)
@@ -60,82 +62,119 @@ export function TablePaginationBar({
   const shell =
     variant === 'neutral'
       ? 'divide-neutral-200 border-neutral-200 bg-white text-neutral-700'
-      : 'divide-slate-200 border-slate-200 bg-white text-ink'
+      : variant === 'brand'
+        ? 'divide-brand-300 border-brand-400 bg-white text-ink shadow-sm'
+        : 'divide-slate-200 border-slate-200 bg-white text-ink'
 
-  const activeBg = variant === 'neutral' ? 'bg-neutral-100' : 'bg-slate-100'
-  const labelMuted = variant === 'neutral' ? 'text-neutral-500' : 'text-ink-muted'
-  const hoverCell = variant === 'neutral' ? 'hover:bg-neutral-50/90' : 'hover:bg-slate-50/90'
+  const activeBg =
+    variant === 'neutral'
+      ? 'bg-neutral-100'
+      : variant === 'brand'
+        ? 'bg-[var(--brand-primary)] text-white'
+        : 'bg-slate-100'
+  const labelMuted =
+    variant === 'neutral'
+      ? 'text-neutral-500'
+      : variant === 'brand'
+        ? 'text-brand-900'
+        : 'text-ink-muted'
+  const hoverCell =
+    variant === 'neutral'
+      ? 'hover:bg-neutral-50/90'
+      : variant === 'brand'
+        ? 'hover:bg-brand-50'
+        : 'hover:bg-slate-50/90'
 
   const segBtn = cn(
-    'inline-flex min-h-[2.25rem] shrink-0 items-center justify-center px-3 py-2 text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-40',
-    variant === 'neutral' ? 'text-neutral-700' : 'text-ink',
+    'inline-flex shrink-0 items-center justify-center font-medium transition-colors disabled:pointer-events-none disabled:opacity-40',
+    compact
+      ? 'min-h-[1.6875rem] px-2 py-0.5 text-xs'
+      : 'min-h-[2.25rem] px-3 py-2 text-sm',
+    variant === 'neutral' ? 'text-neutral-700' : variant === 'brand' ? 'text-brand-900' : 'text-ink',
   )
 
+  const pageNumMin = compact ? 'min-w-[1.75rem]' : 'min-w-[2.25rem]'
+  const iconSize = compact ? 'h-3.5 w-3.5' : 'h-4 w-4'
+
+  const hasLeft = beforeNav || subLabel
+
   return (
-    <div className={cn('flex flex-wrap items-center justify-between gap-4', className)}>
-      <div className="min-w-0 flex-1">
-        <p className={cn('text-sm tabular-nums', labelMuted)}>
-          Page {safePage} of {safeTotal}
-        </p>
-        {subLabel ? <div className={cn('mt-0.5 text-xs tabular-nums', labelMuted)}>{subLabel}</div> : null}
-      </div>
-      <div className="flex min-w-0 flex-wrap items-center justify-end gap-3">
-        {beforeNav}
-        <nav
-          className={cn('inline-flex divide-x overflow-hidden rounded-xl border shadow-sm', shell)}
-          aria-label="Pagination"
+    <div className={cn('flex flex-wrap items-center justify-between', compact ? 'gap-2' : 'gap-3', className)}>
+      {/* Left: rows-per-page selector + showing info */}
+      {hasLeft ? (
+        <div className={cn('flex shrink-0 flex-wrap items-center', compact ? 'gap-2' : 'gap-3')}>
+          {beforeNav}
+          {subLabel ? (
+            <span className={cn('tabular-nums', compact ? 'text-[11px]' : 'text-xs', labelMuted)}>{subLabel}</span>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* Right: pagination nav */}
+      <nav
+        className={cn(
+          'ml-auto inline-flex divide-x overflow-hidden border shadow-sm',
+          compact ? 'rounded-lg' : 'rounded-xl',
+          shell,
+        )}
+        aria-label="Pagination"
+      >
+        <button
+          type="button"
+          className={cn(segBtn, hoverCell, compact ? 'gap-1 pl-2 pr-2.5' : 'gap-1.5 pl-3 pr-3.5')}
+          disabled={safePage <= 1}
+          onClick={() => onPageChange(Math.max(1, safePage - 1))}
+          aria-label="Previous page"
         >
-          <button
-            type="button"
-            className={cn(segBtn, hoverCell, 'gap-1.5 pr-3.5 pl-3')}
-            disabled={safePage <= 1}
-            onClick={() => onPageChange(Math.max(1, safePage - 1))}
-            aria-label="Previous page"
-          >
-            <ChevronLeft className="h-4 w-4 shrink-0 opacity-70" aria-hidden />
-            Previous
-          </button>
-          {items.map((item) =>
-            item.type === 'ellipsis' ? (
-              <span
-                key={item.key}
-                className={cn(
-                  'inline-flex min-h-[2.25rem] items-center px-2.5 py-2 text-sm',
-                  variant === 'neutral' ? 'text-neutral-400' : 'text-slate-400',
-                )}
-                aria-hidden
-              >
-                …
-              </span>
-            ) : (
-              <button
-                key={item.value}
-                type="button"
-                className={cn(
-                  segBtn,
-                  pageNumBtn,
-                  item.value === safePage ? activeBg : hoverCell,
-                )}
-                onClick={() => onPageChange(item.value)}
-                aria-label={`Page ${item.value}`}
-                aria-current={item.value === safePage ? 'page' : undefined}
-              >
-                {item.value}
-              </button>
-            ),
-          )}
-          <button
-            type="button"
-            className={cn(segBtn, hoverCell, 'gap-1.5 pl-3.5 pr-3')}
-            disabled={safePage >= safeTotal}
-            onClick={() => onPageChange(Math.min(safeTotal, safePage + 1))}
-            aria-label="Next page"
-          >
-            Next
-            <ChevronRight className="h-4 w-4 shrink-0 opacity-70" aria-hidden />
-          </button>
-        </nav>
-      </div>
+          <ChevronLeft className={cn(iconSize, 'shrink-0 opacity-70')} aria-hidden />
+          Previous
+        </button>
+        {items.map((item) =>
+          item.type === 'ellipsis' ? (
+            <span
+              key={item.key}
+              className={cn(
+                'inline-flex items-center',
+                compact ? 'min-h-[1.6875rem] px-1.5 py-0.5 text-xs' : 'min-h-[2.25rem] px-2.5 py-2 text-sm',
+                variant === 'neutral'
+                  ? 'text-neutral-400'
+                  : variant === 'brand'
+                    ? 'text-brand-400'
+                    : 'text-slate-400',
+              )}
+              aria-hidden
+            >
+              …
+            </span>
+          ) : (
+            <button
+              key={item.value}
+              type="button"
+              className={cn(
+                segBtn,
+                pageNumBtn,
+                pageNumMin,
+                item.value === safePage ? activeBg : hoverCell,
+              )}
+              onClick={() => onPageChange(item.value)}
+              aria-label={`Page ${item.value}`}
+              aria-current={item.value === safePage ? 'page' : undefined}
+            >
+              {item.value}
+            </button>
+          ),
+        )}
+        <button
+          type="button"
+          className={cn(segBtn, hoverCell, compact ? 'gap-1 pl-2.5 pr-2' : 'gap-1.5 pl-3.5 pr-3')}
+          disabled={safePage >= safeTotal}
+          onClick={() => onPageChange(Math.min(safeTotal, safePage + 1))}
+          aria-label="Next page"
+        >
+          Next
+          <ChevronRight className={cn(iconSize, 'shrink-0 opacity-70')} aria-hidden />
+        </button>
+      </nav>
     </div>
   )
 }

@@ -23,7 +23,7 @@ function SortableField({ field, selected, onSelect, onDelete, onDuplicate }) {
 export function FormCanvas({ fields, selectedFieldId, onSelectField, onDeleteField, onDuplicateField }) {
   const { setNodeRef, isOver } = useDroppable({ id: 'form-canvas' })
   return (
-    <div ref={setNodeRef} className={`min-h-[420px] rounded-2xl border p-4 ${isOver ? 'border-brand-500 bg-brand-50/50' : 'border-surface-border bg-surface-muted/30'}`}>
+    <div ref={setNodeRef} className={`min-h-[420px] rounded-2xl border p-4 ${isOver ? 'border-brand-500 bg-slate-50' : 'border-surface-border bg-surface-muted/30'}`}>
       {!fields.length ? (
         <div className="rounded-2xl border border-dashed border-surface-border bg-white p-12 text-center text-sm text-ink-muted">
           Drag fields here to build your form

@@ -3,6 +3,10 @@ import { Op, literal } from 'sequelize'
 import { sequelize, Campaign, CampaignTeamMember, CampaignLead, Lead, User } from '../models/index.js'
 import { allowedWorkspaceIdsForUser } from '../services/userWorkspaceService.js'
 import { leadAccessWhere } from '../services/leadVisibility.js'
+import {
+  collectCampaignRecipients,
+  notifyCampaignLeadsBatch,
+} from '../services/notification/teamNotificationService.js'
 
 export const DEFAULT_CAMPAIGN_STAGES = [
   { key: 'new', label: 'New', sortOrder: 0 },
@@ -23,7 +27,15 @@ const createSchema = Joi.object({
   skipUpdatingLeadAssignedTo: Joi.boolean().default(false),
   /** Optional campaign amount goal (displayed on campaign detail KPIs). */
   leadTarget: Joi.number().min(0).precision(2).max(999999999999.99).allow(null).optional(),
+  endDate: Joi.date().iso().allow(null, '').optional(),
 }).required()
+
+function parseOptionalDateOnly(value) {
+  if (value == null || value === '') return null
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return null
+  return d.toISOString().slice(0, 10)
+}
 
 function assertWorkspace(req, workspaceId) {
   const wid = String(workspaceId || '').trim()
@@ -65,6 +77,16 @@ export async function list(req, res, next) {
     const status = String(req.query.status || '').trim().toLowerCase()
     const where = { workspaceId, companyId: req.user.companyId }
     if (status && ['active', 'inactive', 'draft'].includes(status)) where.status = status
+    const kind = req.user.userRoleKind
+    const isSalesOnly = !req.user.isCompanyAdmin && kind !== 'workspace_admin' && kind !== 'manager'
+    if (isSalesOnly) {
+      const memberOf = await CampaignTeamMember.findAll({
+        where: { userId: req.user.id },
+        attributes: ['campaignId'],
+      })
+      const memberCampaignIds = memberOf.map((m) => m.campaignId)
+      where[Op.or] = [{ createdBy: req.user.id }, { id: { [Op.in]: memberCampaignIds } }]
+    }
     const rows = await Campaign.findAll({
       where,
       order: [['createdAt', 'DESC']],
@@ -74,9 +96,15 @@ export async function list(req, res, next) {
     const ids = rows.map((r) => r.id)
     const countsByCampaign = new Map()
     if (ids.length) {
+      const countWhere = { campaignId: { [Op.in]: ids } }
+      const countInclude = [{ model: Lead, as: 'lead', attributes: [], required: true, where: { isDeleted: false } }]
+      if (isSalesOnly) {
+        countWhere[Op.or] = [{ assignedUserId: req.user.id }, { '$lead.assigned_to$': req.user.id }]
+      }
       const agg = await CampaignLead.findAll({
         attributes: ['campaignId', 'stageKey', [literal('COUNT(*)'), 'cnt']],
-        where: { campaignId: { [Op.in]: ids } },
+        where: countWhere,
+        include: countInclude,
         group: ['campaignId', 'stageKey'],
         raw: true,
       })
@@ -144,6 +172,7 @@ export async function create(req, res, next) {
       return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Invalid team user selection.' } })
     }
 
+    const campaignLeadRows = []
     const campaign = await sequelize.transaction(async (transaction) => {
       const c = await Campaign.create(
         {
@@ -152,8 +181,11 @@ export async function create(req, res, next) {
           name: value.name.trim(),
           description: value.description ? String(value.description).trim() : null,
           leadTarget: value.leadTarget != null ? value.leadTarget : null,
+          endDate: parseOptionalDateOnly(value.endDate),
           stages: DEFAULT_CAMPAIGN_STAGES,
           status: value.status,
+          preferExistingTeamAssignee: Boolean(value.preferExistingTeamAssignee),
+          skipUpdatingLeadAssignedTo: Boolean(value.skipUpdatingLeadAssignedTo),
           createdBy: req.user.id,
         },
         { transaction },
@@ -184,8 +216,18 @@ export async function create(req, res, next) {
         }
       }
       await CampaignLead.bulkCreate(rows, { transaction })
+      campaignLeadRows.push(...rows)
       return c
     })
+    const campaignCounts = collectCampaignRecipients(campaignLeadRows, req.user.id)
+    notifyCampaignLeadsBatch({
+      companyId: req.user.companyId,
+      workspaceId,
+      actorUserId: req.user.id,
+      campaignId: campaign.id,
+      campaignName: campaign.name,
+      countByUserId: campaignCounts,
+    }).catch(() => {})
     const full = await loadCampaignForCompany(campaign.id, req.user.companyId)
     return res.status(201).json({ success: true, data: full.get({ plain: true }), meta: {} })
   } catch (e) {
@@ -209,16 +251,24 @@ export async function getOne(req, res, next) {
     })
     if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Campaign not found' } })
     const stages = Array.isArray(row.stages) ? row.stages : DEFAULT_CAMPAIGN_STAGES
+    const detailKind = req.user.userRoleKind
+    const detailSalesOnly = !req.user.isCompanyAdmin && detailKind !== 'workspace_admin' && detailKind !== 'manager'
+    const funnelWhere = { campaignId: row.id }
+    const funnelInclude = [{ model: Lead, as: 'lead', attributes: [], required: true, where: { isDeleted: false } }]
+    if (detailSalesOnly) {
+      funnelWhere[Op.or] = [{ assignedUserId: req.user.id }, { '$lead.assigned_to$': req.user.id }]
+    }
     const agg = await CampaignLead.findAll({
       attributes: ['stageKey', [literal('COUNT(*)'), 'cnt']],
-      where: { campaignId: row.id },
+      where: funnelWhere,
+      include: funnelInclude,
       group: ['stageKey'],
       raw: true,
     })
     const amountAgg = await CampaignLead.findAll({
       attributes: [[literal('COALESCE(SUM(`lead`.`value`), 0)'), 'totalAmount']],
-      where: { campaignId: row.id },
-      include: [{ model: Lead, as: 'lead', attributes: [], required: false }],
+      where: detailSalesOnly ? funnelWhere : { campaignId: row.id },
+      include: [{ model: Lead, as: 'lead', attributes: [], required: true, where: { isDeleted: false } }],
       raw: true,
     })
     const stageCounts = {}
@@ -249,7 +299,17 @@ export async function listLeads(req, res, next) {
     if (stageKey) clWhere.stageKey = stageKey
     if (assignedUserId && /^[0-9a-f-]{36}$/i.test(assignedUserId)) clWhere.assignedUserId = assignedUserId
 
-    const leadWhere = {}
+    const clKind = req.user.userRoleKind
+    const isSalesOnlyLeads = !req.user.isCompanyAdmin && clKind !== 'workspace_admin' && clKind !== 'manager'
+    if (isSalesOnlyLeads && !assignedUserId) {
+      // Sales sees only campaign leads assigned to them (campaign-level OR lead-level)
+      clWhere[Op.or] = [
+        { assignedUserId: req.user.id },
+        { '$lead.assigned_to$': req.user.id },
+      ]
+    }
+
+    const leadWhere = { isDeleted: false }
     if (isOpportunity === 'true') leadWhere.isOpportunity = true
     if (isOpportunity === 'false') leadWhere.isOpportunity = false
     if (q) {
@@ -315,9 +375,22 @@ const patchCampaignSchema = Joi.object({
   name: Joi.string().trim().min(1).max(255).optional(),
   description: Joi.string().trim().allow('', null).max(65535).optional(),
   leadTarget: Joi.number().min(0).precision(2).max(999999999999.99).allow(null).optional(),
+  endDate: Joi.date().iso().allow(null, '').optional(),
   status: Joi.string().valid('active', 'inactive', 'draft').optional(),
+  teamUserIds: Joi.array().items(Joi.string().uuid()).min(1).optional(),
+  preferExistingTeamAssignee: Joi.boolean().optional(),
+  skipUpdatingLeadAssignedTo: Joi.boolean().optional(),
 })
-  .or('name', 'description', 'leadTarget', 'status')
+  .or(
+    'name',
+    'description',
+    'leadTarget',
+    'endDate',
+    'status',
+    'teamUserIds',
+    'preferExistingTeamAssignee',
+    'skipUpdatingLeadAssignedTo',
+  )
   .required()
 
 export async function patchCampaign(req, res, next) {
@@ -344,11 +417,210 @@ export async function patchCampaign(req, res, next) {
     if (Object.prototype.hasOwnProperty.call(value, 'leadTarget')) {
       nextPatch.leadTarget = value.leadTarget == null ? null : value.leadTarget
     }
+    if (Object.prototype.hasOwnProperty.call(value, 'endDate')) {
+      nextPatch.endDate = parseOptionalDateOnly(value.endDate)
+    }
     if (Object.prototype.hasOwnProperty.call(value, 'status')) nextPatch.status = value.status
+    if (Object.prototype.hasOwnProperty.call(value, 'preferExistingTeamAssignee')) {
+      nextPatch.preferExistingTeamAssignee = Boolean(value.preferExistingTeamAssignee)
+    }
+    if (Object.prototype.hasOwnProperty.call(value, 'skipUpdatingLeadAssignedTo')) {
+      nextPatch.skipUpdatingLeadAssignedTo = Boolean(value.skipUpdatingLeadAssignedTo)
+    }
 
-    await campaign.update(nextPatch)
+    if (Object.keys(nextPatch).length) {
+      await campaign.update(nextPatch)
+    }
+
+    if (Object.prototype.hasOwnProperty.call(value, 'teamUserIds')) {
+      const teamSet = new Set(value.teamUserIds.map(String))
+      const usersOk = await User.count({
+        where: { id: { [Op.in]: [...teamSet] }, companyId: req.user.companyId },
+      })
+      if (usersOk !== teamSet.size) {
+        return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Invalid team user selection.' } })
+      }
+      await sequelize.transaction(async (transaction) => {
+        await CampaignTeamMember.destroy({ where: { campaignId: campaign.id }, transaction })
+        await CampaignTeamMember.bulkCreate(
+          [...teamSet].map((userId) => ({ campaignId: campaign.id, userId })),
+          { transaction },
+        )
+      })
+    }
+
     const full = await loadCampaignForCompany(campaign.id, req.user.companyId)
     return res.json({ success: true, data: full.get({ plain: true }), meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function addLeads(req, res, next) {
+  try {
+    const workspaceId = await assertWorkspaceAccess(req, req.headers['x-workspace-id'])
+    const campaign = await Campaign.findOne({
+      where: { id: req.params.id, companyId: req.user.companyId, workspaceId },
+    })
+    if (!campaign) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Campaign not found' } })
+
+    const { leadIds, preferExistingTeamAssignee = false, skipUpdatingLeadAssignedTo = false } = req.body || {}
+    if (!Array.isArray(leadIds) || !leadIds.length) {
+      return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'leadIds is required' } })
+    }
+
+    const accessWhere = await leadAccessWhere(req.user)
+    const leads = await Lead.findAll({
+      where: { ...accessWhere, id: { [Op.in]: leadIds }, workspaceId, companyId: req.user.companyId, isDeleted: false },
+    })
+    if (!leads.length) {
+      return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'No valid leads found' } })
+    }
+
+    const existingCl = await CampaignLead.findAll({
+      where: { campaignId: campaign.id, leadId: { [Op.in]: leads.map((l) => l.id) } },
+      attributes: ['leadId'],
+    })
+    const existingSet = new Set(existingCl.map((e) => String(e.leadId)))
+    const newLeads = leads.filter((l) => !existingSet.has(String(l.id)))
+
+    if (!newLeads.length) {
+      return res.json({ success: true, data: { added: 0, skipped: existingSet.size }, meta: {} })
+    }
+
+    const teamMembers = await CampaignTeamMember.findAll({
+      where: { campaignId: campaign.id },
+      attributes: ['userId'],
+    })
+    const teamArr = teamMembers.map((m) => String(m.userId))
+    const teamSet = new Set(teamArr)
+    const existingCount = await CampaignLead.count({ where: { campaignId: campaign.id } })
+    let rr = existingCount
+
+    const rows = []
+    for (const lead of newLeads) {
+      let assignedUserId = null
+      if (teamArr.length) {
+        if (preferExistingTeamAssignee && lead.assignedTo && teamSet.has(String(lead.assignedTo))) {
+          assignedUserId = lead.assignedTo
+        } else {
+          assignedUserId = teamArr[rr % teamArr.length]
+          rr += 1
+        }
+      }
+      rows.push({ campaignId: campaign.id, leadId: lead.id, stageKey: 'new', assignedUserId })
+    }
+
+    await sequelize.transaction(async (transaction) => {
+      await CampaignLead.bulkCreate(rows, { transaction })
+      if (!skipUpdatingLeadAssignedTo) {
+        for (const row of rows) {
+          if (row.assignedUserId) {
+            await Lead.update({ assignedTo: row.assignedUserId }, { where: { id: row.leadId }, transaction })
+          }
+        }
+      }
+    })
+
+    return res.json({ success: true, data: { added: newLeads.length, skipped: existingSet.size }, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function removeLead(req, res, next) {
+  try {
+    const workspaceId = await assertWorkspaceAccess(req, req.headers['x-workspace-id'])
+    const campaign = await Campaign.findOne({
+      where: { id: req.params.id, companyId: req.user.companyId, workspaceId },
+    })
+    if (!campaign) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Campaign not found' } })
+    const deleted = await CampaignLead.destroy({ where: { campaignId: campaign.id, leadId: req.params.leadId } })
+    if (!deleted) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Lead not in campaign' } })
+    return res.json({ success: true, data: {}, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function addMembers(req, res, next) {
+  try {
+    const workspaceId = await assertWorkspaceAccess(req, req.headers['x-workspace-id'])
+    const campaign = await Campaign.findOne({
+      where: { id: req.params.id, companyId: req.user.companyId, workspaceId },
+    })
+    if (!campaign) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Campaign not found' } })
+
+    const { userIds } = req.body || {}
+    if (!Array.isArray(userIds) || !userIds.length) {
+      return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'userIds is required' } })
+    }
+    const usersOk = await User.count({ where: { id: { [Op.in]: userIds }, companyId: req.user.companyId } })
+    if (usersOk !== userIds.length) {
+      return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Invalid user selection' } })
+    }
+
+    const existing = await CampaignTeamMember.findAll({ where: { campaignId: campaign.id }, attributes: ['userId'] })
+    const existingSet = new Set(existing.map((m) => String(m.userId)))
+    const newUserIds = userIds.filter((uid) => !existingSet.has(String(uid)))
+    if (newUserIds.length) {
+      await CampaignTeamMember.bulkCreate(newUserIds.map((userId) => ({ campaignId: campaign.id, userId })))
+    }
+
+    const full = await loadCampaignForCompany(campaign.id, req.user.companyId)
+    return res.json({ success: true, data: full.get({ plain: true }), meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function removeMember(req, res, next) {
+  try {
+    const workspaceId = await assertWorkspaceAccess(req, req.headers['x-workspace-id'])
+    const campaign = await Campaign.findOne({
+      where: { id: req.params.id, companyId: req.user.companyId, workspaceId },
+    })
+    if (!campaign) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Campaign not found' } })
+    await CampaignTeamMember.destroy({ where: { campaignId: campaign.id, userId: req.params.userId } })
+    return res.json({ success: true, data: {}, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function distributeLeads(req, res, next) {
+  try {
+    const workspaceId = await assertWorkspaceAccess(req, req.headers['x-workspace-id'])
+    const campaign = await Campaign.findOne({
+      where: { id: req.params.id, companyId: req.user.companyId, workspaceId },
+    })
+    if (!campaign) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Campaign not found' } })
+
+    const teamMembers = await CampaignTeamMember.findAll({ where: { campaignId: campaign.id }, attributes: ['userId'] })
+    if (!teamMembers.length) {
+      return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'No team members to distribute to' } })
+    }
+    const teamArr = teamMembers.map((m) => String(m.userId))
+    const { skipUpdatingLeadAssignedTo = false } = req.body || {}
+
+    const unassigned = await CampaignLead.findAll({ where: { campaignId: campaign.id, assignedUserId: null } })
+    if (!unassigned.length) {
+      return res.json({ success: true, data: { distributed: 0 }, meta: {} })
+    }
+
+    let rr = 0
+    await sequelize.transaction(async (transaction) => {
+      for (const cl of unassigned) {
+        const assignedUserId = teamArr[rr % teamArr.length]
+        rr += 1
+        await cl.update({ assignedUserId }, { transaction })
+        if (!skipUpdatingLeadAssignedTo) {
+          await Lead.update({ assignedTo: assignedUserId }, { where: { id: cl.leadId }, transaction })
+        }
+      }
+    })
+
+    return res.json({ success: true, data: { distributed: unassigned.length }, meta: {} })
   } catch (e) {
     return next(e)
   }
@@ -381,6 +653,26 @@ export async function patchLeadStage(req, res, next) {
       data: { campaignId: campaign.id, leadId: req.params.leadId, stageKey: value.stageKey },
       meta: {},
     })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function remove(req, res, next) {
+  try {
+    const workspaceId = await assertWorkspaceAccess(req, req.headers['x-workspace-id'])
+    const campaign = await Campaign.findOne({
+      where: { id: req.params.id, companyId: req.user.companyId, workspaceId },
+    })
+    if (!campaign) {
+      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Campaign not found' } })
+    }
+    await sequelize.transaction(async (transaction) => {
+      await CampaignLead.destroy({ where: { campaignId: campaign.id }, transaction })
+      await CampaignTeamMember.destroy({ where: { campaignId: campaign.id }, transaction })
+      await campaign.destroy({ transaction })
+    })
+    return res.json({ success: true, data: { id: campaign.id }, meta: {} })
   } catch (e) {
     return next(e)
   }

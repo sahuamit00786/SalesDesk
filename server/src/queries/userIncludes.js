@@ -50,7 +50,7 @@ export const userWorkspaceMembershipInclude = {
       model: Workspace,
       as: 'workspace',
       required: false,
-      attributes: ['id', 'name', 'description', 'archivedAt'],
+      attributes: ['id', 'name', 'description', 'archivedAt', 'themeColor', 'sidebarTextColor'],
     },
   ],
 }

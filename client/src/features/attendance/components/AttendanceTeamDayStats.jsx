@@ -4,8 +4,8 @@ const STAT_ITEMS = [
   { key: 'present', label: 'Present', dot: 'bg-emerald-500', text: 'text-emerald-800' },
   { key: 'absent', label: 'Absent', dot: 'bg-rose-500', text: 'text-rose-800' },
   { key: 'late', label: 'Late', dot: 'bg-amber-500', text: 'text-amber-800' },
-  { key: 'half_day', label: 'Half day', dot: 'bg-sky-500', text: 'text-sky-800' },
-  { key: 'on_leave', label: 'On leave', dot: 'bg-violet-500', text: 'text-violet-800' },
+  { key: 'half_day', label: 'Half day', dot: 'bg-[var(--brand-primary)]', text: 'text-sky-800' },
+  { key: 'on_leave', label: 'On leave', dot: 'bg-slate-500', text: 'text-brand-800' },
 ]
 
 function StatRow({ label, count, dot, text }) {

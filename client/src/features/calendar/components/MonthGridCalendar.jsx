@@ -100,16 +100,16 @@ export function MonthGridCalendar({
                 cell.outside && 'bg-gray-50/80',
                 !cell.outside && 'bg-white',
                 clickable &&
-                  'cursor-pointer hover:bg-gray-50/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500/35',
+                  'cursor-pointer hover:bg-gray-50/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500/35',
                 !clickable && 'cursor-default',
-                isToday && 'bg-indigo-50/60 ring-1 ring-inset ring-indigo-200/80',
+                isToday && 'bg-brand-50/60 ring-1 ring-inset ring-brand-200/80',
               )}
             >
               <div className="mb-1.5 flex justify-center">
                 <span
                   className={cn(
                     'flex h-7 w-7 items-center justify-center rounded-lg text-sm font-medium tabular-nums',
-                    isToday && 'bg-indigo-600 font-semibold text-white shadow-sm',
+                    isToday && 'bg-[var(--brand-primary)] font-semibold text-white shadow-sm',
                     !isToday && cell.outside && 'text-gray-300',
                     !isToday && !cell.outside && 'text-gray-800',
                   )}

@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import toast from 'react-hot-toast'
-import { CalendarPlus } from 'lucide-react'
+import { AlertTriangle, CalendarPlus } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
@@ -10,21 +10,31 @@ import {
   useApplyLeaveMutation,
   useGetLeaveTypesQuery,
   useGetMyLeaveBalanceQuery,
+  useGetMyLeavesQuery,
   useLazyPreviewLeaveDaysQuery,
 } from '@/features/leave/leaveApi'
+import { useIsHrManagerOrAdmin } from '@/features/hr/useHrRole'
+import { useTeamUsersQuery } from '@/features/team/teamApi'
 import { clampDateKeyToMin, isPastDateKey, todayDateKey } from '@/features/leave/utils/leaveDateUtils'
 import { formatLeaveDaysPreview } from '@/features/leave/utils/leavePreviewText'
 
 export function ApplyLeaveForm({ onSuccess }) {
   const year = new Date().getFullYear()
+  const isManager = useIsHrManagerOrAdmin()
   const { data: typesData } = useGetLeaveTypesQuery()
   const { data: balanceData } = useGetMyLeaveBalanceQuery(year)
   const [applyLeave, { isLoading }] = useApplyLeaveMutation()
   const [previewDays, { data: previewData }] = useLazyPreviewLeaveDaysQuery()
+  const { data: usersData } = useTeamUsersQuery(undefined, { skip: !isManager })
+
+  const { data: myLeavesData } = useGetMyLeavesQuery()
 
   const types = typesData?.data || []
   const balances = balanceData?.data || []
+  const myLeaves = myLeavesData?.data || []
+  const teamUsers = usersData?.data || []
 
+  const [targetUserId, setTargetUserId] = useState('')
   const [leaveTypeId, setLeaveTypeId] = useState('')
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
@@ -33,6 +43,14 @@ export function ApplyLeaveForm({ onSuccess }) {
   const [errors, setErrors] = useState({})
 
   const selectedBalance = balances.find((b) => String(b.leaveTypeId) === String(leaveTypeId))
+
+  const overlappingLeaves = useMemo(() => {
+    if (!fromDate || !toDate) return []
+    return myLeaves.filter((l) => {
+      if (l.status === 'cancelled' || l.status === 'rejected') return false
+      return l.fromDate <= toDate && l.toDate >= fromDate
+    })
+  }, [myLeaves, fromDate, toDate])
   const preview = previewData?.data
   const days = preview?.days
   const daysHint = formatLeaveDaysPreview(preview)
@@ -65,8 +83,10 @@ export function ApplyLeaveForm({ onSuccess }) {
       fd.append('toDate', toDate)
       fd.append('reason', reason.trim())
       if (document) fd.append('document', document)
+      if (isManager && targetUserId) fd.append('targetUserId', targetUserId)
       await applyLeave(fd).unwrap()
       toast.success('Leave request submitted')
+      setTargetUserId('')
       setLeaveTypeId('')
       setFromDate('')
       setToDate('')
@@ -85,6 +105,26 @@ export function ApplyLeaveForm({ onSuccess }) {
       icon={CalendarPlus}
     >
       <form onSubmit={submit} className="space-y-5">
+        {isManager && teamUsers.length > 0 && (
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink-muted">
+              Apply for
+            </label>
+            <Select value={targetUserId} onChange={(e) => setTargetUserId(e.target.value)}>
+              <option value="">Myself</option>
+              {teamUsers.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
+              ))}
+            </Select>
+            {targetUserId && (
+              <p className="mt-1 text-xs text-amber-700">
+                Submitting on behalf of <strong>{teamUsers.find((u) => u.id === targetUserId)?.name}</strong>
+              </p>
+            )}
+          </div>
+        )}
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink-muted">
@@ -106,7 +146,7 @@ export function ApplyLeaveForm({ onSuccess }) {
             ) : null}
           </div>
           <div className="flex items-end">
-            <div className="w-full rounded-xl border border-brand-200/60 bg-brand-50/50 px-4 py-3">
+            <div className="w-full rounded-xl border border-brand-200/60 bg-slate-50 px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-wider text-brand-700/80">Working days</p>
               <p className="mt-1 text-lg font-bold tabular-nums text-brand-900">{days != null ? days : '—'}</p>
               <p className="text-[11px] text-ink-muted">
@@ -158,6 +198,22 @@ export function ApplyLeaveForm({ onSuccess }) {
             />
           </div>
         </div>
+        {overlappingLeaves.length > 0 && (
+          <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+            <div>
+              <p className="text-sm font-semibold text-amber-800">Overlapping leave request</p>
+              <p className="mt-0.5 text-xs text-amber-700">
+                You already have {overlappingLeaves.length} {overlappingLeaves.length === 1 ? 'request' : 'requests'} in this date range:{' '}
+                {overlappingLeaves.map((l) => (
+                  <span key={l.id} className="font-semibold">
+                    {l.leaveType?.name || 'Leave'} ({l.fromDate} – {l.toDate}, {l.status})
+                  </span>
+                )).reduce((acc, el, i) => i === 0 ? [el] : [...acc, ', ', el], [])}
+              </p>
+            </div>
+          </div>
+        )}
         <div className="flex justify-end border-t border-surface-border/80 pt-4">
           <Button type="submit" disabled={isLoading}>
             {isLoading ? 'Submitting…' : 'Submit request'}

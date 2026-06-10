@@ -15,7 +15,7 @@ const LEGEND_PERSONAL = [
 
 const LEGEND_TEAM = [
   ...LEGEND_PERSONAL,
-  { key: 'on_leave', label: 'On leave', dotClassName: 'bg-violet-400 border-violet-300' },
+  { key: 'on_leave', label: 'On leave', dotClassName: 'bg-violet-400 border-brand-300' },
 ]
 
 function formatCheckIn(v) {

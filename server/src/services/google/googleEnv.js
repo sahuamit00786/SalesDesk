@@ -1,3 +1,5 @@
+import { google } from 'googleapis'
+
 /**
  * Read Google OAuth vars from process.env with trim + strip one pair of surrounding quotes.
  * Tries alternate key names people often copy from different Google / blog examples.
@@ -55,4 +57,15 @@ export function missingGoogleOAuthEnvKeys() {
 
 export function isGoogleCalendarConfigured() {
   return missingGoogleOAuthEnvKeys().length === 0
+}
+
+export function getGoogleOAuthClient() {
+  const e = readGoogleOAuthEnv()
+  if (!e.clientId || !e.clientSecret || !e.redirectUri) {
+    const err = new Error('Google OAuth is not configured')
+    err.status = 500
+    err.code = 'GOOGLE_OAUTH_NOT_CONFIGURED'
+    throw err
+  }
+  return new google.auth.OAuth2(e.clientId, e.clientSecret, e.redirectUri)
 }

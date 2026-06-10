@@ -3,7 +3,6 @@ import { RequireAuth } from '@/components/auth/RequireAuth'
 import { RequireOnboarded } from '@/components/auth/RequireOnboarded'
 import { SessionSync } from '@/components/auth/SessionSync'
 import { LoginPage } from '@/pages/LoginPage'
-import { ModulePlaceholderPage } from '@/pages/ModulePlaceholderPage'
 import { WorkspacePage } from '@/pages/WorkspacePage'
 import { OnboardingPage } from '@/pages/OnboardingPage'
 import { RegisterPage } from '@/pages/RegisterPage'
@@ -49,46 +48,10 @@ import { LeavePage } from '@/pages/LeavePage'
 import { LeaveRequestsPage } from '@/pages/LeaveRequestsPage'
 import { LeaveApprovalPage } from '@/pages/LeaveApprovalPage'
 import { LeaveConfigPage } from '@/pages/LeaveConfigPage'
-
-const APP_PATHS = [
-  '/dashboard',
-  '/leads',
-  '/contacts',
-  '/companies',
-  '/pipeline',
-  '/deals',
-  '/opportunities',
-  '/activities',
-  '/tasks',
-  '/calls',
-  '/email',
-  '/templates',
-  '/whatsapp',
-  '/documents',
-  '/automation',
-  '/campaigns',
-  '/forms',
-  '/reports',
-  '/forecasting',
-  '/workspace',
-  '/lead-configuration',
-  '/lead-distribution',
-  '/team',
-  '/integrations',
-  '/attendance',
-  '/leave',
-  '/leave/requests',
-  '/leave/approval',
-  '/leave/config',
-  '/meetings',
-  '/calendar',
-  '/quotations',
-  '/quotations/templates',
-  '/quotations/new',
-  '/invoices',
-  '/invoices/templates',
-  '/invoices/new',
-]
+import { HRDashboardPage } from '@/pages/HRDashboardPage'
+import { AnalyticsPage } from '@/pages/AnalyticsPage'
+import { ReportDetailPage } from '@/pages/ReportDetailPage'
+import { DealPaymentsPage } from '@/pages/DealPaymentsPage'
 
 export default function App() {
   return (
@@ -103,50 +66,12 @@ export default function App() {
         <Route element={<RequireOnboarded />}>
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/workspace" element={<WorkspacePage />} />
-            {APP_PATHS.filter(
-              (path) =>
-                path !== '/dashboard' &&
-                path !== '/workspace' &&
-                path !== '/team' &&
-                path !== '/leads' &&
-                path !== '/opportunities' &&
-                path !== '/pipeline' &&
-                path !== '/deals' &&
-                path !== '/lead-configuration' &&
-                path !== '/lead-distribution' &&
-                path !== '/integrations' &&
-                path !== '/documents' &&
-                path !== '/forms' &&
-                path !== '/activities' &&
-                path !== '/tasks' &&
-                path !== '/email' &&
-                path !== '/templates' &&
-                path !== '/meetings' &&
-                path !== '/calendar' &&
-                path !== '/quotations' &&
-                path !== '/quotations/templates' &&
-                path !== '/quotations/new' &&
-                path !== '/invoices' &&
-                path !== '/invoices/templates' &&
-                path !== '/invoices/new' &&
-                path !== '/campaigns' &&
-                path !== '/campaigns/new' &&
-                path !== '/automation' &&
-                path !== '/automation/new' &&
-                path !== '/attendance' &&
-                path !== '/leave' &&
-                path !== '/leave/requests' &&
-                path !== '/leave/approval' &&
-                path !== '/leave/config',
-            ).map((path) => (
-              <Route key={path} path={path} element={<ModulePlaceholderPage />} />
-            ))}
-
             <Route path="/leads" element={<LeadsPage />} />
             <Route path="/lead-distribution" element={<LeadDistributionPage />} />
             <Route path="/pipeline" element={<PipelinePage />} />
             <Route path="/deals" element={<DealsPage />} />
             <Route path="/deals/:id" element={<DealDetailPage />} />
+            <Route path="/deal-payments" element={<DealPaymentsPage />} />
             <Route path="/opportunities" element={<OpportunitiesPage />} />
             <Route path="/opportunities/:id" element={<LeadDetailPage />} />
             <Route path="/meetings" element={<MeetingsPage />} />
@@ -171,6 +96,8 @@ export default function App() {
             <Route path="/invoices/templates" element={<InvoiceTemplatesPage />} />
             <Route path="/invoices/:id/print" element={<InvoicePrintPage />} />
             <Route path="/lead-configuration" element={<LeadConfigurationPage />} />
+            <Route path="/hr" element={<HRDashboardPage />} />
+            <Route path="/hr/reports" element={<Navigate to="/reports/leave" replace />} />
             <Route path="/attendance" element={<AttendancePage />} />
             <Route path="/leave" element={<LeavePage />} />
             <Route path="/leave/requests" element={<LeaveRequestsPage />} />
@@ -182,8 +109,15 @@ export default function App() {
             <Route path="/documents" element={<DocumentsPage />} />
             <Route path="/forms" element={<WebFormsListPage />} />
             <Route path="/forms/:id/builder" element={<FormBuilderPage />} />
+            <Route path="/reports" element={<AnalyticsPage />} />
+            <Route path="/reports/:type" element={<ReportDetailPage />} />
             <Route path="/analytics" element={<Navigate to="/reports" replace />} />
+            <Route path="/email-tracking" element={<Navigate to="/reports/email" replace />} />
             <Route path="/settings" element={<Navigate to="/workspace" replace />} />
+            <Route path="/contacts" element={<Navigate to="/leads" replace />} />
+            <Route path="/companies" element={<Navigate to="/leads" replace />} />
+            <Route path="/whatsapp" element={<Navigate to="/email" replace />} />
+            <Route path="/calls" element={<Navigate to="/meetings" replace />} />
         </Route>
         </Route>
       </Route>

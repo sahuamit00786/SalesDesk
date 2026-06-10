@@ -8,8 +8,10 @@ import { useAppSelector } from '@/app/hooks'
 /**
  * @param {string} [className]
  * @param {string[] | null} [lockedTypes] — e.g. ['task'] for Tasks page calendar tab
+ * @param {string} [filterAssignedTo] — optional userId to filter calendar events by assignee
+ * @param {string} [filterLeadId] — optional leadId to filter calendar events by lead
  */
-export function CalendarWorkspace({ className, lockedTypes = null }) {
+export function CalendarWorkspace({ className, lockedTypes = null, filterAssignedTo, filterLeadId }) {
   const [selectedTypes, setSelectedTypes] = useState(() =>
     lockedTypes?.length ? [...lockedTypes] : ['meeting', 'task', 'followup', 'opportunity', 'reminder'],
   )
@@ -27,7 +29,8 @@ export function CalendarWorkspace({ className, lockedTypes = null }) {
       from: queryRange?.from,
       to: queryRange?.to,
       types: typesForQuery,
-      ownerUserId: user?.id,
+      ownerUserId: filterAssignedTo || user?.id,
+      leadId: filterLeadId || undefined,
     },
     { skip: !activeWorkspaceId || !queryRange?.from },
   )

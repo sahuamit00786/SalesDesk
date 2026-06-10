@@ -238,7 +238,7 @@ export function TeamMemberAccessDrawer({ open, user, onClose, onSaved }) {
             type="button"
             disabled={busy}
             onClick={save}
-            className="h-10 rounded-xl bg-brand-600 px-5 text-sm font-semibold text-white shadow-lg shadow-brand-600/25 transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="h-10 rounded-xl bg-[var(--brand-primary)] px-5 text-sm font-semibold text-white shadow-lg shadow-brand-600/25 transition hover:bg-[var(--brand-primary-dark)] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {busy ? 'Saving…' : 'Save changes'}
           </button>

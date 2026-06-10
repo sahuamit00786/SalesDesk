@@ -8,7 +8,7 @@ function workspacesFromUser(user) {
   if (!Array.isArray(ws) || !ws.length) return []
   return ws
     .filter((w) => !w.archived)
-    .map((w) => ({ id: w.id, name: w.name }))
+    .map((w) => ({ id: w.id, name: w.name, themeColor: w.themeColor || null, sidebarTextColor: w.sidebarTextColor || null }))
 }
 
 function readStoredPreferenceId() {
@@ -95,7 +95,7 @@ export const selectWorkspaceList = (state) => {
   if (Array.isArray(ws) && ws.length) {
     return ws
       .filter((w) => !w.archived)
-      .map((w) => ({ id: w.id, name: w.name }))
+      .map((w) => ({ id: w.id, name: w.name, themeColor: w.themeColor || null, sidebarTextColor: w.sidebarTextColor || null }))
   }
   return []
 }

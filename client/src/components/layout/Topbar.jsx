@@ -7,16 +7,18 @@ import { MeetingBotConsentBanner } from '@/features/meetings/components/MeetingB
 import { CheckInOutButton } from '@/features/attendance/components/CheckInOutButton'
 import { HrNotificationBell } from '@/features/leave/components/HrNotificationBell'
 import { ProfileMenuDropdown } from '@/components/layout/ProfileMenuDropdown'
+import { useHrRole } from '@/features/hr/useHrRole'
 
 export function Topbar({ onMenu }) {
   const { pathname } = useLocation()
   const meta = getRouteMeta(pathname)
+  const hrRole = useHrRole()
 
   return (
     <>
       <MeetingBotConsentBanner />
-      <header className="flex h-auto min-h-16 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-surface-border bg-white px-4 py-3 sm:px-6">
-        <div className="flex min-w-0 flex-1 items-start gap-3">
+      <header className="cx-chrome-header flex shrink-0 items-center justify-between gap-3 border-b border-surface-border bg-white px-4 sm:px-6">
+        <div className="flex min-h-0 min-w-0 flex-1 items-center gap-3">
           <Button
             variant="icon"
             type="button"
@@ -26,15 +28,15 @@ export function Topbar({ onMenu }) {
           >
             <Menu className="w-5 h-5" />
           </Button>
-          <div className="min-w-0 flex-1 py-0.5">
-            <h1 className="truncate text-base font-medium text-ink">{meta.title}</h1>
+          <div className="min-h-0 min-w-0 flex-1">
+            <h1 className="truncate text-base font-medium leading-tight text-ink">{meta.title}</h1>
             {meta.sub ? (
-              <p className="mt-1 line-clamp-2 text-xs leading-snug text-ink-muted sm:line-clamp-none">{meta.sub}</p>
+              <p className="mt-0.5 line-clamp-1 text-xs leading-snug text-ink-muted">{meta.sub}</p>
             ) : null}
           </div>
         </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2 sm:gap-3">
-          <CheckInOutButton />
+        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+          {hrRole === 'employee' && <CheckInOutButton />}
           <WorkspaceSwitcher />
           <HrNotificationBell />
           <ProfileMenuDropdown />

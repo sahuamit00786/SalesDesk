@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { Printer } from 'lucide-react'
@@ -8,18 +8,38 @@ import { ScaledA4PreviewViewport } from '@/features/sales-docs/components/Scaled
 import { useGetBillingProfileQuery } from '@/features/sales-docs/billingProfileApi'
 import {
   useCreateQuotationMutation,
+  useGetQuotationQuery,
   useGetQuotationTemplateQuery,
   usePatchQuotationMutation,
 } from '@/features/sales-docs/quotationsApi'
 import { useGetLeadsQuery, useGetLeadQuery } from '@/features/leads/leadsApi'
-import { useGetDealQuery } from '@/features/deals/dealsApi'
+import { useGetDealQuery, useGetDealsQuery } from '@/features/deals/dealsApi'
 import { QUOTATION_PRESET_LABELS } from '@/features/sales-docs/presetLabels'
 import { buildCustomerSnapshotFromLead, formatAddressLines } from '@/features/sales-docs/customerSnapshot'
 import { aggregateQuotationTotals } from '@/features/sales-docs/previewTotals'
 import { suggestedQuotationNumber } from '@/features/sales-docs/suggestedDocNumber'
 import { cn } from '@/utils/cn'
 import { pickTemplateIdFromSearch } from '@/utils/docTemplateQuery'
-import { shortDealId } from '@/utils/shortDealId'
+
+const CURRENCY_FALLBACK = ['USD', 'EUR', 'GBP', 'INR', 'AED', 'CAD', 'AUD', 'SGD', 'JPY']
+function getCurrencyOptions() {
+  try {
+    const values = Intl.supportedValuesOf?.('currency')
+    if (Array.isArray(values) && values.length) return [...values].sort((a, b) => a.localeCompare(b))
+  } catch { /* ignore */ }
+  return CURRENCY_FALLBACK
+}
+const CURRENCY_OPTIONS = getCurrencyOptions()
+
+function resolveCssColor(value, fallback = '#5B21B6') {
+  if (!value || typeof value !== 'string') return fallback
+  if (value.startsWith('#') || value.startsWith('rgb')) return value
+  try {
+    const varName = value.replace(/^var\(/, '').replace(/\)$/, '').trim()
+    const resolved = getComputedStyle(document.documentElement).getPropertyValue(varName).trim()
+    return resolved || fallback
+  } catch { return fallback }
+}
 
 const emptyLine = () => ({
   name: '',
@@ -46,6 +66,7 @@ export function NewQuotationPage() {
     () => pickTemplateIdFromSearch(location.search, 'quotationTemplateId', 'templateId'),
     [location.search],
   )
+  const quotationId = useMemo(() => query.get('quotationId')?.trim() || '', [query])
   const leadId = useMemo(() => query.get('leadId')?.trim() || '', [query])
   const dealId = useMemo(() => query.get('dealId')?.trim() || '', [query])
 
@@ -58,18 +79,28 @@ export function NewQuotationPage() {
 
   return (
     <NewQuotationEditor
-      key={`${templateId || '__blank__'}:${leadId || '__lead__'}:${dealId || '__deal__'}`}
+      key={`${quotationId || '__new__'}:${templateId || '__blank__'}:${leadId || '__lead__'}:${dealId || '__deal__'}`}
       templateId={templateId}
+      quotationId={quotationId}
       initialLeadId={leadId}
       initialDealId={dealId}
     />
   )
 }
 
-function NewQuotationEditor({ templateId, initialLeadId = '', initialDealId = '' }) {
-  const navigate = useNavigate()
+function addressFromSnapshot(snap) {
+  if (!snap || typeof snap !== 'object') return ''
+  const a = snap.billingAddress || {}
+  return [a.street, a.city, a.state, a.postalCode, a.country].filter(Boolean).join(', ')
+}
 
-  const [leadId, setLeadId] = useState(initialLeadId)
+function NewQuotationEditor({ templateId, quotationId = '', initialLeadId = '', initialDealId = '' }) {
+  const navigate = useNavigate()
+  const hydratedQuotationIdRef = useRef('')
+  const isEditingExisting = Boolean(quotationId)
+
+  const [clientLeadId, setClientLeadId] = useState(initialLeadId)
+  const [dealLeadId, setDealLeadId] = useState('')
   const [quotationTemplateId, setQuotationTemplateId] = useState(templateId)
   const [layoutPreset, setLayoutPreset] = useState(1)
   const [currency, setCurrency] = useState('USD')
@@ -83,15 +114,18 @@ function NewQuotationEditor({ templateId, initialLeadId = '', initialDealId = ''
   const [shipping, setShipping] = useState('0')
   const [adjustment, setAdjustment] = useState('0')
   const [lines, setLines] = useState([emptyLine()])
-  const [documentTheme, setDocumentTheme] = useState({ accentColor: '#534AB7', headerTone: 'light' })
+  const [documentTheme, setDocumentTheme] = useState(() => ({ accentColor: resolveCssColor('var(--brand-primary)'), headerTone: 'light' }))
   const [savedId, setSavedId] = useState(null)
   const [previewNumber, setPreviewNumber] = useState('Preview')
   const [showPreviewMobile, setShowPreviewMobile] = useState(true)
 
   const { data: billRes } = useGetBillingProfileQuery()
   const { data: tplRes, isFetching: tplLoading } = useGetQuotationTemplateQuery(templateId, { skip: !templateId })
+  const { data: quotationRes, isFetching: quotationLoading } = useGetQuotationQuery(quotationId, { skip: !quotationId })
   const tplPayload = tplRes?.data
   const tpl = tplPayload?.data ?? tplPayload
+  const quotationPayload = quotationRes?.data
+  const existingQuotation = quotationPayload?.data ?? quotationPayload
 
   const activeDealId = String(initialDealId || '').trim()
   const { data: dealRes } = useGetDealQuery(activeDealId, { skip: !activeDealId })
@@ -102,16 +136,42 @@ function NewQuotationEditor({ templateId, initialLeadId = '', initialDealId = ''
 
   const { data: leadsRes } = useGetLeadsQuery({ page: 1, limit: 400, search: '' })
   const leads = leadsRes?.data || []
-  const dealOptions = useMemo(() => {
-    const onlyDeals = leads.filter((l) =>
-      Boolean(l?.isOpportunity) || Boolean(l?.opportunityStage) || Boolean(l?.pipelineStage) || Boolean(l?.dealValue),
-    )
-    return onlyDeals.length ? onlyDeals : leads
-  }, [leads])
 
-  function applyLeadSelection(id) {
-    setLeadId(id)
+  const { data: dealsRes } = useGetDealsQuery({ page: 1, limit: 400 })
+  const allDeals = dealsRes?.data || []
+
+  const filteredDealOptions = useMemo(() => {
+    if (!clientLeadId) return allDeals
+    const client = leads.find((l) => l.id === clientLeadId)
+    if (!client?.company) return allDeals
+    return allDeals.filter(
+      (d) =>
+        d.parentOpportunityLeadId === clientLeadId ||
+        d.companyName === client.company,
+    )
+  }, [allDeals, clientLeadId, leads])
+
+  function applyClientSelection(id) {
+    setClientLeadId(id)
     const lead = leads.find((l) => l.id === id)
+    if (lead) setAddressLine(formatAddressLines(buildCustomerSnapshotFromLead(lead)))
+    if (dealLeadId) {
+      const deal = allDeals.find((d) => d.id === dealLeadId)
+      const newClient = leads.find((l) => l.id === id)
+      if (deal && newClient && deal.companyName !== newClient.company) {
+        setDealLeadId('')
+      }
+    }
+  }
+
+  function applyDealSelection(dealId) {
+    setDealLeadId(dealId)
+    const deal = allDeals.find((d) => d.id === dealId)
+    if (!deal) return
+    const oppLeadId = deal.parentOpportunityLeadId || ''
+    setClientLeadId(oppLeadId)
+    const lead = leads.find((l) => l.id === oppLeadId) ||
+      (deal ? { contactName: deal.fullName, company: deal.companyName, email: deal.email } : null)
     if (lead) setAddressLine(formatAddressLines(buildCustomerSnapshotFromLead(lead)))
   }
 
@@ -125,29 +185,81 @@ function NewQuotationEditor({ templateId, initialLeadId = '', initialDealId = ''
     if (savedId) return
     const seq = billing?.quotationNextSeq
     if (seq == null) return
-    setPreviewNumber(suggestedQuotationNumber(issueDate, seq))
+    const num = suggestedQuotationNumber(issueDate, seq)
+    setPreviewNumber(num)
+    setPurchaseOrderRef((prev) => prev || num)
   }, [savedId, billing?.quotationNextSeq, issueDate])
 
   useEffect(() => {
     if (!templateId || !tpl) return
+    if (isEditingExisting) return
     if (String(tpl.id).toLowerCase() !== String(templateId).toLowerCase()) return
     setQuotationTemplateId(tpl.id)
     if (tpl.layoutPreset != null) setLayoutPreset(Number(tpl.layoutPreset))
     if (tpl.defaultCurrency) setCurrency(String(tpl.defaultCurrency).toUpperCase().slice(0, 3))
     if (tpl.defaultPaymentTerms) setTermsSnapshot(tpl.defaultPaymentTerms)
     if (tpl.defaultNotes) setNotes(tpl.defaultNotes)
-  }, [tpl, templateId])
+  }, [tpl, templateId, isEditingExisting])
+
+  useEffect(() => {
+    if (!quotationId || !existingQuotation) return
+    if (hydratedQuotationIdRef.current === quotationId) return
+    hydratedQuotationIdRef.current = quotationId
+
+    setSavedId(existingQuotation.id || null)
+    setClientLeadId(existingQuotation.leadId || '')
+    setDealLeadId(existingQuotation.dealId || '')
+    setQuotationTemplateId(existingQuotation.quotationTemplateId || '')
+    setLayoutPreset(Number(existingQuotation.layoutPreset) || 1)
+    setCurrency(String(existingQuotation.currency || 'USD').toUpperCase().slice(0, 3))
+    setIssueDate(existingQuotation.issueDate ? String(existingQuotation.issueDate).slice(0, 10) : new Date().toISOString().slice(0, 10))
+    setExpiryDate(existingQuotation.expiryDate ? String(existingQuotation.expiryDate).slice(0, 10) : '')
+    setReference(existingQuotation.reference || '')
+    setPurchaseOrderRef(existingQuotation.purchaseOrderRef || '')
+    setAddressLine(addressFromSnapshot(existingQuotation.customerSnapshot))
+    setNotes(existingQuotation.notes || '')
+    setTermsSnapshot(existingQuotation.termsSnapshot || '')
+    setShipping(String(existingQuotation.shipping ?? 0))
+    setAdjustment(String(existingQuotation.adjustment ?? 0))
+    setPreviewNumber(existingQuotation.quotationNumber || 'Quotation')
+
+    const fetchedItems = Array.isArray(existingQuotation.items) ? existingQuotation.items : []
+    const nextLines = fetchedItems.length
+      ? fetchedItems.map((it) => ({
+          name: String(it.name || ''),
+          quantity: Number(it.quantity) || 1,
+          unitPrice: Number(it.unitPrice) || 0,
+          taxPct: it.taxPct == null ? '' : String(it.taxPct),
+          discountPct: it.discountPct == null ? '' : String(it.discountPct),
+        }))
+      : [emptyLine()]
+    setLines(nextLines)
+
+    const t = existingQuotation.documentTheme
+    if (t && typeof t === 'object') {
+      setDocumentTheme({
+        accentColor: resolveCssColor(String(t.accentColor || '')),
+        headerTone: t.headerTone === 'dark' ? 'dark' : 'light',
+      })
+    }
+  }, [existingQuotation, quotationId])
 
   useEffect(() => {
     if (activeDealId) return
     if (!initialLeadId || !leads.length) return
-    if (!leadId) applyLeadSelection(initialLeadId)
-  }, [activeDealId, initialLeadId, leads, leadId])
+    if (!clientLeadId) applyClientSelection(initialLeadId)
+  }, [activeDealId, initialLeadId, leads, clientLeadId])
+
+  useEffect(() => {
+    if (!activeDealId || !dealParentLead || addressLine) return
+    const addr = formatAddressLines(buildCustomerSnapshotFromLead(dealParentLead))
+    if (addr) setAddressLine(addr)
+  }, [activeDealId, dealParentLead])
 
   const selectedLead = useMemo(() => {
     if (activeDealId && dealParentLead) return dealParentLead
-    return leads.find((l) => l.id === leadId)
-  }, [leads, leadId, activeDealId, dealParentLead])
+    return leads.find((l) => l.id === clientLeadId)
+  }, [leads, clientLeadId, activeDealId, dealParentLead])
 
   const customerSnapshot = useMemo(() => {
     const base = buildCustomerSnapshotFromLead(selectedLead)
@@ -213,7 +325,7 @@ function NewQuotationEditor({ templateId, initialLeadId = '', initialDealId = ''
 
   async function saveDraft() {
     const items = buildItemsPayload()
-    if (!activeDealId && !leadId) {
+    if (!activeDealId && !clientLeadId) {
       toast.error('Select a client')
       return
     }
@@ -223,7 +335,7 @@ function NewQuotationEditor({ templateId, initialLeadId = '', initialDealId = ''
     }
 
     const createBody = {
-      ...(activeDealId ? { dealId: activeDealId } : { leadId }),
+      ...(activeDealId ? { dealId: activeDealId } : dealLeadId ? { dealId: dealLeadId, leadId: clientLeadId } : { leadId: clientLeadId }),
       quotationTemplateId: quotationTemplateId || null,
       issueDate: toIsoDate(issueDate),
       expiryDate: expiryDate ? toIsoDate(expiryDate) : null,
@@ -263,7 +375,7 @@ function NewQuotationEditor({ templateId, initialLeadId = '', initialDealId = ''
       if (savedId) {
         const res = await patchQuotation({ id: savedId, ...patchBody }).unwrap()
         const q = res?.data ?? res
-        toast.success('Draft saved')
+        toast.success(isEditingExisting ? 'Quotation updated' : 'Draft saved')
         setPreviewNumber(q.quotationNumber || previewNumber)
       } else {
         const res = await createQuotation(createBody).unwrap()
@@ -279,7 +391,7 @@ function NewQuotationEditor({ templateId, initialLeadId = '', initialDealId = ''
 
   async function sendQuotation() {
     const items = buildItemsPayload()
-    if (!activeDealId && !leadId) {
+    if (!activeDealId && !clientLeadId) {
       toast.error('Select a client')
       return
     }
@@ -315,7 +427,7 @@ function NewQuotationEditor({ templateId, initialLeadId = '', initialDealId = ''
         navigate(`/quotations/${savedId}/print`)
       } else {
         const res = await createQuotation({
-          ...(activeDealId ? { dealId: activeDealId } : { leadId }),
+          ...(activeDealId ? { dealId: activeDealId } : dealLeadId ? { dealId: dealLeadId, leadId: clientLeadId } : { leadId: clientLeadId }),
           quotationTemplateId: quotationTemplateId || null,
           issueDate: toIsoDate(issueDate),
           expiryDate: expiryDate ? toIsoDate(expiryDate) : null,
@@ -341,15 +453,19 @@ function NewQuotationEditor({ templateId, initialLeadId = '', initialDealId = ''
     }
   }
 
-  const busy = creating || patching || tplLoading
+  const busy = creating || patching || tplLoading || (isEditingExisting && quotationLoading)
 
   return (
     <PageShell fullWidth>
-      <div className="flex min-h-0 w-full min-w-0 flex-col gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-neutral-200 pb-4">
+      <div className="sales-doc-editor flex min-h-0 w-full min-w-0 flex-col gap-3 px-3 pt-2 pb-3 sm:px-4 sm:pt-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-200 pb-3">
           <div>
-            <h1 className="text-xl font-semibold text-neutral-900">New quotation</h1>
-            <p className="text-xs text-neutral-500">{QUOTATION_PRESET_LABELS[layoutPreset - 1] || 'Quotation'}</p>
+            <h1 className="text-xl font-semibold text-neutral-900">
+              {isEditingExisting ? 'Edit quotation' : 'New quotation'}
+            </h1>
+            <p className="text-xs text-neutral-500">
+              {isEditingExisting ? previewNumber : QUOTATION_PRESET_LABELS[layoutPreset - 1] || 'Quotation'}
+            </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <label className="flex cursor-pointer items-center gap-2 text-sm text-neutral-600 lg:hidden">
@@ -361,7 +477,7 @@ function NewQuotationEditor({ templateId, initialLeadId = '', initialDealId = ''
                 to={`/quotations/${savedId}/print`}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-2 rounded-lg border border-neutral-200 bg-white px-4 py-2 text-sm font-medium text-neutral-800 shadow-sm hover:bg-neutral-50"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-sm font-medium text-neutral-800 shadow-sm hover:bg-neutral-50"
               >
                 <Printer className="h-4 w-4" />
                 Print / PDF
@@ -371,42 +487,48 @@ function NewQuotationEditor({ templateId, initialLeadId = '', initialDealId = ''
               type="button"
               disabled={busy}
               onClick={saveDraft}
-              className="rounded-lg border border-neutral-200 bg-white px-4 py-2 text-sm font-semibold text-neutral-800 shadow-sm hover:bg-neutral-50 disabled:opacity-50"
+              className="rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-sm font-semibold text-neutral-800 shadow-sm hover:bg-neutral-50 disabled:opacity-50"
             >
-              {creating || patching ? 'Saving…' : 'Save as draft'}
+              {creating || patching ? 'Saving…' : isEditingExisting ? 'Update draft' : 'Save as draft'}
             </button>
             <button
               type="button"
               disabled={busy}
               onClick={sendQuotation}
-              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
+              className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
             >
-              Send quotation
+              {isEditingExisting ? 'Update & send' : 'Send quotation'}
             </button>
           </div>
         </div>
 
-        <div className="grid min-h-0 w-full flex-1 grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start lg:gap-6">
-          <div className="flex min-w-0 flex-col gap-4">
-            <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+        <div className="grid min-h-0 w-full flex-1 grid-cols-1 gap-3 lg:grid-cols-2 lg:items-start lg:gap-4">
+          <div className="flex min-w-0 flex-col gap-3">
+            <section className="sde-card">
               <h2 className="text-sm font-semibold text-neutral-900">Quotation details</h2>
-              <div className="mt-4 space-y-4">
+              <div className="sde-field-stack">
                 <label className="block text-xs font-medium text-neutral-600">
-                  Deal
+                  Deal <span className="font-normal text-neutral-400">(optional)</span>
                   <select
                     className="mt-1 w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm"
-                    value={leadId}
+                    value={dealLeadId}
                     disabled={Boolean(activeDealId)}
-                    onChange={(e) => applyLeadSelection(e.target.value)}
+                    onChange={(e) => {
+                      if (!e.target.value) {
+                        setDealLeadId('')
+                      } else {
+                        applyDealSelection(e.target.value)
+                      }
+                    }}
                   >
-                    <option value="">Select deal…</option>
-                    {dealOptions.map((l) => {
-                      const who = (l.contactName || l.title || 'Lead').trim()
-                      const co = (l.company || '').trim() || '—'
-                      const stage = String(l.opportunityStage || l.pipelineStage || l.currentStage || 'Open')
+                    <option value="">No deal / select later…</option>
+                    {filteredDealOptions.map((d) => {
+                      const who = (d.fullName || '').trim() || '—'
+                      const co = (d.companyName || '').trim() || '—'
+                      const stage = String(d.currentStage || 'Open')
                       return (
-                        <option key={l.id} value={l.id}>
-                          Deal #{shortDealId(l)} · {who} · {co} · {stage}
+                        <option key={d.id} value={d.id}>
+                          {d.dealName || who} 
                         </option>
                       )
                     })}
@@ -417,9 +539,9 @@ function NewQuotationEditor({ templateId, initialLeadId = '', initialDealId = ''
                   Bill to
                   <select
                     className="mt-1 w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm"
-                    value={leadId}
+                    value={clientLeadId}
                     disabled={Boolean(activeDealId)}
-                    onChange={(e) => applyLeadSelection(e.target.value)}
+                    onChange={(e) => applyClientSelection(e.target.value)}
                   >
                     <option value="">Select client…</option>
                     {leads.map((l) => (
@@ -430,7 +552,7 @@ function NewQuotationEditor({ templateId, initialLeadId = '', initialDealId = ''
                   </select>
                 </label>
 
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="sde-field-grid">
                   <label className="block text-xs font-medium text-neutral-600">
                     Quotation number
                     <input
@@ -450,7 +572,7 @@ function NewQuotationEditor({ templateId, initialLeadId = '', initialDealId = ''
                   </label>
                 </div>
 
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="sde-field-grid">
                   <label className="block text-xs font-medium text-neutral-600">
                     Issue date
                     <input
@@ -462,12 +584,15 @@ function NewQuotationEditor({ templateId, initialLeadId = '', initialDealId = ''
                   </label>
                   <label className="block text-xs font-medium text-neutral-600">
                     Currency
-                    <input
-                      className="mt-1 w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm uppercase"
-                      maxLength={3}
+                    <select
+                      className="mt-1 w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm"
                       value={currency}
-                      onChange={(e) => setCurrency(e.target.value.toUpperCase().slice(0, 3))}
-                    />
+                      onChange={(e) => setCurrency(e.target.value)}
+                    >
+                      {CURRENCY_OPTIONS.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
                   </label>
                 </div>
 
@@ -482,7 +607,7 @@ function NewQuotationEditor({ templateId, initialLeadId = '', initialDealId = ''
                   />
                 </label>
 
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="sde-field-grid">
                   <label className="block text-xs font-medium text-neutral-600">
                     Reference
                     <input
@@ -501,7 +626,7 @@ function NewQuotationEditor({ templateId, initialLeadId = '', initialDealId = ''
                   </label>
                 </div>
 
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="sde-field-grid">
                   <label className="block text-xs font-medium text-neutral-600">
                     Shipping
                     <input
@@ -526,23 +651,23 @@ function NewQuotationEditor({ templateId, initialLeadId = '', initialDealId = ''
               </div>
             </section>
 
-            <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+            <section className="sde-card">
               <div className="flex items-center justify-between gap-2">
                 <h2 className="text-sm font-semibold text-neutral-900">Line items</h2>
                 <button
                   type="button"
-                  className="text-sm font-medium text-[#534AB7] hover:underline"
+                  className="text-sm font-medium text-brand-600 hover:underline"
                   onClick={() => setLines((prev) => [...prev, emptyLine()])}
                 >
                   + Add item
                 </button>
               </div>
-              <div className="mt-4 space-y-3">
+              <div className="sde-line-stack">
                 {lines.map((line, idx) => (
-                  <div key={idx} className="rounded-xl border border-neutral-100 bg-neutral-50/80 p-3">
+                  <div key={idx} className="sde-line-card">
                     <input
                       placeholder="Description"
-                      className="mb-2 w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm font-medium"
+                      className="mb-1.5 w-full rounded-lg border border-neutral-200 px-2.5 py-1.5 text-sm font-medium"
                       value={line.name}
                       onChange={(e) => {
                         const v = e.target.value
@@ -607,16 +732,16 @@ function NewQuotationEditor({ templateId, initialLeadId = '', initialDealId = ''
               </div>
             </section>
 
-            <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+            <section className="sde-card">
               <h2 className="text-sm font-semibold text-neutral-900">Appearance</h2>
-              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <label className="block text-xs font-medium text-neutral-600">
                   Accent color
                   <div className="mt-1 flex items-center gap-2">
                     <input
                       type="color"
                       className="h-10 w-14 cursor-pointer rounded border border-neutral-200 bg-white"
-                      value={documentTheme.accentColor || '#534AB7'}
+                      value={documentTheme.accentColor || 'var(--brand-primary)'}
                       onChange={(e) => setDocumentTheme((t) => ({ ...t, accentColor: e.target.value }))}
                     />
                     <input
@@ -654,7 +779,7 @@ function NewQuotationEditor({ templateId, initialLeadId = '', initialDealId = ''
               </div>
             </section>
 
-            <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+            <section className="sde-card">
               <label className="block text-xs font-medium text-neutral-600">
                 Terms (shown on PDF)
                 <textarea
@@ -664,7 +789,7 @@ function NewQuotationEditor({ templateId, initialLeadId = '', initialDealId = ''
                   onChange={(e) => setTermsSnapshot(e.target.value)}
                 />
               </label>
-              <label className="mt-4 block text-xs font-medium text-neutral-600">
+              <label className="mt-2.5 block text-xs font-medium text-neutral-600">
                 Notes
                 <textarea
                   rows={3}
@@ -682,7 +807,7 @@ function NewQuotationEditor({ templateId, initialLeadId = '', initialDealId = ''
               !showPreviewMobile && 'hidden lg:flex',
             )}
           >
-            <div className="flex min-h-0 flex-1 flex-col rounded-2xl bg-neutral-100 p-2 lg:p-3">
+            <div className="flex min-h-0 flex-1 flex-col rounded-xl bg-neutral-100 p-1 lg:p-2">
               <ScaledA4PreviewViewport fit="width" className="min-h-[280px]">
                 <SalesDocumentPreview
                   embedded

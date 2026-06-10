@@ -1,84 +1,89 @@
 import { Link } from 'react-router-dom'
+import { Mail, Phone } from 'lucide-react'
+
+const EMAIL = 'sahuamit00786@gmail.com'
+const PHONE = '+91 63869 23401'
+const PHONE_TEL = '+916386923401'
 
 const cols = [
   {
     title: 'Product',
     links: [
-      { label: 'Tour', href: '#tour' },
+      { label: 'Product tour', href: '#showcase' },
       { label: 'Features', href: '#features' },
-      { label: 'Pipeline', href: '#pipeline' },
-      { label: 'Pricing', href: '#pricing' },
+      { label: 'Automation', href: '#automation' },
+      { label: 'FAQ', href: '#faq' },
     ],
   },
   {
-    title: 'Resources',
+    title: 'Account',
     links: [
-      { label: 'Security', href: '#faq' },
-      { label: 'API docs', href: '#' },
-      { label: 'Blog', href: '#' },
-      { label: 'Status', href: '#' },
-    ],
-  },
-  {
-    title: 'Company',
-    links: [
-      { label: 'Careers', href: '#' },
-      { label: 'Legal', href: '#' },
-      { label: 'Privacy', href: '#' },
+      { label: 'Sign in', href: '/login', route: true },
+      { label: 'Register', href: '/register', route: true },
+      { label: 'Contact', href: '#contact' },
     ],
   },
 ]
 
 export function FooterSection() {
   return (
-    <footer className="bg-gradient-to-r from-violet-100/90 via-fuchsia-50 to-cyan-100/90">
-      <div className="bg-white/95 backdrop-blur-sm">
-      <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
-        <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-4">
-          <div>
-            <p className="flex items-center gap-2 text-sm font-bold text-lf-ink">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-violet-600 via-fuchsia-600 to-cyan-500 text-xs font-bold text-white shadow-md">
-                L
+    <footer className="relative border-t border-white/[0.05] bg-[#050510]">
+      {/* Top fade from CTA section */}
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-500/20 to-transparent" />
+
+      <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-8">
+        <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-3">
+          <div className="lg:col-span-1">
+            <p className="flex items-center gap-2.5 text-sm font-bold text-white">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-purple-700 text-xs font-bold text-white shadow-[0_0_12px_rgba(139,92,246,0.4)]">
+                C
               </span>
-              LeadFlow AI
+              Connexify CRM
             </p>
-            <p className="mt-3 text-sm text-lf-muted">
-              The AI-powered lead management & CRM platform for teams who refuse to leak pipeline.
+            <p className="mt-3 text-sm leading-relaxed text-white/35">
+              Lead management, pipeline, email, automation, documents, and team workspace — in one
+              system.
             </p>
-            <form
-              className="mt-4 flex max-w-sm gap-2"
-              onSubmit={(e) => {
-                e.preventDefault()
-              }}
-            >
-              <input
-                type="email"
-                required
-                placeholder="Work email"
-                className="h-10 flex-1 rounded-lg border border-violet-200 bg-violet-50/50 px-3 text-sm outline-none ring-fuchsia-400/30 focus:ring-2 focus:ring-violet-400"
-              />
-              <button
-                type="submit"
-                className="h-10 shrink-0 rounded-lg bg-gradient-to-r from-violet-700 to-fuchsia-600 px-3 text-xs font-semibold text-white shadow-md transition hover:brightness-110"
+            <div className="mt-6 space-y-2.5">
+              <a
+                href={`mailto:${EMAIL}`}
+                className="flex items-center gap-2 text-sm text-violet-400/70 transition hover:text-violet-300"
               >
-                Subscribe
-              </button>
-            </form>
+                <Mail className="h-4 w-4 shrink-0" aria-hidden />
+                {EMAIL}
+              </a>
+              <a
+                href={`tel:${PHONE_TEL}`}
+                className="flex items-center gap-2 text-sm text-violet-400/70 transition hover:text-violet-300"
+              >
+                <Phone className="h-4 w-4 shrink-0" aria-hidden />
+                {PHONE}
+              </a>
+            </div>
           </div>
+
           {cols.map((c) => (
             <div key={c.title}>
-              <p className="text-xs font-semibold uppercase tracking-wider text-lf-muted">{c.title}</p>
-              <ul className="mt-4 space-y-2">
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/30">
+                {c.title}
+              </p>
+              <ul className="mt-4 space-y-2.5">
                 {c.links.map((l) => (
                   <li key={l.label}>
-                    {l.href.startsWith('#') ? (
-                      <a href={l.href} className="text-sm text-lf-muted transition hover:text-lf-purple-700">
-                        {l.label}
-                      </a>
-                    ) : (
-                      <Link to={l.href} className="text-sm text-lf-muted transition hover:text-lf-purple-700">
+                    {l.route ? (
+                      <Link
+                        to={l.href}
+                        className="text-sm text-white/40 transition hover:text-white/75"
+                      >
                         {l.label}
                       </Link>
+                    ) : (
+                      <a
+                        href={l.href}
+                        className="text-sm text-white/40 transition hover:text-white/75"
+                      >
+                        {l.label}
+                      </a>
                     )}
                   </li>
                 ))}
@@ -86,21 +91,12 @@ export function FooterSection() {
             </div>
           ))}
         </div>
-        <div className="mt-12 flex flex-col items-start justify-between gap-4 border-t border-lf-purple-100 pt-8 text-xs text-lf-muted sm:flex-row sm:items-center">
-          <p>© {new Date().getFullYear()} LeadFlow AI. All rights reserved.</p>
-          <div className="flex gap-4">
-            <a href="#" className="hover:text-lf-purple-700">
-              Twitter
-            </a>
-            <a href="#" className="hover:text-lf-purple-700">
-              LinkedIn
-            </a>
-            <a href="#" className="hover:text-lf-purple-700">
-              GitHub
-            </a>
-          </div>
+
+        <div className="mt-14 border-t border-white/[0.05] pt-8">
+          <p className="text-xs text-white/20">
+            © {new Date().getFullYear()} Connexify CRM. All rights reserved.
+          </p>
         </div>
-      </div>
       </div>
     </footer>
   )

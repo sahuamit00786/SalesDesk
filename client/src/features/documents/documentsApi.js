@@ -49,15 +49,49 @@ export const documentsApi = baseApi.injectEndpoints({
       query: (body) => ({ url: '/documents/folders', method: 'POST', body }),
       invalidatesTags: [{ type: 'Document', id: 'FOLDER_TREE' }],
     }),
+    addDocumentToFolder: build.mutation({
+      query: ({ id, folderIds }) => ({ url: `/documents/${id}/folders`, method: 'POST', body: { folderIds } }),
+      invalidatesTags: [{ type: 'Document', id: 'FOLDER_TREE' }, { type: 'Document', id: 'LIST' }],
+    }),
+    removeDocumentFromFolder: build.mutation({
+      query: ({ id, folderId }) => ({ url: `/documents/${id}/folders/${folderId}`, method: 'DELETE' }),
+      invalidatesTags: [{ type: 'Document', id: 'FOLDER_TREE' }, { type: 'Document', id: 'LIST' }],
+    }),
+    deleteDocument: build.mutation({
+      query: (id) => ({ url: `/documents/${id}`, method: 'DELETE' }),
+      invalidatesTags: [{ type: 'Document', id: 'LIST' }, { type: 'Document', id: 'FOLDER_TREE' }, { type: 'Document', id: 'LEAD_SUMMARIES' }],
+    }),
+    moveDocumentFolder: build.mutation({
+      query: ({ id, fromFolderId, toFolderId }) => ({
+        url: `/documents/${id}/move-folder`,
+        method: 'POST',
+        body: { fromFolderId, toFolderId },
+      }),
+      invalidatesTags: [{ type: 'Document', id: 'LIST' }, { type: 'Document', id: 'FOLDER_TREE' }],
+    }),
+    getFolderInfo: build.query({
+      query: (id) => `/documents/folders/${id}/info`,
+    }),
+    deleteFolder: build.mutation({
+      query: (id) => ({ url: `/documents/folders/${id}`, method: 'DELETE' }),
+      invalidatesTags: [{ type: 'Document', id: 'LIST' }, { type: 'Document', id: 'FOLDER_TREE' }, { type: 'Document', id: 'LEAD_SUMMARIES' }],
+    }),
   }),
 })
 
 export const {
   useGetDocumentsQuery,
+  useLazyGetDocumentsQuery,
   useGetLeadDocumentSummariesQuery,
   useGetDocumentFolderTreeQuery,
   useUploadDocumentMutation,
   usePatchDocumentMutation,
   useAddDocumentLinksMutation,
   useCreateDocumentFolderMutation,
+  useAddDocumentToFolderMutation,
+  useRemoveDocumentFromFolderMutation,
+  useDeleteDocumentMutation,
+  useMoveDocumentFolderMutation,
+  useLazyGetFolderInfoQuery,
+  useDeleteFolderMutation,
 } = documentsApi

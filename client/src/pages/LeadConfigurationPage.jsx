@@ -1,24 +1,32 @@
 import { useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
-import { GitBranch, GripVertical, Pencil, Plus, Tag, Trash2, Waypoints } from 'lucide-react'
+import { ChevronDown, ChevronUp, GitBranch, Pencil, Plus, Tag, Trash2, Waypoints } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
+import { PageFilterBar } from '@/components/layout/PageFilterBar'
+import { PageContentPanel } from '@/components/layout/PageContentPanel'
+import { PageStack } from '@/components/layout/PageStack'
+import { DataGrid } from '@/components/shared/DataGrid'
 import { Modal } from '@/components/ui/Modal'
 import {
   useCreateLeadSourceMutation,
   useCreateLeadTagMutation,
   useCreateDealStatusMutation,
   useCreateOpportunityStageMutation,
+  useCreateOpportunityStatusMutation,
   useDeleteDealStatusMutation,
   useDeleteLeadSourceMutation,
   useDeleteLeadTagMutation,
   useDeleteOpportunityStageMutation,
+  useDeleteOpportunityStatusMutation,
   useGetLeadSetupQuery,
   useReorderDealStatusesMutation,
   useReorderOpportunityStagesMutation,
+  useReorderOpportunityStatusesMutation,
   useUpdateDealStatusMutation,
   useUpdateLeadSourceMutation,
   useUpdateLeadTagMutation,
   useUpdateOpportunityStageMutation,
+  useUpdateOpportunityStatusMutation,
 } from '@/features/leads/leadsApi'
 import { cn } from '@/utils/cn'
 
@@ -26,6 +34,7 @@ const TABS = [
   { id: 'source', label: 'Source', icon: Waypoints },
   { id: 'tags', label: 'Tags', icon: Tag },
   { id: 'opportunity-stages', label: 'Lead status (pipeline)', icon: GitBranch },
+  { id: 'opportunity-statuses', label: 'Opportunity status', icon: GitBranch },
   { id: 'deal-statuses', label: 'Deal status name', icon: GitBranch },
 ]
 
@@ -50,6 +59,50 @@ function formatStatusName(value) {
     .join(' ')
 }
 
+function YesNoPill({ yes }) {
+  return (
+    <span
+      className={cn(
+        'inline-flex rounded-md border px-2 py-0.5 text-[11px] font-semibold',
+        yes
+          ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+          : 'border-surface-border bg-surface-subtle text-ink-muted',
+      )}
+    >
+      {yes ? 'Yes' : 'No'}
+    </span>
+  )
+}
+
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
+
+function MoveRowButtons({ row, rows, onReorder, disabled }) {
+  const idx = rows.findIndex((r) => r.id === row.id)
+  if (idx < 0) return null
+  return (
+    <div className="inline-flex flex-col gap-0.5" onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        disabled={disabled || idx === 0}
+        onClick={() => onReorder(row.id, rows[idx - 1].id)}
+        className="inline-flex h-6 w-6 items-center justify-center rounded border border-surface-border text-ink-muted hover:bg-brand-50 disabled:opacity-30"
+        aria-label="Move up"
+      >
+        <ChevronUp className="h-3.5 w-3.5" />
+      </button>
+      <button
+        type="button"
+        disabled={disabled || idx >= rows.length - 1}
+        onClick={() => onReorder(row.id, rows[idx + 1].id)}
+        className="inline-flex h-6 w-6 items-center justify-center rounded border border-surface-border text-ink-muted hover:bg-brand-50 disabled:opacity-30"
+        aria-label="Move down"
+      >
+        <ChevronDown className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  )
+}
+
 export function LeadConfigurationPage() {
   const { data, isLoading } = useGetLeadSetupQuery()
   const [createSource, { isLoading: creatingSource }] = useCreateLeadSourceMutation()
@@ -62,6 +115,10 @@ export function LeadConfigurationPage() {
   const [updateOpportunityStage, { isLoading: updatingOppStage }] = useUpdateOpportunityStageMutation()
   const [reorderOpportunityStages, { isLoading: reorderingOppStages }] = useReorderOpportunityStagesMutation()
   const [deleteOpportunityStage] = useDeleteOpportunityStageMutation()
+  const [createOpportunityStatus, { isLoading: creatingOppStatus }] = useCreateOpportunityStatusMutation()
+  const [updateOpportunityStatus, { isLoading: updatingOppStatus }] = useUpdateOpportunityStatusMutation()
+  const [deleteOpportunityStatus] = useDeleteOpportunityStatusMutation()
+  const [reorderOpportunityStatuses, { isLoading: reorderingOppStatuses }] = useReorderOpportunityStatusesMutation()
   const [createDealStatus, { isLoading: creatingDealStatus }] = useCreateDealStatusMutation()
   const [updateDealStatus, { isLoading: updatingDealStatus }] = useUpdateDealStatusMutation()
   const [deleteDealStatus] = useDeleteDealStatusMutation()
@@ -70,11 +127,9 @@ export function LeadConfigurationPage() {
   const [activeTab, setActiveTab] = useState('source')
   const [editor, setEditor] = useState({ open: false, mode: 'create', type: 'source', id: null, name: '', color: '#3b73f5' })
   const [deleteDialog, setDeleteDialog] = useState({ open: false, type: '', id: null, name: '' })
-  const [draggingOpportunityStageId, setDraggingOpportunityStageId] = useState(null)
-  const [draggingDealStatusId, setDraggingDealStatusId] = useState(null)
 
   const setup = useMemo(
-    () => data?.data || { sources: [], tags: [], opportunityStages: [], dealStatuses: [] },
+    () => data?.data || { sources: [], tags: [], opportunityStages: [], opportunityStatuses: [], dealStatuses: [] },
     [data],
   )
 
@@ -82,6 +137,7 @@ export function LeadConfigurationPage() {
     if (type === 'source') return 'Source'
     if (type === 'tags') return 'Tag'
     if (type === 'opportunityStages') return 'Lead status'
+    if (type === 'opportunityStatuses') return 'Opportunity status'
     if (type === 'dealStatuses') return 'Deal status'
     return 'Item'
   }
@@ -90,6 +146,7 @@ export function LeadConfigurationPage() {
     if (activeTab === 'source') return 'source'
     if (activeTab === 'tags') return 'tags'
     if (activeTab === 'opportunity-stages') return 'opportunityStages'
+    if (activeTab === 'opportunity-statuses') return 'opportunityStatuses'
     if (activeTab === 'deal-statuses') return 'dealStatuses'
     return 'source'
   }
@@ -138,6 +195,15 @@ export function LeadConfigurationPage() {
           toast.success('Lead status created')
         }
       }
+      if (editor.type === 'opportunityStatuses') {
+        if (editor.mode === 'edit') {
+          await updateOpportunityStatus({ id: editor.id, name }).unwrap()
+          toast.success('Opportunity status updated')
+        } else {
+          await createOpportunityStatus({ name }).unwrap()
+          toast.success('Opportunity status created')
+        }
+      }
       if (editor.type === 'dealStatuses') {
         if (editor.mode === 'edit') {
           await updateDealStatus({ id: editor.id, name }).unwrap()
@@ -171,6 +237,10 @@ export function LeadConfigurationPage() {
         await deleteOpportunityStage(deleteDialog.id).unwrap()
         toast.success('Lead status deleted')
       }
+      if (deleteDialog.type === 'opportunityStatuses') {
+        await deleteOpportunityStatus(deleteDialog.id).unwrap()
+        toast.success('Opportunity status deleted')
+      }
       if (deleteDialog.type === 'dealStatuses') {
         await deleteDealStatus(deleteDialog.id).unwrap()
         toast.success('Deal status deleted')
@@ -188,6 +258,8 @@ export function LeadConfigurationPage() {
     updatingTag ||
     creatingOppStage ||
     updatingOppStage ||
+    creatingOppStatus ||
+    updatingOppStatus ||
     creatingDealStatus ||
     updatingDealStatus
   const activeAddLabel = `Add ${getEntityLabel(getActiveTabType()).toLowerCase()}`
@@ -238,340 +310,366 @@ export function LeadConfigurationPage() {
     }
   }
 
-  return (
-    <PageShell fullWidth>
-      <div className="pb-4 sm:pb-5">
-        <section className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-y border-surface-border bg-white px-4 py-2.5 sm:px-6">
-            <div className="flex min-w-max items-center gap-2 overflow-x-auto">
-              {TABS.map((tab) => {
-                const Icon = tab.icon
-                const selected = activeTab === tab.id
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setActiveTab(tab.id)}
-                    className={cn(
-                      'inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium',
-                      selected ? 'border-brand-200 bg-brand-50 text-brand-700' : 'border-surface-border bg-white text-ink',
-                    )}
-                  >
-                    <Icon className="h-3.5 w-3.5" aria-hidden />
-                    {tab.label}
-                  </button>
-                )
-              })}
-            </div>
-            <div className="ml-auto flex items-center gap-2">
-              <button
-                type="button"
-                onClick={openCreateModal}
-                className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-brand-600 px-3 text-xs font-semibold text-white"
-              >
-                <Plus className="h-3 w-3" />
-                {activeAddLabel}
-              </button>
-            </div>
-          </div>
+  const opportunityRows = setup.opportunityStages || []
+  const opportunityStatusRows = setup.opportunityStatuses || []
+  const dealStatusRows = setup.dealStatuses || []
 
-          {isLoading ? <p className="text-sm text-ink-muted">Loading setup…</p> : null}
+  async function onReorderOpportunityStatuses(sourceId, targetId) {
+    const rows = Array.isArray(setup.opportunityStatuses) ? setup.opportunityStatuses : []
+    const sourceIndex = rows.findIndex((r) => r.id === sourceId)
+    const targetIndex = rows.findIndex((r) => r.id === targetId)
+    if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return
+    const next = [...rows]
+    const [moved] = next.splice(sourceIndex, 1)
+    next.splice(targetIndex, 0, moved)
+    try {
+      await reorderOpportunityStatuses({ ids: next.map((r) => r.id) }).unwrap()
+    } catch (err) {
+      toast.error(apiErrorMessage(err))
+    }
+  }
 
-          {activeTab === 'source' ? (
-            <div className="overflow-hidden rounded-xl border border-surface-border bg-white">
-              <div className="overflow-x-auto">
-                <table className="cx-table cx-table--dense min-w-full text-xs">
-                  <thead className="cx-table-sticky-head">
-                    <tr>
-                      <th>Source</th>
-                      <th>Created</th>
-                      <th className="cx-table-cell-actions text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {setup.sources.length === 0 ? (
-                      <tr>
-                        <td colSpan={3} className="py-8 text-center text-ink-muted">
-                          No sources found.
-                        </td>
-                      </tr>
-                    ) : (
-                      setup.sources.map((item) => (
-                        <tr key={item.id} className="group">
-                          <td className="text-xs text-ink">{item.name}</td>
-                          <td className="text-xs text-ink-muted">{formatDate(item.createdAt)}</td>
-                          <td className="cx-table-cell-actions text-right">
-                            <div className="inline-flex gap-1 opacity-100 transition">
-                              <button
-                                type="button"
-                                onClick={() => openEditModal('source', item)}
-                                className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-brand-200 bg-brand-50 text-brand-700"
-                                aria-label="Edit source"
-                                title="Edit source"
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                              </button>
-                              <button
-                                type="button"
-                                  onClick={() => openDeleteDialog('source', item)}
-                                className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-danger"
-                                aria-label="Delete source"
-                                title="Delete source"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ) : null}
-
-            {activeTab === 'tags' ? (
-              <div className="overflow-hidden rounded-xl border border-surface-border bg-white">
-                <div className="overflow-x-auto">
-                  <table className="cx-table cx-table--dense min-w-full text-xs">
-                    <thead className="cx-table-sticky-head">
-                      <tr>
-                        <th>Tag</th>
-                        <th>Color</th>
-                        <th>Created</th>
-                        <th className="cx-table-cell-actions text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {setup.tags.length === 0 ? (
-                        <tr>
-                          <td colSpan={4} className="py-8 text-center text-ink-muted">
-                            No tags found.
-                          </td>
-                        </tr>
-                      ) : (
-                        setup.tags.map((item) => (
-                          <tr key={item.id} className="group">
-                            <td className="text-xs text-ink">{item.name}</td>
-                            <td>
-                              <span className="inline-flex items-center gap-2 text-xs text-ink-muted">
-                                <span className="h-3.5 w-3.5 rounded-full border border-surface-border" style={{ backgroundColor: item.color || '#3b73f5' }} />
-                                {item.color || '#3b73f5'}
-                              </span>
-                            </td>
-                            <td className="text-xs text-ink-muted">{formatDate(item.createdAt)}</td>
-                            <td className="cx-table-cell-actions text-right">
-                              <div className="inline-flex gap-1 opacity-100 transition">
-                                <button
-                                  type="button"
-                                  onClick={() => openEditModal('tags', item)}
-                                  className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-brand-200 bg-brand-50 text-brand-700"
-                                  aria-label="Edit tag"
-                                  title="Edit tag"
-                                >
-                                  <Pencil className="h-3.5 w-3.5" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => openDeleteDialog('tags', item)}
-                                  className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-danger"
-                                  aria-label="Delete tag"
-                                  title="Delete tag"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ) : null}
-
-            {activeTab === 'opportunity-stages' ? (
-              <div className="overflow-hidden rounded-xl border border-surface-border bg-white">
-                <div className="overflow-x-auto">
-                  <table className="cx-table cx-table--dense min-w-full text-xs">
-                    <thead className="cx-table-sticky-head">
-                      <tr>
-                        <th className="cx-table-cell-actions w-8">Move</th>
-                        <th>Stage</th>
-                        <th className="text-center">Initial</th>
-                        <th className="text-center">Deal status</th>
-                        <th>Created</th>
-                        <th className="cx-table-cell-actions text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(setup.opportunityStages || []).length === 0 ? (
-                        <tr>
-                          <td colSpan={6} className="py-8 text-center text-ink-muted">
-                            No lead statuses found.
-                          </td>
-                        </tr>
-                      ) : (
-                        setup.opportunityStages.map((item) => (
-                          <tr
-                            key={item.id}
-                            draggable={!reorderingOppStages}
-                            onDragStart={() => setDraggingOpportunityStageId(item.id)}
-                            onDragEnd={() => setDraggingOpportunityStageId(null)}
-                            onDragOver={(e) => e.preventDefault()}
-                            onDrop={() => {
-                              if (draggingOpportunityStageId && draggingOpportunityStageId !== item.id) {
-                                onReorderOpportunityStages(draggingOpportunityStageId, item.id)
-                              }
-                              setDraggingOpportunityStageId(null)
-                            }}
-                            className={cn(
-                              'group',
-                              draggingOpportunityStageId === item.id ? 'opacity-50' : '',
-                            )}
-                          >
-                            <td className="cx-table-cell-actions text-ink-muted">
-                              <span className="inline-flex cursor-grab items-center" title="Drag to reorder">
-                                <GripVertical className="h-3.5 w-3.5" />
-                              </span>
-                            </td>
-                            <td className="text-xs text-ink">{formatStatusName(item.name)}</td>
-                            <td className="text-center text-xs text-ink-muted">{item.isDefault ? 'Yes' : 'No'}</td>
-                            <td className="text-center align-middle">
-                              <input
-                                type="checkbox"
-                                className="h-3.5 w-3.5 rounded border-surface-border text-brand-600 focus:ring-brand-500"
-                                checked={!!item.isDealStatus}
-                                disabled={updatingOppStage || reorderingOppStages}
-                                onChange={(e) => onSetOpportunityDealStatus(item, e.target.checked)}
-                                aria-label={item.isDealStatus ? 'Deal stage selected' : 'Set as deal stage'}
-                              />
-                            </td>
-                            <td className="text-xs text-ink-muted">{formatDate(item.createdAt)}</td>
-                            <td className="cx-table-cell-actions text-right">
-                              <div className="inline-flex gap-1 opacity-100 transition">
-                                <button
-                                  type="button"
-                                  onClick={() => openEditModal('opportunityStages', item)}
-                                  className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-brand-200 bg-brand-50 text-brand-700"
-                                  aria-label="Edit lead status"
-                                  title="Edit lead status"
-                                >
-                                  <Pencil className="h-3.5 w-3.5" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => openDeleteDialog('opportunityStages', item)}
-                                  className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-danger"
-                                  aria-label="Delete lead status"
-                                  title="Delete lead status"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ) : null}
-            {activeTab === 'deal-statuses' ? (
-              <div className="overflow-hidden rounded-xl border border-surface-border bg-white">
-                <div className="overflow-x-auto">
-                  <table className="cx-table cx-table--dense min-w-full text-xs">
-                    <thead className="cx-table-sticky-head">
-                      <tr>
-                        <th className="cx-table-cell-actions w-8">Move</th>
-                        <th>Status name</th>
-                        <th className="text-center">Initial</th>
-                        <th className="text-center">Is deal complete status</th>
-                        <th>Created</th>
-                        <th className="cx-table-cell-actions text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(setup.dealStatuses || []).length === 0 ? (
-                        <tr>
-                          <td colSpan={6} className="py-8 text-center text-ink-muted">
-                            No deal statuses found.
-                          </td>
-                        </tr>
-                      ) : (
-                        setup.dealStatuses.map((item) => (
-                          <tr
-                            key={item.id}
-                            draggable={!reorderingDealStatuses}
-                            onDragStart={() => setDraggingDealStatusId(item.id)}
-                            onDragEnd={() => setDraggingDealStatusId(null)}
-                            onDragOver={(e) => e.preventDefault()}
-                            onDrop={() => {
-                              if (draggingDealStatusId && draggingDealStatusId !== item.id) {
-                                onReorderDealStatuses(draggingDealStatusId, item.id)
-                              }
-                              setDraggingDealStatusId(null)
-                            }}
-                            className={cn(
-                              'group',
-                              draggingDealStatusId === item.id ? 'opacity-50' : '',
-                            )}
-                          >
-                            <td className="cx-table-cell-actions text-ink-muted">
-                              <span className="inline-flex cursor-grab items-center" title="Drag to reorder">
-                                <GripVertical className="h-3.5 w-3.5" />
-                              </span>
-                            </td>
-                            <td className="text-xs text-ink">{item.name}</td>
-                            <td className="text-center text-xs text-ink-muted">
-                              {item.isInitial ? 'Yes' : 'No'}
-                            </td>
-                            <td className="text-center align-middle">
-                              <input
-                                type="checkbox"
-                                className="h-3.5 w-3.5 rounded border-surface-border text-brand-600 focus:ring-brand-500"
-                                checked={!!item.isDealCompleteStatus}
-                                disabled={updatingDealStatus || reorderingDealStatuses}
-                                onChange={(e) => onSetDealCompleteStatus(item, e.target.checked)}
-                                aria-label={item.isDealCompleteStatus ? 'Deal complete status selected' : 'Set as deal complete status'}
-                              />
-                            </td>
-                            <td className="text-xs text-ink-muted">{formatDate(item.createdAt)}</td>
-                            <td className="cx-table-cell-actions text-right">
-                              <div className="inline-flex gap-1 opacity-100 transition">
-                                <button
-                                  type="button"
-                                  onClick={() => openEditModal('dealStatuses', item)}
-                                  className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-brand-200 bg-brand-50 text-brand-700"
-                                  aria-label="Edit deal status"
-                                  title="Edit deal status"
-                                >
-                                  <Pencil className="h-3.5 w-3.5" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => openDeleteDialog('dealStatuses', item)}
-                                  className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-danger"
-                                  aria-label="Delete deal status"
-                                  title="Delete deal status"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ) : null}
-        </section>
+  function SetupRowActions({ row, type }) {
+    return (
+      <div className="inline-flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+        <button
+          type="button"
+          onClick={() => openEditModal(type, row)}
+          className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-brand-200 bg-brand-50 text-brand-700 hover:bg-brand-100"
+          aria-label="Edit"
+          title="Edit"
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => openDeleteDialog(type, row)}
+          className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-danger hover:bg-red-100"
+          aria-label="Delete"
+          title="Delete"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
       </div>
+    )
+  }
+
+  const activeTable = useMemo(() => {
+    const actionsCol = {
+      field: 'actions',
+      headerName: 'Actions',
+      width: 92,
+      minWidth: 92,
+      maxWidth: 92,
+      sortable: false,
+      renderCell: ({ row }) => <SetupRowActions row={row} type={getActiveTabType()} />,
+    }
+
+    switch (activeTab) {
+      case 'tags':
+        return {
+          data: setup.tags,
+          columns: [
+            {
+              field: 'name',
+              headerName: 'Tag',
+              flex: 1,
+              minWidth: 160,
+              renderCell: ({ row }) => <span className="font-medium text-ink">{row.name}</span>,
+            },
+            {
+              field: 'color',
+              headerName: 'Color',
+              width: 140,
+              renderCell: ({ row }) => (
+                <span className="inline-flex items-center gap-2 text-xs text-ink-muted">
+                  <span
+                    className="h-4 w-4 shrink-0 rounded-full border border-surface-border shadow-sm"
+                    style={{ backgroundColor: row.color || '#3b73f5' }}
+                  />
+                  <span className="font-mono">{row.color || '#3b73f5'}</span>
+                </span>
+              ),
+            },
+            {
+              field: 'createdAt',
+              headerName: 'Created',
+              width: 120,
+              valueGetter: (_v, row) => formatDate(row.createdAt),
+            },
+            actionsCol,
+          ],
+          emptyTitle: 'No tags found',
+          emptyDescription: 'Add a tag to organize leads.',
+        }
+      case 'opportunity-stages':
+        return {
+          data: opportunityRows,
+          columns: [
+            {
+              field: 'order',
+              headerName: 'Order',
+              width: 72,
+              sortable: false,
+              renderCell: ({ row }) => (
+                <MoveRowButtons
+                  row={row}
+                  rows={opportunityRows}
+                  onReorder={onReorderOpportunityStages}
+                  disabled={updatingOppStage || reorderingOppStages}
+                />
+              ),
+            },
+            {
+              field: 'name',
+              headerName: 'Stage',
+              flex: 1,
+              minWidth: 180,
+              renderCell: ({ row }) => (
+                <span className="font-medium text-ink">{formatStatusName(row.name)}</span>
+              ),
+            },
+            {
+              field: 'isDefault',
+              headerName: 'Initial',
+              width: 88,
+              renderCell: ({ row }) => <YesNoPill yes={!!row.isDefault} />,
+            },
+            {
+              field: 'isDealStatus',
+              headerName: 'Deal status',
+              width: 108,
+              sortable: false,
+              renderCell: ({ row }) => (
+                <div className="flex justify-center">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-surface-border text-brand-600 focus:ring-brand-500"
+                    checked={!!row.isDealStatus}
+                    disabled={updatingOppStage || reorderingOppStages}
+                    onChange={(e) => onSetOpportunityDealStatus(row, e.target.checked)}
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label={row.isDealStatus ? 'Deal stage selected' : 'Set as deal stage'}
+                  />
+                </div>
+              ),
+            },
+            {
+              field: 'createdAt',
+              headerName: 'Created',
+              width: 120,
+              valueGetter: (_v, row) => formatDate(row.createdAt),
+            },
+            actionsCol,
+          ],
+          emptyTitle: 'No lead statuses found',
+          emptyDescription: 'Add pipeline stages for opportunities.',
+        }
+      case 'opportunity-statuses':
+        return {
+          data: opportunityStatusRows,
+          columns: [
+            {
+              field: 'order',
+              headerName: 'Order',
+              width: 72,
+              sortable: false,
+              renderCell: ({ row }) => (
+                <MoveRowButtons
+                  row={row}
+                  rows={opportunityStatusRows}
+                  onReorder={onReorderOpportunityStatuses}
+                  disabled={updatingOppStatus || reorderingOppStatuses}
+                />
+              ),
+            },
+            {
+              field: 'name',
+              headerName: 'Status name',
+              flex: 1,
+              minWidth: 180,
+              renderCell: ({ row }) => (
+                <span className="font-medium text-ink">{formatStatusName(row.name)}</span>
+              ),
+            },
+            {
+              field: 'isInitial',
+              headerName: 'Initial',
+              width: 88,
+              renderCell: ({ row }) => <YesNoPill yes={!!row.isInitial} />,
+            },
+            {
+              field: 'createdAt',
+              headerName: 'Created',
+              width: 120,
+              valueGetter: (_v, row) => formatDate(row.createdAt),
+            },
+            actionsCol,
+          ],
+          emptyTitle: 'No opportunity statuses found',
+          emptyDescription: 'Add statuses for your opportunity pipeline.',
+        }
+      case 'deal-statuses':
+        return {
+          data: dealStatusRows,
+          columns: [
+            {
+              field: 'order',
+              headerName: 'Order',
+              width: 72,
+              sortable: false,
+              renderCell: ({ row }) => (
+                <MoveRowButtons
+                  row={row}
+                  rows={dealStatusRows}
+                  onReorder={onReorderDealStatuses}
+                  disabled={updatingDealStatus || reorderingDealStatuses}
+                />
+              ),
+            },
+            {
+              field: 'name',
+              headerName: 'Status name',
+              flex: 1,
+              minWidth: 180,
+              renderCell: ({ row }) => (
+                <span className="font-medium text-ink">{formatStatusName(row.name)}</span>
+              ),
+            },
+            {
+              field: 'isInitial',
+              headerName: 'Initial',
+              width: 88,
+              renderCell: ({ row }) => <YesNoPill yes={!!row.isInitial} />,
+            },
+            {
+              field: 'isDealCompleteStatus',
+              headerName: 'Deal complete',
+              width: 120,
+              sortable: false,
+              renderCell: ({ row }) => (
+                <div className="flex justify-center">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-surface-border text-brand-600 focus:ring-brand-500"
+                    checked={!!row.isDealCompleteStatus}
+                    disabled={updatingDealStatus || reorderingDealStatuses}
+                    onChange={(e) => onSetDealCompleteStatus(row, e.target.checked)}
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label={
+                      row.isDealCompleteStatus ? 'Deal complete status selected' : 'Set as deal complete status'
+                    }
+                  />
+                </div>
+              ),
+            },
+            {
+              field: 'createdAt',
+              headerName: 'Created',
+              width: 120,
+              valueGetter: (_v, row) => formatDate(row.createdAt),
+            },
+            actionsCol,
+          ],
+          emptyTitle: 'No deal statuses found',
+          emptyDescription: 'Add deal status names for your pipeline.',
+        }
+      case 'source':
+      default:
+        return {
+          data: setup.sources,
+          columns: [
+            {
+              field: 'name',
+              headerName: 'Source',
+              flex: 1,
+              minWidth: 200,
+              renderCell: ({ row }) => <span className="font-medium text-ink">{row.name}</span>,
+            },
+            {
+              field: 'createdAt',
+              headerName: 'Created',
+              width: 120,
+              valueGetter: (_v, row) => formatDate(row.createdAt),
+            },
+            actionsCol,
+          ],
+          emptyTitle: 'No sources found',
+          emptyDescription: 'Add lead sources such as Web Form or Referral.',
+        }
+    }
+  }, [
+    activeTab,
+    setup.sources,
+    setup.tags,
+    opportunityRows,
+    opportunityStatusRows,
+    dealStatusRows,
+    updatingOppStage,
+    reorderingOppStages,
+    updatingOppStatus,
+    reorderingOppStatuses,
+    updatingDealStatus,
+    reorderingDealStatuses,
+  ])
+
+  return (
+    <PageShell fullWidth mainClassName="pt-1.5 pb-3 sm:pb-4">
+      <PageStack className="gap-3">
+        <PageFilterBar>
+          <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto">
+            {TABS.map((tab) => {
+              const Icon = tab.icon
+              const selected = activeTab === tab.id
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  className={cn(
+                    'inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium',
+                    selected
+                      ? 'border-brand-300 bg-brand-50 text-brand-800'
+                      : 'border-surface-border bg-white text-ink hover:border-brand-200 hover:bg-brand-50/50',
+                  )}
+                >
+                  <Icon className="h-3.5 w-3.5" aria-hidden />
+                  {tab.label}
+                </button>
+              )
+            })}
+          </div>
+          <button
+            type="button"
+            onClick={openCreateModal}
+            className="ml-auto inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-[var(--brand-primary)] px-3 text-xs font-semibold text-white hover:bg-[var(--brand-primary-dark)]"
+          >
+            <Plus className="h-3 w-3" />
+            {activeAddLabel}
+          </button>
+        </PageFilterBar>
+
+        <PageContentPanel flush>
+          <DataGrid
+            key={activeTab}
+            gridColumns
+            columns={activeTable.columns}
+            data={activeTable.data}
+            loading={isLoading}
+            searchable={false}
+            showColumnToggle={false}
+            showExportCsv={false}
+            compact
+            defaultPageSize={20}
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
+            getRowId={(row) => row.id}
+            emptyTitle={activeTable.emptyTitle}
+            emptyDescription={activeTable.emptyDescription}
+            maxHeightClass="max-h-[min(65vh,640px)]"
+            className="rounded-none border-0 shadow-none"
+          />
+        </PageContentPanel>
+      </PageStack>
 
       <Modal
         open={editor.open}
@@ -590,7 +688,7 @@ export function LeadConfigurationPage() {
               type="button"
               onClick={onSaveModal}
               disabled={savingModal}
-              className="h-10 rounded-xl bg-brand-600 px-4 text-sm font-medium text-white disabled:opacity-60"
+              className="h-10 rounded-xl bg-slate-800 px-4 text-sm font-medium text-white disabled:opacity-60"
             >
               {savingModal ? 'Saving…' : editor.mode === 'edit' ? 'Save changes' : 'Add'}
             </button>

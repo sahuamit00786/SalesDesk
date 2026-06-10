@@ -1,13 +1,14 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
+import { Search } from 'lucide-react'
 import { useIsHrManagerOrAdmin } from '@/features/hr/useHrRole'
 import { PageShell } from '@/components/layout/PageShell'
 import { Modal } from '@/components/ui/Modal'
 import { Select } from '@/components/ui/Select'
 import { Button } from '@/components/ui/Button'
 import { Textarea } from '@/components/ui/Textarea'
-import { Loader } from '@/components/shared/Loader'
+import { SkeletonList } from '@/components/shared/SkeletonLoader'
 import { BulkApproveBar } from '@/features/leave/components/BulkApproveBar'
 import { LeaveRequestTable } from '@/features/leave/components/LeaveRequestTable'
 import { HrToolbar, HrToolbarGroup } from '@/features/hr/components/HrToolbar'
@@ -23,6 +24,9 @@ export function LeaveApprovalPage() {
   const canApprove = useIsHrManagerOrAdmin()
   const [status, setStatus] = useState('pending')
   const [leaveTypeId, setLeaveTypeId] = useState('')
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
+  const [employeeSearch, setEmployeeSearch] = useState('')
   const [selected, setSelected] = useState([])
   const [rejectRow, setRejectRow] = useState(null)
   const [rejectReason, setRejectReason] = useState('')
@@ -31,13 +35,21 @@ export function LeaveApprovalPage() {
   const { data, refetch, isLoading } = useGetAllLeavesQuery({
     status: status || undefined,
     leaveTypeId: leaveTypeId || undefined,
+    from: fromDate || undefined,
+    to: toDate || undefined,
   })
   const [approveLeave] = useApproveLeaveMutation()
   const [rejectLeave, { isLoading: rejecting }] = useRejectLeaveMutation()
   const [bulkApprove, { isLoading: bulkBusy }] = useBulkApproveLeavesMutation()
 
-  const rows = data?.data || []
+  const allRows = data?.data || []
   const types = typesData?.data || []
+
+  const rows = useMemo(() => {
+    const q = employeeSearch.trim().toLowerCase()
+    if (!q) return allRows
+    return allRows.filter((r) => String(r.user?.name || '').toLowerCase().includes(q))
+  }, [allRows, employeeSearch])
 
   if (!canApprove) return <Navigate to="/leave" replace />
 
@@ -104,15 +116,38 @@ export function LeaveApprovalPage() {
                 </option>
               ))}
             </Select>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search employee…"
+                value={employeeSearch}
+                onChange={(e) => setEmployeeSearch(e.target.value)}
+                className="h-10 rounded-lg border border-gray-200 bg-white pl-8 pr-3 text-sm text-gray-900 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-100"
+              />
+            </div>
+          </HrToolbarGroup>
+          <HrToolbarGroup label="Date range">
+            <input
+              type="date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-900 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-100"
+            />
+            <span className="text-sm text-gray-400">–</span>
+            <input
+              type="date"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-900 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-100"
+            />
           </HrToolbarGroup>
         </HrToolbar>
 
         <BulkApproveBar selectedCount={selected.length} onApprove={onBulkApprove} busy={bulkBusy} />
 
         {isLoading ? (
-          <div className="flex justify-center py-16">
-            <Loader />
-          </div>
+          <SkeletonList rows={6} />
         ) : (
           <LeaveRequestTable
             rows={rows}

@@ -294,7 +294,7 @@ export function WorkspaceCompanyTab() {
         <button
           type="submit"
           disabled={saving || !dirty}
-          className="inline-flex h-9 shrink-0 items-center gap-2 rounded-xl bg-brand-600 px-3 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700 disabled:opacity-50 sm:h-10 sm:px-4"
+          className="inline-flex h-9 shrink-0 items-center gap-2 rounded-xl bg-slate-800 px-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-50 sm:h-10 sm:px-4"
         >
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" aria-hidden />}
           {saving ? 'Saving…' : 'Save'}
@@ -314,7 +314,7 @@ export function WorkspaceCompanyTab() {
               onClick={() => setCompanyTab(t.id)}
               className={cn(
                 'inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition sm:flex-none sm:px-3',
-                active ? 'bg-brand-50 text-brand-800 ring-1 ring-brand-200/80' : 'text-ink-muted hover:bg-surface-muted hover:text-ink',
+                active ? 'bg-slate-100 text-brand-800 ring-1 ring-brand-200/80' : 'text-ink-muted hover:bg-surface-muted hover:text-ink',
               )}
             >
               <Icon className="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden />

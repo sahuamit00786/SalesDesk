@@ -1,7 +1,7 @@
 /** Badge colors aligned with leave type codes (reference calendar style). */
 const BY_CODE = {
   CL: { bg: 'bg-teal-600', label: 'Casual Leave' },
-  SL: { bg: 'bg-indigo-600', label: 'Sick Leave' },
+  SL: { bg: 'bg-[#5B21B6]', label: 'Sick Leave' },
   EL: { bg: 'bg-emerald-600', label: 'Earned Leave' },
   UL: { bg: 'bg-rose-900', label: 'Unpaid Leave' },
   PTO: { bg: 'bg-green-600', label: 'Paid Time Off' },

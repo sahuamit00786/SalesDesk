@@ -67,7 +67,7 @@ export function HrNotificationBell() {
                     ? 'bg-rose-100 text-rose-700'
                     : isLeave
                       ? 'bg-amber-100 text-amber-800'
-                      : 'bg-brand-100 text-brand-700'
+                      : 'bg-slate-200 text-brand-700'
                 const inner = (
                   <>
                     <div className="flex gap-3">
@@ -89,7 +89,7 @@ export function HrNotificationBell() {
                       <Link
                         to={row.link}
                         onClick={() => onClickRow(row)}
-                        className={`block px-4 py-3 hover:bg-surface-subtle ${row.isRead ? '' : 'bg-brand-50/50'}`}
+                        className={`block px-4 py-3 hover:bg-surface-subtle ${row.isRead ? '' : 'bg-slate-50'}`}
                       >
                         {inner}
                       </Link>
@@ -97,7 +97,7 @@ export function HrNotificationBell() {
                       <button
                         type="button"
                         onClick={() => onClickRow(row)}
-                        className={`w-full px-4 py-3 text-left hover:bg-surface-subtle ${row.isRead ? '' : 'bg-brand-50/50'}`}
+                        className={`w-full px-4 py-3 text-left hover:bg-surface-subtle ${row.isRead ? '' : 'bg-slate-50'}`}
                       >
                         {inner}
                       </button>

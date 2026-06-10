@@ -18,6 +18,7 @@ export function requireAuth(req, res, next) {
       email: decoded.email,
       role: decoded.role,
       companyRoleId: decoded.companyRoleId ?? null,
+      userRoleKind: decoded.userRoleKind ?? null,
       isCompanyAdmin: Boolean(decoded.isCompanyAdmin),
       companyId: decoded.companyId ?? null,
     }

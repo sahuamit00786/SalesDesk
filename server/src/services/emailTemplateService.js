@@ -175,6 +175,37 @@ ${inner}
 </html>`
 }
 
+/** Tokens referenced in subject/body (known merge keys only for @). */
+export function extractMergeKeysFromTemplate(subject, bodyHtml) {
+  const keys = new Set()
+  const scan = (text) => {
+    const s = String(text || '')
+    for (const m of s.matchAll(CURLY_MERGE_REGEX)) {
+      const k = String(m[1] || '').trim().toLowerCase()
+      if (KNOWN_MERGE_KEYS.has(k)) keys.add(k)
+    }
+    for (const m of s.matchAll(AT_MERGE_REGEX)) {
+      const k = String(m[1] || '').trim().toLowerCase()
+      if (KNOWN_MERGE_KEYS.has(k)) keys.add(k)
+    }
+  }
+  scan(subject)
+  scan(bodyHtml)
+  return [...keys]
+}
+
+const MERGE_FALLBACK_KEYS = new Set(['first_name', 'last_name', 'contact_name', 'name', 'sender_name'])
+
+/** Fields empty after merge resolution (excluding keys with intentional fallbacks). */
+export function missingMergeKeysForLead(subject, bodyHtml, lead, senderName = '') {
+  const map = leadTokenMap(lead, senderName)
+  return extractMergeKeysFromTemplate(subject, bodyHtml).filter((key) => {
+    if (MERGE_FALLBACK_KEYS.has(key)) return false
+    const v = map[key]
+    return v == null || !String(v).trim()
+  })
+}
+
 export function resolveMergeTags(templateSubject, templateBody, lead, { senderName = '', wrapBody = true } = {}) {
   const subject = replaceMergePlaceholders(templateSubject, lead, senderName)
   let bodyHtml = replaceMergePlaceholders(templateBody, lead, senderName)

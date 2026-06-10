@@ -1,0 +1,22 @@
+# Local dev services for Connexify (optional — MySQL can stay on host).
+# Start Redis:  npm run redis:up
+# Stop Redis:   npm run redis:down
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: connexify-redis
+    ports:
+      - '6379:6379'
+    volumes:
+      - connexify_redis_data:/data
+    command: ['redis-server', '--appendonly', 'yes']
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  connexify_redis_data:
