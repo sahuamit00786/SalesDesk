@@ -31,7 +31,8 @@ import { TablePaginationBar } from '@/components/ui/TablePaginationBar'
 import { inputFieldClassName } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { DataGrid } from '@/components/shared/DataGrid'
-import { formatAggregatedDealAmount, formatDealMoney } from '@/features/deals/dealCurrencies'
+import { formatDealMoney } from '@/features/deals/dealCurrencies'
+import { MixedMoneyValue } from '@/components/shared/MixedMoneyValue'
 
 const STAGE_FILTER_FALLBACK = ['Lead Inbound', 'New', 'Contacted', 'Qualified', 'Proposal', 'Won', 'Lost']
 
@@ -185,8 +186,6 @@ export function PipelinePage() {
     setPage(1)
   }, [mode, debouncedSearch, selectedStages, selectedAssignees, sortValue, limit, pipelineWorkspaceId])
 
-  const pageSum = useMemo(() => rows.reduce((acc, r) => acc + Number(r.dealValue || 0), 0), [rows])
-  const avgDealValue = useMemo(() => (rows.length ? pageSum / rows.length : 0), [rows.length, pageSum])
   const highScoreCount = useMemo(() => rows.filter((r) => Number(r.leadScore || 0) >= 80).length, [rows])
   const unassignedCount = useMemo(() => rows.filter((r) => !r.owner?.id).length, [rows])
   const staleCount = useMemo(() => {
@@ -476,22 +475,67 @@ export function PipelinePage() {
     <PageShell fullWidth>
       <div className="flex h-[calc(100dvh-89px)] min-h-0 flex-col gap-3 px-2 py-2 lg:px-4 lg:py-3">
         <div className="flex flex-col gap-3 rounded-2xl border border-surface-border bg-gradient-to-br from-white via-slate-50 to-slate-50 px-4 py-4 sm:px-5">
-          <div className="order-2 flex flex-col gap-3 border-t border-surface-border/60 pt-3">
-            <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-              <div className="relative min-w-0 lg:flex-1">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
-                <input
-                  className="h-9 w-full rounded-xl border border-surface-border bg-white pl-10 pr-3 text-sm outline-none ring-brand-500/30 focus:border-brand-400 focus:ring-2"
-                  placeholder="Search name, company, email, job title, phone…"
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  aria-label="Search pipeline"
-                />
-                {isFetching ? (
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-medium text-ink-muted">Updating…</span>
-                ) : null}
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="rounded-xl border border-white/80 bg-white/90 px-3 py-2 shadow-sm">
+              <p className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
+                <Activity className="h-3 w-3" />
+                Total (filtered)
+              </p>
+              <p className="text-lg font-bold text-ink">{total.toLocaleString()}</p>
+            </div>
+            <div className="rounded-xl border border-white/80 bg-white/90 px-3 py-2 shadow-sm">
+              <p className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
+                <TrendingUp className="h-3 w-3" />
+                Value (this page)
+              </p>
+              <p className="text-lg font-bold text-ink">
+                <MixedMoneyValue rows={rows} mode="sum" className="text-lg font-bold text-ink" />
+              </p>
+            </div>
+            <div className="rounded-xl border border-white/80 bg-white/90 px-3 py-2 shadow-sm">
+              <p className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
+                <BriefcaseBusiness className="h-3 w-3" />
+                Avg value
+              </p>
+              <p className="text-lg font-bold text-ink">
+                <MixedMoneyValue rows={rows} mode="avg" className="text-lg font-bold text-ink" />
+              </p>
+            </div>
+            <div className="rounded-xl border border-white/80 bg-white/90 px-3 py-2 shadow-sm">
+              <p className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
+                <Sparkles className="h-3 w-3" />
+                High score (80+)
+              </p>
+              <p className="text-lg font-bold text-ink">{highScoreCount.toLocaleString()}</p>
+            </div>
+            <div className="rounded-xl border border-white/80 bg-white/90 px-3 py-2 shadow-sm">
+              <p className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
+                <UserMinus className="h-3 w-3" />
+                Need attention
+              </p>
+              <p className="text-lg font-bold text-ink">{(unassignedCount + staleCount).toLocaleString()}</p>
+              <p className="text-[10px] text-ink-muted">
+                {unassignedCount} unassigned, {staleCount} stale
+              </p>
+            </div>
+          </div>
+
+          <div className="relative w-full min-w-[16rem] shrink-0">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
+            <input
+              className="h-10 w-full rounded-xl border border-surface-border bg-white pl-10 pr-3 text-sm outline-none ring-brand-500/30 focus:border-brand-400 focus:ring-2"
+              placeholder="Search name, company, email, job title, phone…"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              aria-label="Search pipeline"
+            />
+            {isFetching ? (
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-medium text-ink-muted">Updating…</span>
+            ) : null}
+          </div>
+
+          <div className="flex flex-col gap-3 border-t border-surface-border/60 pt-3">
+            <div className="flex flex-wrap items-center gap-2">
                 {isCompanyAdmin && workspaceList.length ? (
                   <label className="inline-flex flex-col gap-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
                    <select
@@ -684,7 +728,6 @@ export function PipelinePage() {
                   <Plus className="h-3.5 w-3.5" />
                   New opportunity
                 </button>
-              </div>
             </div>
             {activeFilterCount > 0 ? (
               <div className="flex flex-wrap items-center gap-1.5 border-t border-surface-border/80 pt-2 text-[11px]">
@@ -715,46 +758,6 @@ export function PipelinePage() {
                 ) : null}
               </div>
             ) : null}
-          </div>
-          <div className="order-1 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
-            <div className="rounded-xl border border-white/80 bg-white/90 px-3 py-2 shadow-sm">
-              <p className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
-                <Activity className="h-3 w-3" />
-                Total (filtered)
-              </p>
-              <p className="text-lg font-bold text-ink">{total.toLocaleString()}</p>
-            </div>
-            <div className="rounded-xl border border-white/80 bg-white/90 px-3 py-2 shadow-sm">
-              <p className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
-                <TrendingUp className="h-3 w-3" />
-                Value (this page)
-              </p>
-              <p className="text-lg font-bold text-ink">{formatAggregatedDealAmount(rows, pageSum)}</p>
-            </div>
-            <div className="rounded-xl border border-white/80 bg-white/90 px-3 py-2 shadow-sm">
-              <p className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
-                <BriefcaseBusiness className="h-3 w-3" />
-                Avg value
-              </p>
-              <p className="text-lg font-bold text-ink">{formatAggregatedDealAmount(rows, avgDealValue)}</p>
-            </div>
-            <div className="rounded-xl border border-white/80 bg-white/90 px-3 py-2 shadow-sm">
-              <p className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
-                <Sparkles className="h-3 w-3" />
-                High score (80+)
-              </p>
-              <p className="text-lg font-bold text-ink">{highScoreCount.toLocaleString()}</p>
-            </div>
-            <div className="rounded-xl border border-white/80 bg-white/90 px-3 py-2 shadow-sm">
-              <p className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
-                <UserMinus className="h-3 w-3" />
-                Need attention
-              </p>
-              <p className="text-lg font-bold text-ink">{(unassignedCount + staleCount).toLocaleString()}</p>
-              <p className="text-[10px] text-ink-muted">
-                {unassignedCount} unassigned, {staleCount} stale
-              </p>
-            </div>
           </div>
         </div>
 

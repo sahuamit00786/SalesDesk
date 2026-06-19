@@ -3,6 +3,9 @@ import { Building2, Briefcase, UserCircle2 } from 'lucide-react'
 import { RightDrawer } from '@/components/ui/RightDrawer'
 import { PhoneField } from '@/components/ui/PhoneField'
 import { DEAL_CURRENCY_OPTIONS, normalizeDealCurrency } from '@/features/deals/dealCurrencies'
+import { CustomFieldsForm, validateCustomFieldsForm } from '@/features/leads/components/CustomFieldsForm'
+import { useGetLeadFormMetaQuery } from '@/features/leads/leadsApi'
+import { useEffectiveCurrency } from '@/hooks/useEffectiveCurrency'
 
 const FALLBACK_STAGE_NAMES = ['Lead Inbound', 'New', 'Contacted', 'Qualified', 'Proposal Made', 'Negotiation', 'Won', 'Lost']
 const INDUSTRIES = ['Software / SaaS', 'FinTech', 'Healthcare', 'Logistics', 'Manufacturing', 'Education', 'Other']
@@ -23,6 +26,7 @@ const EMPTY_FORM = {
   dealValue: '',
   dealCurrency: 'USD',
   ownerUserId: '',
+  customFields: {},
 }
 
 export function CreateOpportunityModal({
@@ -34,8 +38,12 @@ export function CreateOpportunityModal({
   opportunityStages = [],
   saving = false,
 }) {
+  const effectiveCurrency = useEffectiveCurrency()
+  const { data: formMetaData } = useGetLeadFormMetaQuery(undefined, { skip: !open })
+  const customFieldDefs = useMemo(() => formMetaData?.data?.customFields || [], [formMetaData])
   const [form, setForm] = useState(() => ({ ...EMPTY_FORM, currentStage: 'Lead Inbound' }))
   const [error, setError] = useState('')
+  const [customFieldErrors, setCustomFieldErrors] = useState({})
 
   const defaultStage = useMemo(() => {
     if (opportunityStages.length) {
@@ -56,10 +64,12 @@ export function CreateOpportunityModal({
         ...EMPTY_FORM,
         currentStage: defaultStage,
         ownerUserId: users[0]?.id || prev.ownerUserId || '',
+        dealCurrency: effectiveCurrency,
       }))
       setError('')
+      setCustomFieldErrors({})
     }
-  }, [open, users, defaultStage])
+  }, [open, users, defaultStage, effectiveCurrency])
 
   const ownerOptions = useMemo(
     () => users.map((u) => ({ id: u.id, label: u.name || u.email || 'User', email: u.email || '' })),
@@ -86,6 +96,7 @@ export function CreateOpportunityModal({
       phoneNumber: form.phoneNumber || null,
       jobTitle: form.jobTitle || null,
       ownerUserId: form.ownerUserId || null,
+      customFields: form.customFields || {},
     }
   }
 
@@ -93,6 +104,12 @@ export function CreateOpportunityModal({
     if (!form.fullName.trim()) return setError('Full name is required')
     if (!form.companyName.trim()) return setError('Company is required')
     if (!form.currentStage.trim()) return setError('Pipeline status is required')
+    const cfErrors = validateCustomFieldsForm(customFieldDefs, form.customFields)
+    if (Object.keys(cfErrors).length) {
+      setCustomFieldErrors(cfErrors)
+      return setError('Please fill in all required custom fields')
+    }
+    setCustomFieldErrors({})
     setError('')
     if (kind === 'add-another') {
       await onSaveAndAddAnother(normalizedPayload(), () =>
@@ -100,7 +117,7 @@ export function CreateOpportunityModal({
           ...EMPTY_FORM,
           currentStage: defaultStage,
           ownerUserId: users[0]?.id || '',
-          dealCurrency: 'USD',
+          dealCurrency: effectiveCurrency,
         }),
       )
     }
@@ -250,6 +267,17 @@ export function CreateOpportunityModal({
               </label>
             </div>
           </section>
+
+          <CustomFieldsForm
+            fields={customFieldDefs}
+            value={form.customFields}
+            errors={customFieldErrors}
+            showErrors={Object.keys(customFieldErrors).length > 0}
+            embedded
+            compact
+            onChange={(customFields) => setForm((prev) => ({ ...prev, customFields }))}
+          />
+
           {error ? <p className="text-xs font-medium text-rose-600">{error}</p> : null}
       </div>
     </RightDrawer>

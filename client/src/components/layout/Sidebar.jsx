@@ -11,6 +11,7 @@ import { selectActiveWorkspaceName } from '@/features/workspace/workspaceSlice'
 import { useGetMailboxInboxBadgeQuery } from '@/features/email/emailApi'
 import { useGetGoogleEmailStatusQuery } from '@/features/leads/leadsApi'
 import { useGetNavBadgesQuery } from '@/features/analytics/analyticsApi'
+import { LeadNestLogo } from '@/components/shared/LeadNestLogo'
 
 const SIDEBAR_BG = 'var(--brand-primary)'
 const SIDEBAR_ACTIVE_BG = 'bg-white/15'
@@ -218,19 +219,17 @@ export function Sidebar({ className, collapsed = false, onToggleCollapse, isMobi
     >
       <div
         className={cn(
-          'cx-chrome-header flex shrink-0 items-center border-b',
+          'cx-chrome-header flex shrink-0 items-center border-b py-2.5',
           SIDEBAR_BORDER,
-          narrow ? 'justify-center px-2' : 'px-4',
+          narrow ? 'justify-center px-2' : 'px-3',
         )}
       >
         {narrow ? (
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/20 bg-white/10 text-xs font-semibold text-white shadow-sm">
-            LF
-          </div>
+          <LeadNestLogo variant="sidebar-wordmark-collapsed" />
         ) : (
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold leading-tight text-white">LeadFlow CRM</p>
-            <p className="mt-0.5 truncate text-[11px] leading-tight text-white/70">
+          <div className="min-w-0 py-0.5">
+            <LeadNestLogo variant="sidebar-wordmark" />
+            <p className="mt-1.5 truncate text-[11px] leading-tight text-white/70">
               {workspaceName ? `${workspaceName} workspace` : 'workspace'}
             </p>
           </div>

@@ -4,6 +4,7 @@ export const DEAL_CURRENCY_OPTIONS = [
   { value: 'EUR', label: 'EUR — Euro' },
   { value: 'GBP', label: 'GBP — British pound' },
   { value: 'INR', label: 'INR — Indian rupee' },
+  { value: 'MYR', label: 'MYR — Malaysian ringgit' },
   { value: 'CAD', label: 'CAD — Canadian dollar' },
   { value: 'AUD', label: 'AUD — Australian dollar' },
   { value: 'AED', label: 'AED — UAE dirham' },
@@ -49,12 +50,25 @@ export function formatDealMoney(value, currency = 'USD') {
   }
 }
 
-/** Sum or average of rows that may use different ISO codes — only formats as currency when a single code is present. */
+/** @deprecated Prefer MixedMoneyValue + aggregateMoneyByCurrency from @/utils/money */
 export function formatAggregatedDealAmount(rows, amount) {
   const n = Number(amount ?? 0)
   if (!Number.isFinite(n)) return '—'
   if (!rows?.length) return formatDealMoney(0, 'USD')
-  const codes = [...new Set(rows.map((r) => normalizeDealCurrency(r.dealCurrency)))]
+  const codes = [...new Set(rows.map((r) => normalizeDealCurrency(r.dealCurrency ?? r.valueCurrency)))]
   if (codes.length === 1) return formatDealMoney(n, codes[0])
-  return `${n.toLocaleString(undefined, { maximumFractionDigits: 0 })} · mixed`
+  return 'mixed'
 }
+
+export const PRIMARY_CURRENCY_OPTIONS = [
+  { code: 'USD', label: 'USD', sub: 'US dollar' },
+  { code: 'MYR', label: 'MYR', sub: 'Malaysian ringgit' },
+  { code: 'INR', label: 'INR', sub: 'Indian rupee' },
+  { code: 'GBP', label: 'GBP', sub: 'British pound' },
+  { code: 'EUR', label: 'EUR', sub: 'Euro' },
+  { code: 'SGD', label: 'SGD', sub: 'Singapore dollar' },
+  { code: 'AED', label: 'AED', sub: 'UAE dirham' },
+  { code: 'AUD', label: 'AUD', sub: 'Australian dollar' },
+  { code: 'CAD', label: 'CAD', sub: 'Canadian dollar' },
+  { code: 'JPY', label: 'JPY', sub: 'Japanese yen' },
+]

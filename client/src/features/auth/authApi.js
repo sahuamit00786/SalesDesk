@@ -103,6 +103,12 @@ export const authApi = baseApi.injectEndpoints({
         method: 'POST',
       }),
     }),
+    getInvitationPreview: build.query({
+      query: ({ invitationId, token }) => ({
+        url: '/auth/invitations/preview',
+        params: { invitationId, token },
+      }),
+    }),
     forgotPassword: build.mutation({
       query: (body) => ({
         url: '/auth/forgot-password',
@@ -129,6 +135,7 @@ export const {
   useAcceptInvitationMutation,
   useMeQuery,
   useLogoutMutation,
+  useGetInvitationPreviewQuery,
   useForgotPasswordMutation,
   useResetPasswordMutation,
 } = authApi

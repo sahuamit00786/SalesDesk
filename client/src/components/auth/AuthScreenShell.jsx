@@ -1,51 +1,46 @@
 import { useLayoutEffect, useRef } from 'react'
 import gsap from 'gsap'
+import { FloatingBg } from '@/features/leadflow-landing/components/FloatingBg'
 
 /**
- * Full-viewport auth layout with GSAP entrance animations.
+ * Full-viewport auth layout — white + violet theme with floating shapes (matches landing).
  * @param {'login'|'register'} variant
  */
-export function AuthScreenShell({ variant = 'login', eyebrow, title, subtitle, visual, children }) {
+export function AuthScreenShell({ variant = 'login', brand, eyebrow, title, subtitle, visual, children }) {
   const rootRef = useRef(null)
   const visualRef = useRef(null)
-  const glowRef = useRef(null)
   const cardRef = useRef(null)
   const textBlockRef = useRef(null)
 
   useLayoutEffect(() => {
     const ctx = gsap.context(() => {
       gsap.fromTo(
-        glowRef.current,
-        { opacity: 0, scale: 0.92 },
-        { opacity: 1, scale: 1, duration: 1.1, ease: 'power3.out' },
-      )
-      gsap.fromTo(
-        visualRef.current,
-        { opacity: 0, x: variant === 'register' ? -36 : -28 },
-        { opacity: 1, x: 0, duration: 0.85, ease: 'power3.out', delay: 0.05 },
-      )
-      gsap.fromTo(
         textBlockRef.current?.children || [],
-        { opacity: 0, y: 18 },
+        { opacity: 0, y: 20 },
         {
           opacity: 1,
           y: 0,
-          duration: 0.55,
-          stagger: 0.08,
+          duration: 0.6,
+          stagger: 0.09,
           ease: 'power2.out',
-          delay: 0.12,
+          delay: 0.08,
         },
       )
       gsap.fromTo(
+        visualRef.current,
+        { opacity: 0, y: 24 },
+        { opacity: 1, y: 0, duration: 0.75, ease: 'power3.out', delay: 0.22 },
+      )
+      gsap.fromTo(
         cardRef.current,
-        { opacity: 0, y: 28, filter: 'blur(6px)' },
+        { opacity: 0, y: 32, scale: 0.98 },
         {
           opacity: 1,
           y: 0,
-          filter: 'blur(0px)',
-          duration: 0.75,
+          scale: 1,
+          duration: 0.8,
           ease: 'power3.out',
-          delay: 0.18,
+          delay: 0.14,
         },
       )
     }, rootRef)
@@ -56,44 +51,45 @@ export function AuthScreenShell({ variant = 'login', eyebrow, title, subtitle, v
   return (
     <div
       ref={rootRef}
-      className="relative min-h-screen w-full overflow-hidden bg-[#070a12] text-white"
+      className="relative min-h-screen w-full overflow-hidden bg-gradient-to-br from-white via-violet-50/50 to-fuchsia-50/30 text-[#0a0714]"
     >
-      <div
-        ref={glowRef}
-        className="pointer-events-none absolute -left-[20%] top-[-30%] h-[70vmin] w-[70vmin] rounded-full bg-[var(--brand-primary)]/25 blur-[100px]"
-        aria-hidden
-      />
-      <div
-        className="pointer-events-none absolute right-[-10%] bottom-[-20%] h-[55vmin] w-[55vmin] rounded-full bg-[var(--brand-primary)]/20 blur-[90px]"
-        aria-hidden
-      />
+      <FloatingBg />
 
-      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-[1200px] flex-col lg:flex-row lg:items-stretch">
-        <aside
-          ref={visualRef}
-          className="relative flex flex-1 flex-col justify-between px-6 pb-8 pt-10 sm:px-10 lg:max-w-[480px] lg:py-14"
-        >
-          <div ref={textBlockRef} className="space-y-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-200/90">{eyebrow}</p>
-            <h1 className="text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">{title}</h1>
+      <div className="pointer-events-none absolute -left-32 top-[-10%] h-[min(520px,70vw)] w-[min(520px,70vw)] rounded-full bg-violet-400/10 blur-3xl" aria-hidden />
+      <div className="pointer-events-none absolute -right-24 bottom-[-8%] h-[min(440px,60vw)] w-[min(440px,60vw)] rounded-full bg-fuchsia-400/10 blur-3xl" aria-hidden />
+
+      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-8 sm:px-6 lg:flex-row lg:items-center lg:gap-14 lg:px-8 lg:py-12">
+        <aside className="flex flex-1 flex-col lg:max-w-[28rem]">
+          <div ref={textBlockRef} className="space-y-5">
+            {brand ? (
+              <div className="w-fit">{brand}</div>
+            ) : eyebrow ? (
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-600">{eyebrow}</p>
+            ) : null}
+            <h1 className="font-display text-3xl font-bold leading-tight tracking-tight text-[#0a0714] sm:text-4xl lg:text-[2.65rem]">
+              {title}
+            </h1>
             {subtitle ? (
-              <p className="max-w-md text-sm leading-relaxed text-white/70 sm:text-base">{subtitle}</p>
+              <p className="max-w-md text-base leading-relaxed text-zinc-500">{subtitle}</p>
             ) : null}
           </div>
-          <div className="mt-10 hidden lg:block">{visual}</div>
+          <div ref={visualRef} className="mt-8 hidden lg:block">{visual}</div>
         </aside>
 
-        <main className="flex flex-1 items-center justify-center px-4 pb-12 pt-4 sm:px-8 lg:py-14">
+        <main className="mt-8 flex flex-1 justify-center lg:mt-0 lg:justify-end">
           <div
             ref={cardRef}
-            className="w-full max-w-md rounded-2xl border border-white/10 bg-white/[0.07] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl sm:p-8"
+            className="w-full max-w-md rounded-3xl border border-violet-100/90 bg-white/95 p-6 shadow-[0_24px_80px_rgba(124,58,237,0.14),0_8px_24px_rgba(15,23,42,0.06)] backdrop-blur-md sm:p-8"
           >
             {children}
           </div>
         </main>
-      </div>
 
-      <div className="relative z-10 px-6 pb-8 lg:hidden">{visual}</div>
+        {visual ? <div className="mt-8 lg:hidden">{visual}</div> : null}
+      </div>
     </div>
   )
 }
+
+/** Shared link style for auth footers */
+export const authLinkClassName = 'font-semibold text-violet-700 transition hover:text-violet-900'

@@ -20,7 +20,25 @@ export const companyApi = baseApi.injectEndpoints({
         }
       },
     }),
+    provisionMyWorkspace: build.mutation({
+      query: () => ({
+        url: '/company/me/provision-workspace',
+        method: 'POST',
+      }),
+      invalidatesTags: [{ type: 'Workspace', id: 'LIST' }],
+      async onQueryStarted(_arg, { dispatch, queryFulfilled }) {
+        try {
+          const { data } = await queryFulfilled
+          const user = data?.data?.user
+          if (data?.success && user) {
+            dispatch(updateSessionUser(user))
+          }
+        } catch {
+          // Errors surfaced via unwrap in UI
+        }
+      },
+    }),
   }),
 })
 
-export const { usePatchMyCompanyMutation } = companyApi
+export const { usePatchMyCompanyMutation, useProvisionMyWorkspaceMutation } = companyApi

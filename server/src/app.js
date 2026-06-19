@@ -27,14 +27,21 @@ app.use((req, res, next) => {
 })
 
 app.use(helmet())
+
+const _isDev = process.env.NODE_ENV !== 'production'
+const _clientOrigins = (process.env.CLIENT_ORIGIN || 'http://localhost:5173').split(',').map(o => o.trim())
+const _allowedOrigins = new Set([
+  ..._clientOrigins,
+  ...(_isDev ? ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173'] : []),
+])
+
 app.use(
   cors({
     origin: (origin, callback) => {
+      // No origin = server-to-server / same-origin request — always allow
       if (!origin) return callback(null, true)
-      if (String(origin).startsWith('http://localhost')) return callback(null, true)
-      const clientOrigin = process.env.CLIENT_ORIGIN
-      if (!clientOrigin || origin === clientOrigin) return callback(null, true)
-      return callback(new Error('Not allowed by CORS'))
+      if (_allowedOrigins.has(origin)) return callback(null, true)
+      return callback(new Error(`CORS: origin '${origin}' is not allowed`))
     },
     credentials: true,
   }),

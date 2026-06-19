@@ -48,6 +48,13 @@ import {
 import { createLeadSystemActivity as createSystemActivity } from '../services/leadSystemActivity.js'
 import { logLeadFieldChanges, logLeadCollaboratorsChange } from '../services/leadFieldChangeActivity.js'
 import { emitLeadWorkflowTriggers, emitLeadWorkflowTriggersBulkImport } from '../services/workflowRunner.js'
+import {
+  enrichLeadPlainWithCustomFields,
+  generateUniqueCustomFieldKey,
+  reorderCustomFields,
+  upsertLeadCustomFields,
+  validateFieldDefinition,
+} from '../services/customFieldService.js'
 import { attachLeadListEngagement } from '../services/leadListEngagementService.js'
 import {
   collectBulkAssignRecipients,
@@ -587,6 +594,15 @@ function normalizeRecipients(value) {
     .filter(Boolean)
 }
 
+const GOOGLE_OAUTH_RETURN_PATHS = new Set(['/onboarding', '/integrations'])
+
+function sanitizeGoogleOAuthReturnTo(raw) {
+  const path = String(raw || '').trim()
+  if (!path.startsWith('/') || path.includes('://') || path.includes('//')) return null
+  const base = path.split('?')[0].split('#')[0]
+  return GOOGLE_OAUTH_RETURN_PATHS.has(base) ? base : null
+}
+
 function parseGoogleOAuthState(rawState) {
   try {
     const decoded = Buffer.from(String(rawState || ''), 'base64url').toString('utf8')
@@ -594,6 +610,9 @@ function parseGoogleOAuthState(rawState) {
     if (!state?.companyId || !state?.userId || !state?.t) return null
     const ageMs = Date.now() - Number(state.t)
     if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > 1000 * 60 * 30) return null
+    if (state.returnTo) {
+      state.returnTo = sanitizeGoogleOAuthReturnTo(state.returnTo)
+    }
     return state
   } catch {
     return null
@@ -987,7 +1006,8 @@ export async function getOne(req, res, next) {
         },
       }),
     ])
-    return res.json({ success: true, data: lead, meta: { summary: { openTasks, completedTasks, lastContactAt } } })
+    const leadPlain = enrichLeadPlainWithCustomFields(lead.get({ plain: true }))
+    return res.json({ success: true, data: leadPlain, meta: { summary: { openTasks, completedTasks, lastContactAt } } })
   } catch (e) {
     return next(e)
   }
@@ -1027,6 +1047,7 @@ export async function create(req, res, next) {
       value.opportunityStage !== undefined && value.opportunityStage !== null
         ? String(value.opportunityStage).trim()
         : ''
+    const customFieldsPayload = value.customFields || {}
     const payload = {
       ...value,
       designation: value.designation || legacy.designation || null,
@@ -1040,6 +1061,10 @@ export async function create(req, res, next) {
       workspaceId,
       isDeleted: false,
     }
+    delete payload.customFields
+    delete payload.tags
+    delete payload.assignedUserIds
+    delete payload.force
     const isOpp = Boolean(value.isOpportunity)
     if (isOpp) {
       payload.opportunityStage =
@@ -1065,6 +1090,13 @@ export async function create(req, res, next) {
       )
       await lead.setTags(tags)
     }
+
+    await upsertLeadCustomFields({
+      leadId: lead.id,
+      workspaceId,
+      companyId: req.user.companyId,
+      customFields: customFieldsPayload,
+    })
 
     await autoAssignLead(lead, { suppressNotification: true })
     await lead.reload()
@@ -1107,8 +1139,22 @@ export async function create(req, res, next) {
       workspaceId: String(workspaceId),
       actorUserId: req.user.id,
     }).catch(() => {})
-    return res.status(201).json({ success: true, data: lead, meta: {} })
+    await lead.reload({
+      include: [
+        {
+          model: CustomFieldValue,
+          as: 'customFieldValues',
+          include: [{ model: CustomField, as: 'customField', attributes: ['id', 'label', 'key', 'type', 'options'] }],
+          required: false,
+        },
+      ],
+    })
+    const createdPlain = enrichLeadPlainWithCustomFields(lead.get({ plain: true }))
+    return res.status(201).json({ success: true, data: createdPlain, meta: {} })
   } catch (e) {
+    if (e?.status === 400) {
+      return res.status(400).json({ success: false, error: { code: e.code || 'VALIDATION', message: e.message } })
+    }
     return next(e)
   }
 }
@@ -1163,6 +1209,8 @@ export async function update(req, res, next) {
       collaboratorIdsBefore = asgRows.map((r) => String(r.userId))
     }
     const legacy = extractLegacyProfile(value.notes || before.notes)
+    const hasCustomFieldsField = Object.prototype.hasOwnProperty.call(req.body || {}, 'customFields')
+    const customFieldsPayload = hasCustomFieldsField ? value.customFields || {} : null
     const leadScalars = { ...value }
     delete leadScalars.tags
     delete leadScalars.assignedUserIds
@@ -1239,6 +1287,14 @@ export async function update(req, res, next) {
         })
       }
     }
+    if (hasCustomFieldsField) {
+      await upsertLeadCustomFields({
+        leadId: lead.id,
+        workspaceId: lead.workspaceId,
+        companyId: lead.companyId,
+        customFields: customFieldsPayload,
+      })
+    }
     await logLeadFieldChanges({
       before,
       after: lead.get({ plain: true }),
@@ -1284,8 +1340,22 @@ export async function update(req, res, next) {
       workspaceId: String(lead.workspaceId),
       actorUserId: req.user.id,
     }).catch(() => {})
-    return res.json({ success: true, data: lead, meta: {} })
+    await lead.reload({
+      include: [
+        {
+          model: CustomFieldValue,
+          as: 'customFieldValues',
+          include: [{ model: CustomField, as: 'customField', attributes: ['id', 'label', 'key', 'type', 'options', 'isRequired', 'order'] }],
+          required: false,
+        },
+      ],
+    })
+    const updatedPlain = enrichLeadPlainWithCustomFields(lead.get({ plain: true }))
+    return res.json({ success: true, data: updatedPlain, meta: {} })
   } catch (e) {
+    if (e?.status === 400) {
+      return res.status(400).json({ success: false, error: { code: e.code || 'VALIDATION', message: e.message } })
+    }
     return next(e)
   }
 }
@@ -1365,7 +1435,7 @@ export async function formMeta(req, res, next) {
       }
     }
 
-    const [sources, users, phoneCodes, opportunityStages, dealStatuses, tags] = await Promise.all([
+    const [sources, users, phoneCodes, opportunityStages, dealStatuses, tags, customFields] = await Promise.all([
       LeadSource.findAll({ where: { workspaceId, companyId: req.user.companyId, isActive: true }, order: [['name', 'ASC']] }),
       User.findAll({ where: { companyId: req.user.companyId, isActive: true }, attributes: ['id', 'name', 'email'], order: [['name', 'ASC']] }),
       CountryPhoneCode.findAll({ where: { isActive: true }, order: [['isDefault', 'DESC'], ['countryName', 'ASC']] }),
@@ -1384,10 +1454,14 @@ export async function formMeta(req, res, next) {
         ],
       }),
       Tag.findAll({ where: { companyId: req.user.companyId }, order: [['name', 'ASC'], ['createdAt', 'ASC']] }),
+      CustomField.findAll({
+        where: { workspaceId, companyId: req.user.companyId },
+        order: [['order', 'ASC'], ['createdAt', 'ASC']],
+      }),
     ])
     return res.json({
       success: true,
-      data: { sources, users, phoneCodes, opportunityStages, dealStatuses, tags },
+      data: { sources, users, phoneCodes, opportunityStages, dealStatuses, tags, customFields },
       meta: {},
     })
   } catch (e) {
@@ -2015,8 +2089,14 @@ export async function getGoogleEmailConnectUrl(req, res, next) {
       'https://www.googleapis.com/auth/userinfo.email',
       'openid',
     ]
+    const returnTo = sanitizeGoogleOAuthReturnTo(req.query.returnTo)
     const state = Buffer.from(
-      JSON.stringify({ companyId: req.user.companyId, userId: req.user.id, t: Date.now() }),
+      JSON.stringify({
+        companyId: req.user.companyId,
+        userId: req.user.id,
+        t: Date.now(),
+        ...(returnTo ? { returnTo } : {}),
+      }),
       'utf8',
     ).toString('base64url')
     const url = oauth2Client.generateAuthUrl({
@@ -2064,7 +2144,10 @@ export async function connectGoogleEmailCallback(req, res, next) {
       registerGmailWatchForTokenRow(row).catch(() => {})
     }
     const clientOrigin = process.env.CLIENT_ORIGIN || 'http://localhost:5173'
-    const redirectUrl = `${clientOrigin.replace(/\/$/, '')}/integrations?tab=google&connected=1`
+    const base = clientOrigin.replace(/\/$/, '')
+    const returnPath = state.returnTo || '/integrations'
+    const query = returnPath === '/integrations' ? 'tab=google&connected=1' : 'connected=1'
+    const redirectUrl = `${base}${returnPath}?${query}`
     return res.redirect(302, redirectUrl)
   } catch (e) {
     return next(e)
@@ -3283,14 +3366,20 @@ export async function listCustomFields(req, res, next) {
 export async function createCustomField(req, res, next) {
   try {
     const workspaceId = req.headers['x-workspace-id']
-    const baseLabel = String(req.body?.label || 'Custom Field').trim()
+    const { error, value } = validateFieldDefinition(req.body || {})
+    if (error) {
+      const message = error.details?.[0]?.context?.message || error.details?.[0]?.message || error.message
+      return res.status(400).json({ success: false, error: { code: 'VALIDATION', message } })
+    }
+    const maxOrder = await CustomField.max('order', { where: { workspaceId, companyId: req.user.companyId } })
+    const key = await generateUniqueCustomFieldKey(workspaceId, value.label)
     const row = await CustomField.create({
-      label: baseLabel,
-      key: baseLabel.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, ''),
-      type: req.body?.type || 'text',
-      options: req.body?.options || null,
-      isRequired: Boolean(req.body?.isRequired),
-      order: Number(req.body?.order || 0),
+      label: value.label,
+      key,
+      type: value.type,
+      options: value.options,
+      isRequired: value.isRequired,
+      order: value.order ?? (Number.isFinite(maxOrder) ? Number(maxOrder) + 1 : 0),
       workspaceId,
       companyId: req.user.companyId,
     })
@@ -3302,9 +3391,22 @@ export async function createCustomField(req, res, next) {
 
 export async function patchCustomField(req, res, next) {
   try {
-    const row = await CustomField.findByPk(req.params.id)
+    const workspaceId = req.headers['x-workspace-id']
+    const row = await CustomField.findOne({ where: { id: req.params.id, workspaceId, companyId: req.user.companyId } })
     if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Field not found' } })
-    await row.update(req.body || {})
+    const { error, value } = validateFieldDefinition(req.body || {}, { isPatch: true })
+    if (error) {
+      const message = error.details?.[0]?.context?.message || error.details?.[0]?.message || error.message
+      return res.status(400).json({ success: false, error: { code: 'VALIDATION', message } })
+    }
+    const patch = { ...value }
+    if (value.label !== undefined) {
+      patch.key = await generateUniqueCustomFieldKey(workspaceId, value.label, row.id)
+    }
+    if (value.type !== undefined && !['dropdown', 'multiselect', 'radio'].includes(value.type)) {
+      patch.options = null
+    }
+    await row.update(patch)
     return res.json({ success: true, data: row, meta: {} })
   } catch (e) {
     return next(e)
@@ -3313,8 +3415,35 @@ export async function patchCustomField(req, res, next) {
 
 export async function deleteCustomField(req, res, next) {
   try {
-    await CustomField.destroy({ where: { id: req.params.id } })
+    const workspaceId = req.headers['x-workspace-id']
+    const row = await CustomField.findOne({ where: { id: req.params.id, workspaceId, companyId: req.user.companyId } })
+    if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Field not found' } })
+    const valueCount = await CustomFieldValue.count({ where: { customFieldId: row.id } })
+    if (valueCount > 0) {
+      return res.status(409).json({
+        success: false,
+        error: {
+          code: 'FIELD_IN_USE',
+          message: `This field has ${valueCount} saved value(s). Remove values from leads first, or keep the field.`,
+        },
+      })
+    }
+    await row.destroy()
     return res.json({ success: true, data: { ok: true }, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function reorderCustomFieldsHandler(req, res, next) {
+  try {
+    const workspaceId = req.headers['x-workspace-id']
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids.map((x) => String(x)) : []
+    if (!ids.length) {
+      return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'ids are required' } })
+    }
+    const count = await reorderCustomFields(workspaceId, req.user.companyId, ids)
+    return res.json({ success: true, data: { reordered: count }, meta: {} })
   } catch (e) {
     return next(e)
   }

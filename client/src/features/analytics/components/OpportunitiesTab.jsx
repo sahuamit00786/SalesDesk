@@ -1,7 +1,9 @@
 import { Target, DollarSign, Percent, Calendar } from 'lucide-react'
 import { ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts'
 import { DashboardChartCard } from '@/features/dashboard/components/DashboardChartCard'
-import { CHART_COLORS, formatChartCurrency } from '@/features/dashboard/dummyDashboardData'
+import { CHART_COLORS } from '@/features/dashboard/dummyDashboardData'
+import { formatDealMoney } from '@/features/deals/dealCurrencies'
+import { useFormatChartCurrency } from '@/hooks/useEffectiveCurrency'
 import { ReportKpiCard } from './ReportKpiCard'
 import { ReportTable } from './ReportTable'
 import { ChartSkeleton, KpiSkeleton } from './ChartSkeleton'
@@ -9,20 +11,19 @@ import { useGetOpportunitiesReportQuery } from '@/features/analytics/analyticsAp
 import { ReportKpiGrid, ReportChartGrid, ReportTableSection } from '@/features/analytics/ReportLayout'
 
 const SLICES = CHART_COLORS.slices
-const fmtMoney = (v) => formatChartCurrency(Number(v) || 0)
-
-const STAGE_COLS = [
-  { key: 'title', label: 'Opportunity', render: (v) => <span className="font-medium text-ink">{v || '—'}</span> },
-  { key: 'company', label: 'Company' },
-  { key: 'stage', label: 'Pipeline stage' },
-  { key: 'status', label: 'Status' },
-  { key: 'value', label: 'Value', render: (v) => <span className="font-semibold">{fmtMoney(v)}</span> },
-  { key: 'owner', label: 'Owner' },
-  { key: 'assignee', label: 'Assignee' },
-  { key: 'closingDate', label: 'Expected close', render: (v) => v ? new Date(v).toLocaleDateString() : '—' },
-]
 
 export function OpportunitiesTab({ queryParams }) {
+  const fmtMoney = useFormatChartCurrency()
+  const stageCols = [
+    { key: 'title', label: 'Opportunity', render: (v) => <span className="font-medium text-ink">{v || '—'}</span> },
+    { key: 'company', label: 'Company' },
+    { key: 'stage', label: 'Pipeline stage' },
+    { key: 'status', label: 'Status' },
+    { key: 'value', label: 'Value', render: (v, r) => <span className="font-semibold">{formatDealMoney(v, r.currency)}</span> },
+    { key: 'owner', label: 'Owner' },
+    { key: 'assignee', label: 'Assignee' },
+    { key: 'closingDate', label: 'Expected close', render: (v) => v ? new Date(v).toLocaleDateString() : '—' },
+  ]
   const { data, isLoading } = useGetOpportunitiesReportQuery(queryParams)
   const d = data?.data
   const kpis = d?.kpis || {}
@@ -71,7 +72,7 @@ export function OpportunitiesTab({ queryParams }) {
       </ReportChartGrid>
 
       <ReportTableSection title="All opportunities by stage" subtitle="Full list — filter by employee or stage above">
-        <ReportTable columns={STAGE_COLS} rows={byStage} isLoading={isLoading} maxH="max-h-[480px]" />
+        <ReportTable columns={stageCols} rows={byStage} isLoading={isLoading} maxH="max-h-[480px]" />
       </ReportTableSection>
     </div>
   )

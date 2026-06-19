@@ -9,6 +9,7 @@ export const CampaignLead = sequelize.define(
     leadId: { type: DataTypes.UUID, allowNull: false, field: 'lead_id' },
     stageKey: { type: DataTypes.STRING(64), allowNull: false, defaultValue: 'new', field: 'stage_key' },
     assignedUserId: { type: DataTypes.UUID, allowNull: true, field: 'assigned_user_id' },
+    amountReceived: { type: DataTypes.DECIMAL(14, 2), allowNull: true, field: 'amount_received' },
   },
   { tableName: 'campaign_leads', timestamps: true },
 )

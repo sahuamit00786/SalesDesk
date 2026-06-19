@@ -7,6 +7,7 @@ import { PageFilterBar } from '@/components/layout/PageFilterBar'
 import { PageStack } from '@/components/layout/PageStack'
 import { RightDrawer } from '@/components/ui/RightDrawer'
 import { useGetCampaignQuery, useListCampaignsQuery, usePatchCampaignMutation } from '@/features/campaigns/campaignsApi'
+import { CurrencyPicker } from '@/components/shared/CurrencyPicker'
 import { formatCampaignEndDate, toCampaignDateInputValue } from '@/features/campaigns/campaignDateUtils'
 import { useTeamUsersQuery } from '@/features/team/teamApi'
 import { cn } from '@/utils/cn'
@@ -124,6 +125,7 @@ export function CampaignsListPage() {
   const [editName, setEditName] = useState('')
   const [editDescription, setEditDescription] = useState('')
   const [editLeadTarget, setEditLeadTarget] = useState('')
+  const [editCurrency, setEditCurrency] = useState('USD')
   const [editStatus, setEditStatus] = useState('active')
   const [editEndDate, setEditEndDate] = useState('')
   const [teamPick, setTeamPick] = useState(() => new Set())
@@ -157,6 +159,7 @@ export function CampaignsListPage() {
     setEditDescription(String(c.description || ''))
     const target = Number(c.leadTarget)
     setEditLeadTarget(Number.isFinite(target) && target >= 0 ? String(target) : '')
+    setEditCurrency(String(c.currency || 'USD'))
     setEditStatus(String(c.status || 'active'))
     setEditEndDate(toCampaignDateInputValue(c.endDate))
     const memberIds = (Array.isArray(c.teamMembers) ? c.teamMembers : [])
@@ -173,6 +176,7 @@ export function CampaignsListPage() {
     setEditDescription(String(campaign?.description || ''))
     const target = Number(campaign?.leadTarget)
     setEditLeadTarget(Number.isFinite(target) && target >= 0 ? String(target) : '')
+    setEditCurrency(String(campaign?.currency || 'USD'))
     setEditStatus(String(campaign?.status || 'active'))
     setEditEndDate(toCampaignDateInputValue(campaign?.endDate))
     setTeamPick(new Set())
@@ -195,6 +199,7 @@ export function CampaignsListPage() {
     payload.description = editDescription.trim() || null
     const rawTarget = editLeadTarget.trim()
     payload.leadTarget = rawTarget === '' ? null : Number.parseFloat(rawTarget) || 0
+    payload.currency = editCurrency
     payload.status = editStatus
     payload.endDate = editEndDate.trim() || null
     payload.teamUserIds = [...teamPick]
@@ -321,6 +326,12 @@ export function CampaignsListPage() {
                 placeholder="What is this campaign for?"
               />
             </label>
+            <div className="block">
+              <span className="text-xs font-semibold text-neutral-700">Currency</span>
+              <div className="mt-1">
+                <CurrencyPicker value={editCurrency} onChange={setEditCurrency} />
+              </div>
+            </div>
             <label className="block">
               <span className="text-xs font-semibold text-neutral-700">Campaign target (amount)</span>
               <input
@@ -334,7 +345,7 @@ export function CampaignsListPage() {
                 placeholder="Optional amount goal"
               />
               <span className="mt-1 block text-[11px] text-neutral-500">
-                Used on the campaign page for amount target vs. achieved amount.
+                Used on the campaign page for amount target vs. achieved amount ({editCurrency}).
               </span>
             </label>
             <label className="block">

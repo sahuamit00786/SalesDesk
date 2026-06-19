@@ -11,6 +11,7 @@ export const Campaign = sequelize.define(
     description: { type: DataTypes.TEXT, allowNull: true },
     /** Optional monetary goal for this campaign (KPI). */
     leadTarget: { type: DataTypes.DECIMAL(14, 2), allowNull: true, field: 'lead_target' },
+    currency: { type: DataTypes.STRING(3), allowNull: false, defaultValue: 'USD' },
     endDate: { type: DataTypes.DATEONLY, allowNull: true, field: 'end_date' },
     stages: { type: DataTypes.JSON, allowNull: false },
     status: { type: DataTypes.ENUM('active', 'inactive', 'draft'), allowNull: false, defaultValue: 'active' },

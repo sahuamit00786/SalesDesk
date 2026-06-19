@@ -20,6 +20,7 @@ import { aggregateQuotationTotals } from '@/features/sales-docs/previewTotals'
 import { suggestedQuotationNumber } from '@/features/sales-docs/suggestedDocNumber'
 import { cn } from '@/utils/cn'
 import { pickTemplateIdFromSearch } from '@/utils/docTemplateQuery'
+import { useEffectiveCurrency } from '@/hooks/useEffectiveCurrency'
 
 const CURRENCY_FALLBACK = ['USD', 'EUR', 'GBP', 'INR', 'AED', 'CAD', 'AUD', 'SGD', 'JPY']
 function getCurrencyOptions() {
@@ -96,6 +97,7 @@ function addressFromSnapshot(snap) {
 
 function NewQuotationEditor({ templateId, quotationId = '', initialLeadId = '', initialDealId = '' }) {
   const navigate = useNavigate()
+  const effectiveCurrency = useEffectiveCurrency()
   const hydratedQuotationIdRef = useRef('')
   const isEditingExisting = Boolean(quotationId)
 
@@ -196,10 +198,18 @@ function NewQuotationEditor({ templateId, quotationId = '', initialLeadId = '', 
     if (String(tpl.id).toLowerCase() !== String(templateId).toLowerCase()) return
     setQuotationTemplateId(tpl.id)
     if (tpl.layoutPreset != null) setLayoutPreset(Number(tpl.layoutPreset))
-    if (tpl.defaultCurrency) setCurrency(String(tpl.defaultCurrency).toUpperCase().slice(0, 3))
+    const tplCurrency = tpl.defaultCurrency
+      ? String(tpl.defaultCurrency).toUpperCase().slice(0, 3)
+      : effectiveCurrency
+    setCurrency(tplCurrency)
     if (tpl.defaultPaymentTerms) setTermsSnapshot(tpl.defaultPaymentTerms)
     if (tpl.defaultNotes) setNotes(tpl.defaultNotes)
-  }, [tpl, templateId, isEditingExisting])
+  }, [tpl, templateId, isEditingExisting, effectiveCurrency])
+
+  useEffect(() => {
+    if (isEditingExisting || savedId || templateId) return
+    setCurrency(effectiveCurrency)
+  }, [effectiveCurrency, isEditingExisting, savedId, templateId])
 
   useEffect(() => {
     if (!quotationId || !existingQuotation) return

@@ -59,7 +59,7 @@ function maskApiKey(value) {
 
 async function start() {
   await sequelize.authenticate()
-  runMigrations()
+  // runMigrations() — run manually: npm run db:migrate
   const openAiMasked = maskApiKey(process.env.OPENAI_API_KEY)
   // eslint-disable-next-line no-console
   console.log(

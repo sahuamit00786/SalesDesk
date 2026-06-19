@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react'
+import { useMemo, useState, useCallback, useEffect } from 'react'
 import { useSelector } from 'react-redux'
 import { Link, useNavigate } from 'react-router-dom'
 import { PageShell } from '@/components/layout/PageShell'
@@ -18,6 +18,8 @@ import {
 import { selectWorkspaceList } from '@/features/workspace/workspaceSlice'
 import { ListSearchToolbar, buildLeadsListQueryParams, countActiveRules } from '@/features/filters'
 import { cn } from '@/utils/cn'
+import { CurrencyPicker } from '@/components/shared/CurrencyPicker'
+import { useEffectiveCurrency } from '@/hooks/useEffectiveCurrency'
 
 const LEAD_PICKER_FILTERS_INITIAL = {
   search: '',
@@ -58,6 +60,8 @@ export function CampaignNewPage() {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [leadTarget, setLeadTarget] = useState('')
+  const [campaignCurrency, setCampaignCurrency] = useState('USD')
+  const effectiveCurrency = useEffectiveCurrency()
   const [campaignStatus, setCampaignStatus] = useState('active')
   const [endDate, setEndDate] = useState('')
   const [teamPick, setTeamPick] = useState(() => new Set())
@@ -81,6 +85,10 @@ export function CampaignNewPage() {
   const { data: formMetaData } = useGetLeadFormMetaQuery()
   const { data: teamData } = useTeamUsersQuery()
   const [createCampaign, { isLoading: saving }] = useCreateCampaignMutation()
+
+  useEffect(() => {
+    setCampaignCurrency(effectiveCurrency)
+  }, [effectiveCurrency])
 
   const leads = useMemo(() => data?.data || [], [data?.data])
   const total = data?.meta?.total ?? 0
@@ -233,6 +241,7 @@ export function CampaignNewPage() {
         preferExistingTeamAssignee: preferExisting,
         skipUpdatingLeadAssignedTo: skipLeadOwner,
         status: campaignStatus,
+        currency: campaignCurrency,
       }
       const rawTarget = leadTarget.trim()
       if (rawTarget !== '') {
@@ -372,8 +381,17 @@ export function CampaignNewPage() {
                     placeholder="What is this campaign for?"
                   />
                 </label>
+                <CurrencyPicker
+                  value={campaignCurrency}
+                  onChange={setCampaignCurrency}
+                  label="Campaign currency"
+                  required
+                  className="mb-1"
+                />
                 <label className="block">
-                  <span className="text-xs font-semibold text-neutral-700">Campaign target (amount)</span>
+                  <span className="text-xs font-semibold text-neutral-700">
+                    Campaign target ({campaignCurrency})
+                  </span>
                   <input
                     type="number"
                     min={0}

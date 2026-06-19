@@ -1,6 +1,7 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react'
 import { readAuthFromStorage, setCredentials, logout } from '@/features/auth/authSlice'
 import { selectResolvedActiveWorkspaceId } from '@/features/workspace/workspaceSlice'
+import { API_BASE_URL } from '@/config'
 
 function resolveAccessToken(getState) {
   const fromStore = getState()?.auth?.accessToken
@@ -21,7 +22,7 @@ function isUnauthorized(error) {
 }
 
 const rawBaseQuery = fetchBaseQuery({
-  baseUrl: '/api/v1',
+  baseUrl: API_BASE_URL,
   credentials: 'include',
   prepareHeaders: (headers, { getState }) => {
     const state = getState()

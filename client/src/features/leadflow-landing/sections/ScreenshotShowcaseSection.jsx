@@ -44,23 +44,15 @@ export function ScreenshotShowcaseSection() {
   }, [active?.id, reduced])
 
   return (
-    <Section id="showcase" className="relative bg-[#080820] py-24">
-      {/* BG atmosphere */}
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{ background: 'radial-gradient(ellipse 60% 50% at 50% 0%, rgba(139,92,246,0.07), transparent 60%)' }}
-        aria-hidden
-      />
-
+    <Section id="showcase" className="relative bg-white py-24">
       <div className="relative mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
         <div className="max-w-2xl">
-          <p className="text-xs font-bold uppercase tracking-[0.22em] text-violet-400">Product tour</p>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-[-0.02em] text-white sm:text-4xl">
+          <p className="text-xs font-bold uppercase tracking-[0.22em] text-violet-600">Product tour</p>
+          <h2 className="mt-3 font-display text-3xl font-bold tracking-[-0.025em] text-[#0a0714] sm:text-4xl">
             See Connexify CRM in action
           </h2>
-          <p className="mt-3 text-sm leading-relaxed text-white/45 sm:text-base">
-            Real screens from the app — sales pipeline, email inbox, workflows, documents, and team
-            settings.
+          <p className="mt-3 text-sm leading-relaxed text-zinc-500 sm:text-base">
+            Real screens from the app — sales pipeline, email inbox, workflows, documents, and team settings.
           </p>
         </div>
 
@@ -74,8 +66,8 @@ export function ScreenshotShowcaseSection() {
                 className={cn(
                   'rounded-full px-4 py-1.5 text-xs font-semibold transition',
                   category === cat.id
-                    ? 'bg-violet-600 text-white shadow-[0_0_16px_rgba(139,92,246,0.45)]'
-                    : 'border border-white/[0.08] bg-white/[0.03] text-white/45 hover:border-white/[0.14] hover:text-white/70',
+                    ? 'bg-violet-700 text-white shadow-md shadow-violet-200'
+                    : 'border border-zinc-200 bg-white text-zinc-500 hover:border-violet-200 hover:text-violet-700',
                 )}
               >
                 {cat.label}
@@ -85,12 +77,11 @@ export function ScreenshotShowcaseSection() {
         )}
 
         {/* Main screenshot */}
-        <div className="mt-8 overflow-hidden rounded-2xl border border-white/[0.07] bg-[#0a0820] shadow-[0_32px_80px_rgba(0,0,0,0.6)]">
-          {/* Browser bar */}
-          <div className="flex items-center gap-2 border-b border-white/[0.05] bg-[#07071a] px-5 py-3">
-            <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]/80" />
-            <span className="h-2.5 w-2.5 rounded-full bg-[#febc2e]/80" />
-            <span className="h-2.5 w-2.5 rounded-full bg-[#28c840]/80" />
+        <div className="mt-8 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-[0_24px_60px_rgba(0,0,0,0.09)]">
+          <div className="flex items-center gap-2 border-b border-zinc-100 bg-zinc-50 px-5 py-3">
+            <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" />
+            <span className="h-2.5 w-2.5 rounded-full bg-[#febc2e]" />
+            <span className="h-2.5 w-2.5 rounded-full bg-[#28c840]" />
           </div>
           <img
             ref={mainImageRef}
@@ -102,7 +93,7 @@ export function ScreenshotShowcaseSection() {
         </div>
 
         {active?.caption && (
-          <p ref={captionRef} className="mt-3 text-center text-sm text-white/35">
+          <p ref={captionRef} className="mt-3 text-center text-sm text-zinc-400">
             {active.caption}
           </p>
         )}
@@ -117,8 +108,8 @@ export function ScreenshotShowcaseSection() {
                 className={cn(
                   'shrink-0 overflow-hidden rounded-lg border transition',
                   i === activeIdx
-                    ? 'border-violet-500/60 ring-1 ring-violet-500/30'
-                    : 'border-white/[0.06] opacity-50 hover:opacity-80',
+                    ? 'border-violet-400 ring-1 ring-violet-200'
+                    : 'border-zinc-200 opacity-60 hover:opacity-90',
                 )}
               >
                 <img src={s.src} alt={s.caption} className="h-14 w-24 object-cover object-top" loading="lazy" />

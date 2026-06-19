@@ -1,7 +1,9 @@
 import { CreditCard, DollarSign, Briefcase, Receipt } from 'lucide-react'
 import { ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts'
 import { DashboardChartCard } from '@/features/dashboard/components/DashboardChartCard'
-import { CHART_COLORS, formatChartCurrency } from '@/features/dashboard/dummyDashboardData'
+import { CHART_COLORS } from '@/features/dashboard/dummyDashboardData'
+import { formatDealMoney } from '@/features/deals/dealCurrencies'
+import { useFormatChartCurrency } from '@/hooks/useEffectiveCurrency'
 import { ReportKpiCard } from './ReportKpiCard'
 import { ReportTable } from './ReportTable'
 import { ChartSkeleton, KpiSkeleton } from './ChartSkeleton'
@@ -9,20 +11,19 @@ import { useGetPaymentsReportQuery } from '@/features/analytics/analyticsApi'
 import { ReportKpiGrid, ReportChartGrid, ReportTableSection } from '@/features/analytics/ReportLayout'
 
 const SLICES = CHART_COLORS.slices
-const fmtMoney = (v) => formatChartCurrency(Number(v) || 0)
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString() : '—'
 
-const LEDGER_COLS = [
-  { key: 'lead', label: 'Lead', render: (v) => <span className="font-medium text-ink">{v}</span> },
-  { key: 'source', label: 'Source', render: (v) => <span className="capitalize">{v}</span> },
-  { key: 'deal', label: 'Deal / Invoice' },
-  { key: 'amount', label: 'Amount', render: (v, r) => <span className="font-semibold text-emerald-700">{fmtMoney(v)} {r.currency !== '—' ? r.currency : ''}</span> },
-  { key: 'mode', label: 'Mode', render: (v) => <span className="capitalize">{String(v).replace(/_/g, ' ')}</span> },
-  { key: 'status', label: 'Status', render: (v) => <span className="capitalize">{v}</span> },
-  { key: 'date', label: 'Date', render: (v) => fmtDate(v) },
-]
-
 export function PaymentsTab({ queryParams }) {
+  const fmtMoney = useFormatChartCurrency()
+  const ledgerCols = [
+    { key: 'lead', label: 'Lead', render: (v) => <span className="font-medium text-ink">{v}</span> },
+    { key: 'source', label: 'Source', render: (v) => <span className="capitalize">{v}</span> },
+    { key: 'deal', label: 'Deal / Invoice' },
+    { key: 'amount', label: 'Amount', render: (v, r) => <span className="font-semibold text-emerald-700">{formatDealMoney(v, r.currency)}</span> },
+    { key: 'mode', label: 'Mode', render: (v) => <span className="capitalize">{String(v).replace(/_/g, ' ')}</span> },
+    { key: 'status', label: 'Status', render: (v) => <span className="capitalize">{v}</span> },
+    { key: 'date', label: 'Date', render: (v) => fmtDate(v) },
+  ]
   const { data, isLoading } = useGetPaymentsReportQuery(queryParams)
   const d = data?.data
   const kpis = d?.kpis || {}
@@ -70,7 +71,7 @@ export function PaymentsTab({ queryParams }) {
       </ReportChartGrid>
 
       <ReportTableSection title="Payment ledger by lead" subtitle="All deal and invoice payments in period">
-        <ReportTable columns={LEDGER_COLS} rows={ledger} isLoading={isLoading} maxH="max-h-[480px]" />
+        <ReportTable columns={ledgerCols} rows={ledger} isLoading={isLoading} maxH="max-h-[480px]" />
       </ReportTableSection>
     </div>
   )

@@ -32,6 +32,21 @@ export const campaignsApi = baseApi.injectEndpoints({
         try { await queryFulfilled; toast.success('Campaign updated.') } catch { toast.error('Could not update campaign.') }
       },
     }),
+    patchCampaignLeadAmount: build.mutation({
+      query: ({ campaignId, leadId, amountReceived }) => ({
+        url: `/campaigns/${campaignId}/leads/${leadId}`,
+        method: 'PATCH',
+        body: { amountReceived },
+      }),
+      invalidatesTags: (_r, _e, arg) => [
+        { type: 'Campaign', id: arg.campaignId },
+        { type: 'Campaign', id: `${arg.campaignId}-leads` },
+        { type: 'Campaign', id: 'LIST' },
+      ],
+      async onQueryStarted(_arg, { queryFulfilled }) {
+        try { await queryFulfilled } catch { toast.error('Could not update amount received.') }
+      },
+    }),
     patchCampaignLeadStage: build.mutation({
       query: ({ campaignId, leadId, stageKey }) => ({
         url: `/campaigns/${campaignId}/leads/${leadId}/stage`,
@@ -87,6 +102,7 @@ export const {
   useGetCampaignLeadsQuery,
   useCreateCampaignMutation,
   usePatchCampaignMutation,
+  usePatchCampaignLeadAmountMutation,
   usePatchCampaignLeadStageMutation,
   useAddCampaignLeadsMutation,
   useRemoveCampaignLeadMutation,

@@ -9,5 +9,5 @@ export const CustomFieldValue = sequelize.define(
     leadId: { type: DataTypes.UUID, allowNull: false, field: 'lead_id' },
     value: { type: DataTypes.TEXT, allowNull: true },
   },
-  { tableName: 'custom_field_values', timestamps: true, updatedAt: false },
+  { tableName: 'custom_field_values', timestamps: true },
 )

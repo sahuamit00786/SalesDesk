@@ -1,16 +1,14 @@
 import { UserCircle, Activity, CheckSquare, Trophy, Phone } from 'lucide-react'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
 import { DashboardChartCard } from '@/features/dashboard/components/DashboardChartCard'
-import { formatChartCurrency } from '@/features/dashboard/dummyDashboardData'
+import { useFormatChartCurrency } from '@/hooks/useEffectiveCurrency'
 import { ReportKpiCard } from './ReportKpiCard'
 import { ReportTable } from './ReportTable'
 import { ChartSkeleton, KpiSkeleton } from './ChartSkeleton'
 import { useGetEmployeeMonthlyReportQuery } from '@/features/analytics/analyticsApi'
 import { ReportKpiGrid, ReportChartGrid, ReportTableSection } from '@/features/analytics/ReportLayout'
 
-const fmtMoney = (v) => formatChartCurrency(Number(v) || 0)
-
-const EMP_COLS = [
+const EMP_COLS_BASE = [
   { key: 'name', label: 'Employee', render: (v) => <span className="font-medium text-ink">{v}</span> },
   { key: 'leadsCreated', label: 'Leads created' },
   { key: 'calls', label: 'Calls' },
@@ -20,10 +18,16 @@ const EMP_COLS = [
   { key: 'meetingsHeld', label: 'Meetings' },
   { key: 'followupsDone', label: 'Follow-ups' },
   { key: 'dealsWon', label: 'Deals won' },
-  { key: 'dealsWonValue', label: 'Won value', render: (v) => fmtMoney(v) },
+  { key: 'dealsWonValue', label: 'Won value' },
 ]
 
 export function EmployeeMonthlyTab({ queryParams }) {
+  const fmtMoney = useFormatChartCurrency()
+  const empCols = EMP_COLS_BASE.map((col) => (
+    col.key === 'dealsWonValue'
+      ? { ...col, render: (v) => fmtMoney(v) }
+      : col
+  ))
   const { data, isLoading } = useGetEmployeeMonthlyReportQuery(queryParams)
   const d = data?.data
   const kpis = d?.kpis || {}
@@ -64,7 +68,7 @@ export function EmployeeMonthlyTab({ queryParams }) {
       </ReportChartGrid>
 
       <ReportTableSection title="Employee monthly breakdown" subtitle="Full activity detail per team member">
-        <ReportTable columns={EMP_COLS} rows={employees} isLoading={isLoading} maxH="max-h-[520px]" />
+        <ReportTable columns={empCols} rows={employees} isLoading={isLoading} maxH="max-h-[520px]" />
       </ReportTableSection>
     </div>
   )

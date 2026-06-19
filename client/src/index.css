@@ -4,8 +4,8 @@
 
 @layer base {
   :root {
-    --brand-primary: #5b21b6;
-    --brand-primary-dark: #4c1d95;
+    --brand-primary: #6d29d9;
+    --brand-primary-dark: #5a22b8;
     --surface-page: #f9f7fc;
     --chrome-header-height: 4.5rem; /* 72px — sidebar brand + main topbar */
     --sidebar-text: #ffffff;
@@ -51,11 +51,46 @@
   }
 }
 
-/* LeadFlow CRM marketing (public landing) — dark premium theme */
+/* LeadFlow CRM marketing (public landing) — white premium theme */
 .leadflow-landing {
-  --lf-hero-glow: rgba(139, 92, 246, 0.35);
-  background-color: #050510;
-  color: #f1f5f9;
+  --lf-accent: #7c3aed;
+  --lf-accent-light: rgba(124, 58, 237, 0.1);
+  background-color: #ffffff;
+  color: #0a0714;
+}
+
+/* Keyframe: floating bob for hero chips */
+@keyframes lf-bob {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+/* 3D floating bg element keyframes */
+@keyframes lf-float-a {
+  0%   { transform: perspective(900px) rotateX(0deg)   rotateY(0deg)    translateZ(0px)  translate(0px, 0px);     }
+  25%  { transform: perspective(900px) rotateX(9deg)   rotateY(7deg)    translateZ(28px) translate(14px, -16px);  }
+  60%  { transform: perspective(900px) rotateX(-6deg)  rotateY(-9deg)   translateZ(14px) translate(-10px, -24px); }
+  100% { transform: perspective(900px) rotateX(0deg)   rotateY(0deg)    translateZ(0px)  translate(0px, 0px);     }
+}
+
+@keyframes lf-float-b {
+  0%   { transform: perspective(900px) rotateX(0deg)   rotateY(0deg)    translateZ(0px)  translate(0px, 0px);     }
+  35%  { transform: perspective(900px) rotateX(-11deg) rotateY(9deg)    translateZ(32px) translate(-16px, -12px); }
+  70%  { transform: perspective(900px) rotateX(7deg)   rotateY(-6deg)   translateZ(18px) translate(12px, -20px);  }
+  100% { transform: perspective(900px) rotateX(0deg)   rotateY(0deg)    translateZ(0px)  translate(0px, 0px);     }
+}
+
+@keyframes lf-float-c {
+  0%   { transform: perspective(900px) rotateX(5deg)   rotateY(0deg)    translateZ(10px) translate(6px, 0px);     }
+  50%  { transform: perspective(900px) rotateX(-9deg)  rotateY(12deg)   translateZ(28px) translate(-12px, -22px); }
+  100% { transform: perspective(900px) rotateX(5deg)   rotateY(0deg)    translateZ(10px) translate(6px, 0px);     }
+}
+
+@keyframes lf-float-d {
+  0%   { transform: perspective(900px) rotateX(0deg)   rotateY(8deg)    translateZ(0px)  translate(0px, 0px);     }
+  40%  { transform: perspective(900px) rotateX(10deg)  rotateY(-4deg)   translateZ(22px) translate(18px, -14px);  }
+  80%  { transform: perspective(900px) rotateX(-4deg)  rotateY(12deg)   translateZ(8px)  translate(-8px, -26px);  }
+  100% { transform: perspective(900px) rotateX(0deg)   rotateY(8deg)    translateZ(0px)  translate(0px, 0px);     }
 }
 
 /* Gradient border utility for landing cards */
@@ -531,6 +566,26 @@
   font-size: 11px;
   color: #6366f1;
   font-weight: 500;
+}
+
+/* Month view: show first event + "+N" overflow button */
+.calendar-month-summary .rbc-month-view .rbc-row-content {
+  overflow: hidden;
+}
+
+.calendar-month-summary .rbc-month-view .rbc-row-content > .rbc-row:nth-child(n + 3):not(:last-child) {
+  display: none !important;
+}
+
+.calendar-month-summary .month-show-more-btn {
+  border: none;
+  cursor: pointer;
+  line-height: 1.2;
+}
+
+.calendar-month-summary .rbc-month-view .rbc-event {
+  min-height: 22px;
+  max-height: 24px;
 }
 
 .rbc-row-segment {

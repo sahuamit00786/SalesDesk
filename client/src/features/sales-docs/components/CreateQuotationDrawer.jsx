@@ -6,6 +6,7 @@ import { cn } from '@/utils/cn'
 import { useCreateQuotationMutation, useGetQuotationTemplatesQuery } from '@/features/sales-docs/quotationsApi'
 import { useGetDealsQuery } from '@/features/deals/dealsApi'
 import { QUOTATION_PRESET_LABELS } from '@/features/sales-docs/presetLabels'
+import { useEffectiveCurrency } from '@/hooks/useEffectiveCurrency'
 
 const emptyLine = () => ({
   name: '',
@@ -24,6 +25,7 @@ function dealSelectLabel(d) {
 }
 
 export function CreateQuotationDrawer({ open, onClose, initialLeadId = null }) {
+  const effectiveCurrency = useEffectiveCurrency()
   const [dealId, setDealId] = useState('')
   const [dealSearch, setDealSearch] = useState('')
   const [debouncedDealSearch, setDebouncedDealSearch] = useState('')
@@ -51,8 +53,10 @@ export function CreateQuotationDrawer({ open, onClose, initialLeadId = null }) {
     if (!open) {
       setDealId('')
       setDealSearch('')
+    } else {
+      setCurrency(effectiveCurrency)
     }
-  }, [open])
+  }, [open, effectiveCurrency])
 
   useEffect(() => {
     if (!open || !initialLeadId) return

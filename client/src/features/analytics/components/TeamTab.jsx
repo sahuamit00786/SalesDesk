@@ -3,16 +3,15 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts'
 import { DashboardChartCard } from '@/features/dashboard/components/DashboardChartCard'
-import { CHART_COLORS, formatChartCurrency } from '@/features/dashboard/dummyDashboardData'
+import { CHART_COLORS } from '@/features/dashboard/dummyDashboardData'
+import { useFormatChartCurrency } from '@/hooks/useEffectiveCurrency'
 import { ReportKpiCard } from './ReportKpiCard'
 import { ReportTable } from './ReportTable'
 import { ChartSkeleton, KpiSkeleton } from './ChartSkeleton'
 import { useGetTeamReportQuery } from '@/features/analytics/analyticsApi'
 import { fmtReportDate } from '@/features/analytics/reportColumns'
 
-const fmtMoney = (v) => formatChartCurrency(Number(v) || 0)
-
-const TEAM_COLS = [
+const TEAM_COLS_BASE = [
   { key: 'name', label: 'Name', render: (v) => <span className="font-medium text-ink">{v || '—'}</span> },
   { key: 'isAdmin', label: 'Role', render: (v) => v
     ? <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">Admin</span>
@@ -25,8 +24,8 @@ const TEAM_COLS = [
   { key: 'leadsOwned', label: 'Leads owned', render: (v) => <span className="font-semibold text-ink">{v}</span> },
   { key: 'leadsAssigned', label: 'Assigned', render: (v) => v ?? 0 },
   { key: 'deals', label: 'Deals', render: (v) => <span className="font-semibold">{v ?? 0}</span> },
-  { key: 'pipelineValue', label: 'Pipeline value', render: (v) => <span className="text-blue-700 font-semibold">{fmtMoney(v)}</span> },
-  { key: 'wonValue', label: 'Won value', render: (v) => <span className="text-emerald-700 font-semibold">{fmtMoney(v)}</span> },
+  { key: 'pipelineValue', label: 'Pipeline value' },
+  { key: 'wonValue', label: 'Won value' },
   { key: 'tasksOpen', label: 'Open tasks', render: (v) => <span className="font-semibold">{v ?? 0}</span> },
   { key: 'tasksOverdue', label: 'Overdue', render: (v) => <span className={v > 0 ? 'font-semibold text-rose-600' : ''}>{v ?? 0}</span> },
   { key: 'tasksCompleted', label: 'Done (period)', render: (v) => <span className="text-emerald-700">{v ?? 0}</span> },
@@ -36,6 +35,16 @@ const TEAM_COLS = [
 ]
 
 export function TeamTab({ queryParams, from, to }) {
+  const fmtMoney = useFormatChartCurrency()
+  const teamCols = TEAM_COLS_BASE.map((col) => {
+    if (col.key === 'pipelineValue') {
+      return { ...col, render: (v) => <span className="font-semibold text-blue-700">{fmtMoney(v)}</span> }
+    }
+    if (col.key === 'wonValue') {
+      return { ...col, render: (v) => <span className="font-semibold text-emerald-700">{fmtMoney(v)}</span> }
+    }
+    return col
+  })
   const params = queryParams || { from, to }
   const { data, isLoading } = useGetTeamReportQuery(params)
   const d = data?.data
@@ -148,7 +157,7 @@ export function TeamTab({ queryParams, from, to }) {
       </div>
 
       <DashboardChartCard title="Full team performance table" subtitle="All metrics per team member in selected period">
-        <ReportTable columns={TEAM_COLS} rows={teamRows} loading={isLoading} emptyText="No team members found" maxHeightClass="max-h-[480px]" />
+        <ReportTable columns={teamCols} rows={teamRows} loading={isLoading} emptyText="No team members found" maxHeightClass="max-h-[480px]" />
       </DashboardChartCard>
     </div>
   )

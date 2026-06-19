@@ -1,7 +1,8 @@
 import Joi from 'joi'
 import { Op, fn, col, where as sqlWhere } from 'sequelize'
 import { parsePhoneNumber, parsePhoneNumberFromString } from 'libphonenumber-js/min'
-import { Activity, Deal, Lead, OpportunityStage, Tag, User } from '../models/index.js'
+import { Activity, CustomField, CustomFieldValue, Deal, Lead, OpportunityStage, Tag, User } from '../models/index.js'
+import { serializeLeadCustomFields, upsertLeadCustomFields } from '../services/customFieldService.js'
 import { serializeDealForClient } from './dealsController.js'
 import { allowedWorkspaceIdsForUser } from '../services/userWorkspaceService.js'
 import { leadAccessWhere } from '../services/leadVisibility.js'
@@ -122,6 +123,7 @@ const createOpportunitySchema = Joi.object({
   dealCurrency: Joi.string().trim().length(3).pattern(/^[A-Za-z]{3}$/).uppercase().default('USD'),
   /** When true, row is shown on the Deals pipeline (not only Opportunities). */
   pipelineDeal: Joi.boolean().default(false),
+  customFields: Joi.object().default({}),
 }).required()
 
 const updateOpportunitySchema = createOpportunitySchema.fork(
@@ -262,12 +264,19 @@ function serializeLeadAsOpportunity(lead) {
     createdAt: plain.createdAt,
     updatedAt: plain.updatedAt,
     owner: ownerUser ? { id: ownerUser.id, name: ownerUser.name, email: ownerUser.email } : null,
+    customFields: plain.customFields || serializeLeadCustomFields(plain.customFieldValues || []),
   }
 }
 
 const leadPipelineIncludes = [
   { model: User, as: 'assignee', attributes: ['id', 'name', 'email'], required: false },
   { model: Tag, as: 'tags', attributes: ['id', 'name', 'color'], through: { attributes: [] }, required: false },
+  {
+    model: CustomFieldValue,
+    as: 'customFieldValues',
+    include: [{ model: CustomField, as: 'customField', attributes: ['id', 'label', 'key', 'type', 'options', 'isRequired', 'order'] }],
+    required: false,
+  },
 ]
 
 /** Pipeline data: `Lead` rows with `isOpportunity: true` only (no legacy opportunities table). */
@@ -525,6 +534,13 @@ export async function create(req, res, next) {
         await leadRow.setTags(tags)
       }
 
+      await upsertLeadCustomFields({
+        leadId: leadRow.id,
+        workspaceId: String(workspaceId),
+        companyId: req.user.companyId,
+        customFields: value.customFields || {},
+      })
+
       await leadRow.reload({ include: leadPipelineIncludes })
       const actorName = await resolveActorDisplayName(req.user.id, req.user.email)
       await Activity.create({
@@ -634,9 +650,19 @@ export async function create(req, res, next) {
       await lead.setTags(tags)
     }
 
+    await upsertLeadCustomFields({
+      leadId: lead.id,
+      workspaceId: String(workspaceId),
+      companyId: req.user.companyId,
+      customFields: value.customFields || {},
+    })
+
     await lead.reload({ include: leadPipelineIncludes })
     return res.status(201).json({ success: true, data: serializeLeadAsOpportunity(lead), meta: {} })
   } catch (e) {
+    if (e?.status === 400) {
+      return res.status(400).json({ success: false, error: { code: e.code || 'VALIDATION', message: e.message } })
+    }
     return next(e)
   }
 }
@@ -656,6 +682,7 @@ export async function update(req, res, next) {
     let lead = await Lead.findOne({ where: { ...baseWhere, id: req.params.id } })
     if (lead) {
       const hasTagsField = Object.prototype.hasOwnProperty.call(req.body || {}, 'tags')
+      const hasCustomFieldsField = Object.prototype.hasOwnProperty.call(req.body || {}, 'customFields')
       const previousStage = lead.opportunityStage || ''
       const beforePlain = lead.get({ plain: true })
       const beforeTags = (await lead.getTags({ attributes: ['name'] })).map((t) => String(t.name || '').trim().toLowerCase()).filter(Boolean)
@@ -705,6 +732,15 @@ export async function update(req, res, next) {
           }),
         )
         await lead.setTags(tags)
+      }
+
+      if (hasCustomFieldsField) {
+        await upsertLeadCustomFields({
+          leadId: lead.id,
+          workspaceId: lead.workspaceId,
+          companyId: lead.companyId,
+          customFields: value.customFields || {},
+        })
       }
 
       await lead.reload({ include: leadPipelineIncludes })
@@ -775,6 +811,9 @@ export async function update(req, res, next) {
     err.publicMessage = 'Opportunity not found'
     throw err
   } catch (e) {
+    if (e?.status === 400) {
+      return res.status(400).json({ success: false, error: { code: e.code || 'VALIDATION', message: e.message } })
+    }
     return next(e)
   }
 }

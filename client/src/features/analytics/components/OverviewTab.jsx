@@ -4,7 +4,8 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts'
 import { DashboardChartCard } from '@/features/dashboard/components/DashboardChartCard'
-import { CHART_COLORS, formatChartCurrency } from '@/features/dashboard/dummyDashboardData'
+import { CHART_COLORS } from '@/features/dashboard/dummyDashboardData'
+import { useFormatChartCurrency } from '@/hooks/useEffectiveCurrency'
 import { ReportKpiCard } from './ReportKpiCard'
 import { ReportTable } from './ReportTable'
 import { ChartSkeleton, KpiSkeleton } from './ChartSkeleton'
@@ -17,6 +18,7 @@ import { ASSIGNEE_WORKLOAD_COLS } from '@/features/analytics/reportColumns'
 const SLICES = CHART_COLORS.slices
 
 export function OverviewTab({ queryParams, from, to }) {
+  const fmtMoney = useFormatChartCurrency()
   const params = queryParams || { from, to }
   const { data: leadsData, isLoading: l1 } = useGetLeadsReportQuery(params)
   const { data: dealsData, isLoading: l2 } = useGetDealsReportQuery(params)
@@ -49,10 +51,10 @@ export function OverviewTab({ queryParams, from, to }) {
           <ReportKpiCard label="Total Leads" value={leads?.kpis?.total ?? 0} icon={Users} />
           <ReportKpiCard label="New (period)" value={leads?.kpis?.newInPeriod ?? 0} icon={TrendingUp} iconBg="bg-blue-50" iconColor="text-blue-600" />
           <ReportKpiCard label="Stale leads" value={leads?.kpis?.staleLeads ?? 0} sub="No activity 14d" icon={AlertTriangle} iconBg="bg-amber-50" iconColor="text-amber-600" />
-          <ReportKpiCard label="Pipeline value" value={formatChartCurrency(deals?.kpis?.pipelineValue ?? 0)} icon={DollarSign} iconBg="bg-emerald-50" iconColor="text-emerald-600" />
-          <ReportKpiCard label="Won value" value={formatChartCurrency(deals?.kpis?.wonValue ?? 0)} icon={Trophy} iconBg="bg-yellow-50" iconColor="text-yellow-600" />
+          <ReportKpiCard label="Pipeline value" value={fmtMoney(deals?.kpis?.pipelineValue ?? 0)} icon={DollarSign} iconBg="bg-emerald-50" iconColor="text-emerald-600" />
+          <ReportKpiCard label="Won value" value={fmtMoney(deals?.kpis?.wonValue ?? 0)} icon={Trophy} iconBg="bg-yellow-50" iconColor="text-yellow-600" />
           <ReportKpiCard label="Win rate" value={`${deals?.kpis?.winRate ?? 0}%`} icon={Percent} iconBg="bg-purple-50" iconColor="text-purple-600" />
-          <ReportKpiCard label="Payments received" value={formatChartCurrency(deals?.kpis?.paymentsReceived ?? 0)} icon={BadgeDollarSign} iconBg="bg-emerald-50" iconColor="text-emerald-700" />
+          <ReportKpiCard label="Payments received" value={fmtMoney(deals?.kpis?.paymentsReceived ?? 0)} icon={BadgeDollarSign} iconBg="bg-emerald-50" iconColor="text-emerald-700" />
           <ReportKpiCard label="Activities" value={actKpis.total ?? 0} icon={Megaphone} iconBg="bg-orange-50" iconColor="text-orange-600" />
           <ReportKpiCard label="Open tasks" value={tasks?.kpis?.openTotal ?? 0} icon={ListTodo} iconBg="bg-sky-50" iconColor="text-sky-600" />
           <ReportKpiCard label="Overdue tasks" value={tasks?.kpis?.overdue ?? 0} icon={CheckSquare} iconBg="bg-red-50" iconColor="text-red-600" />

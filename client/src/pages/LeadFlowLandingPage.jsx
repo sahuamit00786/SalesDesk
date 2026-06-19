@@ -20,7 +20,7 @@ export function LeadFlowLandingPage() {
 
   useEffect(() => {
     const prev = document.title
-    document.title = 'LeadFlow CRM — Lead management, pipeline, and team workspace'
+    document.title = 'LeadNest — Lead management, pipeline, and team workspace'
     let meta = document.querySelector('meta[name="description"]')
     let created = false
     const desc =
@@ -47,7 +47,7 @@ export function LeadFlowLandingPage() {
 
   return (
     <SmoothScrollProvider disabled={reduced}>
-      <div className="leadflow-landing min-h-screen bg-[#050510] text-white">
+      <div className="leadflow-landing min-h-screen bg-white text-[#0a0714]">
         <LandingNav />
         <main>
           <HeroSection />

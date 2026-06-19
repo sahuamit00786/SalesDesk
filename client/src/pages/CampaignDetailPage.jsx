@@ -24,10 +24,12 @@ import { DataGrid } from '@/components/shared/DataGrid'
 import {
   useGetCampaignQuery,
   useGetCampaignLeadsQuery,
+  usePatchCampaignLeadAmountMutation,
   usePatchCampaignLeadStageMutation,
   useRemoveCampaignLeadMutation,
   useDistributeCampaignLeadsMutation,
 } from '@/features/campaigns/campaignsApi'
+import { formatDealMoney } from '@/features/deals/dealCurrencies'
 import { AddLeadsDrawer } from '@/features/campaigns/components/AddLeadsDrawer'
 import { AddMembersDrawer } from '@/features/campaigns/components/AddMembersDrawer'
 import { cn } from '@/utils/cn'
@@ -220,6 +222,7 @@ export function CampaignDetailPage() {
   const existingLeadIds = useMemo(() => rows.map((r) => r.lead?.id).filter(Boolean), [rows])
 
   const [patchStage, { isLoading: patching }] = usePatchCampaignLeadStageMutation()
+  const [patchAmount, { isLoading: patchingAmount }] = usePatchCampaignLeadAmountMutation()
   const [removeLead, { isLoading: removing }] = useRemoveCampaignLeadMutation()
   const [distribute, { isLoading: distributing }] = useDistributeCampaignLeadsMutation()
 
@@ -227,11 +230,11 @@ export function CampaignDetailPage() {
     () => displayFunnel.reduce((a, s) => a + (Number(s.count) || 0), 0),
     [displayFunnel],
   )
-  const formatAmount = useCallback((n) => {
-    const v = Number(n)
-    if (!Number.isFinite(v)) return '—'
-    return `₹${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-  }, [])
+  const campaignCurrency = campaign?.currency || 'USD'
+  const formatAmount = useCallback(
+    (n) => formatDealMoney(n, campaignCurrency),
+    [campaignCurrency],
+  )
 
   const memberCount = teamMembers.length
   const endDateLabel = formatCampaignEndDate(campaign?.endDate)
@@ -254,6 +257,18 @@ export function CampaignDetailPage() {
   const onStageChange = async (leadId, nextKey) => {
     if (!id || !nextKey) return
     try { await patchStage({ campaignId: id, leadId, stageKey: nextKey }).unwrap() } catch { /* toast in api */ }
+  }
+
+  const onAmountReceivedChange = async (leadId, raw) => {
+    if (!id || !leadId) return
+    const trimmed = String(raw ?? '').trim()
+    const amountReceived = trimmed === '' ? null : Number.parseFloat(trimmed)
+    if (trimmed !== '' && !Number.isFinite(amountReceived)) return
+    try {
+      await patchAmount({ campaignId: id, leadId, amountReceived }).unwrap()
+    } catch {
+      /* toast in api */
+    }
   }
 
   const onRemoveLead = async (leadId) => {
@@ -378,6 +393,30 @@ export function CampaignDetailPage() {
         width: 120,
         valueGetter: (_v, row) => row.campaignAssignee?.name || row.campaignAssignee?.email || '—',
       },
+      {
+        field: 'amountReceived',
+        headerName: `Received (${campaignCurrency})`,
+        width: 150,
+        sortable: false,
+        renderCell: ({ row }) => {
+          const leadId = row.lead?.id
+          const val = row.amountReceived != null ? String(row.amountReceived) : ''
+          return (
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              defaultValue={val}
+              key={`${leadId}-${val}`}
+              disabled={patchingAmount}
+              onClick={(e) => e.stopPropagation()}
+              onBlur={(e) => onAmountReceivedChange(leadId, e.target.value)}
+              className="h-8 w-full max-w-[8.5rem] rounded-lg border border-surface-border px-2 text-xs tabular-nums"
+              placeholder="0.00"
+            />
+          )
+        },
+      },
       ...(canManage ? [{
         field: 'actions',
         headerName: '',
@@ -424,7 +463,7 @@ export function CampaignDetailPage() {
         },
       }] : []),
     ],
-    [selected, stageOptions, patching, canManage, removeConfirmId, removing],
+    [selected, stageOptions, patching, patchingAmount, campaignCurrency, canManage, removeConfirmId, removing],
   )
 
   const rosterRows = useMemo(

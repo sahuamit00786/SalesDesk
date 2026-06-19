@@ -152,7 +152,11 @@ export const leadsApi = baseApi.injectEndpoints({
       providesTags: [{ type: 'Lead', id: 'GOOGLE_EMAIL_AUTH' }],
     }),
     getGoogleEmailConnectUrl: build.mutation({
-      query: () => ({ url: '/leads/email/google/connect-url', method: 'GET' }),
+      query: (returnTo) => ({
+        url: '/leads/email/google/connect-url',
+        method: 'GET',
+        params: returnTo ? { returnTo } : undefined,
+      }),
     }),
     completeGoogleEmailConnect: build.query({
       query: (params) => ({ url: '/leads/email/google/callback', params }),
@@ -313,15 +317,31 @@ export const leadsApi = baseApi.injectEndpoints({
     }),
     createCustomField: build.mutation({
       query: (body) => ({ url: '/leads/custom-fields', method: 'POST', body }),
-      invalidatesTags: [{ type: 'Lead', id: 'CUSTOM_FIELDS' }],
+      invalidatesTags: [
+        { type: 'Lead', id: 'CUSTOM_FIELDS' },
+        { type: 'Lead', id: 'FORM_META' },
+      ],
     }),
     patchCustomField: build.mutation({
       query: ({ id, ...body }) => ({ url: `/leads/custom-fields/${id}`, method: 'PATCH', body }),
-      invalidatesTags: [{ type: 'Lead', id: 'CUSTOM_FIELDS' }],
+      invalidatesTags: [
+        { type: 'Lead', id: 'CUSTOM_FIELDS' },
+        { type: 'Lead', id: 'FORM_META' },
+      ],
     }),
     deleteCustomField: build.mutation({
       query: (id) => ({ url: `/leads/custom-fields/${id}`, method: 'DELETE' }),
-      invalidatesTags: [{ type: 'Lead', id: 'CUSTOM_FIELDS' }],
+      invalidatesTags: [
+        { type: 'Lead', id: 'CUSTOM_FIELDS' },
+        { type: 'Lead', id: 'FORM_META' },
+      ],
+    }),
+    reorderCustomFields: build.mutation({
+      query: (body) => ({ url: '/leads/custom-fields/reorder', method: 'POST', body }),
+      invalidatesTags: [
+        { type: 'Lead', id: 'CUSTOM_FIELDS' },
+        { type: 'Lead', id: 'FORM_META' },
+      ],
     }),
     getAssignmentRules: build.query({
       query: () => '/leads/assignment-rules',
@@ -414,6 +434,7 @@ export const {
   useCreateCustomFieldMutation,
   usePatchCustomFieldMutation,
   useDeleteCustomFieldMutation,
+  useReorderCustomFieldsMutation,
   useGetAssignmentRulesQuery,
   useCreateAssignmentRuleMutation,
   usePatchAssignmentRuleMutation,

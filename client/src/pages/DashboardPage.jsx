@@ -22,7 +22,8 @@ import { useGetActivitiesFeedQuery } from '@/features/activities/activitiesApi'
 import { useGetLeadsQuery } from '@/features/leads/leadsApi'
 import { useGetTasksQuery } from '@/features/tasks/tasksApi'
 import { useGetDashboardChartsQuery } from '@/features/analytics/analyticsApi'
-import { CHART_COLORS, formatChartCurrency } from '@/features/dashboard/dummyDashboardData'
+import { CHART_COLORS } from '@/features/dashboard/dummyDashboardData'
+import { useFormatChartCurrency } from '@/hooks/useEffectiveCurrency'
 import { DashboardChartCard, StatDeltaCard } from '@/features/dashboard/components/DashboardChartCard'
 import {
   DASHBOARD_EXPIRING_TASK_LIMIT,
@@ -96,6 +97,7 @@ const tooltipStyle = {
 }
 
 export function DashboardPage() {
+  const formatChartCurrency = useFormatChartCurrency()
   const [chartDatePreset, setChartDatePreset] = useState('30d')
   const [chartScope, setChartScope] = useState('all')
 

@@ -1,17 +1,13 @@
-import { Activity, CustomField, CustomFieldValue, Lead, OpportunityStage, Tag, Workspace } from '../models/index.js'
+import { Activity, CustomField, Lead, OpportunityStage, Tag, Workspace } from '../models/index.js'
 import { autoAssignLead } from './assignmentRulesService.js'
+import { mapWebFormTypeToCustomFieldType, slugifyCustomFieldKey, upsertLeadCustomFields } from './customFieldService.js'
 import { recalculateScore } from './leadScoringService.js'
 import { emitLeadWorkflowTriggers } from './workflowRunner.js'
 
 const STRUCTURAL_TYPES = new Set(['heading', 'paragraph', 'divider', 'hidden', 'file'])
 
 function toCustomKey(label, fieldId) {
-  const base = (label || fieldId || '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_|_$/g, '')
-    .slice(0, 120)
-  return base || fieldId || 'field'
+  return slugifyCustomFieldKey(label || fieldId) || fieldId || 'field'
 }
 
 function displayValue(raw) {
@@ -35,7 +31,7 @@ export async function createLeadFromSubmission(submission, form, workspaceId, co
     if (field.crmField) {
       const [entity, key] = String(field.crmField).split('.')
       if (entity === 'lead') leadData[key] = raw
-      if (entity === 'custom') mappedCustomFields[key] = dv
+      if (entity === 'custom') mappedCustomFields[key] = raw
     }
 
     submissionFields.push({ label: field.label || field.id, value: dv, fieldId: field.id })
@@ -73,11 +69,14 @@ export async function createLeadFromSubmission(submission, form, workspaceId, co
   const lead = await Lead.create(leadData)
 
   // Apply CRM-mapped custom fields (crmField: 'custom.key')
-  for (const [key, value] of Object.entries(mappedCustomFields)) {
-    const customField = await CustomField.findOne({ where: { key, workspaceId } })
-    if (customField) {
-      await CustomFieldValue.create({ customFieldId: customField.id, leadId: lead.id, value })
-    }
+  if (Object.keys(mappedCustomFields).length) {
+    await upsertLeadCustomFields({
+      leadId: lead.id,
+      workspaceId,
+      companyId,
+      customFields: mappedCustomFields,
+      validateRequired: false,
+    })
   }
 
   // Auto-create custom fields for unmapped form fields
@@ -85,26 +84,33 @@ export async function createLeadFromSubmission(submission, form, workspaceId, co
     const mappedFieldIds = new Set(
       (form.fields || []).filter((f) => f.crmField).map((f) => f.id),
     )
+    const autoCustomFields = {}
     for (const field of form.fields || []) {
       if (STRUCTURAL_TYPES.has(field.type)) continue
       if (mappedFieldIds.has(field.id)) continue
       const raw = submission?.data?.[field.id]
       if (raw === undefined || raw === null || raw === '') continue
       const key = toCustomKey(field.label, field.id)
-      const [customField] = await CustomField.findOrCreate({
+      await CustomField.findOrCreate({
         where: { key, workspaceId },
         defaults: {
           key,
           label: field.label || key,
-          type: field.type === 'number' ? 'number' : 'text',
+          type: mapWebFormTypeToCustomFieldType(field.type),
           workspaceId,
           companyId,
         },
       })
-      const existing = await CustomFieldValue.findOne({ where: { customFieldId: customField.id, leadId: lead.id } })
-      if (!existing) {
-        await CustomFieldValue.create({ customFieldId: customField.id, leadId: lead.id, value: displayValue(raw) })
-      }
+      autoCustomFields[key] = raw
+    }
+    if (Object.keys(autoCustomFields).length) {
+      await upsertLeadCustomFields({
+        leadId: lead.id,
+        workspaceId,
+        companyId,
+        customFields: autoCustomFields,
+        validateRequired: false,
+      })
     }
   }
 

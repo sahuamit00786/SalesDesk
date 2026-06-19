@@ -32,17 +32,10 @@ const FAQS = [
 
 export function FaqSection() {
   return (
-    <Section id="faq" className="relative bg-[#050510] py-24">
-      {/* BG atmosphere */}
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{ background: 'radial-gradient(ellipse 50% 60% at 50% 100%, rgba(139,92,246,0.06), transparent 70%)' }}
-        aria-hidden
-      />
-
+    <Section id="faq" className="relative bg-[#faf9ff] py-24">
       <div className="relative mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
-        <p className="text-center text-xs font-bold uppercase tracking-[0.22em] text-violet-400">FAQ</p>
-        <h2 className="mt-3 text-center font-display text-3xl font-bold tracking-[-0.02em] text-white sm:text-4xl">
+        <p className="text-center text-xs font-bold uppercase tracking-[0.22em] text-violet-600">FAQ</p>
+        <h2 className="mt-3 text-center font-display text-3xl font-bold tracking-[-0.025em] text-[#0a0714] sm:text-4xl">
           Common questions
         </h2>
 
@@ -51,20 +44,20 @@ export function FaqSection() {
             <Accordion.Item
               key={item.q}
               value={`item-${idx}`}
-              className="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02] backdrop-blur-sm transition hover:border-white/[0.1]"
+              className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm transition hover:border-violet-200"
             >
               <Accordion.Header>
                 <Accordion.Trigger
                   className={cn(
-                    'group flex w-full items-center justify-between gap-3 px-5 py-4 text-left text-sm font-semibold text-white/80 transition hover:text-white',
+                    'group flex w-full items-center justify-between gap-3 px-5 py-4 text-left text-sm font-semibold text-zinc-800 transition hover:text-violet-700',
                   )}
                 >
                   {item.q}
-                  <ChevronDown className="h-4 w-4 shrink-0 text-violet-400/70 transition group-data-[state=open]:rotate-180" />
+                  <ChevronDown className="h-4 w-4 shrink-0 text-violet-400 transition group-data-[state=open]:rotate-180" />
                 </Accordion.Trigger>
               </Accordion.Header>
               <Accordion.Content className="data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down overflow-hidden">
-                <div className="border-t border-white/[0.04] px-5 pb-4 pt-3 text-sm leading-relaxed text-white/45">
+                <div className="border-t border-zinc-100 px-5 pb-4 pt-3 text-sm leading-relaxed text-zinc-500">
                   {item.a}
                 </div>
               </Accordion.Content>

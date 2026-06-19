@@ -20,6 +20,7 @@ import { aggregateInvoiceTotals } from '@/features/sales-docs/previewTotals'
 import { suggestedInvoiceNumber } from '@/features/sales-docs/suggestedDocNumber'
 import { cn } from '@/utils/cn'
 import { pickTemplateIdFromSearch } from '@/utils/docTemplateQuery'
+import { useEffectiveCurrency } from '@/hooks/useEffectiveCurrency'
 
 const emptyLine = () => ({
   name: '',
@@ -109,6 +110,7 @@ export function NewInvoicePage() {
 
 function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', initialDealId = '' }) {
   const navigate = useNavigate()
+  const effectiveCurrency = useEffectiveCurrency()
   const hydratedInvoiceIdRef = useRef('')
   const isEditingExisting = Boolean(invoiceId)
 
@@ -209,9 +211,14 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
     if (String(tpl.id).toLowerCase() !== String(templateId).toLowerCase()) return
     setInvoiceTemplateId(tpl.id)
     if (tpl.layoutPreset != null) setLayoutPreset(Number(tpl.layoutPreset))
-    if (tpl.defaultCurrency != null) setCurrency(normalizeCurrencyCode(tpl.defaultCurrency))
+    setCurrency(normalizeCurrencyCode(tpl.defaultCurrency ?? effectiveCurrency))
     if (tpl.defaultPaymentTerms) setTermsSnapshot(tpl.defaultPaymentTerms)
-  }, [tpl, templateId, isEditingExisting])
+  }, [tpl, templateId, isEditingExisting, effectiveCurrency])
+
+  useEffect(() => {
+    if (isEditingExisting || savedId || templateId) return
+    setCurrency(effectiveCurrency)
+  }, [effectiveCurrency, isEditingExisting, savedId, templateId])
 
   useEffect(() => {
     if (!invoiceId || !existingInvoice) return

@@ -13,7 +13,8 @@ import {
 } from 'lucide-react'
 import { useRegisterMutation, useResendVerificationMutation, useVerifyEmailMutation } from '@/features/auth/authApi'
 import { useAppSelector } from '@/app/hooks'
-import { AuthScreenShell } from '@/components/auth/AuthScreenShell'
+import { AuthScreenShell, authLinkClassName } from '@/components/auth/AuthScreenShell'
+import { LeadNestLogo } from '@/components/shared/LeadNestLogo'
 import { useAuthStepAnimation } from '@/hooks/useAuthStepAnimation'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -30,20 +31,19 @@ function RegisterVisual() {
     { icon: BellRing, text: 'Activity history you can trust for audits and coaching.' },
   ]
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5">
-      <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-brand-200/90">
+    <div className="rounded-2xl border border-violet-100 bg-white/80 p-5 shadow-[0_8px_30px_rgba(124,58,237,0.08)] backdrop-blur-sm">
+      <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-violet-600">
         <Sparkles className="h-4 w-4" aria-hidden />
         Lead management
       </p>
-      <h3 className="mt-3 text-xl font-semibold text-white">Why teams choose SalesDesk</h3>
-      <p className="mt-2 text-sm leading-relaxed text-white/70">
-        SalesDesk is Connexify&apos;s lead-management layer: capture inquiries, qualify fast, and
-        keep every stakeholder aligned from first touch to closed-won.
+      <h3 className="mt-3 text-xl font-semibold text-[#0a0714]">Why teams choose LeadNest</h3>
+      <p className="mt-2 text-sm leading-relaxed text-zinc-500">
+        Capture inquiries, qualify fast, and keep every stakeholder aligned from first touch to closed-won.
       </p>
-      <ul className="mt-5 space-y-3 text-sm text-white/75">
+      <ul className="mt-5 space-y-3 text-sm text-zinc-600">
         {bullets.map(({ icon: Icon, text }) => (
           <li key={text} className="flex gap-3">
-            <Icon className="mt-0.5 h-4 w-4 shrink-0 text-brand-200" aria-hidden />
+            <Icon className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" aria-hidden />
             <span>{text}</span>
           </li>
         ))}
@@ -67,6 +67,7 @@ export function RegisterPage() {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [otp, setOtp] = useState('')
+  const [emailAlreadyRegistered, setEmailAlreadyRegistered] = useState(false)
 
   const [register, { isLoading: registering }] = useRegisterMutation()
   const [verifyEmail, { isLoading: verifying }] = useVerifyEmailMutation()
@@ -126,10 +127,16 @@ export function RegisterPage() {
       confirmPassword: parsed.data.confirmPassword,
     }
     try {
+      setEmailAlreadyRegistered(false)
       const res = await register(body).unwrap()
       toast.success(res?.data?.message ?? 'Check your email for the code.')
       goToOtp(parsed.data.email)
     } catch (err) {
+      const code = err?.data?.error?.code
+      if (code === 'CONFLICT') {
+        setEmailAlreadyRegistered(true)
+        return
+      }
       const message = err?.data?.error?.message ?? err?.error ?? 'Unable to register'
       toast.error(message)
     }
@@ -169,24 +176,56 @@ export function RegisterPage() {
   return (
     <AuthScreenShell
       variant="register"
-      eyebrow="SalesDesk by Connexify"
+      brand={<LeadNestLogo variant="auth" />}
       title="Create your revenue workspace"
       subtitle="Tell us about your company, confirm your email with a one-time code, and you are in."
       visual={<RegisterVisual />}
     >
-      <div className="mb-5 flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/80">
-        <Building2 className="h-4 w-4 shrink-0 text-brand-200" aria-hidden />
-        <span>
-          You are registering for <span className="font-semibold text-white">SalesDesk</span> — lead
-          capture, qualification, and deal tracking in one place.
-        </span>
-      </div>
+      {!emailAlreadyRegistered ? (
+        <div className="mb-5 flex items-center gap-2 rounded-xl border border-violet-100 bg-violet-50/60 px-3 py-2.5 text-xs text-zinc-600">
+          <Building2 className="h-4 w-4 shrink-0 text-violet-600" aria-hidden />
+          <span>
+            You are registering for <span className="font-semibold text-[#0a0714]">LeadNest</span> — lead
+            capture, qualification, and deal tracking in one place.
+          </span>
+        </div>
+      ) : null}
 
-      <div ref={stepRef} className="space-y-1 border-b border-white/10 pb-4">
-        <h2 className="text-lg font-semibold text-white">
+      {emailAlreadyRegistered ? (
+        <div className="rounded-2xl border border-violet-200 bg-violet-50/80 px-4 py-5 text-center">
+          <h2 className="text-lg font-semibold text-[#0a0714]">This email already has an account</h2>
+          <p className="mt-2 text-sm text-zinc-600">
+            Sign in with <span className="font-medium text-ink">{email.trim()}</span> or use a different email to create a new company workspace.
+          </p>
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-center">
+            <Link
+              to="/login"
+              state={{ email: email.trim() }}
+              className="inline-flex h-10 items-center justify-center rounded-xl bg-violet-700 px-5 text-sm font-semibold text-white hover:bg-violet-600"
+            >
+              Sign in
+            </Link>
+            <button
+              type="button"
+              className="inline-flex h-10 items-center justify-center rounded-xl border border-violet-200 bg-white px-5 text-sm font-semibold text-violet-700 hover:bg-violet-50"
+              onClick={() => {
+                setEmailAlreadyRegistered(false)
+                setEmail('')
+              }}
+            >
+              Use another email
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {!emailAlreadyRegistered ? (
+      <>
+      <div ref={stepRef} className="space-y-1 border-b border-violet-100 pb-4">
+        <h2 className="text-lg font-semibold text-[#0a0714]">
           {step === 'details' ? 'Company & account' : 'Verify your email'}
         </h2>
-        <p className="text-sm text-white/60">
+        <p className="text-sm text-zinc-500">
           {step === 'details'
             ? 'We will send a 6-digit code to your inbox (Google SMTP from the server).'
             : `Enter the code sent to ${email || 'your inbox'}.`}
@@ -196,7 +235,7 @@ export function RegisterPage() {
       {step === 'details' ? (
         <form ref={formRef} className="mt-5 flex flex-col gap-4" onSubmit={onRegister}>
           <div data-field className="space-y-2">
-            <label className="text-sm font-medium text-white/90" htmlFor="reg-name">
+            <label className="text-sm font-medium text-ink" htmlFor="reg-name">
               Full name
             </label>
             <Input
@@ -205,12 +244,11 @@ export function RegisterPage() {
               onChange={(e) => setName(e.target.value)}
               autoComplete="name"
               placeholder="Enter your full name"
-              className="border-white/15 bg-white/10 text-white placeholder:text-white/40"
               required
             />
           </div>
           <div data-field className="space-y-2">
-            <label className="text-sm font-medium text-white/90" htmlFor="reg-company">
+            <label className="text-sm font-medium text-ink" htmlFor="reg-company">
               Company name
             </label>
             <Input
@@ -219,12 +257,11 @@ export function RegisterPage() {
               onChange={(e) => setCompanyName(e.target.value)}
               autoComplete="organization"
               placeholder="Enter your company name"
-              className="border-white/15 bg-white/10 text-white placeholder:text-white/40"
               required
             />
           </div>
           <div data-field className="space-y-2">
-            <label className="text-sm font-medium text-white/90" htmlFor="reg-email">
+            <label className="text-sm font-medium text-ink" htmlFor="reg-email">
               Work email
             </label>
             <Input
@@ -234,12 +271,11 @@ export function RegisterPage() {
               onChange={(e) => setEmail(e.target.value)}
               autoComplete="email"
               placeholder="Enter your work email"
-              className="border-white/15 bg-white/10 text-white placeholder:text-white/40"
               required
             />
           </div>
           <div data-field className="group/pw space-y-2">
-            <label className="text-sm font-medium text-white/90" htmlFor="reg-password">
+            <label className="text-sm font-medium text-ink" htmlFor="reg-password">
               Password
             </label>
             <PasswordInput
@@ -248,8 +284,6 @@ export function RegisterPage() {
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="new-password"
               placeholder="e.g. MyTeam#2026!Secure"
-              className="border-white/15 bg-white/10 text-white placeholder:text-white/40"
-              toggleButtonClassName="text-white/45 hover:bg-white/10 hover:text-white"
               required
             />
             <div
@@ -257,8 +291,8 @@ export function RegisterPage() {
               onMouseDown={(e) => e.preventDefault()}
               aria-live="polite"
             >
-              <p className="text-[11px] leading-snug text-white/50">{passwordPolicySummary()}</p>
-              <ul className="flex flex-col gap-1.5 rounded-lg border border-white/10 bg-black/20 px-3 py-2.5 text-[11px] text-white/70">
+              <p className="text-[11px] leading-snug text-zinc-500">{passwordPolicySummary()}</p>
+              <ul className="flex flex-col gap-1.5 rounded-lg border border-violet-100 bg-violet-50/50 px-3 py-2.5 text-[11px] text-zinc-600">
                 {passwordPolicyRules.map((rule) => {
                   const ok = rule.test(password)
                   return (
@@ -266,14 +300,14 @@ export function RegisterPage() {
                       <span
                         className={
                           ok
-                            ? 'flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/25 text-emerald-300'
-                            : 'flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-white/15 text-white/25'
+                            ? 'flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700'
+                            : 'flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-violet-200 text-zinc-300'
                         }
                         aria-hidden
                       >
                         {ok ? <Check className="h-2.5 w-2.5" strokeWidth={3} /> : null}
                       </span>
-                      <span className={ok ? 'text-white/90' : undefined}>{rule.label}</span>
+                      <span className={ok ? 'text-ink' : undefined}>{rule.label}</span>
                     </li>
                   )
                 })}
@@ -281,7 +315,7 @@ export function RegisterPage() {
             </div>
           </div>
           <div data-field className="space-y-2">
-            <label className="text-sm font-medium text-white/90" htmlFor="reg-confirm">
+            <label className="text-sm font-medium text-ink" htmlFor="reg-confirm">
               Confirm password
             </label>
             <PasswordInput
@@ -292,11 +326,7 @@ export function RegisterPage() {
               placeholder="Re-enter your password"
               aria-invalid={confirmPasswordMismatch}
               aria-describedby={confirmPasswordMismatch ? 'reg-confirm-error' : undefined}
-              className={cn(
-                'border-white/15 bg-white/10 text-white placeholder:text-white/40',
-                confirmPasswordMismatch && 'border-danger/70 ring-1 ring-danger/30',
-              )}
-              toggleButtonClassName="text-white/45 hover:bg-white/10 hover:text-white"
+              className={cn(confirmPasswordMismatch && 'border-danger ring-1 ring-danger/30')}
               required
             />
             {confirmPasswordMismatch ? (
@@ -306,7 +336,7 @@ export function RegisterPage() {
             ) : null}
           </div>
           <div data-field>
-            <Button variant="primary" type="submit" className="mt-1 w-full" disabled={registering}>
+            <Button variant="primary" type="submit" className="mt-1 w-full !bg-violet-700 hover:!bg-violet-600" disabled={registering}>
               {registering ? 'Creating account…' : 'Continue'}
             </Button>
           </div>
@@ -314,12 +344,12 @@ export function RegisterPage() {
       ) : (
         <form className="mt-5 flex flex-col gap-4" onSubmit={onVerify}>
           {email ? (
-            <p className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/70">
-              Code sent to <span className="font-medium text-white">{email}</span>
+            <p className="rounded-lg border border-violet-100 bg-violet-50/60 px-3 py-2 text-xs text-zinc-600">
+              Code sent to <span className="font-medium text-[#0a0714]">{email}</span>
             </p>
           ) : (
             <div className="space-y-2">
-              <label className="text-sm font-medium text-white/90" htmlFor="otp-email">
+              <label className="text-sm font-medium text-ink" htmlFor="otp-email">
                 Work email
               </label>
               <Input
@@ -328,13 +358,12 @@ export function RegisterPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Enter your work email"
-                className="border-white/15 bg-white/10 text-white placeholder:text-white/40"
                 required
               />
             </div>
           )}
           <div className="space-y-2">
-            <label className="text-sm font-medium text-white/90" htmlFor="otp-code">
+            <label className="text-sm font-medium text-ink" htmlFor="otp-code">
               6-digit code
             </label>
             <Input
@@ -345,17 +374,17 @@ export function RegisterPage() {
               value={otp}
               onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
               placeholder="000000"
-              className="border-white/15 bg-white/10 text-center font-mono text-lg tracking-[0.35em] text-white placeholder:text-white/35"
+              className="text-center font-mono text-lg tracking-[0.35em]"
               required
             />
           </div>
-          <Button variant="primary" type="submit" className="w-full" disabled={verifying}>
+          <Button variant="primary" type="submit" className="w-full !bg-violet-700 hover:!bg-violet-600" disabled={verifying}>
             {verifying ? 'Verifying…' : 'Verify & sign in'}
           </Button>
-          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-white/55">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500">
             <button
               type="button"
-              className="font-semibold text-brand-200 hover:text-white disabled:opacity-50"
+              className={cn(authLinkClassName, 'disabled:opacity-50')}
               onClick={() => {
                 setStep('details')
                 setOtp('')
@@ -365,7 +394,7 @@ export function RegisterPage() {
             </button>
             <button
               type="button"
-              className="font-semibold text-brand-200 hover:text-white disabled:opacity-50"
+              className={cn(authLinkClassName, 'disabled:opacity-50')}
               onClick={onResend}
               disabled={resending}
             >
@@ -375,12 +404,14 @@ export function RegisterPage() {
         </form>
       )}
 
-      <p className="mt-6 text-center text-xs text-white/55">
+      <p className="mt-6 text-center text-xs text-zinc-500">
         Already have an account?{' '}
-        <Link className="font-semibold text-brand-200 hover:text-white" to="/login">
+        <Link className={authLinkClassName} to="/login">
           Sign in
         </Link>
       </p>
+      </>
+      ) : null}
     </AuthScreenShell>
   )
 }

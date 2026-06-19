@@ -5,6 +5,7 @@ import { RightDrawer } from '@/components/ui/RightDrawer'
 import { useGetLeadQuery, useGetLeadsQuery } from '@/features/leads/leadsApi'
 import { useGetDealsQuery, useCreateDealMutation } from '@/features/deals/dealsApi'
 import { DEAL_CURRENCY_OPTIONS, formatDealMoney, normalizeDealCurrency } from '@/features/deals/dealCurrencies'
+import { useEffectiveCurrency } from '@/hooks/useEffectiveCurrency'
 
 function opportunityOptionLabel(row) {
   const title = (row.title || '').trim()
@@ -25,6 +26,7 @@ export function AddDealDrawer({
   fixedOpportunityLeadId = null,
   onCreated,
 }) {
+  const effectiveCurrency = useEffectiveCurrency()
   const [selectedOppId, setSelectedOppId] = useState('')
   const [dealName, setDealName] = useState('')
   const [dealDescription, setDealDescription] = useState('')
@@ -37,10 +39,10 @@ export function AddDealDrawer({
     setDealName('')
     setDealDescription('')
     setDealValue('')
-    setDealCurrency('USD')
+    setDealCurrency(effectiveCurrency)
     setOwnerUserId(users[0]?.id || '')
     setSelectedOppId(fixedOpportunityLeadId || '')
-  }, [open, fixedOpportunityLeadId, users])
+  }, [open, fixedOpportunityLeadId, users, effectiveCurrency])
 
   const effectiveOppId = fixedOpportunityLeadId || selectedOppId
 

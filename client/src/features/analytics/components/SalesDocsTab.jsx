@@ -1,32 +1,31 @@
 import { FileText, Receipt, DollarSign, Percent, AlertCircle } from 'lucide-react'
 import { ResponsiveContainer, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
 import { DashboardChartCard } from '@/features/dashboard/components/DashboardChartCard'
-import { formatChartCurrency } from '@/features/dashboard/dummyDashboardData'
+import { formatDealMoney } from '@/features/deals/dealCurrencies'
+import { useFormatChartCurrency } from '@/hooks/useEffectiveCurrency'
 import { ReportKpiCard } from './ReportKpiCard'
 import { ReportTable } from './ReportTable'
 import { ChartSkeleton, KpiSkeleton } from './ChartSkeleton'
 import { useGetSalesDocsReportQuery } from '@/features/analytics/analyticsApi'
 import { ReportKpiGrid, ReportChartGrid, ReportTableSection } from '@/features/analytics/ReportLayout'
 
-const fmtMoney = (v) => formatChartCurrency(Number(v) || 0)
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString() : '—'
 
-const DOC_COLS = [
-  { key: 'number', label: 'Number', render: (v) => <span className="font-medium">{v}</span> },
-  { key: 'lead', label: 'Lead' },
-  { key: 'status', label: 'Status' },
-  { key: 'value', label: 'Value', render: (v, r) => fmtMoney(v) + (r.currency ? ` ${r.currency}` : '') },
-  { key: 'owner', label: 'Owner' },
-  { key: 'createdAt', label: 'Created', render: (v) => fmtDate(v) },
-]
-
-const INV_COLS = [
-  ...DOC_COLS.slice(0, 4),
-  { key: 'paid', label: 'Paid', render: (v) => fmtMoney(v) },
-  ...DOC_COLS.slice(4),
-]
-
 export function SalesDocsTab({ queryParams }) {
+  const fmtMoney = useFormatChartCurrency()
+  const docCols = [
+    { key: 'number', label: 'Number', render: (v) => <span className="font-medium">{v}</span> },
+    { key: 'lead', label: 'Lead' },
+    { key: 'status', label: 'Status' },
+    { key: 'value', label: 'Value', render: (v, r) => formatDealMoney(v, r.currency) },
+    { key: 'owner', label: 'Owner' },
+    { key: 'createdAt', label: 'Created', render: (v) => fmtDate(v) },
+  ]
+  const invCols = [
+    ...docCols.slice(0, 4),
+    { key: 'paid', label: 'Paid', render: (v, r) => formatDealMoney(v, r.currency) },
+    ...docCols.slice(4),
+  ]
   const { data, isLoading } = useGetSalesDocsReportQuery(queryParams)
   const d = data?.data
   const kpis = d?.kpis || {}
@@ -76,11 +75,11 @@ export function SalesDocsTab({ queryParams }) {
       </ReportChartGrid>
 
       <ReportTableSection title="Recent quotations" subtitle="Created in selected period">
-        <ReportTable columns={DOC_COLS} rows={tables.recentQuotations || []} isLoading={isLoading} maxH="max-h-[360px]" />
+        <ReportTable columns={docCols} rows={tables.recentQuotations || []} isLoading={isLoading} maxH="max-h-[360px]" />
       </ReportTableSection>
 
       <ReportTableSection title="Recent invoices" subtitle="Created in selected period">
-        <ReportTable columns={INV_COLS} rows={tables.recentInvoices || []} isLoading={isLoading} maxH="max-h-[360px]" />
+        <ReportTable columns={invCols} rows={tables.recentInvoices || []} isLoading={isLoading} maxH="max-h-[360px]" />
       </ReportTableSection>
     </div>
   )

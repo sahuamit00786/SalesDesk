@@ -2,6 +2,7 @@ import { Op } from 'sequelize'
 import { User, UserWorkspace, Workspace } from '../models/index.js'
 import { ensureLibrarySalesDocTemplates } from '../services/defaultSalesDocTemplates.js'
 import { createWorkspaceSchema, patchWorkspaceSchema } from '../validations/workspace.js'
+import { normalizeCurrencyCode } from '../utils/currency.js'
 
 async function userCompanyId(userId) {
   const user = await User.findByPk(userId)
@@ -41,6 +42,7 @@ async function serializeWorkspaceList(companyId) {
       memberCount,
       themeColor: w.themeColor ?? null,
       sidebarTextColor: w.sidebarTextColor ?? null,
+      defaultCurrency: w.defaultCurrency ?? null,
     })),
   )
   return items
@@ -83,6 +85,9 @@ export async function listWorkspaces(req, res, next) {
         createdAt: w.createdAt ? w.createdAt.toISOString() : null,
         leadCount: await leadCountForWorkspace(w.id),
         memberCount,
+        themeColor: w.themeColor ?? null,
+        sidebarTextColor: w.sidebarTextColor ?? null,
+        defaultCurrency: w.defaultCurrency ?? null,
       })),
     )
     return res.json({ success: true, data: { items }, meta: {} })
@@ -118,6 +123,7 @@ export async function createWorkspace(req, res, next) {
       companyId,
       name: value.name,
       description: desc,
+      ...(value.defaultCurrency ? { defaultCurrency: normalizeCurrencyCode(value.defaultCurrency) } : {}),
     })
     await ensureLibrarySalesDocTemplates({ workspaceId: created.id, companyId })
     if (created && !req.user.isCompanyAdmin) {
@@ -183,6 +189,9 @@ export async function patchWorkspace(req, res, next) {
 
     if (value.themeColor !== undefined) workspace.themeColor = value.themeColor
     if (value.sidebarTextColor !== undefined) workspace.sidebarTextColor = value.sidebarTextColor
+    if (value.defaultCurrency !== undefined) {
+      workspace.defaultCurrency = value.defaultCurrency ? normalizeCurrencyCode(value.defaultCurrency) : null
+    }
 
     if (value.archived === true) {
       const nonArchivedCount = await Workspace.count({

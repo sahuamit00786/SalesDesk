@@ -4,33 +4,33 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts'
 import { DashboardChartCard } from '@/features/dashboard/components/DashboardChartCard'
-import { CHART_COLORS, formatChartCurrency } from '@/features/dashboard/dummyDashboardData'
+import { CHART_COLORS } from '@/features/dashboard/dummyDashboardData'
+import { formatDealMoney } from '@/features/deals/dealCurrencies'
+import { useFormatChartCurrency } from '@/hooks/useEffectiveCurrency'
 import { ReportKpiCard } from './ReportKpiCard'
 import { ReportTable } from './ReportTable'
 import { ChartSkeleton, KpiSkeleton } from './ChartSkeleton'
 import { useGetDealsReportQuery } from '@/features/analytics/analyticsApi'
 
 const SLICES = CHART_COLORS.slices
-const fmtMoney = (v) => formatChartCurrency(Number(v) || 0)
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString() : '—'
 
-const RECENT_COLS = [
-  { key: 'name', label: 'Deal', render: (v) => <span className="font-medium text-ink">{v || '—'}</span> },
-  { key: 'stage', label: 'Stage' },
-  { key: 'value', label: 'Value', render: (v, r) => <span className="font-semibold text-ink">{fmtMoney(v)} {r.currency}</span> },
-  { key: 'owner', label: 'Owner' },
-  { key: 'createdAt', label: 'Created', render: (v) => fmtDate(v) },
-  { key: 'updatedAt', label: 'Updated', render: (v) => fmtDate(v) },
-]
-
-const OWNER_COLS = [
-  { key: 'name', label: 'Owner', render: (v) => <span className="font-medium text-ink">{v}</span> },
-  { key: 'email', label: 'Email', render: (v) => <span className="text-xs text-ink-muted">{v}</span> },
-  { key: 'deals', label: 'Deals', render: (v) => <span className="font-semibold">{v}</span> },
-  { key: 'value', label: 'Pipeline value', render: (v) => <span className="font-semibold text-emerald-700">{fmtMoney(v)}</span> },
-]
-
 export function PipelineTab({ from, to }) {
+  const fmtMoney = useFormatChartCurrency()
+  const recentCols = [
+    { key: 'name', label: 'Deal', render: (v) => <span className="font-medium text-ink">{v || '—'}</span> },
+    { key: 'stage', label: 'Stage' },
+    { key: 'value', label: 'Value', render: (v, r) => <span className="font-semibold text-ink">{formatDealMoney(v, r.currency)}</span> },
+    { key: 'owner', label: 'Owner' },
+    { key: 'createdAt', label: 'Created', render: (v) => fmtDate(v) },
+    { key: 'updatedAt', label: 'Updated', render: (v) => fmtDate(v) },
+  ]
+  const ownerCols = [
+    { key: 'name', label: 'Owner', render: (v) => <span className="font-medium text-ink">{v}</span> },
+    { key: 'email', label: 'Email', render: (v) => <span className="text-xs text-ink-muted">{v}</span> },
+    { key: 'deals', label: 'Deals', render: (v) => <span className="font-semibold">{v}</span> },
+    { key: 'value', label: 'Pipeline value', render: (v) => <span className="font-semibold text-emerald-700">{fmtMoney(v)}</span> },
+  ]
   const { data, isLoading } = useGetDealsReportQuery({ from, to })
   const d = data?.data
   const kpis = d?.kpis || {}
@@ -172,12 +172,12 @@ export function PipelineTab({ from, to }) {
 
       {/* Owner performance table */}
       <DashboardChartCard title="Deals by owner — detail" subtitle="Pipeline ownership breakdown">
-        <ReportTable columns={OWNER_COLS} rows={tables.dealsByOwner || []} loading={isLoading} emptyText="No deals found" />
+        <ReportTable columns={ownerCols} rows={tables.dealsByOwner || []} loading={isLoading} emptyText="No deals found" />
       </DashboardChartCard>
 
       {/* Recent deals */}
       <DashboardChartCard title="Recent deals (last 20)" subtitle="Most recently updated deals">
-        <ReportTable columns={RECENT_COLS} rows={tables.recentDeals || []} loading={isLoading} emptyText="No deals found" />
+        <ReportTable columns={recentCols} rows={tables.recentDeals || []} loading={isLoading} emptyText="No deals found" />
       </DashboardChartCard>
     </div>
   )

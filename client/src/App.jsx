@@ -6,6 +6,7 @@ import { LoginPage } from '@/pages/LoginPage'
 import { WorkspacePage } from '@/pages/WorkspacePage'
 import { OnboardingPage } from '@/pages/OnboardingPage'
 import { RegisterPage } from '@/pages/RegisterPage'
+import { ForgotPasswordPage } from '@/pages/ForgotPasswordPage'
 import { TeamPage } from '@/pages/TeamPage'
 import { TeamMemberProfilePage } from '@/features/team/pages/TeamMemberProfilePage'
 import { IntegrationsPage } from '@/pages/IntegrationsPage'
@@ -59,6 +60,7 @@ export default function App() {
       <Route path="/" element={<LeadFlowLandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/accept-invite" element={<AcceptInvitePage />} />
       <Route element={<RequireAuth />}>
         <Route element={<SessionSync />}>

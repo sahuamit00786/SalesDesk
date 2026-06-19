@@ -6,7 +6,7 @@ import { PageContentPanel } from '@/components/layout/PageContentPanel'
 import { ReportFilterBar } from '@/features/analytics/ReportFilterBar'
 import { useReportFilters } from '@/features/analytics/useReportFilters'
 import { REPORT_CATEGORIES, REPORT_META } from '@/features/analytics/reportTypes'
-import { formatChartCurrency } from '@/features/dashboard/dummyDashboardData'
+import { useFormatChartCurrency } from '@/hooks/useEffectiveCurrency'
 import {
   useGetLeadsReportQuery, useGetDealsReportQuery, useGetTasksReportQuery,
   useGetFollowupsReportQuery,
@@ -16,11 +16,6 @@ import { cn } from '@/utils/cn'
 function fmt(v, suffix = '') {
   if (v === undefined || v === null) return '—'
   return `${v}${suffix}`
-}
-
-function fmtMoney(v) {
-  if (v === undefined || v === null) return '—'
-  return formatChartCurrency(Number(v) || 0)
 }
 
 function ReportCard({ id, onClick }) {
@@ -50,6 +45,11 @@ function ReportCard({ id, onClick }) {
 
 export function AnalyticsPage() {
   const navigate = useNavigate()
+  const formatChartCurrency = useFormatChartCurrency()
+  const fmtMoney = (v) => {
+    if (v === undefined || v === null) return '—'
+    return formatChartCurrency(Number(v) || 0)
+  }
   const filters = useReportFilters()
   const params = filters.queryParams
 

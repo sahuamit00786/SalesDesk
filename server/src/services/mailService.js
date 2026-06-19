@@ -34,6 +34,10 @@ function fromAddress() {
   return process.env.SMTP_FROM || `${appDisplayName()} <${process.env.SMTP_USER}>`
 }
 
+export function companyRegistrationNotifyEmail() {
+  return String(process.env.COMPANY_REGISTRATION_NOTIFY_EMAIL || 'sahuamit00786@gmail.com').trim()
+}
+
 function escapeHtml(s) {
   return String(s)
     .replace(/&/g, '&amp;')
@@ -138,6 +142,70 @@ ${buildOtpCodeRowHtml(otp)}
 <p style="margin:20px 0 0;font-size:15px;font-weight:700;color:#000000;line-height:1.4;">This code expires in ${OTP_EXPIRY_MIN} minutes.</p>
 ${otpDisclaimerFooterHtml(app)}`
   return buildMinimalEmailDocument({ innerHtml: inner })
+}
+
+export function buildCompanyRegistrationNotifyEmailHtml({ company, user, registeredAt }) {
+  const safeCompany = escapeHtml(company?.name || '—')
+  const safeCompanyId = escapeHtml(company?.id || '—')
+  const safeUserName = escapeHtml(user?.name || '—')
+  const safeUserEmail = escapeHtml(user?.email || '—')
+  const safeWhen = escapeHtml(
+    registeredAt instanceof Date ? registeredAt.toISOString() : String(registeredAt || new Date().toISOString()),
+  )
+  const app = appDisplayName()
+  const safeApp = escapeHtml(app)
+  const inner = `${brandMarkHtml()}
+<h1 style="margin:0 0 12px;font-size:22px;font-weight:700;color:#000000;line-height:1.25;">New company registered</h1>
+<p style="margin:0 0 20px;font-size:15px;line-height:1.55;color:#374151;">A new company signed up on <strong>${safeApp}</strong>.</p>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 8px;">
+  <tr><td style="padding:8px 0;font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#6B7280;">Company</td></tr>
+  <tr><td style="padding:0 0 4px;font-size:15px;font-weight:600;color:#111827;">${safeCompany}</td></tr>
+  <tr><td style="padding:0 0 16px;font-size:13px;color:#6B7280;">ID: ${safeCompanyId}</td></tr>
+  <tr><td style="padding:8px 0;font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#6B7280;">Admin user</td></tr>
+  <tr><td style="padding:0 0 4px;font-size:15px;color:#111827;">${safeUserName}</td></tr>
+  <tr><td style="padding:0 0 16px;font-size:14px;color:#374151;">${safeUserEmail}</td></tr>
+  <tr><td style="padding:8px 0;font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#6B7280;">Registered at</td></tr>
+  <tr><td style="padding:0;font-size:14px;color:#374151;">${safeWhen}</td></tr>
+</table>`
+  return buildMinimalEmailDocument({ innerHtml: inner })
+}
+
+/** Internal alert when a new company registers (does not throw if SMTP is missing). */
+export async function sendCompanyRegistrationNotifyEmail({ company, user, registeredAt = new Date() }) {
+  const transport = getMailTransport()
+  const from = fromAddress()
+  const app = appDisplayName()
+  const to = companyRegistrationNotifyEmail()
+  if (!to) return { sent: false }
+
+  const companyName = company?.name || 'Unknown company'
+  const html = buildCompanyRegistrationNotifyEmailHtml({ company, user, registeredAt })
+  const text = [
+    `New company registered on ${app}`,
+    '',
+    `Company: ${companyName}`,
+    `Company ID: ${company?.id || '—'}`,
+    `Admin: ${user?.name || '—'} <${user?.email || '—'}>`,
+    `Registered at: ${registeredAt instanceof Date ? registeredAt.toISOString() : registeredAt}`,
+  ].join('\n')
+
+  if (!transport) {
+    if (process.env.NODE_ENV !== 'production') {
+      // eslint-disable-next-line no-console
+      console.info(`[${app} mail] SMTP not configured. Company registration notify -> ${to}\n${text}`)
+    }
+    return { sent: false }
+  }
+
+  await transport.sendMail({
+    from,
+    to,
+    subject: `New company registered — ${companyName}`,
+    html,
+    text,
+  })
+
+  return { sent: true }
 }
 
 export async function sendRegistrationEmails({ to, name, companyName, otpPlain }) {

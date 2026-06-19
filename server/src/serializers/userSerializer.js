@@ -17,7 +17,9 @@ export function serializeUser(user) {
   const companyRole = user.companyRole
   const memberships = Array.isArray(user.workspaceMemberships) ? user.workspaceMemberships : []
   const companyName = c?.name ?? null
-  const needsOnboarding = Boolean(user.companyId && (!c || !c.onboardingCompletedAt))
+  const needsOnboarding = Boolean(
+    user.isCompanyAdmin && user.companyId && (!c || !c.onboardingCompletedAt),
+  )
   let allowedMenus = Array.isArray(companyRole?.menuLinks)
     ? companyRole.menuLinks
         .map((l) => l.menu)
@@ -37,6 +39,7 @@ export function serializeUser(user) {
       archived: Boolean(w.archivedAt),
       themeColor: w.themeColor ?? null,
       sidebarTextColor: w.sidebarTextColor ?? null,
+      defaultCurrency: w.defaultCurrency ?? null,
     }))
   const companyWorkspaces = Array.isArray(c?.workspaces)
     ? c.workspaces.map((w) => ({
@@ -46,6 +49,7 @@ export function serializeUser(user) {
         archived: Boolean(w.archivedAt),
         themeColor: w.themeColor ?? null,
         sidebarTextColor: w.sidebarTextColor ?? null,
+        defaultCurrency: w.defaultCurrency ?? null,
       }))
     : []
   const scopedWorkspaces = user.isCompanyAdmin ? companyWorkspaces : memberWorkspaces
@@ -84,11 +88,14 @@ export function serializeUser(user) {
           name: c.name,
           industry: c.industry,
           websiteUrl: c.websiteUrl,
+          country: c.country,
+          city: c.city,
           employeeRange: c.employeeRange,
           monthlyLeadsBand: c.monthlyLeadsBand,
           leadPainTags: c.leadPainTags,
           leadPainNotes: c.leadPainNotes,
           currentToolsNotes: c.currentToolsNotes,
+          baseCurrency: c.baseCurrency ?? 'USD',
           onboardingCompletedAt: c.onboardingCompletedAt,
           workspaces: scopedWorkspaces,
         }

@@ -53,6 +53,8 @@ import {
 import { LeadScorePill } from '@/features/leads/components/LeadScorePill'
 import { LeadSourceTag } from '@/features/leads/components/LeadSourceTag'
 import { LeadTagsInput } from '@/features/leads/components/LeadTagsInput'
+import { CustomFieldsDisplay } from '@/features/leads/components/CustomFieldsDisplay'
+import { mapCustomFieldValuesFromLead } from '@/features/leads/customFieldTypes'
 import { LeadDocumentsWorkspace } from '@/features/documents/components/LeadDocumentsWorkspace'
 import { getFileUrl } from '@/features/documents/documentUtils'
 import { useUploadDocumentMutation } from '@/features/documents/documentsApi'
@@ -703,6 +705,16 @@ export function LeadDetailPage() {
     [formMetaData],
   )
 
+  const customFieldDefs = useMemo(
+    () => formMetaData?.data?.customFields || [],
+    [formMetaData],
+  )
+
+  const customFieldValues = useMemo(
+    () => (lead ? mapCustomFieldValuesFromLead(lead) : {}),
+    [lead],
+  )
+
   const visibleActivities = useMemo(() => {
     const base = activities.filter((activity) => !isSystemNoteActivity(activity))
     const seenTaskCreate = new Set()
@@ -780,7 +792,7 @@ export function LeadDetailPage() {
     if (whatsappE164) return digitsOnlyE164(whatsappE164)
     return whatsappRaw.replace(/\D/g, '')
   }, [whatsappE164, whatsappRaw])
-  const formattedValue = `₹${Number(lead?.value || 0).toLocaleString('en-IN')}`
+  const formattedValue = formatDealMoney(lead?.value, lead?.valueCurrency || lead?.value_currency || 'USD')
   const leadOwnerName =
     (lead?.assignedUsers || []).map((user) => user?.name).filter(Boolean).join(', ') || lead?.assignee?.name || lead?.owner?.name || '-'
   const addressLine = [lead?.street, lead?.city, lead?.state, lead?.country, lead?.postalCode].filter(Boolean).join(', ') || '-'
@@ -1073,6 +1085,7 @@ export function LeadDetailPage() {
                     <div className="pt-1">
                       <LeadScorePill score={lead.score || 0} showBar />
                     </div>
+                    <CustomFieldsDisplay fields={customFieldDefs} values={customFieldValues} />
                   </>
                 ) : (
                   <>

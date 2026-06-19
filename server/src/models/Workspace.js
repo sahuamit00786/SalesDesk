@@ -41,6 +41,11 @@ export const Workspace = sequelize.define(
       allowNull: true,
       field: 'sidebar_text_color',
     },
+    defaultCurrency: {
+      type: DataTypes.STRING(3),
+      allowNull: true,
+      field: 'default_currency',
+    },
   },
   {
     tableName: 'workspaces',

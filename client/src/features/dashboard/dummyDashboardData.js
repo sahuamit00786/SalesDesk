@@ -16,17 +16,15 @@ export const CHART_COLORS = {
   slices: ['#2451eb', '#5c98ff', '#90bdff', '#bdd8ff', '#4b5263', '#d97706'],
 }
 
-function formatCurrency(n) {
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1000) return `$${(n / 1000).toFixed(1)}k`
-  return `$${Math.round(n)}`
+import { formatCompactMoney } from '@/utils/money'
+
+function formatCurrency(n, currency = 'USD') {
+  return formatCompactMoney(n, currency)
 }
 
-export function formatChartCurrency(n) {
-  if (n == null || Number.isNaN(n)) return '—'
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1000) return `$${(n / 1000).toFixed(0)}k`
-  return `$${Math.round(n)}`
+export function formatChartCurrency(n, currency = 'USD') {
+  if (n == null || Number.isNaN(Number(n))) return '—'
+  return formatCompactMoney(n, currency)
 }
 
 function round(n) {

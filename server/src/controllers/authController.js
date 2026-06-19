@@ -18,6 +18,7 @@ import {
   verifyEmailSchema,
 } from '../validations/auth.js'
 import {
+  sendCompanyRegistrationNotifyEmail,
   sendPasswordResetOtpEmail,
   sendRegistrationEmails,
   sendResendOtpEmail,
@@ -104,9 +105,11 @@ export async function register(req, res, next) {
 
     const hadExistingUnverified = Boolean(existing)
     let user
+    let company
+    let isNewCompany = false
 
     await sequelize.transaction(async (t) => {
-      let company = null
+      company = null
       if (existing?.companyId) {
         company = await Company.findByPk(existing.companyId, { transaction: t })
       }
@@ -115,6 +118,7 @@ export async function register(req, res, next) {
         await company.reload({ transaction: t })
       } else {
         company = await Company.create({ name: companyName }, { transaction: t })
+        isNewCompany = true
       }
 
       await ensureCompanyWorkspace(company, { transaction: t })
@@ -167,6 +171,13 @@ export async function register(req, res, next) {
       })
     } catch (mailErr) {
       return next(mailErr)
+    }
+
+    if (isNewCompany) {
+      sendCompanyRegistrationNotifyEmail({ company, user }).catch((notifyErr) => {
+        // eslint-disable-next-line no-console
+        console.error('[company registration notify]', notifyErr?.message || notifyErr)
+      })
     }
 
     return res.status(hadExistingUnverified ? 200 : 201).json({

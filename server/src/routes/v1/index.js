@@ -43,7 +43,7 @@ import * as notificationSettingsController from '../../controllers/notificationS
 import { handleGmailPubSubPushHttp } from '../../services/gmail/gmailPushService.js'
 import meetingRoutes from '../meetingRoutes.js'
 import transcriptionRoutes from '../transcriptionRoutes.js'
-import aiMeetingRoutes from '../aiMeetingRoutes.js'
+import aiMeetingRoutes from '../AiMeetingRoutes.js'
 
 const router = Router()
 const emailUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 24 * 1024 * 1024, files: 12 } })
@@ -102,10 +102,12 @@ router.post('/auth/refresh', authLimiter, authController.refresh)
 router.post('/auth/forgot-password', authLimiter, authController.forgotPassword)
 router.post('/auth/reset-password', authLimiter, authController.resetPassword)
 router.post('/auth/logout', requireAuth, authLimiter, authController.logout)
+router.get('/auth/invitations/preview', authLimiter, teamController.previewInvitation)
 router.post('/auth/invitations/accept', authLimiter, teamController.acceptInvitation)
 router.post('/auth/sso/google', authLimiter, teamController.googleSsoPlaceholder)
 router.get('/auth/me', requireAuth, apiLimiter, authController.me)
 router.patch('/company/me', requireAuth, apiLimiter, companyController.patchMyCompany)
+router.post('/company/me/provision-workspace', requireAuth, apiLimiter, companyController.provisionMyWorkspace)
 
 router.get(
   '/settings/notification-emails',
@@ -416,6 +418,7 @@ router.patch('/leads/assignment-rules/:id', requireAuth, apiLimiter, requireComp
 router.delete('/leads/assignment-rules/:id', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'admin'), leadsController.deleteAssignmentRule)
 router.get('/leads/custom-fields', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'admin'), leadsController.listCustomFields)
 router.post('/leads/custom-fields', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'admin'), leadsController.createCustomField)
+router.post('/leads/custom-fields/reorder', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'admin'), leadsController.reorderCustomFieldsHandler)
 router.patch('/leads/custom-fields/:id', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'admin'), leadsController.patchCustomField)
 router.delete('/leads/custom-fields/:id', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'admin'), leadsController.deleteCustomField)
 router.post('/leads/import', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'edit'), leadsController.importRows)
@@ -880,6 +883,15 @@ router.patch(
   loadPermissions,
   requirePermission('campaigns', 'edit'),
   campaignsController.patchLeadStage,
+)
+router.patch(
+  '/campaigns/:id/leads/:leadId',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('campaigns', 'edit'),
+  campaignsController.patchCampaignLead,
 )
 router.get(
   '/campaigns/:id',

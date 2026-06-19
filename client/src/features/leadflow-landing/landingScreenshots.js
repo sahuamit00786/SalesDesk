@@ -171,4 +171,4 @@ export const LANDING_SCREENSHOTS = [
   },
 ]
 
-export const HERO_SCREENSHOT = '/landing/pipeline.png'
+export const HERO_SCREENSHOT = '/landing/dashboard.png'

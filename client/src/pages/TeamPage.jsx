@@ -20,7 +20,9 @@ import {
   Users,
   X,
 } from 'lucide-react'
+import { NAV_SECTIONS } from '@/components/layout/navConfig'
 import { COMPANY_USER_ROLE_KIND_ALL_OPTIONS, COMPANY_USER_ROLE_KIND_CREATE_OPTIONS, labelCompanyUserRoleKind } from '@/constants/companyUserRoleKind'
+import { normalizeMenuRoute } from '@/utils/menuAccess'
 import { Modal } from '@/components/ui/Modal'
 import { RightDrawer } from '@/components/ui/RightDrawer'
 import { PhoneField } from '@/components/ui/PhoneField'
@@ -80,6 +82,20 @@ const EMPTY_INVITE_FORM = {
 
 function apiErrorMessage(err) {
   return err?.data?.error?.message ?? err?.error ?? 'Something went wrong'
+}
+
+function formatUkDateTime(value) {
+  if (!value) return null
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return null
+  return d.toLocaleString('en-GB', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
 }
 
 function normalizeProfileDraft(draft) {
@@ -323,18 +339,17 @@ export function TeamPage() {
             </div>
             <div>
               <p className="font-medium text-ink">{u.name || 'Unnamed user'}</p>
-              <p className="text-xs text-ink-faint">{u.email}</p>
+              <p className="text-[10px] leading-snug text-ink-faint">{u.email}</p>
             </div>
           </div>
         ),
       },
       { field: 'jobTitle', headerName: 'Job title', width: 120, valueGetter: (_v, u) => u.jobTitle || '—' },
-      { field: 'department', headerName: 'Department', width: 120, valueGetter: (_v, u) => u.department || '—' },
       {
         field: 'lastLoginAt',
         headerName: 'Last login',
         width: 150,
-        valueGetter: (_v, u) => (u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : 'Never'),
+        valueGetter: (_v, u) => formatUkDateTime(u.lastLoginAt) || 'Never',
       },
       {
         field: 'role',
@@ -349,16 +364,6 @@ export function TeamPage() {
               </span>
             ) : null} */}
           </div>
-        ),
-      },
-      {
-        field: 'workspaces',
-        headerName: 'Workspaces',
-        flex: 1,
-        minWidth: 120,
-        sortable: false,
-        renderCell: ({ row: u }) => (
-          <WorkspacePills selectedIds={(u.workspaces || []).map((w) => w.id)} all={workspaces} />
         ),
       },
       {
@@ -430,7 +435,7 @@ export function TeamPage() {
         ),
       },
     ],
-    [workspaces, userBusy],
+    [userBusy],
   )
 
   const inviteColumns = useMemo(
@@ -655,15 +660,38 @@ export function TeamPage() {
     [deletingRole, roles],
   )
 
+  const sidebarMenus = useMemo(() => {
+    const menuByRoute = new Map()
+    for (const m of menuItems) {
+      const route = normalizeMenuRoute(m.route)
+      if (!route) continue
+      const navRoute = route === '/' ? '/dashboard' : route
+      menuByRoute.set(navRoute, m)
+    }
+
+    const items = []
+    for (const section of NAV_SECTIONS) {
+      for (const navItem of section.items) {
+        const apiMenu = menuByRoute.get(navItem.to)
+        if (!apiMenu) continue
+        items.push({ ...apiMenu, label: navItem.label, sectionLabel: section.label })
+      }
+    }
+    return items
+  }, [menuItems])
+
   const menusBySection = useMemo(() => {
     const groups = new Map()
-    for (const m of menuItems.filter((x) => x.route)) {
-      const section = (m.key || '').split('.')[0] || 'other'
-      if (!groups.has(section)) groups.set(section, [])
-      groups.get(section).push(m)
+    for (const m of sidebarMenus) {
+      if (!groups.has(m.sectionLabel)) groups.set(m.sectionLabel, [])
+      groups.get(m.sectionLabel).push(m)
     }
-    return [...groups.entries()]
-  }, [menuItems])
+    return NAV_SECTIONS.map((section) => [section.label, groups.get(section.label) || []]).filter(
+      ([, sectionMenus]) => sectionMenus.length > 0,
+    )
+  }, [sidebarMenus])
+
+  const routableMenus = sidebarMenus
 
   function permissionFor(menuId) {
     return roleForm.menuPermissions.find((m) => m.menuId === menuId) || {
@@ -713,13 +741,49 @@ export function TeamPage() {
     })
   }
 
+  function selectAllMenuPermissions() {
+    setRoleForm((f) => ({
+      ...f,
+      menuPermissions: routableMenus.map((m) => ({
+        menuId: m.id,
+        canView: true,
+        canEdit: true,
+        canUpdate: true,
+        canDelete: true,
+      })),
+    }))
+  }
+
+  function clearAllMenuPermissions() {
+    setRoleForm((f) => ({ ...f, menuPermissions: [] }))
+  }
+
   function renderMenuPermissionPicker() {
+    const allMenusFullAccess =
+      routableMenus.length > 0 &&
+      routableMenus.every((m) => {
+        const p = permissionFor(m.id)
+        return p.canView && p.canEdit && p.canUpdate && p.canDelete
+      })
+
     return (
-      <div className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-surface-border bg-white p-2">
+      <div className="mt-2 flex min-h-[400px] flex-1 flex-col overflow-hidden rounded-xl border border-surface-border bg-white p-2">
+        <div className="mb-2 flex shrink-0 items-center justify-between gap-2 border-b border-surface-border px-1 pb-2">
+          <label className="flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              checked={allMenusFullAccess}
+              onChange={(e) => (e.target.checked ? selectAllMenuPermissions() : clearAllMenuPermissions())}
+              className="h-4 w-4 rounded border-surface-border text-brand-600 focus:ring-brand-500/30"
+            />
+            <span className="text-xs font-semibold text-ink">Select all</span>
+          </label>
+          <span className="text-[10px] text-ink-faint">View, Edit, Update & Delete on every menu</span>
+        </div>
         <div className="scrollbar-subtle min-h-0 flex-1 overflow-y-auto">
-          {menusBySection.map(([section, sectionMenus]) => (
-            <div key={section} className="mb-3 last:mb-0">
-              <p className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">{section}</p>
+          {menusBySection.map(([sectionLabel, sectionMenus]) => (
+            <div key={sectionLabel} className="mb-3 last:mb-0">
+              <p className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">{sectionLabel}</p>
               {sectionMenus.map((m) => {
                 const p = permissionFor(m.id)
                 const menuEnabled = p.canView || p.canEdit || p.canUpdate || p.canDelete
@@ -783,6 +847,7 @@ export function TeamPage() {
     try {
       const prof = normalizeProfileDraft(inviteForm)
       await createInvitation({
+        name: inviteForm.name.trim() || undefined,
         email: inviteForm.email.trim(),
         companyRoleId: inviteForm.companyRoleId,
         workspaceIds: wsIds,
@@ -920,7 +985,7 @@ export function TeamPage() {
     <PageShell fullWidth>
       <PageStack>
         <PageFilterBar>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
             {[
               { id: 'members', label: 'Members' },
               { id: 'invitations', label: 'Invitations' },
@@ -936,7 +1001,7 @@ export function TeamPage() {
               </PageTabButton>
             ))}
           </div>
-          <div className="flex gap-2">
+          <div className="ml-auto flex shrink-0 gap-2">
             <button
               type="button"
               onClick={() => {

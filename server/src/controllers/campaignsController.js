@@ -7,6 +7,7 @@ import {
   collectCampaignRecipients,
   notifyCampaignLeadsBatch,
 } from '../services/notification/teamNotificationService.js'
+import { normalizeCurrencyCode } from '../utils/currency.js'
 
 export const DEFAULT_CAMPAIGN_STAGES = [
   { key: 'new', label: 'New', sortOrder: 0 },
@@ -27,6 +28,7 @@ const createSchema = Joi.object({
   skipUpdatingLeadAssignedTo: Joi.boolean().default(false),
   /** Optional campaign amount goal (displayed on campaign detail KPIs). */
   leadTarget: Joi.number().min(0).precision(2).max(999999999999.99).allow(null).optional(),
+  currency: Joi.string().trim().length(3).pattern(/^[A-Za-z]{3}$/).uppercase().default('USD'),
   endDate: Joi.date().iso().allow(null, '').optional(),
 }).required()
 
@@ -181,6 +183,7 @@ export async function create(req, res, next) {
           name: value.name.trim(),
           description: value.description ? String(value.description).trim() : null,
           leadTarget: value.leadTarget != null ? value.leadTarget : null,
+          currency: normalizeCurrencyCode(value.currency),
           endDate: parseOptionalDateOnly(value.endDate),
           stages: DEFAULT_CAMPAIGN_STAGES,
           status: value.status,
@@ -266,7 +269,7 @@ export async function getOne(req, res, next) {
       raw: true,
     })
     const amountAgg = await CampaignLead.findAll({
-      attributes: [[literal('COALESCE(SUM(`lead`.`value`), 0)'), 'totalAmount']],
+      attributes: [[literal('COALESCE(SUM(`CampaignLead`.`amount_received`), 0)'), 'totalAmount']],
       where: detailSalesOnly ? funnelWhere : { campaignId: row.id },
       include: [{ model: Lead, as: 'lead', attributes: [], required: true, where: { isDeleted: false } }],
       raw: true,
@@ -343,6 +346,7 @@ export async function listLeads(req, res, next) {
       return {
         campaignLeadId: p.id,
         stageKey: p.stageKey,
+        amountReceived: p.amountReceived != null ? Number(p.amountReceived) : null,
         campaignAssignee: p.campaignAssignee,
         lead: {
           id: lead.id,
@@ -375,6 +379,7 @@ const patchCampaignSchema = Joi.object({
   name: Joi.string().trim().min(1).max(255).optional(),
   description: Joi.string().trim().allow('', null).max(65535).optional(),
   leadTarget: Joi.number().min(0).precision(2).max(999999999999.99).allow(null).optional(),
+  currency: Joi.string().trim().length(3).pattern(/^[A-Za-z]{3}$/).uppercase().optional(),
   endDate: Joi.date().iso().allow(null, '').optional(),
   status: Joi.string().valid('active', 'inactive', 'draft').optional(),
   teamUserIds: Joi.array().items(Joi.string().uuid()).min(1).optional(),
@@ -385,6 +390,7 @@ const patchCampaignSchema = Joi.object({
     'name',
     'description',
     'leadTarget',
+    'currency',
     'endDate',
     'status',
     'teamUserIds',
@@ -416,6 +422,9 @@ export async function patchCampaign(req, res, next) {
     }
     if (Object.prototype.hasOwnProperty.call(value, 'leadTarget')) {
       nextPatch.leadTarget = value.leadTarget == null ? null : value.leadTarget
+    }
+    if (Object.prototype.hasOwnProperty.call(value, 'currency')) {
+      nextPatch.currency = normalizeCurrencyCode(value.currency)
     }
     if (Object.prototype.hasOwnProperty.call(value, 'endDate')) {
       nextPatch.endDate = parseOptionalDateOnly(value.endDate)
@@ -621,6 +630,45 @@ export async function distributeLeads(req, res, next) {
     })
 
     return res.json({ success: true, data: { distributed: unassigned.length }, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+const patchCampaignLeadSchema = Joi.object({
+  amountReceived: Joi.number().min(0).precision(2).max(999999999999.99).allow(null).optional(),
+}).min(1).required()
+
+export async function patchCampaignLead(req, res, next) {
+  try {
+    const workspaceId = await assertWorkspaceAccess(req, req.headers['x-workspace-id'])
+    const { error, value } = patchCampaignLeadSchema.validate(req.body || {}, { abortEarly: false, stripUnknown: true })
+    if (error) {
+      return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: error.message } })
+    }
+    const campaign = await Campaign.findOne({
+      where: { id: req.params.id, companyId: req.user.companyId, workspaceId },
+    })
+    if (!campaign) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Campaign not found' } })
+    const row = await CampaignLead.findOne({
+      where: { campaignId: campaign.id, leadId: req.params.leadId },
+    })
+    if (!row) {
+      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Lead not in campaign' } })
+    }
+    if (Object.prototype.hasOwnProperty.call(value, 'amountReceived')) {
+      row.amountReceived = value.amountReceived == null ? null : value.amountReceived
+      await row.save()
+    }
+    return res.json({
+      success: true,
+      data: {
+        campaignId: campaign.id,
+        leadId: req.params.leadId,
+        amountReceived: row.amountReceived != null ? Number(row.amountReceived) : null,
+      },
+      meta: {},
+    })
   } catch (e) {
     return next(e)
   }

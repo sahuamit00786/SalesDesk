@@ -13,6 +13,7 @@ const optionalProfilePhotoUrl = Joi.alternatives()
   .optional()
 
 export const createInvitationSchema = Joi.object({
+  name: Joi.string().min(2).max(120).allow('', null).optional(),
   email,
   companyRoleId,
   workspaceIds: Joi.array().items(Joi.string().uuid()).min(1).required(),
@@ -25,6 +26,11 @@ export const createInvitationSchema = Joi.object({
   city: Joi.string().max(120).allow('', null).optional(),
   country: Joi.string().max(120).allow('', null).optional(),
   postalCode: Joi.string().max(32).allow('', null).optional(),
+})
+
+export const previewInvitationSchema = Joi.object({
+  invitationId: Joi.string().uuid().required(),
+  token: Joi.string().min(20).max(512).required(),
 })
 
 export const acceptInvitationSchema = Joi.object({

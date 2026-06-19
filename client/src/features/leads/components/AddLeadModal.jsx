@@ -26,8 +26,11 @@ import { LeadTagsInput } from '@/features/leads/components/LeadTagsInput'
 import { STATUS_OPTIONS } from '@/features/leads/constants'
 import { useCreateLeadSourceMutation, useCreateLeadTagMutation, useGetLeadFormMetaQuery } from '@/features/leads/leadsApi'
 import { DuplicateLeadsTab } from '@/features/leads/components/DuplicateLeadsTab'
+import { CustomFieldsForm, mapCustomFieldValuesFromLead, validateCustomFieldsForm } from '@/features/leads/components/CustomFieldsForm'
 import { mergePartsToE164 } from '@/utils/phoneNumbers'
 import { cn } from '@/utils/cn'
+import { useEffectiveCurrency } from '@/hooks/useEffectiveCurrency'
+import { DEAL_CURRENCY_OPTIONS } from '@/features/deals/dealCurrencies'
 
 const initialForm = {
   contactName: '',
@@ -45,6 +48,7 @@ const initialForm = {
   country: '',
   postalCode: '',
   value: 0,
+  valueCurrency: 'USD',
   sourceId: '',
   status: 'new',
   requirement: '',
@@ -285,12 +289,13 @@ function toEditForm(lead) {
     country: lead.country || parsedNotes.country || '',
     postalCode: lead.postalCode || parsedNotes.postalCode || '',
     value: Number(lead.value || 0),
+    valueCurrency: lead.valueCurrency || lead.value_currency || 'USD',
     sourceId: lead.sourceId || '',
     status: lead.status || 'new',
     requirement: lead.requirement || '',
     tags: Array.isArray(lead.tags) ? lead.tags.map((tag) => tag.name).filter(Boolean) : [],
     assignedUserIds: Array.isArray(lead.assignedUsers) ? lead.assignedUsers.map((user) => user.id) : [],
-    customFields: lead.customFields || {},
+    customFields: mapCustomFieldValuesFromLead(lead),
   }
 }
 
@@ -313,6 +318,7 @@ export function AddLeadModal({
   /** When true, new rows default to Lead `is_opportunity` (pipeline / opportunities views). */
   defaultIsOpportunity = false,
 }) {
+  const effectiveCurrency = useEffectiveCurrency()
   const { data: formMetaData } = useGetLeadFormMetaQuery(undefined, { skip: !open })
   const [createLeadSource, { isLoading: creatingSource }] = useCreateLeadSourceMutation()
   const [createLeadTag] = useCreateLeadTagMutation()
@@ -326,6 +332,7 @@ export function AddLeadModal({
   const opportunityStages = useMemo(() => formMeta.opportunityStages || [], [formMeta.opportunityStages])
   const users = formMeta.users || []
   const availableTags = useMemo(() => formMeta.tags || [], [formMeta.tags])
+  const customFieldDefs = useMemo(() => formMeta.customFields || [], [formMeta.customFields])
   const bulkImportFieldTargets = useMemo(
     () =>
       BULK_IMPORT_FIELD_TARGETS.filter((opt) => {
@@ -355,6 +362,7 @@ export function AddLeadModal({
   const [bulkAssigneeIds, setBulkAssigneeIds] = useState([])
   const [bulkAssigneeDropdownOpen, setBulkAssigneeDropdownOpen] = useState(false)
   const [bulkAssigneeSearch, setBulkAssigneeSearch] = useState('')
+  const [customFieldErrors, setCustomFieldErrors] = useState({})
   const showPipelineFields = asOpportunity || defaultIsOpportunity
   const phoneDefaultCountry = useMemo(() => {
     const c = String(form.country || '')
@@ -424,7 +432,11 @@ export function AddLeadModal({
     setBulkAssigneeIds([])
     setBulkAssigneeDropdownOpen(false)
     setBulkAssigneeSearch('')
-    setForm(toEditForm(initialLead))
+    setForm(
+      initialLead
+        ? toEditForm(initialLead)
+        : { ...initialForm, valueCurrency: effectiveCurrency },
+    )
     const fromLead = Boolean(initialLead?.isOpportunity)
     setAsOpportunity(fromLead || Boolean(defaultIsOpportunity))
     setOpportunityStage(String(initialLead?.opportunityStage || '').trim())
@@ -436,7 +448,7 @@ export function AddLeadModal({
     setImportActiveSheet('')
     bulkPasteSigRef.current = ''
     setBulkImportSourceId('')
-  }, [open, initialLead, defaultIsOpportunity])
+  }, [open, initialLead, defaultIsOpportunity, effectiveCurrency])
 
   useEffect(() => {
     if (!open || activeTab !== 'bulk') return
@@ -478,6 +490,12 @@ export function AddLeadModal({
     if (isSamePhone) {
       return toast.error('Phone and alternate phone cannot be the same')
     }
+    const cfErrors = validateCustomFieldsForm(customFieldDefs, form.customFields)
+    if (Object.keys(cfErrors).length) {
+      setCustomFieldErrors(cfErrors)
+      return toast.error('Please fill in all required custom fields')
+    }
+    setCustomFieldErrors({})
     setBusy(true)
     try {
       const payload = {
@@ -863,14 +881,27 @@ export function AddLeadModal({
           <section className="space-y-3 rounded-2xl border border-surface-border p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Deal & Budget</p>
             <LeadFieldGroup label="Budget">
-              <IconInput
-                wrapperClassName="w-full"
-                icon={CircleDollarSign}
-                placeholder="0"
-                type="number"
-                value={form.value}
-                onChange={(e) => setForm((f) => ({ ...f, value: Number(e.target.value || 0) }))}
-              />
+              <div className="flex gap-2">
+                <select
+                  className="h-10 shrink-0 rounded-xl border border-surface-border bg-white px-2 text-xs font-semibold text-ink"
+                  value={form.valueCurrency || effectiveCurrency}
+                  onChange={(e) => setForm((f) => ({ ...f, valueCurrency: e.target.value }))}
+                >
+                  {DEAL_CURRENCY_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.value}
+                    </option>
+                  ))}
+                </select>
+                <IconInput
+                  wrapperClassName="min-w-0 flex-1"
+                  icon={CircleDollarSign}
+                  placeholder="0"
+                  type="number"
+                  value={form.value}
+                  onChange={(e) => setForm((f) => ({ ...f, value: Number(e.target.value || 0) }))}
+                />
+              </div>
             </LeadFieldGroup>
           </section>
 
@@ -887,6 +918,15 @@ export function AddLeadModal({
               />
             </LeadFieldGroup>
           </section>
+
+          <CustomFieldsForm
+            fields={customFieldDefs}
+            value={form.customFields}
+            errors={customFieldErrors}
+            showErrors={Object.keys(customFieldErrors).length > 0}
+            embedded
+            onChange={(customFields) => setForm((f) => ({ ...f, customFields }))}
+          />
 
           <section className="space-y-3 rounded-2xl border border-surface-border p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Assignment</p>

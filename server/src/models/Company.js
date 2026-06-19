@@ -33,6 +33,12 @@ export const Company = sequelize.define(
       type: DataTypes.STRING(2),
       allowNull: true,
     },
+    baseCurrency: {
+      type: DataTypes.STRING(3),
+      allowNull: false,
+      defaultValue: 'USD',
+      field: 'base_currency',
+    },
     websiteUrl: {
       type: DataTypes.STRING(255),
       allowNull: true,

@@ -20,6 +20,7 @@ import { sendTeamInviteEmail } from '../services/mailService.js'
 import { signAccessToken, signRefreshToken, refreshTokenPayloadForUser } from '../services/tokenService.js'
 import {
   acceptInvitationSchema,
+  previewInvitationSchema,
   createInvitationSchema,
   createCompanyRoleSchema,
   createTeamSchema,
@@ -71,6 +72,9 @@ const INVITE_PROFILE_KEYS = [
 /** Persist only non-empty invite profile hints (stored JSON on Invitation). */
 function buildInvitationProfilePrefill(body) {
   const out = {}
+  if (typeof body.name === 'string' && body.name.trim()) {
+    out.name = body.name.trim()
+  }
   for (const k of INVITE_PROFILE_KEYS) {
     if (body[k] === undefined) continue
     const raw = body[k]
@@ -606,7 +610,7 @@ export async function createInvitation(req, res, next) {
     try {
       mail = await sendTeamInviteEmail({
         to: normEmail,
-        name: normEmail.split('@')[0],
+        name: profilePrefill?.name || value.name?.trim() || normEmail.split('@')[0],
         companyName: company.name,
         inviteUrl,
         roleName: selectedCompanyRole.name,
@@ -650,6 +654,73 @@ export async function cancelInvitation(req, res, next) {
     }
     await inv.destroy()
     return res.json({ success: true, data: { ok: true }, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function previewInvitation(req, res, next) {
+  try {
+    const { error, value } = previewInvitationSchema.validate(req.query, { abortEarly: false, stripUnknown: true })
+    if (error) {
+      const err = new Error('Validation failed')
+      err.status = 400
+      err.code = 'VALIDATION'
+      err.publicMessage = joiPublicMessages(error)
+      throw err
+    }
+
+    const inv = await Invitation.findOne({
+      where: { id: value.invitationId, acceptedAt: null },
+      include: [
+        { model: Company, as: 'company', attributes: ['id', 'name'] },
+        { model: CompanyRole, as: 'companyRole', attributes: ['id', 'name'] },
+      ],
+    })
+    if (!inv || new Date(inv.expiresAt) < new Date()) {
+      const err = new Error('Invalid invitation')
+      err.status = 400
+      err.code = 'INVITE_INVALID'
+      err.publicMessage = 'This invitation is invalid or has expired'
+      throw err
+    }
+
+    const ok = await verifyInviteToken(value.token, inv.tokenHash)
+    if (!ok) {
+      const err = new Error('Invalid invitation')
+      err.status = 400
+      err.code = 'INVITE_INVALID'
+      err.publicMessage = 'This invitation is invalid or has expired'
+      throw err
+    }
+
+    const workspaceIds = uniqueIds(inv.invitedWorkspaceIds)
+    const workspaces = workspaceIds.length
+      ? await Workspace.findAll({
+          where: { companyId: inv.companyId, id: { [Op.in]: workspaceIds } },
+          attributes: ['id', 'name'],
+        })
+      : []
+
+    const prefill = inv.profilePrefill && typeof inv.profilePrefill === 'object' ? inv.profilePrefill : {}
+    const inviteeName =
+      typeof prefill.name === 'string' && prefill.name.trim()
+        ? prefill.name.trim()
+        : inv.email.split('@')[0] || ''
+
+    return res.json({
+      success: true,
+      data: {
+        email: inv.email,
+        name: inviteeName,
+        nameFromInvite: Boolean(prefill.name),
+        companyName: inv.company?.name ?? null,
+        roleName: inv.companyRole?.name ?? null,
+        workspaceNames: workspaces.map((w) => w.name).filter(Boolean),
+        expiresAt: inv.expiresAt?.toISOString() ?? null,
+      },
+      meta: {},
+    })
   } catch (e) {
     return next(e)
   }

@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
-import { ChevronDown, ChevronUp, GitBranch, Pencil, Plus, Tag, Trash2, Waypoints } from 'lucide-react'
+import { FormInput, GitBranch, Pencil, Plus, Tag, Trash2, Waypoints } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
 import { PageFilterBar } from '@/components/layout/PageFilterBar'
 import { PageContentPanel } from '@/components/layout/PageContentPanel'
 import { PageStack } from '@/components/layout/PageStack'
-import { DataGrid } from '@/components/shared/DataGrid'
+import { ReorderableSetupTable } from '@/components/shared/ReorderableSetupTable'
 import { Modal } from '@/components/ui/Modal'
 import {
   useCreateLeadSourceMutation,
@@ -19,6 +19,11 @@ import {
   useDeleteOpportunityStageMutation,
   useDeleteOpportunityStatusMutation,
   useGetLeadSetupQuery,
+  useGetCustomFieldsQuery,
+  useCreateCustomFieldMutation,
+  usePatchCustomFieldMutation,
+  useDeleteCustomFieldMutation,
+  useReorderCustomFieldsMutation,
   useReorderDealStatusesMutation,
   useReorderOpportunityStagesMutation,
   useReorderOpportunityStatusesMutation,
@@ -28,11 +33,14 @@ import {
   useUpdateOpportunityStageMutation,
   useUpdateOpportunityStatusMutation,
 } from '@/features/leads/leadsApi'
+import { CustomFieldEditorDrawer } from '@/features/leads/components/CustomFieldEditorDrawer'
+import { CustomFieldsSetupTable } from '@/features/leads/components/CustomFieldsSetupTable'
 import { cn } from '@/utils/cn'
 
 const TABS = [
   { id: 'source', label: 'Source', icon: Waypoints },
   { id: 'tags', label: 'Tags', icon: Tag },
+  { id: 'custom-fields', label: 'Custom fields', icon: FormInput },
   { id: 'opportunity-stages', label: 'Lead status (pipeline)', icon: GitBranch },
   { id: 'opportunity-statuses', label: 'Opportunity status', icon: GitBranch },
   { id: 'deal-statuses', label: 'Deal status name', icon: GitBranch },
@@ -74,35 +82,6 @@ function YesNoPill({ yes }) {
   )
 }
 
-const PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
-
-function MoveRowButtons({ row, rows, onReorder, disabled }) {
-  const idx = rows.findIndex((r) => r.id === row.id)
-  if (idx < 0) return null
-  return (
-    <div className="inline-flex flex-col gap-0.5" onClick={(e) => e.stopPropagation()}>
-      <button
-        type="button"
-        disabled={disabled || idx === 0}
-        onClick={() => onReorder(row.id, rows[idx - 1].id)}
-        className="inline-flex h-6 w-6 items-center justify-center rounded border border-surface-border text-ink-muted hover:bg-brand-50 disabled:opacity-30"
-        aria-label="Move up"
-      >
-        <ChevronUp className="h-3.5 w-3.5" />
-      </button>
-      <button
-        type="button"
-        disabled={disabled || idx >= rows.length - 1}
-        onClick={() => onReorder(row.id, rows[idx + 1].id)}
-        className="inline-flex h-6 w-6 items-center justify-center rounded border border-surface-border text-ink-muted hover:bg-brand-50 disabled:opacity-30"
-        aria-label="Move down"
-      >
-        <ChevronDown className="h-3.5 w-3.5" />
-      </button>
-    </div>
-  )
-}
-
 export function LeadConfigurationPage() {
   const { data, isLoading } = useGetLeadSetupQuery()
   const [createSource, { isLoading: creatingSource }] = useCreateLeadSourceMutation()
@@ -123,19 +102,29 @@ export function LeadConfigurationPage() {
   const [updateDealStatus, { isLoading: updatingDealStatus }] = useUpdateDealStatusMutation()
   const [deleteDealStatus] = useDeleteDealStatusMutation()
   const [reorderDealStatuses, { isLoading: reorderingDealStatuses }] = useReorderDealStatusesMutation()
+  const { data: customFieldsData, isLoading: loadingCustomFields } = useGetCustomFieldsQuery(undefined, {
+    skip: false,
+  })
+  const [createCustomField, { isLoading: creatingCustomField }] = useCreateCustomFieldMutation()
+  const [patchCustomField, { isLoading: patchingCustomField }] = usePatchCustomFieldMutation()
+  const [deleteCustomField] = useDeleteCustomFieldMutation()
+  const [reorderCustomFields, { isLoading: reorderingCustomFields }] = useReorderCustomFieldsMutation()
 
   const [activeTab, setActiveTab] = useState('source')
   const [editor, setEditor] = useState({ open: false, mode: 'create', type: 'source', id: null, name: '', color: '#3b73f5' })
+  const [customFieldEditor, setCustomFieldEditor] = useState({ open: false, mode: 'create', row: null })
   const [deleteDialog, setDeleteDialog] = useState({ open: false, type: '', id: null, name: '' })
 
   const setup = useMemo(
     () => data?.data || { sources: [], tags: [], opportunityStages: [], opportunityStatuses: [], dealStatuses: [] },
     [data],
   )
+  const customFieldRows = useMemo(() => customFieldsData?.data || [], [customFieldsData])
 
   function getEntityLabel(type) {
     if (type === 'source') return 'Source'
     if (type === 'tags') return 'Tag'
+    if (type === 'customFields') return 'Custom field'
     if (type === 'opportunityStages') return 'Lead status'
     if (type === 'opportunityStatuses') return 'Opportunity status'
     if (type === 'dealStatuses') return 'Deal status'
@@ -145,6 +134,7 @@ export function LeadConfigurationPage() {
   function getActiveTabType() {
     if (activeTab === 'source') return 'source'
     if (activeTab === 'tags') return 'tags'
+    if (activeTab === 'custom-fields') return 'customFields'
     if (activeTab === 'opportunity-stages') return 'opportunityStages'
     if (activeTab === 'opportunity-statuses') return 'opportunityStatuses'
     if (activeTab === 'deal-statuses') return 'dealStatuses'
@@ -152,8 +142,31 @@ export function LeadConfigurationPage() {
   }
 
   function openCreateModal() {
+    if (activeTab === 'custom-fields') {
+      setCustomFieldEditor({ open: true, mode: 'create', row: null })
+      return
+    }
     const type = getActiveTabType()
     setEditor({ open: true, mode: 'create', type, id: null, name: '', color: '#3b73f5' })
+  }
+
+  function openCustomFieldEdit(row) {
+    setCustomFieldEditor({ open: true, mode: 'edit', row })
+  }
+
+  async function onSaveCustomField(payload) {
+    try {
+      if (customFieldEditor.mode === 'edit' && customFieldEditor.row?.id) {
+        await patchCustomField({ id: customFieldEditor.row.id, ...payload }).unwrap()
+        toast.success('Custom field updated')
+      } else {
+        await createCustomField(payload).unwrap()
+        toast.success('Custom field created')
+      }
+      setCustomFieldEditor({ open: false, mode: 'create', row: null })
+    } catch (err) {
+      toast.error(apiErrorMessage(err))
+    }
   }
 
   function openEditModal(type, row) {
@@ -220,7 +233,7 @@ export function LeadConfigurationPage() {
   }
 
   function openDeleteDialog(type, row) {
-    setDeleteDialog({ open: true, type, id: row.id, name: row.name || '' })
+    setDeleteDialog({ open: true, type, id: row.id, name: row.name || row.label || '' })
   }
 
   async function onConfirmDelete() {
@@ -244,6 +257,10 @@ export function LeadConfigurationPage() {
       if (deleteDialog.type === 'dealStatuses') {
         await deleteDealStatus(deleteDialog.id).unwrap()
         toast.success('Deal status deleted')
+      }
+      if (deleteDialog.type === 'customFields') {
+        await deleteCustomField(deleteDialog.id).unwrap()
+        toast.success('Custom field deleted')
       }
       setDeleteDialog({ open: false, type: '', id: null, name: '' })
     } catch (err) {
@@ -272,35 +289,19 @@ export function LeadConfigurationPage() {
     }
   }
 
-  async function onReorderDealStatuses(sourceId, targetId) {
-    const rows = Array.isArray(setup.dealStatuses) ? setup.dealStatuses : []
-    const sourceIndex = rows.findIndex((r) => r.id === sourceId)
-    const targetIndex = rows.findIndex((r) => r.id === targetId)
-    if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return
-    const next = [...rows]
-    const [moved] = next.splice(sourceIndex, 1)
-    next.splice(targetIndex, 0, moved)
+  async function persistReorder(mutation, ids) {
+    if (!Array.isArray(ids) || !ids.length) return
     try {
-      await reorderDealStatuses({ ids: next.map((r) => r.id) }).unwrap()
+      await mutation({ ids }).unwrap()
     } catch (err) {
       toast.error(apiErrorMessage(err))
     }
   }
 
-  async function onReorderOpportunityStages(sourceId, targetId) {
-    const rows = Array.isArray(setup.opportunityStages) ? setup.opportunityStages : []
-    const sourceIndex = rows.findIndex((r) => r.id === sourceId)
-    const targetIndex = rows.findIndex((r) => r.id === targetId)
-    if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return
-    const next = [...rows]
-    const [moved] = next.splice(sourceIndex, 1)
-    next.splice(targetIndex, 0, moved)
-    try {
-      await reorderOpportunityStages({ ids: next.map((r) => r.id) }).unwrap()
-    } catch (err) {
-      toast.error(apiErrorMessage(err))
-    }
-  }
+  const onReorderDealStatusesByIds = (ids) => persistReorder(reorderDealStatuses, ids)
+  const onReorderOpportunityStagesByIds = (ids) => persistReorder(reorderOpportunityStages, ids)
+  const onReorderOpportunityStatusesByIds = (ids) => persistReorder(reorderOpportunityStatuses, ids)
+  const onReorderCustomFieldsByIds = (ids) => persistReorder(reorderCustomFields, ids)
 
   async function onSetOpportunityDealStatus(row, isDealStatus) {
     try {
@@ -313,21 +314,6 @@ export function LeadConfigurationPage() {
   const opportunityRows = setup.opportunityStages || []
   const opportunityStatusRows = setup.opportunityStatuses || []
   const dealStatusRows = setup.dealStatuses || []
-
-  async function onReorderOpportunityStatuses(sourceId, targetId) {
-    const rows = Array.isArray(setup.opportunityStatuses) ? setup.opportunityStatuses : []
-    const sourceIndex = rows.findIndex((r) => r.id === sourceId)
-    const targetIndex = rows.findIndex((r) => r.id === targetId)
-    if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return
-    const next = [...rows]
-    const [moved] = next.splice(sourceIndex, 1)
-    next.splice(targetIndex, 0, moved)
-    try {
-      await reorderOpportunityStatuses({ ids: next.map((r) => r.id) }).unwrap()
-    } catch (err) {
-      toast.error(apiErrorMessage(err))
-    }
-  }
 
   function SetupRowActions({ row, type }) {
     return (
@@ -354,34 +340,34 @@ export function LeadConfigurationPage() {
     )
   }
 
-  const activeTable = useMemo(() => {
-    const actionsCol = {
-      field: 'actions',
-      headerName: 'Actions',
-      width: 92,
-      minWidth: 92,
-      maxWidth: 92,
-      sortable: false,
-      renderCell: ({ row }) => <SetupRowActions row={row} type={getActiveTabType()} />,
-    }
+  const actionsColumn = (type) => ({
+    id: 'actions',
+    header: 'Actions',
+    width: 92,
+    headerClassName: 'text-right',
+    className: 'text-right',
+    cell: (row) => <SetupRowActions row={row} type={type} />,
+  })
 
+  const activeTable = useMemo(() => {
     switch (activeTab) {
       case 'tags':
         return {
-          data: setup.tags,
+          rows: setup.tags,
+          sortable: false,
+          loading: isLoading,
+          disabled: false,
           columns: [
             {
-              field: 'name',
-              headerName: 'Tag',
-              flex: 1,
-              minWidth: 160,
-              renderCell: ({ row }) => <span className="font-medium text-ink">{row.name}</span>,
+              id: 'name',
+              header: 'Tag',
+              cell: (row) => <span className="font-medium text-ink">{row.name}</span>,
             },
             {
-              field: 'color',
-              headerName: 'Color',
+              id: 'color',
+              header: 'Color',
               width: 140,
-              renderCell: ({ row }) => (
+              cell: (row) => (
                 <span className="inline-flex items-center gap-2 text-xs text-ink-muted">
                   <span
                     className="h-4 w-4 shrink-0 rounded-full border border-surface-border shadow-sm"
@@ -392,55 +378,41 @@ export function LeadConfigurationPage() {
               ),
             },
             {
-              field: 'createdAt',
-              headerName: 'Created',
+              id: 'createdAt',
+              header: 'Created',
               width: 120,
-              valueGetter: (_v, row) => formatDate(row.createdAt),
+              cell: (row) => formatDate(row.createdAt),
             },
-            actionsCol,
+            actionsColumn('tags'),
           ],
           emptyTitle: 'No tags found',
           emptyDescription: 'Add a tag to organize leads.',
         }
       case 'opportunity-stages':
         return {
-          data: opportunityRows,
+          rows: opportunityRows,
+          sortable: true,
+          loading: isLoading,
+          disabled: updatingOppStage || reorderingOppStages,
+          onReorder: onReorderOpportunityStagesByIds,
+          getDragLabel: (row) => `Drag to reorder ${formatStatusName(row.name)}`,
           columns: [
             {
-              field: 'order',
-              headerName: 'Order',
-              width: 72,
-              sortable: false,
-              renderCell: ({ row }) => (
-                <MoveRowButtons
-                  row={row}
-                  rows={opportunityRows}
-                  onReorder={onReorderOpportunityStages}
-                  disabled={updatingOppStage || reorderingOppStages}
-                />
-              ),
+              id: 'name',
+              header: 'Stage',
+              cell: (row) => <span className="font-medium text-ink">{formatStatusName(row.name)}</span>,
             },
             {
-              field: 'name',
-              headerName: 'Stage',
-              flex: 1,
-              minWidth: 180,
-              renderCell: ({ row }) => (
-                <span className="font-medium text-ink">{formatStatusName(row.name)}</span>
-              ),
-            },
-            {
-              field: 'isDefault',
-              headerName: 'Initial',
+              id: 'isDefault',
+              header: 'Initial',
               width: 88,
-              renderCell: ({ row }) => <YesNoPill yes={!!row.isDefault} />,
+              cell: (row) => <YesNoPill yes={!!row.isDefault} />,
             },
             {
-              field: 'isDealStatus',
-              headerName: 'Deal status',
+              id: 'isDealStatus',
+              header: 'Deal status',
               width: 108,
-              sortable: false,
-              renderCell: ({ row }) => (
+              cell: (row) => (
                 <div className="flex justify-center">
                   <input
                     type="checkbox"
@@ -455,99 +427,72 @@ export function LeadConfigurationPage() {
               ),
             },
             {
-              field: 'createdAt',
-              headerName: 'Created',
+              id: 'createdAt',
+              header: 'Created',
               width: 120,
-              valueGetter: (_v, row) => formatDate(row.createdAt),
+              cell: (row) => formatDate(row.createdAt),
             },
-            actionsCol,
+            actionsColumn('opportunityStages'),
           ],
           emptyTitle: 'No lead statuses found',
           emptyDescription: 'Add pipeline stages for opportunities.',
         }
       case 'opportunity-statuses':
         return {
-          data: opportunityStatusRows,
+          rows: opportunityStatusRows,
+          sortable: true,
+          loading: isLoading,
+          disabled: updatingOppStatus || reorderingOppStatuses,
+          onReorder: onReorderOpportunityStatusesByIds,
+          getDragLabel: (row) => `Drag to reorder ${formatStatusName(row.name)}`,
           columns: [
             {
-              field: 'order',
-              headerName: 'Order',
-              width: 72,
-              sortable: false,
-              renderCell: ({ row }) => (
-                <MoveRowButtons
-                  row={row}
-                  rows={opportunityStatusRows}
-                  onReorder={onReorderOpportunityStatuses}
-                  disabled={updatingOppStatus || reorderingOppStatuses}
-                />
-              ),
+              id: 'name',
+              header: 'Status name',
+              cell: (row) => <span className="font-medium text-ink">{formatStatusName(row.name)}</span>,
             },
             {
-              field: 'name',
-              headerName: 'Status name',
-              flex: 1,
-              minWidth: 180,
-              renderCell: ({ row }) => (
-                <span className="font-medium text-ink">{formatStatusName(row.name)}</span>
-              ),
-            },
-            {
-              field: 'isInitial',
-              headerName: 'Initial',
+              id: 'isInitial',
+              header: 'Initial',
               width: 88,
-              renderCell: ({ row }) => <YesNoPill yes={!!row.isInitial} />,
+              cell: (row) => <YesNoPill yes={!!row.isInitial} />,
             },
             {
-              field: 'createdAt',
-              headerName: 'Created',
+              id: 'createdAt',
+              header: 'Created',
               width: 120,
-              valueGetter: (_v, row) => formatDate(row.createdAt),
+              cell: (row) => formatDate(row.createdAt),
             },
-            actionsCol,
+            actionsColumn('opportunityStatuses'),
           ],
           emptyTitle: 'No opportunity statuses found',
           emptyDescription: 'Add statuses for your opportunity pipeline.',
         }
       case 'deal-statuses':
         return {
-          data: dealStatusRows,
+          rows: dealStatusRows,
+          sortable: true,
+          loading: isLoading,
+          disabled: updatingDealStatus || reorderingDealStatuses,
+          onReorder: onReorderDealStatusesByIds,
+          getDragLabel: (row) => `Drag to reorder ${formatStatusName(row.name)}`,
           columns: [
             {
-              field: 'order',
-              headerName: 'Order',
-              width: 72,
-              sortable: false,
-              renderCell: ({ row }) => (
-                <MoveRowButtons
-                  row={row}
-                  rows={dealStatusRows}
-                  onReorder={onReorderDealStatuses}
-                  disabled={updatingDealStatus || reorderingDealStatuses}
-                />
-              ),
+              id: 'name',
+              header: 'Status name',
+              cell: (row) => <span className="font-medium text-ink">{formatStatusName(row.name)}</span>,
             },
             {
-              field: 'name',
-              headerName: 'Status name',
-              flex: 1,
-              minWidth: 180,
-              renderCell: ({ row }) => (
-                <span className="font-medium text-ink">{formatStatusName(row.name)}</span>
-              ),
-            },
-            {
-              field: 'isInitial',
-              headerName: 'Initial',
+              id: 'isInitial',
+              header: 'Initial',
               width: 88,
-              renderCell: ({ row }) => <YesNoPill yes={!!row.isInitial} />,
+              cell: (row) => <YesNoPill yes={!!row.isInitial} />,
             },
             {
-              field: 'isDealCompleteStatus',
-              headerName: 'Deal complete',
+              id: 'isDealCompleteStatus',
+              header: 'Deal complete',
               width: 120,
-              sortable: false,
-              renderCell: ({ row }) => (
+              cell: (row) => (
                 <div className="flex justify-center">
                   <input
                     type="checkbox"
@@ -564,12 +509,12 @@ export function LeadConfigurationPage() {
               ),
             },
             {
-              field: 'createdAt',
-              headerName: 'Created',
+              id: 'createdAt',
+              header: 'Created',
               width: 120,
-              valueGetter: (_v, row) => formatDate(row.createdAt),
+              cell: (row) => formatDate(row.createdAt),
             },
-            actionsCol,
+            actionsColumn('dealStatuses'),
           ],
           emptyTitle: 'No deal statuses found',
           emptyDescription: 'Add deal status names for your pipeline.',
@@ -577,22 +522,23 @@ export function LeadConfigurationPage() {
       case 'source':
       default:
         return {
-          data: setup.sources,
+          rows: setup.sources,
+          sortable: false,
+          loading: isLoading,
+          disabled: false,
           columns: [
             {
-              field: 'name',
-              headerName: 'Source',
-              flex: 1,
-              minWidth: 200,
-              renderCell: ({ row }) => <span className="font-medium text-ink">{row.name}</span>,
+              id: 'name',
+              header: 'Source',
+              cell: (row) => <span className="font-medium text-ink">{row.name}</span>,
             },
             {
-              field: 'createdAt',
-              headerName: 'Created',
+              id: 'createdAt',
+              header: 'Created',
               width: 120,
-              valueGetter: (_v, row) => formatDate(row.createdAt),
+              cell: (row) => formatDate(row.createdAt),
             },
-            actionsCol,
+            actionsColumn('source'),
           ],
           emptyTitle: 'No sources found',
           emptyDescription: 'Add lead sources such as Web Form or Referral.',
@@ -605,6 +551,7 @@ export function LeadConfigurationPage() {
     opportunityRows,
     opportunityStatusRows,
     dealStatusRows,
+    isLoading,
     updatingOppStage,
     reorderingOppStages,
     updatingOppStatus,
@@ -650,29 +597,45 @@ export function LeadConfigurationPage() {
         </PageFilterBar>
 
         <PageContentPanel flush>
-          <DataGrid
-            key={activeTab}
-            gridColumns
-            columns={activeTable.columns}
-            data={activeTable.data}
-            loading={isLoading}
-            searchable={false}
-            showColumnToggle={false}
-            showExportCsv={false}
-            compact
-            defaultPageSize={20}
-            pageSizeOptions={PAGE_SIZE_OPTIONS}
-            getRowId={(row) => row.id}
-            emptyTitle={activeTable.emptyTitle}
-            emptyDescription={activeTable.emptyDescription}
-            maxHeightClass="max-h-[min(65vh,640px)]"
-            className="rounded-none border-0 shadow-none"
-          />
+          {activeTab === 'custom-fields' ? (
+            <CustomFieldsSetupTable
+              rows={customFieldRows}
+              loading={loadingCustomFields}
+              disabled={patchingCustomField || reorderingCustomFields}
+              onEdit={openCustomFieldEdit}
+              onDelete={(row) => openDeleteDialog('customFields', row)}
+              onReorder={onReorderCustomFieldsByIds}
+              className="rounded-none border-0 shadow-none"
+            />
+          ) : (
+            <ReorderableSetupTable
+              key={activeTab}
+              rows={activeTable.rows}
+              columns={activeTable.columns}
+              loading={activeTable.loading}
+              disabled={activeTable.disabled}
+              sortable={activeTable.sortable}
+              onReorder={activeTable.onReorder}
+              getDragLabel={activeTable.getDragLabel}
+              emptyTitle={activeTable.emptyTitle}
+              emptyDescription={activeTable.emptyDescription}
+              className="rounded-none border-0 shadow-none"
+            />
+          )}
         </PageContentPanel>
       </PageStack>
 
+      <CustomFieldEditorDrawer
+        open={customFieldEditor.open}
+        mode={customFieldEditor.mode}
+        initial={customFieldEditor.row}
+        saving={creatingCustomField || patchingCustomField}
+        onClose={() => setCustomFieldEditor({ open: false, mode: 'create', row: null })}
+        onSave={onSaveCustomField}
+      />
+
       <Modal
-        open={editor.open}
+        open={editor.open && activeTab !== 'custom-fields'}
         onClose={closeModal}
         title={`${editor.mode === 'edit' ? 'Edit' : 'Add'} ${getEntityLabel(editor.type)}`}
         footer={

@@ -1,5 +1,9 @@
 import { Workspace } from '../models/index.js'
 import { ensureLibrarySalesDocTemplates } from './defaultSalesDocTemplates.js'
+import {
+  DEFAULT_WORKSPACE_SIDEBAR_TEXT_COLOR,
+  DEFAULT_WORKSPACE_THEME_COLOR,
+} from '../constants/workspaceDefaults.js'
 
 const SUFFIX = ' workspace'
 const MAX_LEN = 240
@@ -32,9 +36,11 @@ export async function ensureCompanyWorkspace(company, opts = {}) {
   })
 
   if (existing) {
-    if (existing.name !== desiredName) {
-      await existing.update({ name: desiredName }, { transaction })
-    }
+    const patch = {}
+    if (existing.name !== desiredName) patch.name = desiredName
+    if (!existing.themeColor) patch.themeColor = DEFAULT_WORKSPACE_THEME_COLOR
+    if (!existing.sidebarTextColor) patch.sidebarTextColor = DEFAULT_WORKSPACE_SIDEBAR_TEXT_COLOR
+    if (Object.keys(patch).length) await existing.update(patch, { transaction })
     return existing
   }
 
@@ -42,6 +48,9 @@ export async function ensureCompanyWorkspace(company, opts = {}) {
     {
       companyId: company.id,
       name: desiredName,
+      defaultCurrency: company.baseCurrency ?? 'USD',
+      themeColor: DEFAULT_WORKSPACE_THEME_COLOR,
+      sidebarTextColor: DEFAULT_WORKSPACE_SIDEBAR_TEXT_COLOR,
     },
     { transaction },
   )

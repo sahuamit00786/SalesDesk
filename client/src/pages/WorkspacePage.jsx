@@ -1,4 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useAppSelector } from '@/app/hooks'
+import { CurrencyPicker } from '@/components/shared/CurrencyPicker'
+import { usePatchMyCompanyMutation } from '@/features/company/companyApi'
+import { selectEffectiveCurrency } from '@/features/workspace/workspaceSlice'
 import { DataGrid } from '@/components/shared/DataGrid'
 import toast from 'react-hot-toast'
 import { useSearchParams } from 'react-router-dom'
@@ -60,8 +64,19 @@ export function WorkspacePage() {
   const [formDescription, setFormDescription] = useState('')
   const [formThemeColor, setFormThemeColor] = useState('#5b21b6')
   const [formSidebarText, setFormSidebarText] = useState('#ffffff')
+  const [formDefaultCurrency, setFormDefaultCurrency] = useState('USD')
   const [statusFilter, setStatusFilter] = useState('active')
+  const user = useAppSelector((s) => s.auth.user)
+  const companyBaseCurrency = useAppSelector(selectEffectiveCurrency)
+  const [patchMyCompany, { isLoading: savingCompanyCurrency }] = usePatchMyCompanyMutation()
+  const [companyCurrencyDraft, setCompanyCurrencyDraft] = useState('USD')
   const [deleteDialog, setDeleteDialog] = useState({ open: false, row: null })
+
+  useEffect(() => {
+    if (user?.company?.baseCurrency) {
+      setCompanyCurrencyDraft(String(user.company.baseCurrency).toUpperCase())
+    }
+  }, [user?.company?.baseCurrency])
 
   const items = data?.data?.items
 
@@ -85,6 +100,7 @@ export function WorkspacePage() {
     setFormDescription('')
     setFormThemeColor('#5b21b6')
     setFormSidebarText('#ffffff')
+    setFormDefaultCurrency(companyBaseCurrency)
   }
 
   function openCreate() {
@@ -94,6 +110,7 @@ export function WorkspacePage() {
     setFormDescription('')
     setFormThemeColor('#5b21b6')
     setFormSidebarText('#ffffff')
+    setFormDefaultCurrency(companyBaseCurrency)
     setDrawerOpen(true)
   }
 
@@ -104,6 +121,7 @@ export function WorkspacePage() {
     setFormDescription(row.description ?? '')
     setFormThemeColor(resolveHex(row.themeColor, '--brand-primary', '#5b21b6'))
     setFormSidebarText(resolveHex(row.sidebarTextColor, '--sidebar-text', '#ffffff'))
+    setFormDefaultCurrency(row.defaultCurrency || companyBaseCurrency)
     setDrawerOpen(true)
   }
 
@@ -123,12 +141,14 @@ export function WorkspacePage() {
           description: descTrim || null,
           themeColor: formThemeColor,
           sidebarTextColor: formSidebarText,
+          defaultCurrency: formDefaultCurrency,
         }).unwrap()
         toast.success('Workspace updated')
       } else {
         await createWorkspace({
           name,
           ...(descTrim ? { description: descTrim } : {}),
+          defaultCurrency: formDefaultCurrency,
         }).unwrap()
         toast.success('Workspace created')
       }
@@ -377,7 +397,36 @@ export function WorkspacePage() {
           )}
         </div>
 
-        {settingsTab === 'company' ? <WorkspaceCompanyTab /> : null}
+        {settingsTab === 'company' ? (
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-surface-border bg-white p-4 shadow-sm">
+              <CurrencyPicker
+                value={companyCurrencyDraft}
+                onChange={setCompanyCurrencyDraft}
+                label="Company base currency"
+              />
+              <p className="mt-2 text-xs text-ink-muted">
+                Existing deals and invoices keep their stored currency. New records default to the active workspace currency.
+              </p>
+              <button
+                type="button"
+                disabled={savingCompanyCurrency}
+                onClick={async () => {
+                  try {
+                    await patchMyCompany({ baseCurrency: companyCurrencyDraft }).unwrap()
+                    toast.success('Company currency updated')
+                  } catch (err) {
+                    toast.error(apiErrorMessage(err))
+                  }
+                }}
+                className="mt-3 h-9 rounded-xl bg-slate-800 px-4 text-sm font-medium text-white hover:bg-slate-900 disabled:opacity-60"
+              >
+                {savingCompanyCurrency ? 'Saving…' : 'Save company currency'}
+              </button>
+            </div>
+            <WorkspaceCompanyTab />
+          </div>
+        ) : null}
 
         {settingsTab === 'notifications' ? <NotificationEmailSettingsTab /> : null}
 
@@ -481,6 +530,12 @@ export function WorkspacePage() {
               placeholder="What this workspace is for (optional)"
             />
           </div>
+          <CurrencyPicker
+            value={formDefaultCurrency}
+            onChange={setFormDefaultCurrency}
+            label="Workspace currency"
+            required
+          />
           <div className="space-y-4 rounded-2xl border border-surface-border p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Theme colors</p>
             <p className="text-xs text-ink-muted">

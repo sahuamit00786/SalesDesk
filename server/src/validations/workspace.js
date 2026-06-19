@@ -2,9 +2,12 @@ import Joi from 'joi'
 
 const DESCRIPTION_MAX = 199
 
+const CURRENCY_CODE = Joi.string().trim().length(3).pattern(/^[A-Za-z]{3}$/).uppercase()
+
 export const createWorkspaceSchema = Joi.object({
   name: Joi.string().trim().min(1).max(240).required(),
   description: Joi.string().trim().max(DESCRIPTION_MAX).allow('').optional(),
+  defaultCurrency: CURRENCY_CODE.optional(),
 })
 
 const HEX_COLOR = Joi.alternatives().try(
@@ -20,6 +23,7 @@ export const patchWorkspaceSchema = Joi.object({
     .optional(),
   themeColor: HEX_COLOR,
   sidebarTextColor: HEX_COLOR,
+  defaultCurrency: CURRENCY_CODE.allow(null).optional(),
 })
   .min(1)
   .messages({

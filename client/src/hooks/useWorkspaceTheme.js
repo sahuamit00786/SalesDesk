@@ -16,7 +16,7 @@ export function useWorkspaceTheme() {
   const workspace = useSelector(selectActiveWorkspace)
 
   useEffect(() => {
-    const theme = workspace?.themeColor || '#5b21b6'
+    const theme = workspace?.themeColor || '#6D29D9'
     const text = workspace?.sidebarTextColor || '#ffffff'
     document.documentElement.style.setProperty('--brand-primary', theme)
     document.documentElement.style.setProperty('--brand-primary-dark', darkenHex(theme))

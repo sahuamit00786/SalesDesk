@@ -10,6 +10,9 @@ import { CalendarFilters } from '@/features/calendar/components/CalendarFilters'
 import { TodayList } from '@/features/calendar/components/TodayList'
 import { DayNotesPanel } from '@/features/calendar/components/DayNotesPanel'
 import { EventChip } from '@/features/calendar/components/EventChip'
+import { DayEventsModal } from '@/features/calendar/components/DayEventsModal'
+import { DayEventsOverflowProvider } from '@/features/calendar/components/DayEventsOverflowContext'
+import { MonthShowMoreButton } from '@/features/calendar/components/MonthShowMoreButton'
 import { getEventColor, CALENDAR_FILTERS } from '@/features/calendar/eventColors'
 import { useAppSelector } from '@/app/hooks'
 
@@ -55,6 +58,7 @@ export function AppCalendarShell({
   const [selectedRange, setSelectedRange] = useState({ start: null, end: null })
   const [calendarSearchOpen, setCalendarSearchOpen] = useState(false)
   const [calendarSearchQuery, setCalendarSearchQuery] = useState('')
+  const [dayEventsModal, setDayEventsModal] = useState({ open: false, date: null, events: [] })
   const searchInputRef = useRef(null)
   const periodNotifyRef = useRef(false)
 
@@ -271,6 +275,18 @@ export function AppCalendarShell({
     onSelectEvent?.(event)
   }
 
+  const openDayEventsModal = useCallback(({ date, events: dayEvents }) => {
+    setDayEventsModal({
+      open: true,
+      date: date instanceof Date ? date : new Date(date),
+      events: dayEvents || [],
+    })
+  }, [])
+
+  const closeDayEventsModal = useCallback(() => {
+    setDayEventsModal({ open: false, date: null, events: [] })
+  }, [])
+
   const DefaultEventComponent = useCallback(
     ({ event }) => (
       <EventChip
@@ -483,29 +499,38 @@ export function AppCalendarShell({
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-auto p-4">
-          <Calendar
-            localizer={calendarLocalizer}
-            events={allEvents}
-            startAccessor="start"
-            endAccessor="end"
-            views={[Views.MONTH, Views.WEEK, Views.DAY]}
-            view={view}
-            date={currentDate}
-            onView={setView}
-            onNavigate={(date) => {
-              setCurrentDate(date)
-              setSelectedDate(date)
-            }}
-            selectable={selectable}
-            onSelectSlot={handleSlotSelect}
-            onSelectEvent={(event) => {
-              if (event?.start) setSelectedDate(new Date(event.start))
-              handleEventClick(event)
-            }}
-            popup
-            showAllEvents
-            components={{ event: (props) => <Chip {...props} view={view} onClick={handleEventClick} /> }}
+        <div
+          className={cn(
+            'min-h-0 flex-1 overflow-auto p-4',
+            view === Views.MONTH && 'calendar-month-summary',
+          )}
+        >
+          <DayEventsOverflowProvider value={openDayEventsModal}>
+            <Calendar
+              localizer={calendarLocalizer}
+              events={allEvents}
+              startAccessor="start"
+              endAccessor="end"
+              views={[Views.MONTH, Views.WEEK, Views.DAY]}
+              view={view}
+              date={currentDate}
+              onView={setView}
+              onNavigate={(date) => {
+                setCurrentDate(date)
+                setSelectedDate(date)
+              }}
+              selectable={selectable}
+              onSelectSlot={handleSlotSelect}
+              onSelectEvent={(event) => {
+                if (event?.start) setSelectedDate(new Date(event.start))
+                handleEventClick(event)
+              }}
+              popup={false}
+              onShowMore={(events, date) => openDayEventsModal({ date, events })}
+              components={{
+                event: (props) => <Chip {...props} view={view} onClick={handleEventClick} />,
+                showMore: MonthShowMoreButton,
+              }}
             eventPropGetter={() => ({
               style: { backgroundColor: 'transparent', border: 'none', padding: 0 },
             })}
@@ -542,9 +567,18 @@ export function AppCalendarShell({
             max={new Date(0, 0, 0, 22, 0, 0)}
             step={30}
             timeslots={2}
-          />
+            />
+          </DayEventsOverflowProvider>
         </div>
       </div>
+
+      <DayEventsModal
+        open={dayEventsModal.open}
+        date={dayEventsModal.date}
+        events={dayEventsModal.events}
+        onClose={closeDayEventsModal}
+        onEventClick={handleEventClick}
+      />
 
       {showRightPanel ? (
         <div className="w-60 shrink-0 overflow-y-auto border-l border-gray-200 bg-gradient-to-b from-gray-50 to-white scrollbar-subtle">

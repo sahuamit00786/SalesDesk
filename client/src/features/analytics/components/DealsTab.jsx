@@ -1,7 +1,9 @@
 import { DollarSign, TrendingUp, Trophy, Percent, BadgeDollarSign, Briefcase } from 'lucide-react'
 import { ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts'
 import { DashboardChartCard } from '@/features/dashboard/components/DashboardChartCard'
-import { CHART_COLORS, formatChartCurrency } from '@/features/dashboard/dummyDashboardData'
+import { CHART_COLORS } from '@/features/dashboard/dummyDashboardData'
+import { formatDealMoney } from '@/features/deals/dealCurrencies'
+import { useFormatChartCurrency } from '@/hooks/useEffectiveCurrency'
 import { ReportKpiCard } from './ReportKpiCard'
 import { ReportTable } from './ReportTable'
 import { ChartSkeleton, KpiSkeleton } from './ChartSkeleton'
@@ -9,26 +11,24 @@ import { useGetDealsReportQuery } from '@/features/analytics/analyticsApi'
 import { ReportKpiGrid, ReportChartGrid, ReportTableSection } from '@/features/analytics/ReportLayout'
 
 const SLICES = CHART_COLORS.slices
-const fmtMoney = (v) => formatChartCurrency(Number(v) || 0)
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString() : '—'
 
-const DEAL_COLS = [
-  { key: 'name', label: 'Deal', render: (v) => <span className="font-medium text-ink">{v || '—'}</span> },
-  { key: 'stage', label: 'Stage' },
-  { key: 'value', label: 'Value', render: (v, r) => <span className="font-semibold">{fmtMoney(v)} {r.currency}</span> },
-  { key: 'owner', label: 'Owner' },
-  { key: 'wonAt', label: 'Won date', render: (v) => fmtDate(v) },
-]
-
-const CREATED_COLS = [
-  { key: 'name', label: 'Deal', render: (v) => <span className="font-medium text-ink">{v || '—'}</span> },
-  { key: 'stage', label: 'Stage' },
-  { key: 'value', label: 'Value', render: (v, r) => <span className="font-semibold">{fmtMoney(v)} {r.currency}</span> },
-  { key: 'owner', label: 'Owner' },
-  { key: 'createdAt', label: 'Created', render: (v) => fmtDate(v) },
-]
-
 export function DealsTab({ queryParams }) {
+  const fmtMoney = useFormatChartCurrency()
+  const dealCols = [
+    { key: 'name', label: 'Deal', render: (v) => <span className="font-medium text-ink">{v || '—'}</span> },
+    { key: 'stage', label: 'Stage' },
+    { key: 'value', label: 'Value', render: (v, r) => <span className="font-semibold">{formatDealMoney(v, r.currency)}</span> },
+    { key: 'owner', label: 'Owner' },
+    { key: 'wonAt', label: 'Won date', render: (v) => fmtDate(v) },
+  ]
+  const createdCols = [
+    { key: 'name', label: 'Deal', render: (v) => <span className="font-medium text-ink">{v || '—'}</span> },
+    { key: 'stage', label: 'Stage' },
+    { key: 'value', label: 'Value', render: (v, r) => <span className="font-semibold">{formatDealMoney(v, r.currency)}</span> },
+    { key: 'owner', label: 'Owner' },
+    { key: 'createdAt', label: 'Created', render: (v) => fmtDate(v) },
+  ]
   const { data, isLoading } = useGetDealsReportQuery(queryParams)
   const d = data?.data
   const kpis = d?.kpis || {}
@@ -79,11 +79,11 @@ export function DealsTab({ queryParams }) {
       </ReportChartGrid>
 
       <ReportTableSection title="Deals won in period" subtitle="Closed/won within selected date range">
-        <ReportTable columns={DEAL_COLS} rows={tables.wonInPeriod || []} isLoading={isLoading} maxH="max-h-[400px]" />
+        <ReportTable columns={dealCols} rows={tables.wonInPeriod || []} isLoading={isLoading} maxH="max-h-[400px]" />
       </ReportTableSection>
 
       <ReportTableSection title="Deals created in period" subtitle="New deals added in date range">
-        <ReportTable columns={CREATED_COLS} rows={tables.createdInPeriod || []} isLoading={isLoading} maxH="max-h-[400px]" />
+        <ReportTable columns={createdCols} rows={tables.createdInPeriod || []} isLoading={isLoading} maxH="max-h-[400px]" />
       </ReportTableSection>
     </div>
   )

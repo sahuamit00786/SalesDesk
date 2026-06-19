@@ -11,6 +11,7 @@ export const patchMyCompanySchema = Joi.object({
   leadPainTags: Joi.array().items(Joi.string().max(80)).max(24).optional(),
   leadPainNotes: Joi.string().max(2000).allow('', null).optional(),
   currentToolsNotes: Joi.string().max(500).allow('', null).optional(),
+  baseCurrency: Joi.string().trim().length(3).pattern(/^[A-Za-z]{3}$/).uppercase().optional(),
   onboardingCompleted: Joi.boolean().optional(),
 })
   .min(1)

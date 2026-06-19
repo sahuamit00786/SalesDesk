@@ -7,7 +7,7 @@ export const CustomField = sequelize.define(
     id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
     label: { type: DataTypes.STRING(120), allowNull: false },
     key: { type: DataTypes.STRING(120), allowNull: false },
-    type: { type: DataTypes.ENUM('text', 'number', 'date', 'dropdown', 'checkbox'), allowNull: false },
+    type: { type: DataTypes.STRING(32), allowNull: false, defaultValue: 'text' },
     options: { type: DataTypes.JSON, allowNull: true },
     isRequired: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false, field: 'is_required' },
     order: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },

@@ -6,6 +6,7 @@ import { cn } from '@/utils/cn'
 import { useCreateInvoiceMutation, useGetInvoiceTemplatesQuery } from '@/features/sales-docs/invoicesApi'
 import { useGetDealsQuery } from '@/features/deals/dealsApi'
 import { INVOICE_PRESET_LABELS } from '@/features/sales-docs/presetLabels'
+import { useEffectiveCurrency } from '@/hooks/useEffectiveCurrency'
 
 const emptyLine = () => ({
   name: '',
@@ -24,6 +25,7 @@ function dealSelectLabel(d) {
 }
 
 export function CreateInvoiceDrawer({ open, onClose, initialLeadId = null }) {
+  const effectiveCurrency = useEffectiveCurrency()
   const [dealId, setDealId] = useState('')
   const [dealSearch, setDealSearch] = useState('')
   const [debouncedDealSearch, setDebouncedDealSearch] = useState('')
@@ -52,8 +54,10 @@ export function CreateInvoiceDrawer({ open, onClose, initialLeadId = null }) {
     if (!open) {
       setDealId('')
       setDealSearch('')
+    } else {
+      setCurrency(effectiveCurrency)
     }
-  }, [open])
+  }, [open, effectiveCurrency])
 
   useEffect(() => {
     if (!open || !initialLeadId) return

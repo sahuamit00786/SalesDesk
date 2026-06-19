@@ -8,7 +8,13 @@ function workspacesFromUser(user) {
   if (!Array.isArray(ws) || !ws.length) return []
   return ws
     .filter((w) => !w.archived)
-    .map((w) => ({ id: w.id, name: w.name, themeColor: w.themeColor || null, sidebarTextColor: w.sidebarTextColor || null }))
+    .map((w) => ({
+      id: w.id,
+      name: w.name,
+      themeColor: w.themeColor || null,
+      sidebarTextColor: w.sidebarTextColor || null,
+      defaultCurrency: w.defaultCurrency || null,
+    }))
 }
 
 function readStoredPreferenceId() {
@@ -95,7 +101,13 @@ export const selectWorkspaceList = (state) => {
   if (Array.isArray(ws) && ws.length) {
     return ws
       .filter((w) => !w.archived)
-      .map((w) => ({ id: w.id, name: w.name, themeColor: w.themeColor || null, sidebarTextColor: w.sidebarTextColor || null }))
+      .map((w) => ({
+      id: w.id,
+      name: w.name,
+      themeColor: w.themeColor || null,
+      sidebarTextColor: w.sidebarTextColor || null,
+      defaultCurrency: w.defaultCurrency || null,
+    }))
   }
   return []
 }
@@ -118,5 +130,13 @@ export const selectActiveWorkspace = (state) => {
 }
 
 export const selectActiveWorkspaceName = (state) => selectActiveWorkspace(state)?.name ?? 'Workspace'
+
+export const selectEffectiveCurrency = (state) => {
+  const ws = selectActiveWorkspace(state)
+  const company = state.auth.user?.company
+  if (ws?.defaultCurrency) return String(ws.defaultCurrency).toUpperCase()
+  if (company?.baseCurrency) return String(company.baseCurrency).toUpperCase()
+  return 'USD'
+}
 
 export default workspaceSlice.reducer
