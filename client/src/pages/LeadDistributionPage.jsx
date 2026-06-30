@@ -21,7 +21,6 @@ import { DataGrid } from '@/components/shared/DataGrid'
 import { cn } from '@/utils/cn'
 import { STATUS_STYLES } from '@/features/leads/constants'
 import { LeadStatusBadge } from '@/features/leads/components/LeadStatusBadge'
-import { formatStageLabel } from '@/features/opportunities/components/OpportunitiesKanban'
 import {
   useDistributeLeadsRoundRobinMutation,
   useGetLeadFormMetaQuery,
@@ -100,7 +99,7 @@ export function LeadDistributionPage() {
   const [callerOrder, setCallerOrder] = useState([])
   const { data: formMeta } = useGetLeadFormMetaQuery()
   const users = formMeta?.data?.users || []
-  const opportunityStages = formMeta?.data?.opportunityStages || []
+  const opportunityStatuses = formMeta?.data?.opportunityStatuses || []
 
   const listFilterParams = useMemo(() => {
     const p = {
@@ -317,9 +316,9 @@ export function LeadDistributionPage() {
   const assignDisabled = selectionCount === 0
   const selectAllCap = Math.min(total, DISTRIBUTE_MAX_LEADS)
   const stageFilterLabel = stageFilter
-    ? formatStageLabel(stageFilter) || stageFilter
+    ? opportunityStatuses.find((s) => s.id === stageFilter)?.name || stageFilter
     : 'All stages'
-  const showStageFilter = recordType !== 'leads' && opportunityStages.length > 0
+  const showStageFilter = recordType !== 'leads' && opportunityStatuses.length > 0
 
   const leadDistColumns = useMemo(
     () => [
@@ -365,7 +364,7 @@ export function LeadDistributionPage() {
         headerName: 'Stage',
         width: 120,
         valueGetter: (_v, row) =>
-          row.isOpportunity ? formatStageLabel(row.opportunityStage) || '—' : '—',
+          row.isOpportunity ? row.oppStatus?.name || '—' : '—',
       },
       {
         field: 'company',
@@ -536,11 +535,10 @@ export function LeadDistributionPage() {
                             All stages
                           </button>
                         </li>
-                        {opportunityStages.map((s) => {
-                          const name = s.name || s.id
-                          const active = stageFilter === name
+                        {opportunityStatuses.map((s) => {
+                          const active = stageFilter === s.id
                           return (
-                            <li key={name} role="option" aria-selected={active}>
+                            <li key={s.id} role="option" aria-selected={active}>
                               <button
                                 type="button"
                                 className={cn(
@@ -548,11 +546,11 @@ export function LeadDistributionPage() {
                                   active && 'bg-brand-50/60 font-semibold text-brand-900',
                                 )}
                                 onClick={() => {
-                                  setStageFilter(name)
+                                  setStageFilter(s.id)
                                   setStageDropdownOpen(false)
                                 }}
                               >
-                                {formatStageLabel(name) || name}
+                                {s.name || s.id}
                               </button>
                             </li>
                           )

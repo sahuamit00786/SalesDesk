@@ -258,10 +258,18 @@ export async function updateLeaveSettings(req, res, next) {
 
     if (lateThresholdHour !== undefined || lateThresholdMinute !== undefined) {
       const current = await getLateThreshold(req.user.companyId)
+      const h = Number(lateThresholdHour ?? current.hour)
+      const m = Number(lateThresholdMinute ?? current.minute)
+      if (!Number.isInteger(h) || h < 0 || h > 23 || !Number.isInteger(m) || m < 0 || m > 59) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'VALIDATION', message: 'Hour must be 0–23 and minute must be 0–59' },
+        })
+      }
       const saved = await setLateThreshold(
         req.user.companyId,
-        lateThresholdHour ?? current.hour,
-        lateThresholdMinute ?? current.minute,
+        h,
+        m,
       )
       updates.lateThresholdHour = saved.hour
       updates.lateThresholdMinute = saved.minute
@@ -412,6 +420,8 @@ async function finalizeLeaveApproval(request, approverId) {
   }
   await sequelize.transaction(async (t) => {
     await request.update({ status: 'approved', approvedBy: approverId, rejectionReason: null }, { transaction: t })
+    // Re-read with exclusive row lock so concurrent approvals on the same balance serialise here
+    await balance.reload({ transaction: t, lock: t.LOCK.UPDATE })
     const newUsed = Number(balance.used) + Number(request.days)
     const newPending = Math.max(0, Number(balance.pending) - Number(request.days))
     const newAvailable = Math.max(0, Number(balance.allocated || 0) - newUsed - newPending)

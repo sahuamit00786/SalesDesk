@@ -61,8 +61,8 @@ export default function InvoicePrintPage() {
         lines={inv.items || []}
         subtotal={inv.subtotal}
         discountTotal={inv.discountTotal}
-        shipping={0}
-        adjustment={inv.roundOff}
+        shipping={inv.shipping || 0}
+        adjustment={inv.adjustment || 0}
         grandTotal={inv.grandTotal}
         taxBreakdown={inv.taxFinancial}
         terms={inv.termsSnapshot}

@@ -19,7 +19,7 @@ export const LEAD_FILTER_FIELDS = {
   ownerUserId: { type: 'uuid', label: 'Record owner' },
   score: { type: 'number', label: 'Health score' },
   value: { type: 'number', label: 'Deal value' },
-  opportunityStage: { type: 'text', label: 'Stage' },
+  opportunityStatus: { type: 'uuid', label: 'Opportunity status' },
   city: { type: 'text', label: 'City' },
   state: { type: 'text', label: 'State' },
   country: { type: 'text', label: 'Country' },

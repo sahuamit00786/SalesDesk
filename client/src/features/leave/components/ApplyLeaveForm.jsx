@@ -40,6 +40,7 @@ export function ApplyLeaveForm({ onSuccess }) {
   const [toDate, setToDate] = useState('')
   const [reason, setReason] = useState('')
   const [document, setDocument] = useState(null)
+  const [isHalfDay, setIsHalfDay] = useState(false)
   const [errors, setErrors] = useState({})
 
   const selectedBalance = balances.find((b) => String(b.leaveTypeId) === String(leaveTypeId))
@@ -64,10 +65,10 @@ export function ApplyLeaveForm({ onSuccess }) {
     const next = {}
     if (!leaveTypeId) next.leaveTypeId = 'Select a leave type'
     if (!fromDate) next.fromDate = 'From date is required'
-    if (!toDate) next.toDate = 'To date is required'
+    if (!isHalfDay && !toDate) next.toDate = 'To date is required'
     if (fromDate && isPastDateKey(fromDate)) next.fromDate = 'From date cannot be in the past'
-    if (toDate && isPastDateKey(toDate)) next.toDate = 'To date cannot be in the past'
-    if (fromDate && toDate && fromDate > toDate) next.toDate = 'To date must be on or after from date'
+    if (!isHalfDay && toDate && isPastDateKey(toDate)) next.toDate = 'To date cannot be in the past'
+    if (!isHalfDay && fromDate && toDate && fromDate > toDate) next.toDate = 'To date must be on or after from date'
     if (!reason.trim()) next.reason = 'Reason is required'
     setErrors(next)
     return Object.keys(next).length === 0
@@ -80,7 +81,8 @@ export function ApplyLeaveForm({ onSuccess }) {
       const fd = new FormData()
       fd.append('leaveTypeId', leaveTypeId)
       fd.append('fromDate', fromDate)
-      fd.append('toDate', toDate)
+      fd.append('toDate', isHalfDay ? fromDate : toDate)
+      fd.append('isHalfDay', isHalfDay ? 'true' : 'false')
       fd.append('reason', reason.trim())
       if (document) fd.append('document', document)
       if (isManager && targetUserId) fd.append('targetUserId', targetUserId)
@@ -92,6 +94,7 @@ export function ApplyLeaveForm({ onSuccess }) {
       setToDate('')
       setReason('')
       setDocument(null)
+      setIsHalfDay(false)
       onSuccess?.()
     } catch (err) {
       toast.error(err?.data?.error?.message || 'Could not submit leave')
@@ -173,13 +176,29 @@ export function ApplyLeaveForm({ onSuccess }) {
             <Input
               type="date"
               min={fromDate && fromDate >= minDate ? fromDate : minDate}
-              value={toDate}
+              value={isHalfDay ? fromDate : toDate}
+              disabled={isHalfDay}
               onChange={(e) => {
                 const floor = fromDate && fromDate >= minDate ? fromDate : minDate
                 setToDate(clampDateKeyToMin(e.target.value, floor))
               }}
+              className={isHalfDay ? 'opacity-50 cursor-not-allowed' : ''}
             />
             {errors.toDate ? <p className="mt-1 text-xs text-danger">{errors.toDate}</p> : null}
+          </div>
+          <div className="sm:col-span-2">
+            <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-ink">
+              <input
+                type="checkbox"
+                checked={isHalfDay}
+                onChange={(e) => {
+                  setIsHalfDay(e.target.checked)
+                  if (e.target.checked && fromDate) setToDate(fromDate)
+                }}
+                className="h-4 w-4 rounded border-surface-border accent-brand-600"
+              />
+              Half day
+            </label>
           </div>
           <div className="sm:col-span-2">
             <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink-muted">Reason</label>

@@ -205,7 +205,7 @@ async function executeNode(run, workflow, node, context) {
         status: 'waiting',
         waitUntil,
         resumeNodeId: nextId,
-        contextJson: { ...context, definition: def, leadId: lead.id },
+        contextJson: { ...context, definition: def, leadId: lead.id, before: context.before ?? null },
       })
       return { waiting: true }
     }
@@ -627,7 +627,7 @@ export async function processWorkflowWakeups() {
     }
     const context = {
       lead: leadPlain,
-      before: null,
+      before: ctxJson.before ?? null,
       actorUserId: ctxJson.actorUserId || null,
       definition: def,
     }

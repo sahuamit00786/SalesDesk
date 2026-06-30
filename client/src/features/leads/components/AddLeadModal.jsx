@@ -97,7 +97,6 @@ const IMPORT_FIELD_TARGETS = [
   { value: 'requirement', label: 'Requirement / notes (long)' },
   { value: 'notes', label: 'Notes' },
   { value: 'sourceId', label: 'Lead source (UUID)' },
-  { value: 'opportunityStage', label: 'Pipeline / opportunity stage' },
   { value: 'status', label: 'Lead status (new, contacted, …)' },
   { value: 'assignedTo', label: 'Primary assignee (user UUID)' },
 ]
@@ -238,7 +237,6 @@ function guessImportTarget(headerLabel) {
   if (/notes?\b|comment/.test(s)) return 'notes'
   if (/source\s?id/.test(s)) return 'skip'
   if (/assign|owner/.test(s)) return 'assignedTo'
-  if (/stage|pipeline|funnel/.test(s)) return 'opportunityStage'
   if (/^status$|lead\s?status/.test(s)) return 'status'
   return 'skip'
 }
@@ -248,7 +246,6 @@ function buildAutoMapping(columns, { defaultIsOpportunity = false } = {}) {
   for (const col of columns) {
     let target = guessImportTarget(col.raw || col.label)
     if (target === 'status') target = 'skip'
-    if (!defaultIsOpportunity && target === 'opportunityStage') target = 'skip'
     m[col.key] = target
   }
   return m
@@ -329,21 +326,12 @@ export function AddLeadModal({
     const sys = sources.filter((s) => SYSTEM_LEAD_SOURCE_NAMES.has(String(s.name || '').trim().toLowerCase()))
     return sys.length ? sys : sources
   }, [sources])
-  const opportunityStages = useMemo(() => formMeta.opportunityStages || [], [formMeta.opportunityStages])
   const users = formMeta.users || []
   const availableTags = useMemo(() => formMeta.tags || [], [formMeta.tags])
   const customFieldDefs = useMemo(() => formMeta.customFields || [], [formMeta.customFields])
-  const bulkImportFieldTargets = useMemo(
-    () =>
-      BULK_IMPORT_FIELD_TARGETS.filter((opt) => {
-        if (opt.value === 'opportunityStage' && !defaultIsOpportunity) return false
-        return true
-      }),
-    [defaultIsOpportunity],
-  )
+  const bulkImportFieldTargets = useMemo(() => BULK_IMPORT_FIELD_TARGETS, [])
   const [form, setForm] = useState(initialForm)
   const [asOpportunity, setAsOpportunity] = useState(false)
-  const [opportunityStage, setOpportunityStage] = useState('')
   const [busy, setBusy] = useState(false)
   const [activeTab, setActiveTab] = useState('single')
   const [parsed, setParsed] = useState({ columns: [], rows: [] })
@@ -439,7 +427,6 @@ export function AddLeadModal({
     )
     const fromLead = Boolean(initialLead?.isOpportunity)
     setAsOpportunity(fromLead || Boolean(defaultIsOpportunity))
-    setOpportunityStage(String(initialLead?.opportunityStage || '').trim())
     setParsed({ columns: [], rows: [] })
     setMapping({})
     setBulkFileName('')
@@ -459,28 +446,6 @@ export function AddLeadModal({
       return manual?.id || bulkImportSources[0]?.id || ''
     })
   }, [open, activeTab, bulkImportSources])
-
-  const opportunityStageOptionsKey = useMemo(
-    () => opportunityStages.map((s) => s.name).join('\u0001'),
-    [opportunityStages],
-  )
-
-  useEffect(() => {
-    if (!open) return
-    if (!showPipelineFields || !opportunityStages.length) {
-      if (!showPipelineFields) setOpportunityStage('')
-      return
-    }
-    const fromLead = String(initialLead?.opportunityStage || '').trim()
-    if (fromLead && opportunityStages.some((s) => s.name === fromLead)) {
-      setOpportunityStage(fromLead)
-      return
-    }
-    setOpportunityStage((prev) => {
-      if (prev && opportunityStages.some((s) => s.name === prev)) return prev
-      return opportunityStages.find((s) => s.isDefault)?.name || opportunityStages[0]?.name || ''
-    })
-  }, [open, showPipelineFields, initialLead?.id, initialLead?.opportunityStage, opportunityStageOptionsKey])
 
   async function submit(e) {
     e?.preventDefault()
@@ -514,11 +479,8 @@ export function AddLeadModal({
           whatsappNumber: form.whatsappNumber || null,
         },
       }
-      if (showPipelineFields) {
-        payload.opportunityStage = String(opportunityStage || '').trim() || null
-      } else {
+      if (!showPipelineFields) {
         payload.status = form.status || 'new'
-        payload.opportunityStage = null
       }
       const result = await onSubmit?.(payload)
       if (result?.queued) {
@@ -608,13 +570,7 @@ export function AddLeadModal({
       out.source = 'csv_import'
       out.sourceId = bulkImportSourceId
       out.isOpportunity = defaultIsOpportunity
-      if (defaultIsOpportunity && !out.opportunityStage) {
-        const defaultStage =
-          opportunityStages.find((s) => s.isDefault)?.name || opportunityStages[0]?.name || null
-        if (defaultStage) out.opportunityStage = defaultStage
-      }
       if (!defaultIsOpportunity) {
-        delete out.opportunityStage
         delete out.status
       }
       if (bulkAssigneeIds.length) {
@@ -827,22 +783,7 @@ export function AddLeadModal({
                   +
                 </button>
               </div>
-              {showPipelineFields ? (
-                <div>
-                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Pipeline stage</p>
-                  <Select value={opportunityStage} onChange={(e) => setOpportunityStage(e.target.value)}>
-                    {!opportunityStages.length ? <option value="">Default (workspace)</option> : null}
-                    {opportunityStages.map((s) => (
-                      <option key={s.id || s.name} value={s.name}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </Select>
-                  {!opportunityStages.length ? (
-                    <p className="mt-1 text-xs text-ink-muted">Configure stages under Lead configuration → Lead status (pipeline).</p>
-                  ) : null}
-                </div>
-              ) : (
+              {!showPipelineFields ? (
                 <LeadFieldGroup label="Status">
                   <Select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}>
                     {STATUS_OPTIONS.map((status) => (
@@ -852,7 +793,7 @@ export function AddLeadModal({
                     ))}
                   </Select>
                 </LeadFieldGroup>
-              )}
+              ) : null}
             </div>
             <LeadTagsInput
               value={form.tags}

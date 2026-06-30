@@ -276,7 +276,7 @@ function DealOtherColumn({ displayLabel, opportunities, onOpen, onOpenClient, on
 
 export function DealsPipelineKanban({
   opportunities = [],
-  opportunityStages = [],
+  opportunityStatuses = [],
   isLoading,
   dealStageName = '',
   onOpenDeal,
@@ -313,9 +313,9 @@ export function DealsPipelineKanban({
   )
 
   const stageOrder = useMemo(() => {
-    const ordered = [...opportunityStages].sort((a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0))
+    const ordered = [...opportunityStatuses].sort((a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0))
     return ordered.map((s) => s.name).filter(Boolean)
-  }, [opportunityStages])
+  }, [opportunityStatuses])
 
   const { byStage, other } = useMemo(() => groupByStage(opportunities, stageOrder), [opportunities, stageOrder])
 

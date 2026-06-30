@@ -74,6 +74,14 @@ export function IntegrationsPage() {
                       </p>
                     </div>
                   ) : null}
+                  {statusData?.data?.connected && !statusData?.data?.calendarConnected ? (
+                    <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] leading-snug text-amber-950 sm:text-xs">
+                      <p className="font-semibold text-amber-900">Calendar access missing</p>
+                      <p className="mt-1 text-amber-900/90">
+                        Google Meet links for meetings require Calendar access. Click <strong>Reconnect Google</strong> below and approve all permissions.
+                      </p>
+                    </div>
+                  ) : null}
                   {statusData?.data?.connected && statusData?.data?.readMailbox !== false ? (
                     <p className="mt-2 text-[11px] leading-snug text-ink-muted sm:text-xs">
                       {statusData?.data?.gmailPushConfigured

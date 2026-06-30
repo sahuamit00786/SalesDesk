@@ -20,6 +20,7 @@ import {
   useGetTeamAttendanceQuery,
   useLazyExportAttendanceCsvQuery,
 } from '@/features/attendance/attendanceApi'
+import { useGetLeaveSettingsQuery } from '@/features/leave/leaveApi'
 import { useIsHrManagerOrAdmin } from '@/features/hr/useHrRole'
 import { cn } from '@/utils/cn'
 
@@ -100,6 +101,9 @@ export function AttendancePage() {
   const [dayModal, setDayModal] = useState(null)
 
   const yearOptions = [now.getFullYear() - 2, now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1]
+
+  const { data: settingsData } = useGetLeaveSettingsQuery()
+  const weeklyOffDays = settingsData?.data?.weeklyOffDays ?? [0, 6]
 
   const { data: myData, isLoading: myLoading } = useGetMyAttendanceQuery({ year, month })
 
@@ -262,6 +266,7 @@ export function AttendancePage() {
                   logs={myLogs}
                   year={year}
                   month={month}
+                  weeklyOffDays={weeklyOffDays}
                 />
                 <HrCard
                   title="Daily log"
@@ -308,6 +313,7 @@ export function AttendancePage() {
                   year={year}
                   month={month}
                   userName={selectedUser?.name}
+                  weeklyOffDays={weeklyOffDays}
                 />
               )}
             </div>
@@ -318,6 +324,7 @@ export function AttendancePage() {
                 mode="team"
                 logs={[]}
                 calendar={calendar}
+                weeklyOffDays={weeklyOffDays}
                 syncPeriod={{ year, month }}
                 onPeriodChange={(y, m) => {
                   setYear(y)

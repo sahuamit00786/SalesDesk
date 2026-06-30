@@ -11,12 +11,10 @@ import {
   useCreateLeadSourceMutation,
   useCreateLeadTagMutation,
   useCreateDealStatusMutation,
-  useCreateOpportunityStageMutation,
   useCreateOpportunityStatusMutation,
   useDeleteDealStatusMutation,
   useDeleteLeadSourceMutation,
   useDeleteLeadTagMutation,
-  useDeleteOpportunityStageMutation,
   useDeleteOpportunityStatusMutation,
   useGetLeadSetupQuery,
   useGetCustomFieldsQuery,
@@ -25,12 +23,10 @@ import {
   useDeleteCustomFieldMutation,
   useReorderCustomFieldsMutation,
   useReorderDealStatusesMutation,
-  useReorderOpportunityStagesMutation,
   useReorderOpportunityStatusesMutation,
   useUpdateDealStatusMutation,
   useUpdateLeadSourceMutation,
   useUpdateLeadTagMutation,
-  useUpdateOpportunityStageMutation,
   useUpdateOpportunityStatusMutation,
 } from '@/features/leads/leadsApi'
 import { CustomFieldEditorDrawer } from '@/features/leads/components/CustomFieldEditorDrawer'
@@ -41,7 +37,6 @@ const TABS = [
   { id: 'source', label: 'Source', icon: Waypoints },
   { id: 'tags', label: 'Tags', icon: Tag },
   { id: 'custom-fields', label: 'Custom fields', icon: FormInput },
-  { id: 'opportunity-stages', label: 'Lead status (pipeline)', icon: GitBranch },
   { id: 'opportunity-statuses', label: 'Opportunity status', icon: GitBranch },
   { id: 'deal-statuses', label: 'Deal status name', icon: GitBranch },
 ]
@@ -90,10 +85,6 @@ export function LeadConfigurationPage() {
   const [createTag, { isLoading: creatingTag }] = useCreateLeadTagMutation()
   const [updateTag, { isLoading: updatingTag }] = useUpdateLeadTagMutation()
   const [deleteTag] = useDeleteLeadTagMutation()
-  const [createOpportunityStage, { isLoading: creatingOppStage }] = useCreateOpportunityStageMutation()
-  const [updateOpportunityStage, { isLoading: updatingOppStage }] = useUpdateOpportunityStageMutation()
-  const [reorderOpportunityStages, { isLoading: reorderingOppStages }] = useReorderOpportunityStagesMutation()
-  const [deleteOpportunityStage] = useDeleteOpportunityStageMutation()
   const [createOpportunityStatus, { isLoading: creatingOppStatus }] = useCreateOpportunityStatusMutation()
   const [updateOpportunityStatus, { isLoading: updatingOppStatus }] = useUpdateOpportunityStatusMutation()
   const [deleteOpportunityStatus] = useDeleteOpportunityStatusMutation()
@@ -116,7 +107,7 @@ export function LeadConfigurationPage() {
   const [deleteDialog, setDeleteDialog] = useState({ open: false, type: '', id: null, name: '' })
 
   const setup = useMemo(
-    () => data?.data || { sources: [], tags: [], opportunityStages: [], opportunityStatuses: [], dealStatuses: [] },
+    () => data?.data || { sources: [], tags: [], opportunityStatuses: [], dealStatuses: [] },
     [data],
   )
   const customFieldRows = useMemo(() => customFieldsData?.data || [], [customFieldsData])
@@ -125,7 +116,6 @@ export function LeadConfigurationPage() {
     if (type === 'source') return 'Source'
     if (type === 'tags') return 'Tag'
     if (type === 'customFields') return 'Custom field'
-    if (type === 'opportunityStages') return 'Lead status'
     if (type === 'opportunityStatuses') return 'Opportunity status'
     if (type === 'dealStatuses') return 'Deal status'
     return 'Item'
@@ -135,7 +125,6 @@ export function LeadConfigurationPage() {
     if (activeTab === 'source') return 'source'
     if (activeTab === 'tags') return 'tags'
     if (activeTab === 'custom-fields') return 'customFields'
-    if (activeTab === 'opportunity-stages') return 'opportunityStages'
     if (activeTab === 'opportunity-statuses') return 'opportunityStatuses'
     if (activeTab === 'deal-statuses') return 'dealStatuses'
     return 'source'
@@ -199,15 +188,6 @@ export function LeadConfigurationPage() {
           toast.success('Tag created')
         }
       }
-      if (editor.type === 'opportunityStages') {
-        if (editor.mode === 'edit') {
-          await updateOpportunityStage({ id: editor.id, name }).unwrap()
-          toast.success('Lead status updated')
-        } else {
-          await createOpportunityStage({ name }).unwrap()
-          toast.success('Lead status created')
-        }
-      }
       if (editor.type === 'opportunityStatuses') {
         if (editor.mode === 'edit') {
           await updateOpportunityStatus({ id: editor.id, name }).unwrap()
@@ -246,10 +226,6 @@ export function LeadConfigurationPage() {
         await deleteTag(deleteDialog.id).unwrap()
         toast.success('Tag deleted')
       }
-      if (deleteDialog.type === 'opportunityStages') {
-        await deleteOpportunityStage(deleteDialog.id).unwrap()
-        toast.success('Lead status deleted')
-      }
       if (deleteDialog.type === 'opportunityStatuses') {
         await deleteOpportunityStatus(deleteDialog.id).unwrap()
         toast.success('Opportunity status deleted')
@@ -273,8 +249,6 @@ export function LeadConfigurationPage() {
     updatingSource ||
     creatingTag ||
     updatingTag ||
-    creatingOppStage ||
-    updatingOppStage ||
     creatingOppStatus ||
     updatingOppStatus ||
     creatingDealStatus ||
@@ -299,19 +273,9 @@ export function LeadConfigurationPage() {
   }
 
   const onReorderDealStatusesByIds = (ids) => persistReorder(reorderDealStatuses, ids)
-  const onReorderOpportunityStagesByIds = (ids) => persistReorder(reorderOpportunityStages, ids)
   const onReorderOpportunityStatusesByIds = (ids) => persistReorder(reorderOpportunityStatuses, ids)
   const onReorderCustomFieldsByIds = (ids) => persistReorder(reorderCustomFields, ids)
 
-  async function onSetOpportunityDealStatus(row, isDealStatus) {
-    try {
-      await updateOpportunityStage({ id: row.id, isDealStatus }).unwrap()
-    } catch (err) {
-      toast.error(apiErrorMessage(err))
-    }
-  }
-
-  const opportunityRows = setup.opportunityStages || []
   const opportunityStatusRows = setup.opportunityStatuses || []
   const dealStatusRows = setup.dealStatuses || []
 
@@ -387,55 +351,6 @@ export function LeadConfigurationPage() {
           ],
           emptyTitle: 'No tags found',
           emptyDescription: 'Add a tag to organize leads.',
-        }
-      case 'opportunity-stages':
-        return {
-          rows: opportunityRows,
-          sortable: true,
-          loading: isLoading,
-          disabled: updatingOppStage || reorderingOppStages,
-          onReorder: onReorderOpportunityStagesByIds,
-          getDragLabel: (row) => `Drag to reorder ${formatStatusName(row.name)}`,
-          columns: [
-            {
-              id: 'name',
-              header: 'Stage',
-              cell: (row) => <span className="font-medium text-ink">{formatStatusName(row.name)}</span>,
-            },
-            {
-              id: 'isDefault',
-              header: 'Initial',
-              width: 88,
-              cell: (row) => <YesNoPill yes={!!row.isDefault} />,
-            },
-            {
-              id: 'isDealStatus',
-              header: 'Deal status',
-              width: 108,
-              cell: (row) => (
-                <div className="flex justify-center">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-surface-border text-brand-600 focus:ring-brand-500"
-                    checked={!!row.isDealStatus}
-                    disabled={updatingOppStage || reorderingOppStages}
-                    onChange={(e) => onSetOpportunityDealStatus(row, e.target.checked)}
-                    onClick={(e) => e.stopPropagation()}
-                    aria-label={row.isDealStatus ? 'Deal stage selected' : 'Set as deal stage'}
-                  />
-                </div>
-              ),
-            },
-            {
-              id: 'createdAt',
-              header: 'Created',
-              width: 120,
-              cell: (row) => formatDate(row.createdAt),
-            },
-            actionsColumn('opportunityStages'),
-          ],
-          emptyTitle: 'No lead statuses found',
-          emptyDescription: 'Add pipeline stages for opportunities.',
         }
       case 'opportunity-statuses':
         return {
@@ -548,12 +463,9 @@ export function LeadConfigurationPage() {
     activeTab,
     setup.sources,
     setup.tags,
-    opportunityRows,
     opportunityStatusRows,
     dealStatusRows,
     isLoading,
-    updatingOppStage,
-    reorderingOppStages,
     updatingOppStatus,
     reorderingOppStatuses,
     updatingDealStatus,

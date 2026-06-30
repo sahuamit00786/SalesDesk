@@ -49,7 +49,7 @@ import {
   taskTypeLabel,
 } from '@/features/leads/components/LeadTaskDrawer'
 import { TaskAttachmentIcons } from '@/features/leads/components/TaskAttachmentIcons'
-import { usePatchOpportunityStageMutation } from '@/features/opportunities/opportunitiesApi'
+import { usePatchOpportunityStatusMutation } from '@/features/opportunities/opportunitiesApi'
 import { useGetDealQuery, usePatchDealStageMutation, useGetDealActivitiesQuery, useCreateDealActivityMutation } from '@/features/deals/dealsApi'
 import { formatStageLabel } from '@/features/opportunities/components/OpportunitiesKanban'
 import { useGetDocumentsQuery, useUploadDocumentMutation } from '@/features/documents/documentsApi'
@@ -342,7 +342,7 @@ function ContactRow({ Icon, label, value, href, tone = 'violet', compact = false
   )
 }
 
-export function DealDetailPanel({ open, onClose, opp, opportunityStages = [], defaultTab = 'activity' }) {
+export function DealDetailPanel({ open, onClose, opp, opportunityStatuses = [], defaultTab = 'activity' }) {
   const navigate = useNavigate()
   const [tab, setTab] = useState(defaultTab)
   const [stageMenuOpen, setStageMenuOpen] = useState(false)
@@ -388,7 +388,7 @@ export function DealDetailPanel({ open, onClose, opp, opportunityStages = [], de
   const [deleteNote] = useDeleteLeadNoteMutation()
   const [patchTask] = usePatchLeadTaskMutation()
   const [deleteTask] = useDeleteLeadTaskMutation()
-  const [patchOppStage, { isLoading: changingOppStage }] = usePatchOpportunityStageMutation()
+  const [patchOpportunityStatus, { isLoading: changingOppStage }] = usePatchOpportunityStatusMutation()
   const [patchDealStage, { isLoading: changingDealStage }] = usePatchDealStageMutation()
   const [createDealActivity, { isLoading: loggingDealActivity }] = useCreateDealActivityMutation()
   const changingStage = changingOppStage || changingDealStage
@@ -402,13 +402,13 @@ export function DealDetailPanel({ open, onClose, opp, opportunityStages = [], de
   const invoices = invoicesData?.data || []
 
   const stagesOrdered = useMemo(
-    () => [...opportunityStages].sort((a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0)),
-    [opportunityStages],
+    () => [...opportunityStatuses].sort((a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0)),
+    [opportunityStatuses],
   )
 
   const currentStage = isDealEntity
     ? (card?.currentStage || '')
-    : (lead?.opportunityStage || card?.currentStage || '')
+    : (lead?.oppStatus?.name || card?.currentStage || '')
   const currentStageLabel = formatStageLabel(currentStage || '')
 
   const visibleActivities = useMemo(() => {
@@ -495,7 +495,9 @@ export function DealDetailPanel({ open, onClose, opp, opportunityStages = [], de
       if (dealId) {
         await patchDealStage({ id: dealId, currentStage: nextStage }).unwrap()
       } else {
-        await patchOppStage({ id: leadApiId, currentStage: nextStage }).unwrap()
+        const status = opportunityStatuses.find((s) => s.name === nextStage)
+        if (!status) return
+        await patchOpportunityStatus({ id: leadApiId, opportunityStatusId: status.id }).unwrap()
       }
       toast.success(`Moved to ${formatStageLabel(nextStage)}`)
       setStageMenuOpen(false)

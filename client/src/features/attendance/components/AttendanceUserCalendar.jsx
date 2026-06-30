@@ -23,7 +23,7 @@ function fmtHours(h) {
 const STATUS = {
   present:  { cell: 'bg-emerald-50 border-emerald-200',  badge: 'bg-emerald-100 text-emerald-800',  label: 'Present' },
   late:     { cell: 'bg-amber-50 border-amber-200',      badge: 'bg-amber-100 text-amber-800',      label: 'Late' },
-  absent:   { cell: 'bg-rose-100 border-rose-300',       badge: 'bg-rose-200 text-rose-900',        label: 'Absent' },
+  absent:   { cell: 'bg-rose-50 border-rose-200',        badge: 'bg-rose-100 text-rose-800',        label: 'Absent' },
   half_day: { cell: 'bg-sky-50 border-sky-200',          badge: 'bg-sky-100 text-sky-800',          label: 'Half day' },
   on_leave: { cell: 'bg-slate-50 border-brand-200',    badge: 'bg-slate-100 text-brand-800',    label: 'On leave' },
 }
@@ -34,9 +34,10 @@ const LEGEND = [
   { status: 'absent',   label: 'Absent',    dot: 'bg-rose-400' },
   { status: 'half_day', label: 'Half day',  dot: 'bg-sky-400' },
   { status: 'on_leave', label: 'On leave',  dot: 'bg-violet-400' },
+  { status: 'week_off', label: 'Week off',  dot: 'bg-yellow-300' },
 ]
 
-export function AttendanceUserCalendar({ logs = [], year, month, userName }) {
+export function AttendanceUserCalendar({ logs = [], year, month, userName, weeklyOffDays = [] }) {
   const todayStr = format(new Date(), 'yyyy-MM-dd')
 
   const logByDate = useMemo(() => {
@@ -53,13 +54,16 @@ export function AttendanceUserCalendar({ logs = [], year, month, userName }) {
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
       const dow = new Date(year, month - 1, d).getDay()
+      const isWeekOff = weeklyOffDays.length > 0
+        ? weeklyOffDays.includes(dow)
+        : (dow === 0 || dow === 6)
       result.push({
         day: d,
         dateStr,
         log: logByDate[dateStr],
         isFuture: dateStr > todayStr,
         isToday: dateStr === todayStr,
-        isWeekend: dow === 0 || dow === 6,
+        isWeekOff,
       })
     }
     return result
@@ -95,7 +99,7 @@ export function AttendanceUserCalendar({ logs = [], year, month, userName }) {
       <div className="grid grid-cols-7 gap-1">
         {cells.map((cell) => {
           if (cell.empty) return <div key={cell.key} className="min-h-[92px]" />
-          const { day, dateStr, log, isFuture, isToday, isWeekend } = cell
+          const { day, dateStr, log, isFuture, isToday, isWeekOff } = cell
           const status = log?.status
           const s = status ? STATUS[status] : null
           const checkIn = fmtTime(log?.checkInTime)
@@ -111,8 +115,8 @@ export function AttendanceUserCalendar({ logs = [], year, month, userName }) {
                   ? 'border-surface-border bg-gray-50/60'
                   : s
                     ? s.cell
-                    : isWeekend
-                      ? 'border-surface-border bg-gray-50'
+                    : isWeekOff
+                      ? 'border-yellow-200 bg-yellow-50'
                       : 'border-surface-border bg-white',
                 isToday && 'ring-2 ring-brand-400 ring-offset-1',
               )}
@@ -131,8 +135,8 @@ export function AttendanceUserCalendar({ logs = [], year, month, userName }) {
                 )}>
                   {s.label}
                 </span>
-              ) : !isFuture && isWeekend ? (
-                <span className="mt-1 text-[10px] leading-tight text-ink-faint">Weekend</span>
+              ) : !isFuture && isWeekOff ? (
+                <span className="mt-1 text-[10px] leading-tight text-yellow-600/70">Week off</span>
               ) : null}
 
               {(checkIn || checkOut || hours) && (

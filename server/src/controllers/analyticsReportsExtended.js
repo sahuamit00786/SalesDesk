@@ -2,7 +2,7 @@ import { Op, fn, col, literal } from 'sequelize'
 import {
   Lead, LeadFollowup, LeadTask, Activity, Meeting, Deal, DealPayment,
   User, UserWorkspace, Invoice, Quotation, InvoicePayment, LeaveRequest, LeaveType,
-  DuplicateLead, Campaign, CampaignLead,
+  DuplicateLead, Campaign, CampaignLead, OpportunityStatus,
 } from '../models/index.js'
 
 function parseRange(q) {
@@ -35,7 +35,7 @@ function applyLeadFilters(scope, query) {
   }
   if (query.status) out.status = query.status
   if (query.source) out.source = query.source
-  if (query.stage) out.opportunityStage = query.stage
+  if (query.stage) out.opportunityStatus = query.stage
   return out
 }
 
@@ -72,23 +72,29 @@ export async function opportunitiesReport(req, res, next) {
       }),
       Lead.findAll({
         where: scope,
-        attributes: ['opportunityStage', [fn('COUNT', col('id')), 'count'], [fn('COALESCE', fn('SUM', col('value')), 0), 'totalValue']],
-        group: ['opportunityStage'],
+        attributes: ['opportunityStatus', [fn('COUNT', col('Lead.id')), 'count'], [fn('COALESCE', fn('SUM', col('Lead.value')), 0), 'totalValue']],
+        include: [{ model: OpportunityStatus, as: 'oppStatus', attributes: ['name'], required: false }],
+        group: ['opportunityStatus', 'oppStatus.id'],
         order: [[literal('count'), 'DESC']],
         raw: true,
+        nest: true,
       }),
       Lead.findAll({
         where: scope,
         include: [
           { model: User, as: 'owner', attributes: ['name'], required: false },
           { model: User, as: 'assignee', attributes: ['name'], required: false },
+          { model: OpportunityStatus, as: 'oppStatus', attributes: ['name'], required: false },
         ],
         order: [['value', 'DESC']],
         limit: 200,
       }),
       Lead.findAll({
         where: { ...scope, value: { [Op.ne]: null, [Op.gt]: 0 } },
-        include: [{ model: User, as: 'owner', attributes: ['name'], required: false }],
+        include: [
+          { model: User, as: 'owner', attributes: ['name'], required: false },
+          { model: OpportunityStatus, as: 'oppStatus', attributes: ['name'], required: false },
+        ],
         order: [['value', 'DESC']],
         limit: 10,
       }),
@@ -116,8 +122,8 @@ export async function opportunitiesReport(req, res, next) {
           }),
         },
         charts: {
-          stageDist: stageDistRaw.filter((r) => r.opportunityStage).map((r) => ({
-            name: capitalize(r.opportunityStage),
+          stageDist: stageDistRaw.filter((r) => r.opportunityStatus).map((r) => ({
+            name: capitalize(r.oppStatus?.name || r.opportunityStatus),
             count: Number(r.count),
             value: Number(r.totalValue),
           })),
@@ -127,7 +133,7 @@ export async function opportunitiesReport(req, res, next) {
             id: l.id,
             title: l.title,
             company: l.company,
-            stage: capitalize(l.opportunityStage || 'Uncategorised'),
+            stage: capitalize(l.oppStatus?.name || 'Uncategorised'),
             status: l.status,
             value: l.value,
             valueCurrency: l.valueCurrency,
@@ -139,7 +145,7 @@ export async function opportunitiesReport(req, res, next) {
             id: l.id,
             title: l.title,
             company: l.company,
-            stage: capitalize(l.opportunityStage || ''),
+            stage: capitalize(l.oppStatus?.name || ''),
             value: l.value,
             owner: l.owner?.name || '—',
           })),

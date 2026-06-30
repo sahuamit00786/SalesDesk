@@ -61,7 +61,7 @@ export function PageShell({ children, fullWidth = false, flush = false, mainClas
           <div
             className={cn(
               'flex w-full min-w-0 max-w-none flex-col',
-              flush ? 'gap-0' : 'gap-6',
+              flush ? 'h-full gap-0' : 'gap-6',
             )}
           >
             {children}

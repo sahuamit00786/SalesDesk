@@ -27,8 +27,6 @@ import { Select } from '@/components/ui/Select'
 import { DataGrid } from '@/components/shared/DataGrid'
 import { formatAggregatedDealAmount, formatDealMoney } from '@/features/deals/dealCurrencies'
 
-const STAGE_FILTER_FALLBACK = ['Lead Inbound', 'New', 'Contacted', 'Qualified', 'Proposal', 'Won', 'Lost']
-
 const SORT_OPTIONS = [
   { value: 'updatedAt:desc', label: 'Recently updated' },
   { value: 'dealValue:desc', label: 'Deal value (high → low)' },
@@ -127,7 +125,10 @@ export function DealsPage() {
   const total = data?.meta?.total || 0
   const totalPages = Math.max(1, Math.ceil(total / (mode === 'pipeline' ? listQuery.limit : limit)))
   const users = formMetaData?.data?.users || []
-  const opportunityStages = formMetaData?.data?.opportunityStages || []
+  const opportunityStatuses = useMemo(
+    () => [...(formMetaData?.data?.opportunityStatuses || [])].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)),
+    [formMetaData?.data?.opportunityStatuses],
+  )
   const dealStatuses = useMemo(
     () => [...(formMetaData?.data?.dealStatuses || [])].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)),
     [formMetaData?.data?.dealStatuses],
@@ -135,10 +136,8 @@ export function DealsPage() {
 
   const stageFilterOptions = useMemo(() => {
     if (dealStatuses.length) return dealStatuses.map((s) => s.name).filter(Boolean)
-    const names = opportunityStages.map((s) => s.name).filter(Boolean)
-    if (names.length) return names
-    return STAGE_FILTER_FALLBACK
-  }, [dealStatuses, opportunityStages])
+    return opportunityStatuses.map((s) => s.name).filter(Boolean)
+  }, [dealStatuses, opportunityStatuses])
 
   const dealStageName = useMemo(
     () => dealStatuses.find((s) => s.isDealCompleteStatus)?.name || '',
@@ -437,7 +436,7 @@ export function DealsPage() {
 
   return (
     <PageShell fullWidth>
-      <div className="flex h-[calc(100dvh-89px)] min-h-0 flex-col gap-3 px-2 py-2 lg:px-4 lg:py-3">
+      <div className="flex h-[calc(100dvh-4.5rem)] min-h-0 flex-col gap-3 px-2 py-2 lg:px-4 lg:py-3">
         <div className="flex flex-col gap-3 rounded-2xl border border-surface-border bg-gradient-to-br from-white via-slate-50 to-slate-50 px-4 py-4 sm:px-5">
           <div className="flex flex-col gap-3 border-b border-surface-border/60 pb-3">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -633,7 +632,7 @@ export function DealsPage() {
             <div className="flex h-full min-h-0 flex-col p-3 sm:p-4">
               <DealsPipelineKanban
                 opportunities={rows}
-                opportunityStages={dealStatuses.length ? dealStatuses : opportunityStages}
+                opportunityStatuses={dealStatuses.length ? dealStatuses : opportunityStatuses}
                 isLoading={isLoading}
                 dealStageName={dealStageName}
                 onOpenDeal={(dealId) => setEditingOpp(rows.find((r) => r.id === dealId) ?? { id: dealId })}
@@ -714,7 +713,7 @@ export function DealsPage() {
         open={Boolean(editingOpp)}
         onClose={() => setEditingOpp(null)}
         opp={editingOpp}
-        opportunityStages={dealStatuses.length ? dealStatuses : opportunityStages}
+        opportunityStatuses={dealStatuses.length ? dealStatuses : opportunityStatuses}
       />
     </PageShell>
   )

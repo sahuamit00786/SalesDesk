@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "Meeting Recorder",
+  "version": "1.0.0",
+  "description": "Record tab audio + mic before/during any meeting. Saves .webm to Downloads.",
+  "permissions": [
+    "tabCapture",
+    "activeTab",
+    "tabs",
+    "downloads",
+    "storage"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Meeting Recorder"
+  }
+}

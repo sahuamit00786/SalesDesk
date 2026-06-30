@@ -27,7 +27,6 @@ import {
   useDeleteLeadMutation,
   useExportLeadsMutation,
   useGetLeadFormMetaQuery,
-  useGetLeadSetupQuery,
   useGetLeadsQuery,
   useImportLeadsMutation,
   useUpdateLeadMutation,
@@ -137,7 +136,6 @@ export function LeadsListPage({ variant = "leads" }) {
   if (!isOpportunities && !filters.assignedTo?.length) query.assignedOnly = true;
   const { data, isLoading, refetch } = useGetLeadsQuery(query);
   const { data: formMetaData } = useGetLeadFormMetaQuery();
-  const { data: setupData } = useGetLeadSetupQuery();
   const [createLead] = useCreateLeadMutation();
   const [updateLead] = useUpdateLeadMutation();
   const [deleteLead] = useDeleteLeadMutation();
@@ -151,10 +149,10 @@ export function LeadsListPage({ variant = "leads" }) {
   const total = data?.meta?.total || 0;
   const pages = Math.max(1, Math.ceil(total / pagination.limit));
   const users = formMetaData?.data?.users || [];
-  const opportunityStages = formMetaData?.data?.opportunityStages || [];
-  const stageOptions = opportunityStages.map((s) => ({
-    value: s.name || s.key || s.id,
-    label: s.name || s.key || "Stage",
+  const opportunityStatuses = formMetaData?.data?.opportunityStatuses || [];
+  const stageOptions = opportunityStatuses.map((s) => ({
+    value: s.id,
+    label: s.name || "Status",
   }));
   const advancedRuleCount = countActiveRules(filters.filterTree);
   const filterCount = advancedRuleCount ||
@@ -621,8 +619,7 @@ export function LeadsListPage({ variant = "leads" }) {
         onClose={() => setBulkEditOpen(false)}
         count={selected.length}
         sources={formMetaData?.data?.sources || []}
-        opportunityStages={opportunityStages}
-        opportunityStatuses={setupData?.data?.opportunityStatuses || []}
+        opportunityStatuses={opportunityStatuses}
         isOpportunities={isOpportunities}
         onSubmit={submitBulkEdit}
         submitting={bulkEditing}
@@ -692,7 +689,7 @@ export function LeadsListPage({ variant = "leads" }) {
         open={createOppOpen}
         onClose={() => setCreateOppOpen(false)}
         users={users}
-        opportunityStages={opportunityStages}
+        opportunityStatuses={opportunityStatuses}
         saving={creatingOpp}
         onSave={async (payload) => {
           const result = await createOpportunity(payload).unwrap();

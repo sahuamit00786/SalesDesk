@@ -699,7 +699,7 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
                         setLines((prev) => prev.map((x, i) => (i === idx ? { ...x, name: v } : x)))
                       }}
                     />
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
                       <label className="text-[11px] text-neutral-500">
                         Qty
                         <input
@@ -723,6 +723,21 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
                           value={line.unitPrice}
                           onChange={(e) =>
                             setLines((prev) => prev.map((x, i) => (i === idx ? { ...x, unitPrice: e.target.value } : x)))
+                          }
+                        />
+                      </label>
+                      <label className="text-[11px] text-neutral-500">
+                        Disc %
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="any"
+                          placeholder="0"
+                          className="mt-0.5 w-full rounded border border-neutral-200 px-2 py-1 text-xs"
+                          value={line.discountPct}
+                          onChange={(e) =>
+                            setLines((prev) => prev.map((x, i) => (i === idx ? { ...x, discountPct: e.target.value } : x)))
                           }
                         />
                       </label>

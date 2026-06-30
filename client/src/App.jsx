@@ -40,6 +40,7 @@ import InvoicePrintPage from '@/pages/InvoicePrintPage'
 import { CampaignsListPage } from '@/pages/CampaignsListPage'
 import { CampaignNewPage } from '@/pages/CampaignNewPage'
 import { CampaignDetailPage } from '@/pages/CampaignDetailPage'
+import { CampaignReportPage } from '@/pages/CampaignReportPage'
 import { WorkflowsListPage } from '@/pages/WorkflowsListPage'
 import { WorkflowNewPage } from '@/pages/WorkflowNewPage'
 import { WorkflowEditorPage } from '@/pages/WorkflowEditorPage'
@@ -81,6 +82,7 @@ export default function App() {
             <Route path="/campaigns" element={<CampaignsListPage />} />
             <Route path="/campaigns/new" element={<CampaignNewPage />} />
             <Route path="/campaigns/:id" element={<CampaignDetailPage />} />
+            <Route path="/campaigns/:id/report" element={<CampaignReportPage />} />
             <Route path="/automation" element={<WorkflowsListPage />} />
             <Route path="/automation/new" element={<WorkflowNewPage />} />
             <Route path="/automation/:id" element={<WorkflowEditorPage />} />

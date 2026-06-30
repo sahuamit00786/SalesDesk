@@ -6,14 +6,6 @@ function capitalize(s) {
   return String(s || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
-function formatStageName(value) {
-  return String(value || '')
-    .trim()
-    .split(/[_\s]+/)
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-    .join(' ')
-}
 
 function getFieldDefs(isOpportunities) {
   const shared = [
@@ -26,19 +18,17 @@ function getFieldDefs(isOpportunities) {
   if (isOpportunities) {
     return [
       { key: 'opportunityStatus', label: 'Opportunity status', type: 'oppStatus' },
-      { key: 'opportunityStage', label: 'Pipeline stage', type: 'stage' },
       ...shared,
     ]
   }
   return [
     { key: 'status', label: 'Lead status', type: 'select' },
-    { key: 'opportunityStage', label: 'Pipeline stage', type: 'stage' },
     ...shared,
     { key: 'isOpportunity', label: 'Convert to opportunity', type: 'convert' },
   ]
 }
 
-export function BulkEditModal({ open, onClose, count, sources, opportunityStages, opportunityStatuses, onSubmit, submitting, isOpportunities }) {
+export function BulkEditModal({ open, onClose, count, sources, opportunityStatuses, onSubmit, submitting, isOpportunities }) {
   const [enabled, setEnabled] = useState({})
   const [values, setValues] = useState({})
   const fields = useMemo(() => getFieldDefs(isOpportunities), [isOpportunities])
@@ -108,12 +98,6 @@ export function BulkEditModal({ open, onClose, count, sources, opportunityStages
                   <select className={selectCls} value={values[field.key] || ''} onChange={(e) => set(field.key, e.target.value)}>
                     <option value="">-- choose opportunity status --</option>
                     {(opportunityStatuses || []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
-                )}
-                {field.type === 'stage' && (
-                  <select className={selectCls} value={values[field.key] || ''} onChange={(e) => set(field.key, e.target.value)}>
-                    <option value="">-- choose stage --</option>
-                    {(opportunityStages || []).map((s) => { const v = s.name || s.key || s.id; return <option key={v} value={v}>{formatStageName(s.name || v)}</option> })}
                   </select>
                 )}
                 {field.type === 'source' && (

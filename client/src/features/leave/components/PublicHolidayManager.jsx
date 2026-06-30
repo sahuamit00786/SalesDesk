@@ -1,10 +1,9 @@
 import { useState } from 'react'
 import toast from 'react-hot-toast'
-import { PartyPopper } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { HrCard } from '@/features/hr/components/HrCard'
 import { HrEmptyState } from '@/features/hr/components/HrEmptyState'
+import { PartyPopper } from 'lucide-react'
 import {
   useCreateHolidayMutation,
   useDeleteHolidayMutation,
@@ -57,17 +56,15 @@ export function PublicHolidayManager({ year }) {
   }
 
   return (
-    <HrCard
-      title={`Public holidays (${year})`}
-      description="Company-wide holidays excluded from leave day calculations"
-      icon={PartyPopper}
-    >
+    <div className="rounded-xl border border-surface-border bg-white p-4">
+      <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-ink-muted">
+        Public holidays ({year})
+      </p>
       <form
         onSubmit={addHoliday}
-        className="mb-6 space-y-4 rounded-xl border border-surface-border bg-surface-subtle/50 p-4 sm:p-5"
+        className="mb-4 space-y-3 rounded-lg border border-surface-border bg-surface-subtle/50 p-3"
       >
-        <p className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Add holiday</p>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <FieldLabel htmlFor="holiday-name">Holiday name</FieldLabel>
             <Input
@@ -91,8 +88,8 @@ export function PublicHolidayManager({ year }) {
             />
           </div>
         </div>
-        <div className="flex justify-end border-t border-surface-border/70 pt-4">
-          <Button type="submit" disabled={creating}>
+        <div className="flex justify-end pt-1">
+          <Button type="submit" disabled={creating} className="!h-8 !px-3 !text-xs">
             {creating ? 'Adding…' : 'Add holiday'}
           </Button>
         </div>
@@ -105,29 +102,29 @@ export function PublicHolidayManager({ year }) {
           icon={PartyPopper}
           title="No holidays configured"
           description="Add public holidays so leave calculations skip non-working days."
-          className="border-0 bg-transparent py-6"
+          className="border-0 bg-transparent py-4"
         />
       ) : (
-        <ul className="divide-y divide-surface-border overflow-hidden rounded-xl border border-surface-border">
+        <ul className="divide-y divide-surface-border overflow-hidden rounded-lg border border-surface-border">
           {holidays.map((h) => (
             <li
               key={h.id}
-              className="flex flex-wrap items-center justify-between gap-3 bg-white px-4 py-3.5 transition-colors hover:bg-slate-50/30 sm:px-5"
+              className="flex flex-wrap items-center justify-between gap-3 bg-white px-3 py-2.5 transition-colors hover:bg-slate-50/30"
             >
               <div className="min-w-0">
-                <p className="font-semibold text-ink">{h.name}</p>
+                <p className="text-sm font-semibold text-ink">{h.name}</p>
                 <p className="mt-0.5 text-xs text-ink-muted">
                   <span className="font-medium tabular-nums text-brand-700">{h.date}</span>
                   {h.description ? ` — ${h.description}` : ''}
                 </p>
               </div>
-              <Button type="button" variant="danger" className="!h-8 !px-3 !text-xs shrink-0" onClick={() => remove(h.id)}>
+              <Button type="button" variant="danger" className="!h-7 !px-2.5 !text-xs shrink-0" onClick={() => remove(h.id)}>
                 Delete
               </Button>
             </li>
           ))}
         </ul>
       )}
-    </HrCard>
+    </div>
   )
 }

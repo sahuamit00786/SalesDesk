@@ -1,0 +1,249 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>
+(function(){var k='upgrow.theme',s=localStorage.getItem(k);
+if(s==='dark'||(s!=='light'&&matchMedia('(prefers-color-scheme:dark)').matches))
+document.documentElement.setAttribute('data-theme','dark');})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Services — Upgrow Ventures</title>
+<meta name="description" content="Full-stack development, AI automation, SaaS, Shopify, WordPress, cloud deployments and more. End-to-end capability from Upgrow Ventures.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://iconsax.gitlab.io/i/icons.css" rel="stylesheet">
+<link rel="stylesheet" href="upgrow.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<div id="progress" aria-hidden="true"></div>
+<div id="cursor-dot" aria-hidden="true"></div>
+
+<nav id="nav" aria-label="Main">
+  <a class="logo" href="index.html" aria-label="Upgrow Ventures home">
+    <img src="logo.png" alt="Upgrow Ventures" class="logo-img">
+  </a>
+  <div class="nav-links" id="nav-links">
+    <a href="index.html">Home</a>
+    <a href="projects.html">Projects</a>
+    <a href="services.html">Services</a>
+    <a href="about.html">About Us</a>
+  </div>
+  <div class="nav-actions">
+    <button class="nav-cta magnetic" onclick="document.getElementById('contact').scrollIntoView({behavior:'smooth'})">Start a project</button>
+    <button class="theme-toggle magnetic" id="theme-toggle" type="button" aria-label="Toggle theme" title="Toggle theme">
+      <span class="theme-toggle-thumb">
+        <i class="iconsax icon-sun" icon-name="sun-1" aria-hidden="true"></i>
+        <i class="iconsax icon-moon" icon-name="moon" aria-hidden="true"></i>
+      </span>
+    </button>
+    <button class="menu-btn" id="menu-btn" aria-label="Toggle menu" aria-expanded="false">
+      <i class="iconsax" icon-name="hamburger-menu" aria-hidden="true"></i>
+    </button>
+  </div>
+</nav>
+
+<main id="main">
+
+<!-- PAGE HERO -->
+<div class="pg-hero pg-hero--split">
+  <div class="pg-hero-copy">
+    <span class="eyebrow"><i class="iconsax" icon-name="code-1" aria-hidden="true"></i>What we do</span>
+    <h1 data-title>The complete product toolbox.</h1>
+    <p>End-to-end capability — from the first commit to fully automated operations. We cover every layer of your stack.</p>
+  </div>
+  <div class="pg-hero-illo" aria-hidden="true">
+    <svg viewBox="0 0 460 360" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <!-- Dot grid background -->
+      <pattern id="sdots" x="0" y="0" width="28" height="28" patternUnits="userSpaceOnUse">
+        <circle cx="1.5" cy="1.5" r="1.5" fill="var(--accent)" fill-opacity=".1"/>
+      </pattern>
+      <rect width="460" height="360" fill="url(#sdots)"/>
+      <!-- Layer 3: Cloud / Infra (bottom) — grouped so rect+text+pills move together -->
+      <g class="b1">
+        <rect x="56" y="262" width="348" height="72" rx="14" fill="var(--bg-2)" stroke="var(--line-strong)" stroke-width="1.5"/>
+        <text x="78" y="287" font-family="Space Grotesk,sans-serif" font-size="9.5" font-weight="700" fill="var(--txt-soft)" letter-spacing=".1em">CLOUD &amp; INFRA</text>
+        <rect x="78" y="298" width="52" height="18" rx="5" fill="var(--accent)" fill-opacity=".1" stroke="var(--line-strong)" stroke-width="1"/>
+        <text x="104" y="311" text-anchor="middle" font-family="Inter,sans-serif" font-size="8" fill="var(--txt-soft)">AWS</text>
+        <rect x="138" y="298" width="52" height="18" rx="5" fill="var(--accent)" fill-opacity=".08" stroke="var(--line-strong)" stroke-width="1"/>
+        <text x="164" y="311" text-anchor="middle" font-family="Inter,sans-serif" font-size="8" fill="var(--txt-soft)">Docker</text>
+        <rect x="198" y="298" width="52" height="18" rx="5" fill="var(--accent)" fill-opacity=".08" stroke="var(--line-strong)" stroke-width="1"/>
+        <text x="224" y="311" text-anchor="middle" font-family="Inter,sans-serif" font-size="8" fill="var(--txt-soft)">Redis</text>
+        <rect x="258" y="298" width="52" height="18" rx="5" fill="var(--accent)" fill-opacity=".08" stroke="var(--line-strong)" stroke-width="1"/>
+        <text x="284" y="311" text-anchor="middle" font-family="Inter,sans-serif" font-size="8" fill="var(--txt-soft)">MySQL</text>
+        <rect x="318" y="298" width="60" height="18" rx="5" fill="var(--accent)" fill-opacity=".08" stroke="var(--line-strong)" stroke-width="1"/>
+        <text x="348" y="311" text-anchor="middle" font-family="Inter,sans-serif" font-size="8" fill="var(--txt-soft)">Kubernetes</text>
+      </g>
+      <!-- Connector -->
+      <line x1="230" y1="262" x2="230" y2="228" stroke="var(--accent)" stroke-width="1.5" stroke-opacity=".22" stroke-dasharray="4 4"/>
+      <!-- Layer 2: Backend / API (middle) -->
+      <g class="b2">
+        <rect x="56" y="156" width="348" height="72" rx="14" fill="var(--bg-2)" stroke="var(--line-strong)" stroke-width="1.5"/>
+        <text x="78" y="181" font-family="Space Grotesk,sans-serif" font-size="9.5" font-weight="700" fill="var(--txt-soft)" letter-spacing=".1em">BACKEND &amp; API</text>
+        <rect x="78" y="192" width="56" height="18" rx="5" fill="var(--accent)" fill-opacity=".12" stroke="var(--accent)" stroke-width="1" stroke-opacity=".35"/>
+        <text x="106" y="205" text-anchor="middle" font-family="Inter,sans-serif" font-size="8" fill="var(--accent)">Node.js</text>
+        <rect x="142" y="192" width="56" height="18" rx="5" fill="var(--accent)" fill-opacity=".08" stroke="var(--line-strong)" stroke-width="1"/>
+        <text x="170" y="205" text-anchor="middle" font-family="Inter,sans-serif" font-size="8" fill="var(--txt-soft)">Express</text>
+        <rect x="206" y="192" width="60" height="18" rx="5" fill="var(--accent)" fill-opacity=".08" stroke="var(--line-strong)" stroke-width="1"/>
+        <text x="236" y="205" text-anchor="middle" font-family="Inter,sans-serif" font-size="8" fill="var(--txt-soft)">GraphQL</text>
+        <rect x="274" y="192" width="60" height="18" rx="5" fill="var(--accent)" fill-opacity=".08" stroke="var(--line-strong)" stroke-width="1"/>
+        <text x="304" y="205" text-anchor="middle" font-family="Inter,sans-serif" font-size="8" fill="var(--txt-soft)">REST API</text>
+        <text x="78" y="222" font-family="monospace" font-size="8" fill="var(--accent)" fill-opacity=".45">POST /api/v1/leads  →  200 OK ✓</text>
+      </g>
+      <!-- Connector -->
+      <line x1="230" y1="156" x2="230" y2="122" stroke="var(--accent)" stroke-width="1.5" stroke-opacity=".22" stroke-dasharray="4 4"/>
+      <!-- Layer 1: Frontend / UI (top) -->
+      <g class="b3">
+        <rect x="56" y="50" width="348" height="72" rx="14" fill="var(--accent)" fill-opacity=".07" stroke="var(--accent)" stroke-width="1.5" stroke-opacity=".45"/>
+        <text x="78" y="75" font-family="Space Grotesk,sans-serif" font-size="9.5" font-weight="700" fill="var(--accent)" letter-spacing=".1em">FRONTEND &amp; UI</text>
+        <rect x="78" y="86" width="56" height="18" rx="5" fill="var(--accent)" fill-opacity=".18" stroke="var(--accent)" stroke-width="1" stroke-opacity=".4"/>
+        <text x="106" y="99" text-anchor="middle" font-family="Inter,sans-serif" font-size="8" fill="var(--accent)">React</text>
+        <rect x="142" y="86" width="60" height="18" rx="5" fill="var(--accent)" fill-opacity=".08" stroke="var(--line-strong)" stroke-width="1"/>
+        <text x="172" y="99" text-anchor="middle" font-family="Inter,sans-serif" font-size="8" fill="var(--txt-soft)">Next.js</text>
+        <rect x="210" y="86" width="66" height="18" rx="5" fill="var(--accent)" fill-opacity=".08" stroke="var(--line-strong)" stroke-width="1"/>
+        <text x="243" y="99" text-anchor="middle" font-family="Inter,sans-serif" font-size="8" fill="var(--txt-soft)">Tailwind</text>
+        <rect x="284" y="86" width="80" height="18" rx="5" fill="var(--accent)" fill-opacity=".08" stroke="var(--line-strong)" stroke-width="1"/>
+        <text x="324" y="99" text-anchor="middle" font-family="Inter,sans-serif" font-size="8" fill="var(--txt-soft)">TypeScript</text>
+        <rect x="78" y="112" width="140" height="6" rx="3" fill="var(--accent)" fill-opacity=".22"/>
+        <rect x="226" y="112" width="90" height="6" rx="3" fill="var(--line-strong)"/>
+        <rect x="324" y="112" width="60" height="6" rx="3" fill="var(--line-strong)"/>
+      </g>
+      <!-- AI badge floating top-right -->
+      <g class="b4">
+        <rect x="346" y="16" width="98" height="28" rx="14" fill="var(--accent)" fill-opacity=".88"/>
+        <text x="395" y="34" text-anchor="middle" font-family="Space Grotesk,sans-serif" font-size="9.5" font-weight="600" fill="white" letter-spacing=".04em">✦ AI Ready</text>
+      </g>
+      <!-- Services count badge -->
+      <g class="b5">
+        <rect x="16" y="22" width="110" height="52" rx="11" fill="var(--surface-card)" stroke="var(--line-strong)" stroke-width="1.5"/>
+        <text x="30" y="48" font-family="Space Grotesk,sans-serif" font-size="20" font-weight="700" fill="var(--accent)">10</text>
+        <text x="30" y="62" font-family="Inter,sans-serif" font-size="8.5" fill="var(--txt-faint)">Services offered</text>
+      </g>
+      <!-- Live status dot -->
+      <circle cx="432" cy="195" r="6" fill="var(--ok)" fill-opacity=".85"/>
+      <text x="432" y="210" text-anchor="middle" font-family="Inter,sans-serif" font-size="7.5" fill="var(--txt-faint)">LIVE</text>
+      <!-- Corner accents -->
+      <polyline points="16,330 40,330 40,306" stroke="var(--accent)" stroke-width="1.5" stroke-opacity=".18" stroke-linejoin="round" fill="none"/>
+      <circle cx="424" cy="336" r="3.5" fill="var(--accent)" fill-opacity=".35"/>
+      <circle cx="444" cy="350" r="2" fill="var(--accent)" fill-opacity=".25"/>
+    </svg>
+  </div>
+</div>
+
+<!-- SERVICES GRID -->
+<section id="services">
+  <div class="sec-head">
+    <span class="sec-index">01 / Our services</span>
+    <h2 class="sec-title" data-title>Everything you need to ship.</h2>
+    <p class="sec-desc" data-reveal>Ten specialisms. One accountable team. No handoffs to subcontractors.</p>
+  </div>
+  <div class="services-grid" id="services-grid"></div>
+</section>
+
+<!-- PROCESS -->
+<section id="process">
+  <div class="sec-head">
+    <span class="sec-index">02 / How we work</span>
+    <h2 class="sec-title" data-title>Idea to scale, in seven moves.</h2>
+    <p class="sec-desc" data-reveal>Tap a step to explore it. Each phase has a clear owner, deliverable, and exit criteria.</p>
+  </div>
+  <div class="proc-scroll"><div class="proc-row" id="proc-row"></div></div>
+</section>
+
+<!-- CONTACT -->
+<section id="contact">
+  <div class="sec-head">
+    <span class="sec-index">03 / Start a project</span>
+    <h2 class="sec-title" data-title>Let's build what's next.</h2>
+  </div>
+  <div class="contact-grid">
+    <div class="contact-info">
+      <p>Tell us where you want to go. We'll reply within one business day with a clear path to get there.</p>
+      <div class="contact-points">
+        <div><i class="iconsax" icon-name="tick-circle" aria-hidden="true"></i>Free scoping call &amp; proposal</div>
+        <div><i class="iconsax" icon-name="tick-circle" aria-hidden="true"></i>Senior engineers only — no hand-offs</div>
+        <div><i class="iconsax" icon-name="tick-circle" aria-hidden="true"></i>NDA-friendly from the first message</div>
+      </div>
+      <div class="contact-direct">
+        <a href="tel:+918368555482"><span class="cd-ico"><i class="iconsax" icon-name="phone" aria-hidden="true"></i></span><span><em>Call us</em>+91 83685 55482</span></a>
+        <a href="mailto:upgrowventures.co@gmail.com"><span class="cd-ico"><i class="iconsax" icon-name="mail" aria-hidden="true"></i></span><span><em>Email us</em>upgrowventures.co@gmail.com</span></a>
+      </div>
+    </div>
+    <form id="contact-form" novalidate>
+      <div class="field-row">
+        <div class="field"><label for="f-name">Name</label><input id="f-name" name="name" type="text" placeholder="Jane Cooper" required></div>
+        <div class="field"><label for="f-email">Email</label><input id="f-email" name="email" type="email" placeholder="jane@company.com" required></div>
+      </div>
+      <div class="field"><label for="f-company">Company</label><input id="f-company" name="company" type="text" placeholder="Acme Inc."></div>
+      <div class="field"><label for="f-details">Project details</label><textarea id="f-details" name="details" rows="5" placeholder="What are you building, and when do you need it live?" required></textarea></div>
+      <button class="btn btn-primary magnetic" type="submit">Send message <i class="iconsax" icon-name="send-2" aria-hidden="true"></i></button>
+      <div class="form-success" id="form-success" role="status">
+        <i class="iconsax" icon-name="tick-circle" aria-hidden="true"></i>
+        <div><b>Message sent.</b><span>Thanks — we'll get back to you within one business day.</span></div>
+      </div>
+    </form>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="foot-word" aria-hidden="true"><div>UPGROW <span class="acc">VENTURES</span></div></div>
+  <div class="foot-grid">
+    <div>
+      <a class="logo" href="index.html"><img src="logo.png" alt="Upgrow Ventures" class="logo-img"></a>
+      <p>Premium software development and AI automation for companies building what's next.</p>
+      <div class="foot-contact">
+        <a href="tel:+918368555482"><i class="iconsax" icon-name="phone" aria-hidden="true"></i>+91 83685 55482</a>
+        <a href="mailto:upgrowventures.co@gmail.com"><i class="iconsax" icon-name="mail" aria-hidden="true"></i>upgrowventures.co@gmail.com</a>
+      </div>
+    </div>
+    <div><h4>Pages</h4><ul>
+      <li><a href="index.html">Home</a></li>
+      <li><a href="projects.html">Projects</a></li>
+      <li><a href="services.html">Services</a></li>
+      <li><a href="about.html">About Us</a></li>
+    </ul></div>
+    <div><h4>Services</h4><ul>
+      <li><a href="#services">Full-Stack Development</a></li>
+      <li><a href="#services">AI Automation</a></li>
+      <li><a href="#services">SaaS Development</a></li>
+      <li><a href="#services">Cloud Deployments</a></li>
+    </ul></div>
+    <div><h4>Stack</h4><ul>
+      <li><a href="index.html#universe">Frontend</a></li>
+      <li><a href="index.html#universe">Backend &amp; APIs</a></li>
+      <li><a href="index.html#universe">AI &amp; Automation</a></li>
+      <li><a href="index.html#universe">Cloud &amp; DevOps</a></li>
+    </ul></div>
+  </div>
+  <div class="foot-bottom">
+    <span>© 2026 UPGROW VENTURES — ALL RIGHTS RESERVED</span>
+    <span>BUILT WITH PRECISION · POWERED BY AUTOMATION</span>
+  </div>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.2/anime.min.js"></script>
+<script src="upgrow.js"></script>
+<script>
+var reduced=matchMedia('(prefers-reduced-motion:reduce)').matches;
+var isMobile=matchMedia('(max-width:640px)').matches;
+
+/* render */
+document.getElementById('services-grid').innerHTML=SERVICES.map(function(s,i){
+  return '<article class="svc" data-i="'+String(i+1).padStart(2,'0')+'" data-reveal><i class="iconsax" icon-name="'+s[0]+'" aria-hidden="true"></i><h3>'+s[1]+'</h3><p>'+s[2]+'</p><span class="svc-line"></span></article>';
+}).join('');
+renderProcess('proc-row');
+
+/* shared init */
+initNav();
+initScrollProgress();
+initReveal(reduced);
+initCursorDot(isMobile,reduced);
+initContactForm(reduced);
+</script>
+</body>
+</html>

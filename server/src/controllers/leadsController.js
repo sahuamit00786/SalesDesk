@@ -5,7 +5,7 @@ import path from 'node:path'
 import { Op, fn, col, where as sqlWhere } from 'sequelize'
 import { getCountries, getCountryCallingCode } from 'libphonenumber-js/min'
 import { google } from 'googleapis'
-import { getGoogleOAuthClient } from '../services/google/googleEnv.js'
+import { getGoogleOAuthClient, readGoogleOAuthEnv } from '../services/google/googleEnv.js'
 import { sequelize } from '../models/index.js'
 import {
   Activity,
@@ -20,7 +20,6 @@ import {
   LeadTaskComment,
   LeadFollowup,
   LeadSource,
-  OpportunityStage,
   OpportunityStatus,
   DealStatus,
   CountryPhoneCode,
@@ -435,16 +434,13 @@ function buildListWhere(query) {
       sqlWhere(fn('LOWER', col('Lead.email')), { [Op.like]: q }),
     ]
   }
+  const stages = parseCsvList(query.stage).filter(Boolean)
+  if (stages.length === 1) where.opportunityStatus = stages[0]
+  else if (stages.length > 1) where.opportunityStatus = { [Op.in]: stages }
+
   const iso = String(query.isOpportunity ?? '').toLowerCase()
   if (iso === 'true' || iso === '1') where.isOpportunity = true
   if (iso === 'false' || iso === '0') where.isOpportunity = false
-
-  const oppStageFilter = parseCsvList(query.stage)
-  const isoFalse = iso === 'false' || iso === '0'
-  if (oppStageFilter.length && !isoFalse) {
-    if (oppStageFilter.length === 1) where.opportunityStage = oppStageFilter[0]
-    else where.opportunityStage = { [Op.in]: oppStageFilter }
-  }
 
   const createdFrom = query.createdFrom ? String(query.createdFrom).slice(0, 10) : null
   const createdTo = query.createdTo ? String(query.createdTo).slice(0, 10) : null
@@ -489,58 +485,6 @@ async function resolveActorDisplayName(userId, emailFallback) {
   const n = u?.name?.trim()
   if (n) return n
   return u?.email?.trim() || emailFallback || 'Someone'
-}
-
-function formatPipelineStageLabelForMessage(value) {
-  const text = String(value || '').trim()
-  if (!text) return '—'
-  return text
-    .split(/[_\s]+/)
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-    .join(' ')
-}
-
-async function normalizeOpportunityStageOrder(workspaceId, companyId, transaction) {
-  const rows = await OpportunityStage.findAll({
-    where: { workspaceId, companyId },
-    order: [
-      ['sortOrder', 'ASC'],
-      ['createdAt', 'ASC'],
-    ],
-    transaction,
-  })
-  for (let i = 0; i < rows.length; i += 1) {
-    await rows[i].update({ sortOrder: i, isDefault: i === 0 }, { transaction })
-  }
-}
-
-async function normalizeOpportunityStageDealStatusFlag(workspaceId, companyId, transaction, preferredId = null) {
-  const rows = await OpportunityStage.findAll({
-    where: { workspaceId, companyId },
-    order: [
-      ['sortOrder', 'ASC'],
-      ['createdAt', 'ASC'],
-    ],
-    transaction,
-  })
-  if (!rows.length) return
-
-  let winnerId = preferredId ? String(preferredId) : null
-  if (!winnerId) {
-    const existing = rows.find((row) => row.isDealStatus)
-    winnerId = existing ? String(existing.id) : null
-  }
-  if (!winnerId) {
-    winnerId = String(rows[0].id)
-  }
-
-  for (const row of rows) {
-    const shouldBeDealStage = winnerId ? String(row.id) === winnerId : false
-    if (Boolean(row.isDealStatus) !== shouldBeDealStage) {
-      await row.update({ isDealStatus: shouldBeDealStage }, { transaction })
-    }
-  }
 }
 
 async function normalizeDealStatusOrder(workspaceId, companyId, transaction) {
@@ -843,7 +787,6 @@ const leadSchema = Joi.object({
   customFields: Joi.object().default({}),
   force: Joi.boolean().default(false),
   isOpportunity: Joi.boolean(),
-  opportunityStage: Joi.string().trim().max(80).allow(null, ''),
 }).custom((value, helpers) => {
   const phone = normalizePhone(value.phone)
   const altPhone = normalizePhone(value.altPhone)
@@ -853,28 +796,6 @@ const leadSchema = Joi.object({
   }
   return value
 }, 'Phone/alternate phone uniqueness')
-
-async function resolveInitialOpportunityStageForLead(workspaceId, companyId, requested) {
-  const trimmed = requested !== undefined && requested !== null ? String(requested).trim() : ''
-  if (trimmed) return trimmed
-  const def = await OpportunityStage.findOne({
-    where: { workspaceId, companyId, isDefault: true },
-    order: [
-      ['sortOrder', 'ASC'],
-      ['createdAt', 'ASC'],
-    ],
-  })
-  if (def) return def.name
-  const first = await OpportunityStage.findOne({
-    where: { workspaceId, companyId },
-    order: [
-      ['sortOrder', 'ASC'],
-      ['createdAt', 'ASC'],
-    ],
-  })
-  if (first) return first.name
-  return 'Lead Inbound'
-}
 
 export async function list(req, res, next) {
   try {
@@ -909,7 +830,6 @@ export async function list(req, res, next) {
       'status',
       'score',
       'value',
-      'opportunityStage',
       'assignedTo',
       'source',
       'contactName',
@@ -922,6 +842,7 @@ export async function list(req, res, next) {
     const include = [
       { model: User, as: 'assignee', attributes: ['id', 'name', 'email'], required: false },
       { model: Tag, as: 'tags', attributes: ['id', 'name', 'color'], through: { attributes: [] }, required: false },
+      { model: OpportunityStatus, as: 'oppStatus', attributes: ['id', 'name'], required: false },
     ]
     if (await hasLeadAssignmentsTable()) {
       include.push({ model: User, as: 'assignedUsers', attributes: ['id', 'name', 'email'], through: { attributes: [] }, required: false })
@@ -1043,10 +964,6 @@ export async function create(req, res, next) {
     }
 
     const legacy = extractLegacyProfile(value.notes)
-    const requestedOpp =
-      value.opportunityStage !== undefined && value.opportunityStage !== null
-        ? String(value.opportunityStage).trim()
-        : ''
     const customFieldsPayload = value.customFields || {}
     const payload = {
       ...value,
@@ -1065,13 +982,6 @@ export async function create(req, res, next) {
     delete payload.tags
     delete payload.assignedUserIds
     delete payload.force
-    const isOpp = Boolean(value.isOpportunity)
-    if (isOpp) {
-      payload.opportunityStage =
-        requestedOpp || (await resolveInitialOpportunityStageForLead(String(workspaceId), req.user.companyId, null))
-    } else {
-      payload.opportunityStage = null
-    }
     const lead = await Lead.create(payload)
     if (value.assignedUserIds?.length && (await hasLeadAssignmentsTable())) {
       await LeadAssignment.bulkCreate(
@@ -1184,21 +1094,6 @@ export async function update(req, res, next) {
       })
     }
 
-    if (value.opportunityStage !== undefined) {
-      const trimmed = String(value.opportunityStage ?? '').trim()
-      if (trimmed) {
-        const stageOk = await OpportunityStage.findOne({
-          where: { name: trimmed, workspaceId: lead.workspaceId, companyId: req.user.companyId },
-        })
-        if (!stageOk) {
-          return res.status(400).json({
-            success: false,
-            error: { code: 'VALIDATION', message: 'Invalid pipeline stage for this workspace' },
-          })
-        }
-      }
-    }
-
     const hasTagsField = Object.prototype.hasOwnProperty.call(req.body || {}, 'tags')
     const hasAssignedUserIdsField = Object.prototype.hasOwnProperty.call(req.body || {}, 'assignedUserIds')
     const before = lead.get({ plain: true })
@@ -1227,25 +1122,6 @@ export async function update(req, res, next) {
     }
     await lead.update(payload)
     await lead.reload()
-    const afterStage = lead.opportunityStage || ''
-    if (
-      value.opportunityStage !== undefined &&
-      String(value.opportunityStage || '').trim() &&
-      String(before.opportunityStage || '') !== String(afterStage)
-    ) {
-      await Activity.create({
-        type: 'status_change',
-        body: `Pipeline stage changed from ${formatPipelineStageLabelForMessage(before.opportunityStage)} to ${formatPipelineStageLabelForMessage(afterStage)} by ${actorName}`,
-        metadata: {
-          action: 'opportunity_stage_changed',
-          from: before.opportunityStage || '',
-          to: afterStage,
-          actorUserId: req.user.id,
-        },
-        leadId: lead.id,
-        userId: req.user.id,
-      })
-    }
     if (hasAssignedUserIdsField && (await hasLeadAssignmentsTable())) {
       await LeadAssignment.destroy({ where: { leadId: lead.id } })
       if (value.assignedUserIds.length) {
@@ -1363,10 +1239,10 @@ export async function update(req, res, next) {
 export async function formMeta(req, res, next) {
   try {
     const workspaceId = req.headers['x-workspace-id']
-    const [sourceCount, opportunityStageCount, dealStatusCount] = await Promise.all([
+    const [sourceCount, dealStatusCount, oppStatusCount] = await Promise.all([
       LeadSource.count({ where: { workspaceId, companyId: req.user.companyId } }),
-      OpportunityStage.count({ where: { workspaceId, companyId: req.user.companyId } }),
       DealStatus.count({ where: { workspaceId, companyId: req.user.companyId } }),
+      OpportunityStatus.count({ where: { workspaceId, companyId: req.user.companyId } }),
     ])
     if (sourceCount === 0) {
       await LeadSource.bulkCreate([
@@ -1375,25 +1251,6 @@ export async function formMeta(req, res, next) {
         { name: 'Referral', workspaceId, companyId: req.user.companyId },
       ])
     }
-    if (opportunityStageCount === 0) {
-      const seedStages = [
-        { name: 'open', isDefault: true, isDealStatus: false, sortOrder: 0 },
-        { name: 'discovery', sortOrder: 1 },
-        { name: 'demo_scheduled', sortOrder: 2 },
-        { name: 'demo_completed', sortOrder: 3 },
-        { name: 'solution_fit_confirmed', sortOrder: 4 },
-        { name: 'proposal_in_progress', sortOrder: 5 },
-        { name: 'proposal_sent', isDealStatus: true, sortOrder: 6 },
-        { name: 'on_hold', sortOrder: 7 },
-      ]
-      await OpportunityStage.bulkCreate(
-        seedStages.map((s) => ({ ...s, workspaceId, companyId: req.user.companyId })),
-      )
-    }
-    await sequelize.transaction(async (transaction) => {
-      await normalizeOpportunityStageOrder(workspaceId, req.user.companyId, transaction)
-      await normalizeOpportunityStageDealStatusFlag(workspaceId, req.user.companyId, transaction)
-    })
     if (dealStatusCount === 0) {
       await DealStatus.bulkCreate([
         { name: 'qualification', isDealCompleteStatus: false, isInitial: true, sortOrder: 0, workspaceId, companyId: req.user.companyId },
@@ -1402,6 +1259,16 @@ export async function formMeta(req, res, next) {
         { name: 'contract_sent', isDealCompleteStatus: false, isInitial: false, sortOrder: 3, workspaceId, companyId: req.user.companyId },
         { name: 'won', isDealCompleteStatus: true, isInitial: false, sortOrder: 4, workspaceId, companyId: req.user.companyId },
         { name: 'lost', isDealCompleteStatus: false, isInitial: false, sortOrder: 5, workspaceId, companyId: req.user.companyId },
+      ])
+    }
+    if (oppStatusCount === 0) {
+      await OpportunityStatus.bulkCreate([
+        { name: 'New', isInitial: true, sortOrder: 0, workspaceId, companyId: req.user.companyId },
+        { name: 'Qualified', isInitial: false, sortOrder: 1, workspaceId, companyId: req.user.companyId },
+        { name: 'Proposal Sent', isInitial: false, sortOrder: 2, workspaceId, companyId: req.user.companyId },
+        { name: 'Negotiation', isInitial: false, sortOrder: 3, workspaceId, companyId: req.user.companyId },
+        { name: 'Won', isInitial: false, sortOrder: 4, workspaceId, companyId: req.user.companyId },
+        { name: 'Lost', isInitial: false, sortOrder: 5, workspaceId, companyId: req.user.companyId },
       ])
     }
     const phoneCodeCount = await CountryPhoneCode.count()
@@ -1435,33 +1302,27 @@ export async function formMeta(req, res, next) {
       }
     }
 
-    const [sources, users, phoneCodes, opportunityStages, dealStatuses, tags, customFields] = await Promise.all([
+    const [sources, users, phoneCodes, dealStatuses, tags, customFields, opportunityStatuses] = await Promise.all([
       LeadSource.findAll({ where: { workspaceId, companyId: req.user.companyId, isActive: true }, order: [['name', 'ASC']] }),
       User.findAll({ where: { companyId: req.user.companyId, isActive: true }, attributes: ['id', 'name', 'email'], order: [['name', 'ASC']] }),
       CountryPhoneCode.findAll({ where: { isActive: true }, order: [['isDefault', 'DESC'], ['countryName', 'ASC']] }),
-      OpportunityStage.findAll({
-        where: { workspaceId, companyId: req.user.companyId },
-        order: [
-          ['sortOrder', 'ASC'],
-          ['createdAt', 'ASC'],
-        ],
-      }),
       DealStatus.findAll({
         where: { workspaceId, companyId: req.user.companyId },
-        order: [
-          ['sortOrder', 'ASC'],
-          ['createdAt', 'ASC'],
-        ],
+        order: [['sortOrder', 'ASC'], ['createdAt', 'ASC']],
       }),
       Tag.findAll({ where: { companyId: req.user.companyId }, order: [['name', 'ASC'], ['createdAt', 'ASC']] }),
       CustomField.findAll({
         where: { workspaceId, companyId: req.user.companyId },
         order: [['order', 'ASC'], ['createdAt', 'ASC']],
       }),
+      OpportunityStatus.findAll({
+        where: { workspaceId, companyId: req.user.companyId },
+        order: [['sortOrder', 'ASC'], ['createdAt', 'ASC']],
+      }),
     ])
     return res.json({
       success: true,
-      data: { sources, users, phoneCodes, opportunityStages, dealStatuses, tags, customFields },
+      data: { sources, users, phoneCodes, dealStatuses, tags, customFields, opportunityStatuses },
       meta: {},
     })
   } catch (e) {
@@ -1581,7 +1442,7 @@ export async function bulk(req, res, next) {
     if (action === 'status') await Lead.update({ status: payload.status || 'new' }, { where: { id: { [Op.in]: ids } } })
     if (action === 'delete') await Lead.update({ isDeleted: true }, { where: { id: { [Op.in]: ids } } })
     if (action === 'update') {
-      const ALLOWED = ['status', 'opportunityStatus', 'sourceId', 'opportunityStage', 'value', 'country', 'city', 'state']
+      const ALLOWED = ['status', 'opportunityStatus', 'sourceId', 'value', 'country', 'city', 'state']
       const patch = {}
       for (const key of ALLOWED) {
         if (Object.prototype.hasOwnProperty.call(payload, key) && payload[key] !== undefined && payload[key] !== '') {
@@ -1590,13 +1451,6 @@ export async function bulk(req, res, next) {
       }
       if (payload.isOpportunity === true) {
         await Lead.update({ isOpportunity: true }, { where: { id: { [Op.in]: ids }, isOpportunity: false } })
-      }
-      if (Object.prototype.hasOwnProperty.call(patch, 'opportunityStage')) {
-        await Lead.update(
-          { opportunityStage: patch.opportunityStage },
-          { where: { id: { [Op.in]: ids }, isOpportunity: true } },
-        )
-        delete patch.opportunityStage
       }
       if (Object.prototype.hasOwnProperty.call(patch, 'opportunityStatus')) {
         await Lead.update(
@@ -2004,6 +1858,12 @@ function hasGoogleMailboxRefreshToken(tokenRow) {
   return Boolean(tokenRow?.refreshToken)
 }
 
+function googleTokenAllowsCalendar(scopeStr) {
+  if (!scopeStr || typeof scopeStr !== 'string') return false
+  const s = scopeStr.toLowerCase()
+  return s.includes('calendar.events') || s.includes('/auth/calendar')
+}
+
 /** Inbox / threads.list need read (or metadata/modify/full), not gmail.send alone. */
 function googleTokenAllowsMailboxRead(scopeStr) {
   if (!scopeStr || typeof scopeStr !== 'string') return null
@@ -2042,6 +1902,7 @@ export async function getGoogleEmailAuthStatus(req, res, next) {
     const token = await companyGoogleEmailToken(req.user.companyId)
     const connected = hasGoogleMailboxRefreshToken(token)
     const readMailbox = connected ? googleTokenAllowsMailboxRead(token?.scope) : null
+    const calendarConnected = connected ? googleTokenAllowsCalendar(token?.scope) : false
 
     if (connected) {
       try {
@@ -2068,6 +1929,7 @@ export async function getGoogleEmailAuthStatus(req, res, next) {
       data: {
         connected,
         readMailbox,
+        calendarConnected,
         email: token?.email || null,
         updatedAt: token?.updatedAt || null,
         gmailPushConfigured: isGmailPushConfigured(),
@@ -2079,15 +1941,30 @@ export async function getGoogleEmailAuthStatus(req, res, next) {
   }
 }
 
+function emailOAuthClient() {
+  const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID || process.env.GOOGLE_CLIENT_ID
+  const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET
+  const redirectUri = process.env.GOOGLE_OAUTH_REDIRECT_URI ||
+    `http://localhost:${process.env.PORT || 4000}/api/v1/leads/email/google/callback`
+  if (!clientId || !clientSecret || !redirectUri) {
+    const err = new Error('Google OAuth is not configured')
+    err.status = 500
+    err.code = 'GOOGLE_OAUTH_NOT_CONFIGURED'
+    throw err
+  }
+  return new google.auth.OAuth2(clientId, clientSecret, redirectUri)
+}
+
 export async function getGoogleEmailConnectUrl(req, res, next) {
   try {
-    const oauth2Client = getGoogleOAuthClient()
+    const oauth2Client = emailOAuthClient()
     const scopes = [
       'https://www.googleapis.com/auth/gmail.send',
       /** Read + label changes (mark read, archive, etc.); readonly is insufficient for threads.modify. */
       'https://www.googleapis.com/auth/gmail.modify',
       'https://www.googleapis.com/auth/userinfo.email',
       'openid',
+      'https://www.googleapis.com/auth/calendar.events',
     ]
     const returnTo = sanitizeGoogleOAuthReturnTo(req.query.returnTo)
     const state = Buffer.from(
@@ -2120,7 +1997,7 @@ export async function connectGoogleEmailCallback(req, res, next) {
     if (!state) {
       return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Invalid or expired OAuth state' } })
     }
-    const oauth2Client = getGoogleOAuthClient()
+    const oauth2Client = emailOAuthClient()
     const { tokens } = await oauth2Client.getToken(code)
     oauth2Client.setCredentials(tokens)
     const oauth2 = google.oauth2({ auth: oauth2Client, version: 'v2' })
@@ -3492,30 +3369,10 @@ export async function exportRows(req, res, next) {
 export async function getLeadSetup(req, res, next) {
   try {
     const workspaceId = req.headers['x-workspace-id']
-    const [oppStageCount, dealStatusCount, oppStatusCount] = await Promise.all([
-      OpportunityStage.count({ where: { workspaceId, companyId: req.user.companyId } }),
+    const [dealStatusCount, oppStatusCount] = await Promise.all([
       DealStatus.count({ where: { workspaceId, companyId: req.user.companyId } }),
       OpportunityStatus.count({ where: { workspaceId, companyId: req.user.companyId } }),
     ])
-    if (oppStageCount === 0) {
-      const seedStages = [
-        { name: 'open', isDefault: true, isDealStatus: false, sortOrder: 0 },
-        { name: 'discovery', sortOrder: 1 },
-        { name: 'demo_scheduled', sortOrder: 2 },
-        { name: 'demo_completed', sortOrder: 3 },
-        { name: 'solution_fit_confirmed', sortOrder: 4 },
-        { name: 'proposal_in_progress', sortOrder: 5 },
-        { name: 'proposal_sent', isDealStatus: true, sortOrder: 6 },
-        { name: 'on_hold', sortOrder: 7 },
-      ]
-      await OpportunityStage.bulkCreate(
-        seedStages.map((s) => ({ ...s, workspaceId, companyId: req.user.companyId })),
-      )
-    }
-    await sequelize.transaction(async (transaction) => {
-      await normalizeOpportunityStageOrder(workspaceId, req.user.companyId, transaction)
-      await normalizeOpportunityStageDealStatusFlag(workspaceId, req.user.companyId, transaction)
-    })
     if (dealStatusCount === 0) {
       await DealStatus.bulkCreate([
         { name: 'qualification', isDealCompleteStatus: false, isInitial: true, sortOrder: 0, workspaceId, companyId: req.user.companyId },
@@ -3536,13 +3393,9 @@ export async function getLeadSetup(req, res, next) {
         { name: 'Lost', isInitial: false, sortOrder: 5, workspaceId, companyId: req.user.companyId },
       ])
     }
-    const [sources, tags, opportunityStages, dealStatuses, opportunityStatuses] = await Promise.all([
+    const [sources, tags, dealStatuses, opportunityStatuses] = await Promise.all([
       LeadSource.findAll({ where: { workspaceId, companyId: req.user.companyId }, order: [['createdAt', 'ASC']] }),
       Tag.findAll({ where: { companyId: req.user.companyId }, order: [['name', 'ASC'], ['createdAt', 'ASC']] }),
-      OpportunityStage.findAll({
-        where: { workspaceId, companyId: req.user.companyId },
-        order: [['sortOrder', 'ASC'], ['createdAt', 'ASC']],
-      }),
       DealStatus.findAll({
         where: { workspaceId, companyId: req.user.companyId },
         order: [['sortOrder', 'ASC'], ['createdAt', 'ASC']],
@@ -3552,7 +3405,7 @@ export async function getLeadSetup(req, res, next) {
         order: [['sortOrder', 'ASC'], ['createdAt', 'ASC']],
       }),
     ])
-    return res.json({ success: true, data: { sources, tags, opportunityStages, dealStatuses, opportunityStatuses }, meta: {} })
+    return res.json({ success: true, data: { sources, tags, dealStatuses, opportunityStatuses }, meta: {} })
   } catch (e) {
     return next(e)
   }
@@ -3730,109 +3583,6 @@ export async function deleteLeadTag(req, res, next) {
     if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Tag not found' } })
     await row.destroy()
     return res.json({ success: true, data: { id: req.params.id }, meta: {} })
-  } catch (e) {
-    return next(e)
-  }
-}
-
-export async function createOpportunityStage(req, res, next) {
-  try {
-    const workspaceId = req.headers['x-workspace-id']
-    const name = String(req.body?.name || '').trim()
-    const requestedDealStatus = Boolean(req.body?.isDealStatus)
-    if (!name) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Stage name is required' } })
-    const maxOrder = await OpportunityStage.max('sortOrder', { where: { workspaceId, companyId: req.user.companyId } })
-    const sortOrder = Number.isFinite(Number(maxOrder)) ? Number(maxOrder) + 1 : 0
-    const row = await sequelize.transaction(async (t) => {
-      const created = await OpportunityStage.create(
-        { name, isDefault: false, isDealStatus: requestedDealStatus, sortOrder, workspaceId, companyId: req.user.companyId },
-        { transaction: t },
-      )
-      await normalizeOpportunityStageOrder(workspaceId, req.user.companyId, t)
-      await normalizeOpportunityStageDealStatusFlag(workspaceId, req.user.companyId, t, requestedDealStatus ? created.id : null)
-      return created
-    })
-    return res.status(201).json({ success: true, data: row, meta: {} })
-  } catch (e) {
-    return next(e)
-  }
-}
-
-export async function patchOpportunityStage(req, res, next) {
-  try {
-    const workspaceId = req.headers['x-workspace-id']
-    const row = await OpportunityStage.findOne({ where: { id: req.params.id, workspaceId, companyId: req.user.companyId } })
-    if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Stage not found' } })
-    const name = req.body?.name !== undefined ? String(req.body.name || '').trim() : undefined
-    const hasDealStatus = Object.prototype.hasOwnProperty.call(req.body || {}, 'isDealStatus')
-    const requestedDealStatus = hasDealStatus ? Boolean(req.body?.isDealStatus) : undefined
-    if (name !== undefined && !name) {
-      return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Stage name is required' } })
-    }
-    await sequelize.transaction(async (t) => {
-      if (name !== undefined || requestedDealStatus !== undefined) {
-        await row.update(
-          {
-            ...(name !== undefined ? { name } : {}),
-            ...(requestedDealStatus !== undefined ? { isDealStatus: requestedDealStatus } : {}),
-          },
-          { transaction: t },
-        )
-      }
-      await normalizeOpportunityStageOrder(workspaceId, req.user.companyId, t)
-      await normalizeOpportunityStageDealStatusFlag(
-        workspaceId,
-        req.user.companyId,
-        t,
-        requestedDealStatus ? row.id : null,
-      )
-    })
-    await row.reload()
-    return res.json({ success: true, data: row, meta: {} })
-  } catch (e) {
-    return next(e)
-  }
-}
-
-export async function deleteOpportunityStage(req, res, next) {
-  try {
-    const workspaceId = req.headers['x-workspace-id']
-    const row = await OpportunityStage.findOne({ where: { id: req.params.id, workspaceId, companyId: req.user.companyId } })
-    if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Stage not found' } })
-    await sequelize.transaction(async (transaction) => {
-      await row.destroy({ transaction })
-      await normalizeOpportunityStageOrder(workspaceId, req.user.companyId, transaction)
-      await normalizeOpportunityStageDealStatusFlag(workspaceId, req.user.companyId, transaction)
-    })
-    return res.json({ success: true, data: { id: req.params.id }, meta: {} })
-  } catch (e) {
-    return next(e)
-  }
-}
-
-export async function reorderOpportunityStages(req, res, next) {
-  try {
-    const workspaceId = req.headers['x-workspace-id']
-    const ids = Array.isArray(req.body?.ids) ? req.body.ids.map((x) => String(x)) : []
-    if (!ids.length) {
-      return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'ids are required' } })
-    }
-    const rows = await OpportunityStage.findAll({
-      where: { workspaceId, companyId: req.user.companyId },
-      order: [['sortOrder', 'ASC'], ['createdAt', 'ASC']],
-    })
-    const byId = new Map(rows.map((r) => [String(r.id), r]))
-    const ordered = ids.map((id) => byId.get(id)).filter(Boolean)
-    for (const row of rows) {
-      if (!ids.includes(String(row.id))) ordered.push(row)
-    }
-    await sequelize.transaction(async (transaction) => {
-      for (let i = 0; i < ordered.length; i += 1) {
-        await ordered[i].update({ sortOrder: i, isDefault: i === 0 }, { transaction })
-      }
-      await normalizeOpportunityStageDealStatusFlag(workspaceId, req.user.companyId, transaction)
-    })
-    return res.json({ success: true, data: { reordered: ordered.length }, meta: {} })
   } catch (e) {
     return next(e)
   }

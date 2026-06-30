@@ -5,9 +5,11 @@ import toast from 'react-hot-toast'
 
 import {
   Award,
+  BarChart2,
   Briefcase,
   CalendarDays,
   ChevronDown,
+  DollarSign,
   Shuffle,
   Target,
   Trash2,
@@ -24,11 +26,11 @@ import { DataGrid } from '@/components/shared/DataGrid'
 import {
   useGetCampaignQuery,
   useGetCampaignLeadsQuery,
-  usePatchCampaignLeadAmountMutation,
   usePatchCampaignLeadStageMutation,
   useRemoveCampaignLeadMutation,
   useDistributeCampaignLeadsMutation,
 } from '@/features/campaigns/campaignsApi'
+import { CampaignPaymentsDrawer } from '@/features/campaigns/components/CampaignPaymentsDrawer'
 import { formatDealMoney } from '@/features/deals/dealCurrencies'
 import { AddLeadsDrawer } from '@/features/campaigns/components/AddLeadsDrawer'
 import { AddMembersDrawer } from '@/features/campaigns/components/AddMembersDrawer'
@@ -189,6 +191,7 @@ export function CampaignDetailPage() {
     return raw.map((m) => m.user).filter(Boolean)
   }, [campaign?.teamMembers])
 
+
   const [stageKey, setStageKey] = useState('')
   const [assignedUserId, setAssignedUserId] = useState('')
   const [isOpp, setIsOpp] = useState('')
@@ -222,8 +225,8 @@ export function CampaignDetailPage() {
   const existingLeadIds = useMemo(() => rows.map((r) => r.lead?.id).filter(Boolean), [rows])
 
   const [patchStage, { isLoading: patching }] = usePatchCampaignLeadStageMutation()
-  const [patchAmount, { isLoading: patchingAmount }] = usePatchCampaignLeadAmountMutation()
   const [removeLead, { isLoading: removing }] = useRemoveCampaignLeadMutation()
+  const [paymentsDrawer, setPaymentsDrawer] = useState(null) // { leadId, leadName }
   const [distribute, { isLoading: distributing }] = useDistributeCampaignLeadsMutation()
 
   const totalLeads = useMemo(
@@ -257,18 +260,6 @@ export function CampaignDetailPage() {
   const onStageChange = async (leadId, nextKey) => {
     if (!id || !nextKey) return
     try { await patchStage({ campaignId: id, leadId, stageKey: nextKey }).unwrap() } catch { /* toast in api */ }
-  }
-
-  const onAmountReceivedChange = async (leadId, raw) => {
-    if (!id || !leadId) return
-    const trimmed = String(raw ?? '').trim()
-    const amountReceived = trimmed === '' ? null : Number.parseFloat(trimmed)
-    if (trimmed !== '' && !Number.isFinite(amountReceived)) return
-    try {
-      await patchAmount({ campaignId: id, leadId, amountReceived }).unwrap()
-    } catch {
-      /* toast in api */
-    }
   }
 
   const onRemoveLead = async (leadId) => {
@@ -394,26 +385,23 @@ export function CampaignDetailPage() {
         valueGetter: (_v, row) => row.campaignAssignee?.name || row.campaignAssignee?.email || '—',
       },
       {
-        field: 'amountReceived',
-        headerName: `Received (${campaignCurrency})`,
-        width: 150,
+        field: 'paymentTotal',
+        headerName: `Payments (${campaignCurrency})`,
+        width: 160,
         sortable: false,
         renderCell: ({ row }) => {
           const leadId = row.lead?.id
-          const val = row.amountReceived != null ? String(row.amountReceived) : ''
+          const leadName = (row.lead?.contactName || row.lead?.title || '').trim() || 'Lead'
+          const total = Number(row.paymentTotal) || 0
           return (
-            <input
-              type="number"
-              min={0}
-              step="0.01"
-              defaultValue={val}
-              key={`${leadId}-${val}`}
-              disabled={patchingAmount}
-              onClick={(e) => e.stopPropagation()}
-              onBlur={(e) => onAmountReceivedChange(leadId, e.target.value)}
-              className="h-8 w-full max-w-[8.5rem] rounded-lg border border-surface-border px-2 text-xs tabular-nums"
-              placeholder="0.00"
-            />
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setPaymentsDrawer({ leadId, leadName }) }}
+              className="flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-neutral-700 shadow-sm hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 transition"
+            >
+              <DollarSign className="h-3 w-3 shrink-0 text-emerald-500" />
+              {total > 0 ? formatAmount(total) : 'Add payments'}
+            </button>
           )
         },
       },
@@ -463,7 +451,7 @@ export function CampaignDetailPage() {
         },
       }] : []),
     ],
-    [selected, stageOptions, patching, patchingAmount, campaignCurrency, canManage, removeConfirmId, removing],
+    [selected, stageOptions, patching, campaignCurrency, formatAmount, canManage, removeConfirmId, removing],
   )
 
   const rosterRows = useMemo(
@@ -548,6 +536,13 @@ export function CampaignDetailPage() {
                       <Shuffle className="h-3.5 w-3.5" />
                       {distributing ? 'Distributing…' : 'Distribute unassigned'}
                     </Button>
+                    <Link
+                      to={`/campaigns/${id}/report`}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-sm font-semibold text-neutral-700 shadow-sm hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 transition"
+                    >
+                      <BarChart2 className="h-3.5 w-3.5" />
+                      View report
+                    </Link>
                   </div>
                 )}
               </header>
@@ -600,6 +595,7 @@ export function CampaignDetailPage() {
             )}
 
             {/* Roster */}
+            {(
             <div className="mt-6 rounded-2xl border border-neutral-200/90 bg-white shadow-sm">
               <div className="flex flex-col gap-3 border-b border-neutral-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
                 <h2 className="text-sm font-bold text-neutral-900">Campaign roster</h2>
@@ -629,6 +625,7 @@ export function CampaignDetailPage() {
                 className="rounded-none border-0 shadow-none"
               />
             </div>
+            )}
           </>
         )}
       </div>
@@ -645,6 +642,15 @@ export function CampaignDetailPage() {
         onClose={() => setAddMembersOpen(false)}
         campaignId={id}
         existingMemberIds={teamMembers.map((u) => u.id)}
+      />
+      <CampaignPaymentsDrawer
+        open={!!paymentsDrawer}
+        onClose={() => setPaymentsDrawer(null)}
+        campaignId={id}
+        leadId={paymentsDrawer?.leadId}
+        leadName={paymentsDrawer?.leadName}
+        currency={campaignCurrency}
+        campaignName={campaign?.name}
       />
     </PageShell>
   )

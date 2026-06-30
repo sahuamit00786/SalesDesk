@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { google } from 'googleapis'
 import { readGoogleOAuthEnv } from './googleEnv.js'
 
-function oauthClient() {
+function oauthClient(credentials = null) {
   const env = readGoogleOAuthEnv()
   const client = new google.auth.OAuth2(
     env.clientId,
@@ -10,9 +10,17 @@ function oauthClient() {
     env.redirectUri,
   )
 
-  client.setCredentials({
-    refresh_token: env.refreshToken,
-  })
+  if (credentials?.refreshToken) {
+    client.setCredentials({
+      refresh_token: credentials.refreshToken,
+      access_token: credentials.accessToken || undefined,
+      expiry_date: credentials.expiryDate || undefined,
+    })
+  } else {
+    client.setCredentials({
+      refresh_token: env.refreshToken,
+    })
+  }
 
   return client
 }
@@ -45,10 +53,10 @@ async function fetchEventWithConference(calendar, eventId) {
   return data
 }
 
-export async function createCalendarEvent(payload) {
+export async function createCalendarEvent(payload, credentials = null) {
   const calendar = google.calendar({
     version: 'v3',
-    auth: oauthClient(),
+    auth: oauthClient(credentials),
   })
 
   const timeZone = payload.timezone || 'Asia/Kolkata'
@@ -105,10 +113,10 @@ export async function createCalendarEvent(payload) {
   }
 }
 
-export async function getCalendarEvent(googleEventId) {
+export async function getCalendarEvent(googleEventId, credentials = null) {
   const calendar = google.calendar({
     version: 'v3',
-    auth: oauthClient(),
+    auth: oauthClient(credentials),
   })
 
   const data = await fetchEventWithConference(calendar, googleEventId)
@@ -119,10 +127,10 @@ export async function getCalendarEvent(googleEventId) {
   }
 }
 
-export async function patchCalendarEvent(googleEventId, payload) {
+export async function patchCalendarEvent(googleEventId, payload, credentials = null) {
   const calendar = google.calendar({
     version: 'v3',
-    auth: oauthClient(),
+    auth: oauthClient(credentials),
   })
 
   const timeZone = payload.timezone || 'Asia/Kolkata'
@@ -144,7 +152,7 @@ export async function patchCalendarEvent(googleEventId, payload) {
   }
 
   if (Object.keys(body).length === 0) {
-    return getCalendarEvent(googleEventId)
+    return getCalendarEvent(googleEventId, credentials)
   }
 
   const { data: patched } = await calendar.events.patch({
@@ -171,10 +179,10 @@ export async function patchCalendarEvent(googleEventId, payload) {
   }
 }
 
-export async function deleteCalendarEvent(googleEventId) {
+export async function deleteCalendarEvent(googleEventId, credentials = null) {
   const calendar = google.calendar({
     version: 'v3',
-    auth: oauthClient(),
+    auth: oauthClient(credentials),
   })
 
   return calendar.events.delete({

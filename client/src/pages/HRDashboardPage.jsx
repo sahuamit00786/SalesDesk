@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import {
-  BarChart2, Building2, CalendarCheck, CheckCircle2,
+  BarChart2, CalendarCheck, CheckCircle2,
   ClipboardList, Clock, ScrollText, SlidersHorizontal, Umbrella,
 } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
@@ -83,17 +83,6 @@ export function HRDashboardPage() {
   return (
     <PageShell fullWidth>
       <div className="min-h-full bg-[#f8f9fc] px-4 py-6 sm:px-6">
-
-        {/* ── Hero header ── */}
-        <div className="mb-8 flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-600 to-violet-600 shadow-md">
-            <Building2 className="h-6 w-6 text-white" strokeWidth={1.8} />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-ink">HR Overview</h1>
-            <p className="text-sm text-ink-muted">Your attendance, leave balances, and team HR actions</p>
-          </div>
-        </div>
 
         {/* ── KPI strip ── */}
         <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4">

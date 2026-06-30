@@ -93,9 +93,11 @@ export async function list(req, res, next) {
         : null
       const def = p.definitionJson || {}
       const nodes = Array.isArray(def.nodes) ? def.nodes : []
-      const triggerNode = nodes.find((n) => n.type === 'trigger' || n.data?.nodeType === 'trigger')
-      const triggerLabel = triggerNode?.data?.label || triggerNode?.data?.triggerType || null
-      const stepCount = nodes.filter((n) => n.type !== 'trigger' && n.data?.nodeType !== 'trigger').length
+      const TRIGGER_NODE_TYPES = new Set(['triggerLeadCreated', 'triggerLeadUpdated'])
+      const triggerNode = nodes.find((n) => TRIGGER_NODE_TYPES.has(n.type))
+      const TRIGGER_LABELS = { triggerLeadCreated: 'Lead created', triggerLeadUpdated: 'Lead updated' }
+      const triggerLabel = TRIGGER_LABELS[triggerNode?.type] ?? null
+      const stepCount = nodes.filter((n) => !TRIGGER_NODE_TYPES.has(n.type)).length
       return {
         ...p,
         definitionJson: undefined,
@@ -226,7 +228,7 @@ export async function publish(req, res, next) {
       definitionJson: row.definitionJson,
       createdBy: req.user.id,
     })
-    await row.update({ publishedVersion: nextVersion })
+    await row.update({ publishedVersion: nextVersion, status: 'active' })
     await row.reload()
     return res.json({ success: true, data: row.get({ plain: true }), meta: {} })
   } catch (e) {

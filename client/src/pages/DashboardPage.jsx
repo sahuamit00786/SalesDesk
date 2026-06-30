@@ -1,5 +1,8 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useSelector } from 'react-redux'
+import { Phone, FileText, Mail, Video, CheckSquare2, CalendarDays, TrendingUp, ArrowRight } from 'lucide-react'
+import { useGetCalendarEventsQuery } from '@/features/calendar/calendarApi'
 import {
   Area,
   AreaChart,
@@ -23,6 +26,7 @@ import { useGetLeadsQuery } from '@/features/leads/leadsApi'
 import { useGetTasksQuery } from '@/features/tasks/tasksApi'
 import { useGetDashboardChartsQuery } from '@/features/analytics/analyticsApi'
 import { CHART_COLORS } from '@/features/dashboard/dummyDashboardData'
+import { STATUS_OPTIONS } from '@/features/leads/constants'
 import { useFormatChartCurrency } from '@/hooks/useEffectiveCurrency'
 import { DashboardChartCard, StatDeltaCard } from '@/features/dashboard/components/DashboardChartCard'
 import {
@@ -60,6 +64,35 @@ function ChartSkeleton({ height = 260 }) {
   )
 }
 
+function timeAgo(iso) {
+  const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
+  if (m < 1) return 'just now'
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h ago`
+  return `${Math.floor(h / 24)}d ago`
+}
+
+function fmtEventTime(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  const today = new Date()
+  const tomorrow = new Date(today)
+  tomorrow.setDate(today.getDate() + 1)
+  const time = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+  if (d.toDateString() === today.toDateString()) return `Today · ${time}`
+  if (d.toDateString() === tomorrow.toDateString()) return `Tomorrow · ${time}`
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + ` · ${time}`
+}
+
+const ACTIVITY_ICON = {
+  call:    { Icon: Phone,        color: 'text-sky-500',     bg: 'bg-sky-50' },
+  note:    { Icon: FileText,     color: 'text-amber-500',   bg: 'bg-amber-50' },
+  email:   { Icon: Mail,         color: 'text-violet-500',  bg: 'bg-violet-50' },
+  meeting: { Icon: Video,        color: 'text-emerald-500', bg: 'bg-emerald-50' },
+  task:    { Icon: CheckSquare2, color: 'text-brand-500',   bg: 'bg-brand-50' },
+}
+
 const CHART_DATE_PRESETS = [
   { id: '7d', label: 'Last 7 days' },
   { id: '30d', label: 'Last 30 days' },
@@ -80,15 +113,6 @@ function isoDate(d) {
   return d.toISOString().slice(0, 10)
 }
 
-// Avatar initial with brand colour ring
-function MemberAvatar({ name, rank }) {
-  const colors = ['bg-brand-600', 'bg-emerald-600', 'bg-purple-600', 'bg-orange-500']
-  return (
-    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${colors[rank % colors.length]}`}>
-      {String(name || '?')[0].toUpperCase()}
-    </span>
-  )
-}
 
 const tooltipStyle = {
   borderRadius: '12px',
@@ -120,7 +144,31 @@ export function DashboardPage() {
   )
   const cd = chartsData?.data
   const charts = cd?.charts || {}
-  const topMembers = cd?.topMembers || []
+
+  // ── Recent activities (10 most recent) ──
+  const { data: recentActData, isLoading: recentActLoading } = useGetActivitiesFeedQuery({ limit: 10 })
+  const recentActivities = useMemo(
+    () => (Array.isArray(recentActData?.data) ? recentActData.data : []),
+    [recentActData],
+  )
+
+  // ── Upcoming meetings (next 48h) ──
+  const authUser = useSelector((s) => s.auth.user)
+  const meetingsFrom = useMemo(() => new Date().toISOString(), [])
+  const meetingsTo = useMemo(() => new Date(Date.now() + 48 * 3600 * 1000).toISOString(), [])
+  const { data: upcomingEventsData, isLoading: upcomingLoading } = useGetCalendarEventsQuery({
+    from: meetingsFrom,
+    to: meetingsTo,
+    types: 'meeting',
+    ownerUserId: authUser?.id,
+  })
+  const upcomingMeetings = useMemo(() => {
+    const evts = Array.isArray(upcomingEventsData?.data) ? upcomingEventsData.data : []
+    return evts
+      .filter((e) => e.source === 'meeting' || e.kind === 'meeting')
+      .sort((a, b) => new Date(a.start) - new Date(b.start))
+      .slice(0, 8)
+  }, [upcomingEventsData])
 
   // ── Existing stat card queries (unchanged) ──
   const activityFrom = useMemo(() => subDays(ACTIVITY_RANGE_DAYS).toISOString(), [])
@@ -187,6 +235,118 @@ export function DashboardPage() {
           </section>
         )}
 
+        {/* ── Revenue Forecast + Upcoming Meetings ── */}
+        <section aria-label="Revenue forecast and upcoming meetings" className="mt-6 grid gap-4 lg:grid-cols-3">
+
+          {/* Revenue Forecast */}
+          <div className="lg:col-span-2">
+            <DashboardChartCard
+              title="Revenue forecast"
+              subtitle="Open pipeline value by stage"
+            >
+              {chartsLoading ? (
+                <ChartSkeleton height={200} />
+              ) : (
+                <div>
+                  <div className="mb-5 grid grid-cols-3 gap-3 border-b border-surface-border pb-5">
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-ink-faint">Pipeline</p>
+                      <p className="mt-1.5 text-lg font-bold tabular-nums text-ink">{formatChartCurrency(cd?.kpis?.pipelineValue || 0)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-ink-faint">Won</p>
+                      <p className="mt-1.5 text-lg font-bold tabular-nums text-emerald-600">{formatChartCurrency(cd?.kpis?.wonValue || 0)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-ink-faint">Win rate</p>
+                      <p className="mt-1.5 text-lg font-bold tabular-nums text-ink">
+                        {(() => {
+                          const p = cd?.kpis?.pipelineValue || 0
+                          const w = cd?.kpis?.wonValue || 0
+                          return p + w > 0 ? `${Math.round((w / (p + w)) * 100)}%` : '—'
+                        })()}
+                      </p>
+                    </div>
+                  </div>
+                  {(charts.pipelineByStage || []).length > 0 ? (() => {
+                    const stageSlice = (charts.pipelineByStage || []).slice(0, 6)
+                    const maxVal = Math.max(...stageSlice.map((s) => s.value), 1)
+                    return (
+                    <div className="space-y-3">
+                      {stageSlice.map((stage) => {
+                        const pct = Math.round((stage.value / maxVal) * 100)
+                        return (
+                          <div key={stage.name}>
+                            <div className="mb-1 flex items-center justify-between text-xs">
+                              <span className="font-medium text-ink">{stage.name}</span>
+                              <span className="tabular-nums text-ink-muted">
+                                {formatChartCurrency(stage.value)} · {stage.count} deal{stage.count !== 1 ? 's' : ''}
+                              </span>
+                            </div>
+                            <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-subtle">
+                              <div
+                                className="h-full rounded-full bg-brand-500 transition-all duration-500"
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                    )
+                  })() : (
+                    <div className="flex h-28 items-center justify-center">
+                      <div className="text-center">
+                        <TrendingUp className="mx-auto mb-2 h-7 w-7 text-ink-faint" />
+                        <p className="text-sm text-ink-muted">No open pipeline data</p>
+                        <Link to="/pipeline" className="mt-1 text-xs font-semibold text-brand-600 hover:underline">Add opportunities →</Link>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </DashboardChartCard>
+          </div>
+
+          {/* Upcoming Meetings */}
+          <div className="lg:col-span-1">
+            <DashboardChartCard title="Upcoming meetings" subtitle="Next 48 hours">
+              {upcomingLoading ? (
+                <ChartSkeleton height={200} />
+              ) : upcomingMeetings.length > 0 ? (
+                <div className="space-y-2">
+                  {upcomingMeetings.map((evt) => (
+                    <div key={evt.id} className="flex items-start gap-3 rounded-xl border border-surface-border bg-surface-subtle/50 px-3 py-2.5">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50">
+                        <Video className="h-4 w-4 text-emerald-600" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-semibold text-ink">{evt.title || 'Meeting'}</p>
+                        <p className="text-[11px] text-ink-muted">{fmtEventTime(evt.start)}</p>
+                        {evt.leadName && (
+                          <p className="truncate text-[11px] text-ink-faint">{evt.leadName}</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  <Link
+                    to="/calendar"
+                    className="mt-1 flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700"
+                  >
+                    View calendar <ArrowRight className="h-3 w-3" />
+                  </Link>
+                </div>
+              ) : (
+                <div className="flex h-40 flex-col items-center justify-center gap-2 text-center">
+                  <CalendarDays className="h-8 w-8 text-ink-faint" />
+                  <p className="text-sm text-ink-muted">No meetings in the next 48 hours</p>
+                  <Link to="/calendar" className="text-xs font-semibold text-brand-600 hover:underline">Open calendar →</Link>
+                </div>
+              )}
+            </DashboardChartCard>
+          </div>
+        </section>
+
         {/* ── Expiring tasks ── */}
         <section aria-label="Tasks expiring soon" className="mt-10">
           <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
@@ -250,21 +410,30 @@ export function DashboardPage() {
             {/* Row 1: Lead status + Opportunity status */}
             <div className="grid gap-6 lg:grid-cols-2">
               <DashboardChartCard title="Lead status breakdown" subtitle="All leads by current status">
-                {chartsLoading ? <ChartSkeleton /> : (
-                  <ResponsiveContainer width="100%" height={260}>
-                    <BarChart
-                      layout="vertical"
-                      data={charts.leadStatusDist || []}
-                      margin={{ top: 8, right: 16, left: 4, bottom: 8 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke={axisStroke} horizontal={false} />
-                      <XAxis type="number" tick={tickStyle} allowDecimals={false} />
-                      <YAxis type="category" dataKey="name" width={90} tick={tickStyle} />
-                      <Tooltip contentStyle={tooltipStyle} />
-                      <Bar dataKey="value" name="Leads" fill={CHART_COLORS.primary} radius={[0, 6, 6, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
+                {chartsLoading ? <ChartSkeleton /> : (() => {
+                  const distMap = Object.fromEntries((charts.leadStatusDist || []).map((r) => [r.name.toLowerCase(), r.value]))
+                  const fullDist = STATUS_OPTIONS.map((s) => ({
+                    name: s.charAt(0).toUpperCase() + s.slice(1),
+                    value: distMap[s] ?? 0,
+                  }))
+                  const chartH = Math.max(fullDist.length * 44, 120)
+                  return (
+                    <ResponsiveContainer width="100%" height={chartH}>
+                      <BarChart
+                        layout="vertical"
+                        data={fullDist}
+                        margin={{ top: 4, right: 16, left: 4, bottom: 4 }}
+                        barSize={22}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke={axisStroke} horizontal={false} />
+                        <XAxis type="number" tick={tickStyle} allowDecimals={false} />
+                        <YAxis type="category" dataKey="name" width={90} tick={tickStyle} />
+                        <Tooltip contentStyle={tooltipStyle} />
+                        <Bar dataKey="value" name="Leads" fill={CHART_COLORS.primary} radius={[0, 6, 6, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )
+                })()}
               </DashboardChartCard>
 
               <DashboardChartCard title="Opportunity status breakdown" subtitle="Opportunities by configurable status">
@@ -300,8 +469,8 @@ export function DashboardPage() {
               </DashboardChartCard>
             </div>
 
-            {/* Row 2: Pipeline by stage */}
-            <DashboardChartCard title="Pipeline by stage" subtitle="Open opportunity value ($) grouped by stage">
+            {/* Row 2: Pipeline by status */}
+            <DashboardChartCard title="Pipeline by status" subtitle="Open opportunity value ($) grouped by status">
               {chartsLoading ? <ChartSkeleton height={280} /> : (
                 <ResponsiveContainer width="100%" height={280}>
                   <BarChart
@@ -406,48 +575,62 @@ export function DashboardPage() {
               </DashboardChartCard>
             </div>
 
-            {/* Row 5: Top 4 Performers */}
-            <DashboardChartCard title="Top performers" subtitle="Best 4 team members scored by leads × 3 + tasks done × 2 + activities">
-              {chartsLoading ? <ChartSkeleton /> : (
-                topMembers.length ? (
-                  <div className="grid grid-cols-2 gap-3 pt-1 md:grid-cols-4">
-                    {topMembers.map((m, i) => (
-                      <div key={m.name} className="rounded-xl border border-surface-border bg-surface-subtle/40 p-4">
-                        <div className="mb-3 flex items-center gap-2">
-                          <MemberAvatar name={m.name} rank={i} />
-                          <span className="truncate text-sm font-semibold text-ink">{m.name}</span>
-                        </div>
-                        <div className="grid grid-cols-3 gap-1 text-center">
-                          <div>
-                            <p className="text-[10px] font-medium uppercase tracking-wide text-ink-faint">Leads</p>
-                            <p className="mt-0.5 text-base font-bold text-ink">{m.leadsOwned}</p>
-                          </div>
-                          <div>
-                            <p className="text-[10px] font-medium uppercase tracking-wide text-ink-faint">Tasks</p>
-                            <p className="mt-0.5 text-base font-bold text-ink">{m.tasksCompleted}</p>
-                          </div>
-                          <div>
-                            <p className="text-[10px] font-medium uppercase tracking-wide text-ink-faint">Activity</p>
-                            <p className="mt-0.5 text-base font-bold text-ink">{m.activities}</p>
-                          </div>
-                        </div>
-                        {i === 0 && (
-                          <div className="mt-2 flex justify-center">
-                            <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-[10px] font-semibold text-yellow-700">🏆 Top performer</span>
-                          </div>
-                        )}
-                      </div>
-                    ))}
+          </div>
+        </section>
+
+        {/* ── Recent Activity Feed ── */}
+        <section aria-label="Recent activity" className="mt-12 border-t border-surface-border pt-10">
+          <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold text-ink">Recent activity</h2>
+              <p className="text-sm text-ink-muted">10 most recent actions across your pipeline</p>
+            </div>
+            <Link to="/activities" className="text-sm font-semibold text-brand-600 hover:text-brand-700">View all →</Link>
+          </div>
+          {recentActLoading ? (
+            <div className="flex flex-col gap-2">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="animate-pulse flex items-center gap-3 rounded-xl border border-surface-border bg-white p-3">
+                  <div className="h-8 w-8 rounded-lg" style={{ backgroundColor: SK_BLOCK }} />
+                  <div className="flex-1 space-y-1.5">
+                    <div className="h-2.5 w-3/4 rounded" style={{ backgroundColor: SK_BLOCK }} />
+                    <div className="h-2 w-1/2 rounded" style={{ backgroundColor: SK_BLOCK }} />
                   </div>
-                ) : (
-                  <div className="flex h-[200px] items-center justify-center">
-                    <p className="text-sm text-ink-muted">No team members found in this workspace.</p>
+                </div>
+              ))}
+            </div>
+          ) : recentActivities.length > 0 ? (
+            <div className="flex flex-col gap-2">
+              {recentActivities.map((act) => {
+                const cfg = ACTIVITY_ICON[act.type] || ACTIVITY_ICON.note
+                const { Icon, color, bg } = cfg
+                const label = act.metadata?.title || act.body || act.type
+                const leadName = act.lead?.title || act.lead?.company || null
+                return (
+                  <div key={act.id} className="flex items-start gap-3 rounded-xl border border-surface-border bg-white px-3 py-2.5 shadow-sm">
+                    <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${bg}`}>
+                      <Icon className={`h-4 w-4 ${color}`} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-semibold text-ink">{label}</p>
+                      <div className="flex items-center gap-1.5 text-[11px] text-ink-muted">
+                        {leadName && <span className="truncate">{leadName}</span>}
+                        {leadName && <span className="shrink-0">·</span>}
+                        <span className="shrink-0">{timeAgo(act.createdAt)}</span>
+                      </div>
+                      {act.user?.name && (
+                        <p className="text-[11px] text-ink-faint">by {act.user.name}</p>
+                      )}
+                    </div>
                   </div>
                 )
-              )}
-            </DashboardChartCard>
-
-          </div>
+              })}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-surface-border bg-white py-10 text-center">
+              <p className="text-sm text-ink-muted">No recent activity found</p>
+            </div>
+          )}
         </section>
       </div>
     </PageShell>

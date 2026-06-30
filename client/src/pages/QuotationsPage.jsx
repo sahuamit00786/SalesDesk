@@ -32,8 +32,8 @@ export function QuotationsPage() {
 
   const { data: formMetaData } = useGetLeadFormMetaQuery()
   const rawDealStatuses = formMetaData?.data?.dealStatuses || []
-  const opportunityStages = formMetaData?.data?.opportunityStages || []
-  const dealStatuses = rawDealStatuses.length ? rawDealStatuses : opportunityStages
+  const opportunityStatuses = formMetaData?.data?.opportunityStatuses || []
+  const dealStatuses = rawDealStatuses.length ? rawDealStatuses : opportunityStatuses
 
   const queryArg = useMemo(() => ({ limit: 50, ...(leadFilter ? { leadId: leadFilter } : {}) }), [leadFilter])
   const { data, isLoading, refetch } = useGetQuotationsQuery(queryArg)
@@ -181,7 +181,7 @@ export function QuotationsPage() {
         open={Boolean(selectedDeal)}
         onClose={() => setSelectedDeal(null)}
         opp={selectedDeal}
-        opportunityStages={dealStatuses}
+        opportunityStatuses={dealStatuses}
       />
     </PageShell>
   )

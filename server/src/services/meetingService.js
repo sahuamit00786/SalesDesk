@@ -1,6 +1,7 @@
 import { Meeting } from "../models/Meeting.js";
 import { MeetingParticipant } from "../models/MeetingParticipant.js";
 import { User } from "../models/User.js";
+import { CompanyGoogleToken } from "../models/CompanyGoogleToken.js";
 import { sequelize } from "../config/db.js";
 import {
   createGoogleMeet,
@@ -11,6 +12,22 @@ import { scheduleReminders } from "../jobs/reminderJob.js";
 import { Op } from "sequelize";
 import { deleteCalendarEvent } from "../services/google/googleCalendarService.js";
 import { notifyMeetingParticipants } from "../services/notification/meetingNotificationService.js"
+
+async function resolveCalendarCredentials(companyId) {
+  if (!companyId) return null
+  const token = await CompanyGoogleToken.findOne({
+    where: { companyId },
+    order: [['updatedAt', 'DESC']],
+  })
+  if (!token?.refreshToken) return null
+  const scope = token.scope || ''
+  if (!scope.includes('calendar.events') && !scope.includes('calendar')) return null
+  return {
+    refreshToken: token.refreshToken,
+    accessToken: token.accessToken || null,
+    expiryDate: token.expiryDate || null,
+  }
+}
 
 /** Only persist fields the client is allowed to set (avoids `...req.body` overwriting Google columns). */
 function pickMeetingCreatePayload(body) {
@@ -89,7 +106,8 @@ export async function createMeeting(user, payload, workspaceId) {
       throw new Error("Lead ID is required");
     }
 
-    const googleResult = await createGoogleMeet(payload);
+    const credentials = await resolveCalendarCredentials(user.companyId);
+    const googleResult = await createGoogleMeet(payload, credentials);
 
     const picked = pickMeetingCreatePayload(payload);
     const wantsBot = Boolean(picked.recordingBotConsent);
@@ -267,7 +285,7 @@ export async function getMeetingById(id, workspaceId) {
   return meeting;
 }
 
-export async function updateMeeting(id, payload, workspaceId) {
+export async function updateMeeting(id, payload, workspaceId, companyId) {
   const meeting = await Meeting.findOne({
     where: { id, workspaceId },
   });
@@ -287,27 +305,28 @@ export async function updateMeeting(id, payload, workspaceId) {
     payload.title !== undefined || payload.agenda !== undefined;
 
   try {
+    const credentials = await resolveCalendarCredentials(companyId);
     if (!googleEventId) {
-      const googleEvent = await createGoogleMeet(merged);
+      const googleEvent = await createGoogleMeet(merged, credentials);
       googleEventId = googleEvent?.id || null;
       googleMeetLink = googleEvent?.meetLink || null;
     } else {
       if (!googleMeetLink) {
-        const synced = await syncGoogleMeetFromEvent(googleEventId);
+        const synced = await syncGoogleMeetFromEvent(googleEventId, credentials);
         googleMeetLink = synced.meetLink || googleMeetLink;
       }
       if (timeChanged || detailsChanged) {
-        const patched = await patchGoogleMeet(googleEventId, merged);
+        const patched = await patchGoogleMeet(googleEventId, merged, credentials);
         googleMeetLink = patched.meetLink || googleMeetLink;
         googleEventId = patched.googleEventId || googleEventId;
       }
       if (!googleMeetLink && googleEventId) {
         try {
-          await deleteCalendarEvent(googleEventId);
+          await deleteCalendarEvent(googleEventId, credentials);
         } catch (_) {
           /* ignore */
         }
-        const recreated = await createGoogleMeet(merged);
+        const recreated = await createGoogleMeet(merged, credentials);
         googleEventId = recreated?.id || googleEventId;
         googleMeetLink = recreated?.meetLink || null;
       }
@@ -329,7 +348,7 @@ export async function updateMeeting(id, payload, workspaceId) {
 }
 
 
-export async function deleteMeeting(id, workspaceId) {
+export async function deleteMeeting(id, workspaceId, companyId) {
   const meeting = await Meeting.findOne({
     where: { id, workspaceId },
   });
@@ -341,7 +360,8 @@ export async function deleteMeeting(id, workspaceId) {
   // 🔥 Delete from Google Calendar
   if (meeting.googleEventId) {
     try {
-      await deleteCalendarEvent(meeting.googleEventId);
+      const credentials = await resolveCalendarCredentials(companyId);
+      await deleteCalendarEvent(meeting.googleEventId, credentials);
     } catch (e) {
       console.error("Google delete failed:", e.message);
     }

@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <h2>Meeting Recorder</h2>
+    <div id="status" class="status ready">Ready</div>
+    <div class="options">
+      <label>
+        <input type="checkbox" id="withVideo">
+        <span>Record Video</span>
+      </label>
+      <label>
+        <input type="checkbox" id="withMic" checked>
+        <span>Include Mic</span>
+      </label>
+    </div>
+    <button id="toggleBtn" class="btn start">Start Recording</button>
+    <p class="note">Saves to Downloads as .webm</p>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

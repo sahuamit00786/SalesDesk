@@ -25,8 +25,8 @@ export const opportunitiesApi = baseApi.injectEndpoints({
         return tags
       },
     }),
-    patchOpportunityStage: build.mutation({
-      query: ({ id, currentStage }) => ({ url: `/opportunities/${id}/stage`, method: 'PATCH', body: { currentStage } }),
+    patchOpportunityStatus: build.mutation({
+      query: ({ id, opportunityStatusId }) => ({ url: `/opportunities/${id}/status`, method: 'PATCH', body: { opportunityStatusId } }),
       invalidatesTags: (result, _e, arg) => {
         const tags = [{ type: 'Lead', id: 'LIST' }, { type: 'Lead', id: arg.id }]
         const leadId = result?.data?.leadId
@@ -37,5 +37,5 @@ export const opportunitiesApi = baseApi.injectEndpoints({
   }),
 })
 
-export const { useCreateOpportunityMutation, useUpdateOpportunityMutation, usePatchOpportunityStageMutation } =
+export const { useCreateOpportunityMutation, useUpdateOpportunityMutation, usePatchOpportunityStatusMutation } =
   opportunitiesApi

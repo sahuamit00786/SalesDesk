@@ -599,10 +599,8 @@ export async function convertQuotationToInvoice(req, res, next) {
     return res.status(201).json({
       success: true,
       data: {
-        invoice: {
-          ...invoice.toJSON(),
-          items: invoice.items?.map((x) => x.toJSON()) || [],
-        },
+        ...invoice.toJSON(),
+        items: invoice.items?.map((x) => x.toJSON()) || [],
       },
       meta: {},
     })

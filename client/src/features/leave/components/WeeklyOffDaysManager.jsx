@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
-import { CalendarOff } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
-import { HrCard } from '@/features/hr/components/HrCard'
 import { useGetLeaveSettingsQuery, useUpdateLeaveSettingsMutation } from '@/features/leave/leaveApi'
 
 const WEEK_DAYS = [
@@ -26,10 +24,9 @@ export function WeeklyOffDaysManager() {
   }, [serverDays])
 
   function toggle(day) {
-    setSelected((prev) => {
-      if (prev.includes(day)) return prev.filter((d) => d !== day)
-      return [...prev, day].sort((a, b) => a - b)
-    })
+    setSelected((prev) =>
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort((a, b) => a - b),
+    )
   }
 
   async function save(e) {
@@ -43,16 +40,20 @@ export function WeeklyOffDaysManager() {
   }
 
   return (
-    <HrCard
-      title="Weekly off days"
-      description="Recurring days excluded from leave calculations (along with public holidays)"
-      icon={CalendarOff}
-    >
+    <div className="rounded-xl border border-surface-border bg-white p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Weekly off days</p>
+        <p className="text-xs text-ink-faint">
+          {selected.length
+            ? selected.map((v) => WEEK_DAYS.find((d) => d.value === v)?.short).join(', ')
+            : 'None'}
+        </p>
+      </div>
       {isLoading ? (
         <p className="text-sm text-ink-muted">Loading…</p>
       ) : (
-        <form onSubmit={save} className="space-y-4">
-          <div className="flex flex-wrap gap-2">
+        <form onSubmit={save}>
+          <div className="flex flex-wrap items-center gap-1.5">
             {WEEK_DAYS.map((d) => {
               const on = selected.includes(d.value)
               return (
@@ -62,7 +63,7 @@ export function WeeklyOffDaysManager() {
                   onClick={() => toggle(d.value)}
                   title={d.label}
                   className={[
-                    'min-w-[3.25rem] rounded-lg border px-3 py-2 text-sm font-medium transition-colors',
+                    'rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors',
                     on
                       ? 'border-brand-500 bg-slate-100 text-brand-800'
                       : 'border-surface-border bg-surface text-ink-muted hover:border-brand-300 hover:text-ink',
@@ -72,19 +73,12 @@ export function WeeklyOffDaysManager() {
                 </button>
               )
             })}
-          </div>
-          <p className="text-xs text-ink-muted">
-            {selected.length
-              ? `Off: ${selected.map((v) => WEEK_DAYS.find((d) => d.value === v)?.label).join(', ')}`
-              : 'No weekly offs selected — all calendar days in range count as working days (except public holidays).'}
-          </p>
-          <div className="flex justify-end border-t border-surface-border/70 pt-4">
-            <Button type="submit" disabled={saving}>
-              {saving ? 'Saving…' : 'Save weekly offs'}
+            <Button type="submit" disabled={saving} className="ml-auto !h-8 !px-3 !text-xs">
+              {saving ? 'Saving…' : 'Save'}
             </Button>
           </div>
         </form>
       )}
-    </HrCard>
+    </div>
   )
 }

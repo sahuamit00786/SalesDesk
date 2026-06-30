@@ -38,7 +38,6 @@ export const quotationsApi = baseApi.injectEndpoints({
       query: (id) => `/quotations/templates/${encodeURIComponent(id)}`,
       serializeQueryArgs: ({ queryArgs }) => String(queryArgs || '').toLowerCase(),
       providesTags: (_r, _e, id) => [{ type: 'QuotationTemplate', id: String(id || '').toLowerCase() }],
-      keepUnusedDataFor: 0,
       refetchOnMountOrArgChange: true,
     }),
     createQuotationTemplate: build.mutation({

@@ -93,10 +93,10 @@ export function CampaignNewPage() {
   const leads = useMemo(() => data?.data || [], [data?.data])
   const total = data?.meta?.total ?? 0
   const formUsers = formMetaData?.data?.users || []
-  const opportunityStages = formMetaData?.data?.opportunityStages || []
-  const stageOptions = opportunityStages.map((s) => ({
-    value: s.name || s.key || s.id,
-    label: s.name || s.key || 'Stage',
+  const opportunityStatuses = formMetaData?.data?.opportunityStatuses || []
+  const stageOptions = opportunityStatuses.map((s) => ({
+    value: s.id,
+    label: s.name || 'Status',
   }))
   const isOpportunitiesPicker = oppFilter === 'true'
   const advancedRuleCount = countActiveRules(leadFilters.filterTree)

@@ -69,10 +69,10 @@ export function DealPaymentsPage() {
   const { data: formMetaData } = useGetLeadFormMetaQuery()
   const users = formMetaData?.data?.users || []
   const rawDealStatuses = formMetaData?.data?.dealStatuses || []
-  const opportunityStages = formMetaData?.data?.opportunityStages || []
+  const opportunityStatuses = formMetaData?.data?.opportunityStatuses || []
   const dealStatuses = rawDealStatuses.length
     ? [...rawDealStatuses].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
-    : opportunityStages
+    : opportunityStatuses
 
   const rows = useMemo(() => (Array.isArray(data?.data) ? data.data : []), [data?.data])
   const total = data?.meta?.total ?? 0
@@ -443,7 +443,7 @@ export function DealPaymentsPage() {
         open={Boolean(selectedDeal)}
         onClose={() => setSelectedDeal(null)}
         opp={selectedDeal}
-        opportunityStages={dealStatuses}
+        opportunityStatuses={dealStatuses}
         defaultTab="payments"
       />
     </PageShell>

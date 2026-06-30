@@ -23,7 +23,7 @@ function formatTime12(d) {
 function computeDurationHours(start, end) {
   const ms = new Date(end).getTime() - new Date(start).getTime()
   if (ms <= 0) return 0
-  return Math.round((ms / 3600000) * 100) / 100
+  return Math.round(ms / 60000) / 60
 }
 
 function sumSessionHours(sessions) {
@@ -62,15 +62,19 @@ async function approvedLeavesInRange(companyId, userIds, rangeStart, rangeEnd) {
 }
 
 function countOnLeaveByDate(leaves, rangeStart, rangeEnd) {
-  const byDate = {}
+  const full = {}, half = {}
   for (const leave of leaves) {
+    const bucket = leave.isHalfDay ? half : full
     eachDateInRange(leave.fromDate, leave.toDate, (d) => {
       if (d < rangeStart || d > rangeEnd) return
-      if (!byDate[d]) byDate[d] = new Set()
-      byDate[d].add(String(leave.userId))
+      if (!bucket[d]) bucket[d] = new Set()
+      bucket[d].add(String(leave.userId))
     })
   }
-  return Object.fromEntries(Object.entries(byDate).map(([d, set]) => [d, set.size]))
+  return {
+    full: Object.fromEntries(Object.entries(full).map(([d, s]) => [d, s.size])),
+    half: Object.fromEntries(Object.entries(half).map(([d, s]) => [d, s.size])),
+  }
 }
 
 function monthRange(year, month) {
@@ -280,7 +284,7 @@ export async function getTeamAttendance(req, res, next) {
     const calendar = {}
     for (const log of logs) {
       const d = String(log.date).slice(0, 10)
-      if (!calendar[d]) calendar[d] = { present: 0, absent: 0, late: 0, half_day: 0, on_leave: 0 }
+      if (!calendar[d]) calendar[d] = { present: 0, absent: 0, late: 0, half_day: 0, on_leave: 0, on_leave_half: 0 }
       if (log.status === 'present') calendar[d].present += 1
       else if (log.status === 'late') calendar[d].late += 1
       else if (log.status === 'absent') calendar[d].absent += 1
@@ -288,10 +292,14 @@ export async function getTeamAttendance(req, res, next) {
     }
 
     const approvedLeaves = await approvedLeavesInRange(req.user.companyId, userIds, start, end)
-    const onLeaveCounts = countOnLeaveByDate(approvedLeaves, start, end)
-    for (const [d, count] of Object.entries(onLeaveCounts)) {
-      if (!calendar[d]) calendar[d] = { present: 0, absent: 0, late: 0, half_day: 0, on_leave: 0 }
+    const { full: onLeaveFull, half: onLeaveHalf } = countOnLeaveByDate(approvedLeaves, start, end)
+    for (const [d, count] of Object.entries(onLeaveFull)) {
+      if (!calendar[d]) calendar[d] = { present: 0, absent: 0, late: 0, half_day: 0, on_leave: 0, on_leave_half: 0 }
       calendar[d].on_leave = count
+    }
+    for (const [d, count] of Object.entries(onLeaveHalf)) {
+      if (!calendar[d]) calendar[d] = { present: 0, absent: 0, late: 0, half_day: 0, on_leave: 0, on_leave_half: 0 }
+      calendar[d].on_leave_half = count
     }
 
     const summary = users.map((u) => {
@@ -421,6 +429,12 @@ export async function createAttendanceLog(req, res, next) {
       return res.status(400).json({
         success: false,
         error: { code: 'VALIDATION', message: 'userId, date, and status are required' },
+      })
+    }
+    if (String(date).slice(0, 10) > todayDateOnly()) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VALIDATION', message: 'Cannot create attendance log for future dates' },
       })
     }
     const targetUser = await User.findOne({ where: { id: userId, companyId: req.user.companyId } })

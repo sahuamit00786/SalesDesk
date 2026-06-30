@@ -45,6 +45,7 @@ export function AppCalendarShell({
   onDateRangeChange,
   highlightAttendanceStatus = false,
   dayStatusByDate: externalDayStatusByDate = null,
+  weeklyOffDays = [],
   searchPlaceholder = 'Search title, lead, notes…',
 }) {
   const [currentDate, setCurrentDate] = useState(() =>
@@ -540,13 +541,19 @@ export function AppCalendarShell({
               const style = {}
               const isAbsent = highlightAttendanceStatus && attendanceStatusByDate[dateKey] === 'absent'
               const isExcluded = hasCustomRange && !isDateInSelectedRange(date)
+              const isWeekOff = weeklyOffDays.length > 0 && weeklyOffDays.includes(date.getDay())
 
               if (isAbsent && !isExcluded) {
                 classes.push('rbc-day-absent')
-                style.backgroundColor = '#fca5a5'
+                // Lighter rose so white chip text is readable
+                style.backgroundColor = '#ffe4e6'
                 style.backgroundImage = 'none'
               } else if (isExcluded) {
                 classes.push('rbc-day-excluded')
+              } else if (isWeekOff && !isExcluded) {
+                classes.push('rbc-day-weekoff')
+                style.backgroundColor = '#fefce8'
+                style.backgroundImage = 'none'
               } else if (isSameDay(date, selectedDate)) {
                 style.backgroundColor = '#eef2ff'
               }

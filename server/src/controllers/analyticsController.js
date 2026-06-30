@@ -1386,7 +1386,8 @@ export async function dashboardCharts(req, res, next) {
     const [
       leadStatusDist,
       oppStatusDistRaw,
-      pipelineByStageRaw,
+      oppStatusByLeadStatus,
+      pipelineByStatusRaw,
       pipelineCreatedTrend,
       pipelineWonTrend,
       activitiesByType,
@@ -1417,19 +1418,28 @@ export async function dashboardCharts(req, res, next) {
         raw: true,
       }),
 
-      // Pipeline by stage
+      // Fallback: opportunity breakdown by inherited lead status field (count + value)
       Lead.findAll({
-        where: {
-          ...leadBase,
-          isOpportunity: true,
-          opportunityStage: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] },
-        },
+        where: { ...leadBase, isOpportunity: true },
         attributes: [
-          'opportunityStage',
+          'status',
           [fn('COUNT', col('id')), 'count'],
           [fn('COALESCE', fn('SUM', col('value')), 0), 'totalValue'],
         ],
-        group: ['opportunityStage'],
+        group: ['status'],
+        order: [[literal('count'), 'DESC']],
+        raw: true,
+      }),
+
+      // Pipeline by opportunity status (configured UUID FK, with value)
+      Lead.findAll({
+        where: { ...leadBase, isOpportunity: true, opportunityStatus: { [Op.ne]: null } },
+        attributes: [
+          'opportunityStatus',
+          [fn('COUNT', col('id')), 'count'],
+          [fn('COALESCE', fn('SUM', col('value')), 0), 'totalValue'],
+        ],
+        group: ['opportunityStatus'],
         order: [[literal('count'), 'DESC']],
         raw: true,
       }),
@@ -1616,12 +1626,20 @@ export async function dashboardCharts(req, res, next) {
         },
         charts: {
           leadStatusDist: leadStatusDist.map((r) => ({ name: capitalize(r.status), value: Number(r.count) })),
-          oppStatusDist: oppStatusDistRaw
-            .filter((r) => oppStatusNameMap[r.opportunityStatus])
-            .map((r) => ({ name: oppStatusNameMap[r.opportunityStatus], value: Number(r.count) })),
-          pipelineByStage: pipelineByStageRaw
-            .filter((r) => r.opportunityStage)
-            .map((r) => ({ name: capitalize(r.opportunityStage), count: Number(r.count), value: Number(r.totalValue) })),
+          oppStatusDist: (() => {
+            const configured = oppStatusDistRaw
+              .filter((r) => oppStatusNameMap[r.opportunityStatus])
+              .map((r) => ({ name: oppStatusNameMap[r.opportunityStatus], value: Number(r.count) }))
+            if (configured.length) return configured
+            return oppStatusByLeadStatus.map((r) => ({ name: capitalize(r.status || 'new'), value: Number(r.count) }))
+          })(),
+          pipelineByStage: (() => {
+            const configured = pipelineByStatusRaw
+              .filter((r) => oppStatusNameMap[r.opportunityStatus])
+              .map((r) => ({ name: oppStatusNameMap[r.opportunityStatus], count: Number(r.count), value: Number(r.totalValue) }))
+            if (configured.length) return configured
+            return oppStatusByLeadStatus.map((r) => ({ name: capitalize(r.status || 'new'), count: Number(r.count), value: Number(r.totalValue) }))
+          })(),
           pipelineTrend,
           activitiesByType: activitiesByType.map((r) => ({ name: capitalize(r.type), value: Number(r.count) })),
           tasksThroughput,

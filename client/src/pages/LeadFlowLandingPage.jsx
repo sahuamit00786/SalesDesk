@@ -18,6 +18,8 @@ export function LeadFlowLandingPage() {
   const token = useAppSelector((s) => s.auth.accessToken)
   const reduced = usePrefersReducedMotion()
 
+  if (token) return <Navigate to="/dashboard" replace />
+
   useEffect(() => {
     const prev = document.title
     document.title = 'LeadNest — Lead management, pipeline, and team workspace'

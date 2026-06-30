@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { BarChart3, CalendarDays, ListChecks, Megaphone, MoreHorizontal, RefreshCw, ShoppingBag, Users } from 'lucide-react'
+import { BarChart3, CalendarDays, LineChart, ListChecks, Megaphone, MoreHorizontal, RefreshCw, ShoppingBag, Users } from 'lucide-react'
 import { SkeletonCards } from '@/components/shared/SkeletonLoader'
 import { PageShell } from '@/components/layout/PageShell'
 import { PageFilterBar } from '@/components/layout/PageFilterBar'
@@ -86,6 +86,15 @@ function CampaignCard({ campaign, index, onEdit }) {
               <span className={cn('h-1.5 w-1.5 rounded-full', statusMeta.dot)} aria-hidden />
               {statusMeta.label}
             </span>
+            <Link
+              to={`/campaigns/${campaign.id}/report`}
+              title="View report"
+              onClick={(e) => e.stopPropagation()}
+              className="rounded-lg p-1.5 text-neutral-400 transition hover:bg-brand-50 hover:text-brand-600"
+              aria-label={`View report for ${campaign.name}`}
+            >
+              <LineChart className="h-4 w-4" />
+            </Link>
             <button
               type="button"
               onClick={(e) => {

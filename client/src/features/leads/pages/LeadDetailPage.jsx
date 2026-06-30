@@ -84,7 +84,7 @@ import GmailThreadList from '@/features/gmail/GmailThreadList'
 import GmailThreadView from '@/features/gmail/GmailThreadView'
 import { parseStoredThread } from '@/features/gmail/gmailParserUtils'
 import { formatStageLabel as formatPipelineStageLabel } from '@/features/opportunities/components/OpportunitiesKanban'
-import { useCreateOpportunityMutation } from '@/features/opportunities/opportunitiesApi'
+import { useCreateOpportunityMutation, usePatchOpportunityStatusMutation } from '@/features/opportunities/opportunitiesApi'
 import { AddDealDrawer } from '@/features/deals/components/AddDealDrawer'
 import { DealDetailPanel } from '@/features/deals/components/DealDetailPanel'
 import { formatDealMoney } from '@/features/deals/dealCurrencies'
@@ -293,7 +293,7 @@ function inferStyleKeyFromSystemAction(action) {
   if (a.startsWith('task_')) return 'task'
   if (a.startsWith('note_')) return 'note'
   if (a.startsWith('followup_')) return 'follow_up'
-  if (a === 'payment_recorded' || a === 'deal_payment_recorded') return 'payment'
+  if (a === 'payment_recorded' || a === 'deal_payment_recorded' || a === 'campaign_payment_recorded') return 'payment'
   return null
 }
 
@@ -586,6 +586,7 @@ export function LeadDetailPage() {
   const [updateLead] = useUpdateLeadMutation()
   const [createLeadTag] = useCreateLeadTagMutation()
   const [createOpportunity] = useCreateOpportunityMutation()
+  const [patchOpportunityStatus] = usePatchOpportunityStatusMutation()
 
   const lead = data?.data
   const summary = data?.meta?.summary || {}
@@ -695,8 +696,8 @@ export function LeadDetailPage() {
     [taskDrawerTaskId, tasks],
   )
 
-  const opportunityStages = useMemo(() => {
-    const rows = formMetaData?.data?.opportunityStages || []
+  const opportunityStatuses = useMemo(() => {
+    const rows = formMetaData?.data?.opportunityStatuses || []
     return [...rows].sort((a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0))
   }, [formMetaData])
 
@@ -1006,19 +1007,19 @@ export function LeadDetailPage() {
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-left text-xs font-medium text-ink-muted">Lead status (pipeline)</p>
                   <span className="rounded-full border border-surface-border bg-surface-subtle px-2 py-0.5 text-[11px] font-medium text-ink">
-                    {formatPipelineStageLabel(lead.opportunityStage) || 'Not set'}
+                    {lead.oppStatus?.name || 'Not set'}
                   </span>
                 </div>
                 <Select
                   className="h-10 rounded-xl text-sm"
-                  value={lead.opportunityStage || ''}
+                  value={lead.opportunityStatus || ''}
                   disabled={pipelineSaving}
                   onChange={async (e) => {
-                    const next = e.target.value
-                    if (!next || next === lead.opportunityStage) return
+                    const nextId = e.target.value
+                    if (!nextId || nextId === lead.opportunityStatus) return
                     setPipelineSaving(true)
                     try {
-                      await updateLead({ id, opportunityStage: next }).unwrap()
+                      await patchOpportunityStatus({ id, opportunityStatusId: nextId }).unwrap()
                     } catch (err) {
                       toast.error(err?.data?.error?.message || err?.error || 'Could not update lead status')
                     } finally {
@@ -1026,17 +1027,12 @@ export function LeadDetailPage() {
                     }
                   }}
                 >
-                  {lead.opportunityStage && !opportunityStages.some((s) => s.name === lead.opportunityStage) ? (
-                    <option value={lead.opportunityStage}>{formatPipelineStageLabel(lead.opportunityStage)}</option>
-                  ) : null}
-                  {opportunityStages.length === 0 ? (
-                    <option value={lead.opportunityStage || ''}>
-                      {formatPipelineStageLabel(lead.opportunityStage) || '—'}
-                    </option>
+                  {opportunityStatuses.length === 0 ? (
+                    <option value="">{lead.oppStatus?.name || '—'}</option>
                   ) : (
-                    opportunityStages.map((s) => (
-                      <option key={s.id} value={s.name}>
-                        {formatPipelineStageLabel(s.name)}
+                    opportunityStatuses.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
                       </option>
                     ))
                   )}
@@ -2205,7 +2201,7 @@ export function LeadDetailPage() {
             <DealDetailPanel
               open
               opp={dealPanelOpp}
-              opportunityStages={opportunityStages}
+              opportunityStatuses={opportunityStatuses}
               onClose={() => setDealPanelOpp(null)}
             />
           ) : null}

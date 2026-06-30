@@ -26,6 +26,10 @@ export const invoicesApi = baseApi.injectEndpoints({
       query: ({ id, ...body }) => ({ url: `/invoices/${id}/payments`, method: 'POST', body }),
       invalidatesTags: (_r, _e, arg) => [{ type: 'Invoice', id: arg.id }, { type: 'Invoice', id: 'LIST' }],
     }),
+    deleteInvoicePayment: build.mutation({
+      query: ({ id, paymentId }) => ({ url: `/invoices/${id}/payments/${paymentId}`, method: 'DELETE' }),
+      invalidatesTags: (_r, _e, arg) => [{ type: 'Invoice', id: arg.id }, { type: 'Invoice', id: 'LIST' }],
+    }),
     getInvoiceTemplates: build.query({
       query: () => '/invoices/templates',
       providesTags: [{ type: 'InvoiceTemplate', id: 'LIST' }],
@@ -35,7 +39,6 @@ export const invoicesApi = baseApi.injectEndpoints({
       /** Avoid duplicate cache entries when the same UUID appears with different casing. */
       serializeQueryArgs: ({ queryArgs }) => String(queryArgs || '').toLowerCase(),
       providesTags: (_r, _e, id) => [{ type: 'InvoiceTemplate', id: String(id || '').toLowerCase() }],
-      keepUnusedDataFor: 0,
       refetchOnMountOrArgChange: true,
     }),
     createInvoiceTemplate: build.mutation({
@@ -60,6 +63,7 @@ export const {
   usePatchInvoiceMutation,
   useDeleteInvoiceMutation,
   useRecordInvoicePaymentMutation,
+  useDeleteInvoicePaymentMutation,
   useGetInvoiceTemplatesQuery,
   useGetInvoiceTemplateQuery,
   useCreateInvoiceTemplateMutation,

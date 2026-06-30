@@ -537,6 +537,46 @@ export async function recordInvoicePayment(req, res, next) {
   }
 }
 
+export async function deleteInvoicePayment(req, res, next) {
+  try {
+    const { workspaceId } = await requireWorkspaceFromRequest(req)
+    const invoice = await Invoice.findOne({
+      where: { id: req.params.id, workspaceId, companyId: req.user.companyId },
+    })
+    if (!invoice) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Invoice not found' } })
+
+    const payment = await InvoicePayment.findOne({
+      where: { id: req.params.paymentId, invoiceId: invoice.id },
+    })
+    if (!payment) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Payment not found' } })
+
+    await sequelize.transaction(async (t) => {
+      await payment.destroy({ transaction: t })
+
+      const remaining = await InvoicePayment.findAll({ where: { invoiceId: invoice.id }, transaction: t })
+      const sumPaid = remaining.reduce((s, p) => s + Number(p.amount), 0)
+      const newStatus = deriveInvoiceStatus(sumPaid, invoice.grandTotal, invoice.status)
+
+      await invoice.update({ amountPaid: sumPaid, status: newStatus }, { transaction: t })
+    })
+
+    const full = await Invoice.findByPk(invoice.id, {
+      include: [
+        { model: InvoiceItem, as: 'items' },
+        { model: InvoicePayment, as: 'payments' },
+      ],
+    })
+
+    return res.json({
+      success: true,
+      data: serializeInvoice(full, full.items, full.payments),
+      meta: {},
+    })
+  } catch (e) {
+    return next(e)
+  }
+}
+
 export async function deleteInvoice(req, res, next) {
   try {
     const { workspaceId } = await requireWorkspaceFromRequest(req)

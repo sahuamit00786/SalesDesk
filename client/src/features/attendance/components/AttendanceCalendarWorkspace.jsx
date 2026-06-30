@@ -26,6 +26,7 @@ export function AttendanceCalendarWorkspace({
   mode = 'personal',
   logs = [],
   calendar = {},
+  weeklyOffDays = [],
   memberName,
   syncPeriod,
   onPeriodChange,
@@ -87,11 +88,6 @@ export function AttendanceCalendarWorkspace({
       ) : null}
       <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-500">Legend</p>
       <HrCalendarLegend items={legend} />
-      <p className="mt-3 text-xs leading-relaxed text-gray-500">
-        {mode === 'team'
-          ? 'Click a day or event to view team attendance details. Use the mini calendar to pick a date range.'
-          : 'Pick a date range in the mini calendar to focus the main view. Absent days are highlighted in red.'}
-      </p>
     </div>
   )
 
@@ -106,6 +102,7 @@ export function AttendanceCalendarWorkspace({
       showRightPanel={false}
       highlightAttendanceStatus
       dayStatusByDate={dayStatusByDate}
+      weeklyOffDays={weeklyOffDays}
       selectable={Boolean(onDayClick)}
       syncPeriod={syncPeriod}
       onPeriodChange={onPeriodChange}

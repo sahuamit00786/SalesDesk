@@ -79,7 +79,7 @@ const FIELD_GROUPS = [
     fields: [
       { id: 'value', label: 'Deal Value', type: 'number' },
       { id: 'score', label: 'Health Score', type: 'number' },
-      { id: 'opportunityStage', label: 'Stage', type: 'text', oppOnly: true },
+      { id: 'opportunityStatus', label: 'Status', type: 'text', oppOnly: true },
     ],
   },
   {
@@ -499,8 +499,8 @@ export function FilterBuilder({
     const source = draft.source?.on
       ? (draft.source.val || '').split(',').map((v) => v.trim()).filter(Boolean)
       : []
-    const stage = draft.opportunityStage?.on && draft.opportunityStage.val
-      ? [draft.opportunityStage.val]
+    const stage = draft.opportunityStatus?.on && draft.opportunityStatus.val
+      ? [draft.opportunityStatus.val]
       : []
     const valueMin = draft.value?.on && draft.value.op !== 'between' ? (Number(draft.value.val) || undefined) : undefined
     const valueMax = draft.value?.on && draft.value.op === 'between' ? (Number(draft.value.val2) || undefined) : undefined

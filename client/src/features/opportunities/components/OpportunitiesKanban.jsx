@@ -4,7 +4,7 @@ import { Building2, GripVertical } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { cn } from '@/utils/cn'
-import { usePatchOpportunityStageMutation } from '@/features/opportunities/opportunitiesApi'
+import { usePatchOpportunityStatusMutation } from '@/features/opportunities/opportunitiesApi'
 import { formatDealMoney } from '@/features/deals/dealCurrencies'
 
 export function formatStageLabel(value) {
@@ -56,7 +56,7 @@ function KanbanCardOverlayPreview({ opp }) {
   )
 }
 
-function KanbanCard({ opp, onOpen, canCreateDeal, onCreateDeal }) {
+function KanbanCard({ opp, onOpen, onCreateDeal }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: opp.id,
     data: { opp },
@@ -107,65 +107,43 @@ function KanbanCard({ opp, onOpen, canCreateDeal, onCreateDeal }) {
             </span>
             <span className="truncate">{opp.owner?.name || opp.owner?.email || 'Unassigned'}</span>
           </div>
-          {canCreateDeal ? (
-            <div className="pt-1">
-              <button
-                type="button"
-                className="inline-flex h-7 items-center rounded-md border border-emerald-200 bg-emerald-50 px-2 text-[10px] font-semibold text-emerald-800 shadow-sm hover:bg-emerald-100/90"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  onCreateDeal?.(opp)
-                }}
-              >
-                Add to Deals
-              </button>
-            </div>
-          ) : null}
+          <div className="pt-1">
+            <button
+              type="button"
+              className="inline-flex h-7 items-center rounded-md border border-emerald-200 bg-emerald-50 px-2 text-[10px] font-semibold text-emerald-800 shadow-sm hover:bg-emerald-100/90"
+              onClick={(event) => {
+                event.stopPropagation()
+                onCreateDeal?.(opp)
+              }}
+            >
+              Add to Deals
+            </button>
+          </div>
         </button>
       </div>
     </div>
   )
 }
 
-function KanbanColumn({ stageName, displayLabel, opportunities, onOpen, dealStageName, onCreateDeal }) {
+function KanbanColumn({ stageName, displayLabel, opportunities, onOpen, onCreateDeal }) {
   const droppableId = `stage:${stageName}`
   const { setNodeRef, isOver } = useDroppable({ id: droppableId })
-  /** Same mint column as Deals pipeline “Won” — stage flagged `isDealStatus` in workspace config. */
-  const isDealStageColumn = Boolean(dealStageName) && stageName === dealStageName
 
   return (
     <div
       ref={setNodeRef}
       className={cn(
-        'flex h-full min-h-0 w-[280px] shrink-0 flex-col rounded-2xl border',
-        isDealStageColumn
-          ? 'border-neutral-200/60 bg-[#f0fae0]'
-          : 'border-surface-border bg-surface-muted/50',
-        isOver &&
-          (isDealStageColumn
-            ? 'ring-2 ring-emerald-500/45 ring-offset-1'
-            : 'border-brand-400 bg-slate-100 ring-2 ring-brand-400/30'),
+        'flex h-full min-h-0 w-[280px] shrink-0 flex-col rounded-2xl border border-surface-border bg-surface-muted/50',
+        isOver && 'border-brand-400 bg-slate-100 ring-2 ring-brand-400/30',
       )}
     >
-      <div
-        className={cn(
-          'shrink-0 border-b px-3 py-2.5',
-          isDealStageColumn ? 'border-neutral-200/70 bg-white' : 'border-surface-border',
-        )}
-      >
+      <div className="shrink-0 border-b border-surface-border px-3 py-2.5">
         <p className="text-xs font-semibold text-ink">{displayLabel}</p>
         <p className="text-[11px] text-ink-muted">{opportunities.length} card{opportunities.length === 1 ? '' : 's'}</p>
       </div>
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2.5 scrollbar-subtle">
         {opportunities.length === 0 ? (
-          <p
-            className={cn(
-              'rounded-lg border border-dashed px-3 py-6 text-center text-[11px] text-ink-muted',
-              isDealStageColumn
-                ? 'border-neutral-300/80 bg-white/50'
-                : 'border-surface-border bg-white/60',
-            )}
-          >
+          <p className="rounded-lg border border-dashed border-surface-border bg-white/60 px-3 py-6 text-center text-[11px] text-ink-muted">
             Drop opportunities here
           </p>
         ) : (
@@ -174,7 +152,6 @@ function KanbanColumn({ stageName, displayLabel, opportunities, onOpen, dealStag
               key={opp.id}
               opp={opp}
               onOpen={onOpen}
-              canCreateDeal={Boolean(dealStageName) && opp.currentStage === dealStageName}
               onCreateDeal={onCreateDeal}
             />
           ))
@@ -184,7 +161,7 @@ function KanbanColumn({ stageName, displayLabel, opportunities, onOpen, dealStag
   )
 }
 
-function KanbanOtherColumn({ displayLabel, opportunities, onOpen, dealStageName, onCreateDeal }) {
+function KanbanOtherColumn({ displayLabel, opportunities, onOpen, onCreateDeal }) {
   return (
     <div className="flex h-full min-h-0 w-[280px] shrink-0 flex-col rounded-2xl border border-amber-200/80 bg-amber-50/30">
       <div className="shrink-0 border-b border-amber-200/80 px-3 py-2.5">
@@ -193,14 +170,13 @@ function KanbanOtherColumn({ displayLabel, opportunities, onOpen, dealStageName,
       </div>
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2.5 scrollbar-subtle">
         <p className="mb-2 rounded-lg bg-amber-100/80 px-2 py-1.5 text-[10px] text-amber-900/90">
-          Status doesn’t match setup — drag into a column to fix.
+          Status doesn't match setup — drag into a column to fix.
         </p>
         {opportunities.map((opp) => (
           <KanbanCard
             key={opp.id}
             opp={opp}
             onOpen={onOpen}
-            canCreateDeal={Boolean(dealStageName) && opp.currentStage === dealStageName}
             onCreateDeal={onCreateDeal}
           />
         ))}
@@ -226,9 +202,9 @@ function groupByStage(opportunities, stageOrder) {
   return { byStage, other }
 }
 
-export function OpportunitiesKanban({ opportunities = [], opportunityStages = [], isLoading, dealStageName = '', onCreateDeal }) {
+export function OpportunitiesKanban({ opportunities = [], opportunityStatuses = [], isLoading, onCreateDeal }) {
   const navigate = useNavigate()
-  const [patchStage] = usePatchOpportunityStageMutation()
+  const [patchOpportunityStatus] = usePatchOpportunityStatusMutation()
   const [activeId, setActiveId] = useState(null)
 
   const sensors = useSensors(
@@ -238,9 +214,9 @@ export function OpportunitiesKanban({ opportunities = [], opportunityStages = []
   )
 
   const stageOrder = useMemo(() => {
-    const ordered = [...opportunityStages].sort((a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0))
+    const ordered = [...opportunityStatuses].sort((a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0))
     return ordered.map((s) => s.name).filter(Boolean)
-  }, [opportunityStages])
+  }, [opportunityStatuses])
 
   const merged = useMemo(() => groupByStage(opportunities, stageOrder), [opportunities, stageOrder])
 
@@ -252,13 +228,15 @@ export function OpportunitiesKanban({ opportunities = [], opportunityStages = []
     if (!over) return
     const overId = String(over.id)
     if (!overId.startsWith('stage:')) return
-    const newStage = overId.slice('stage:'.length)
+    const newStageName = overId.slice('stage:'.length)
     const oppId = String(active.id)
     const opp = opportunities.find((o) => o.id === oppId)
-    if (!opp || opp.currentStage === newStage) return
+    if (!opp || opp.currentStage === newStageName) return
+    const status = opportunityStatuses.find((s) => s.name === newStageName)
+    if (!status) return
     try {
-      await patchStage({ id: oppId, currentStage: newStage }).unwrap()
-      toast.success(`Moved to ${formatStageLabel(newStage)}`)
+      await patchOpportunityStatus({ id: oppId, opportunityStatusId: status.id }).unwrap()
+      toast.success(`Moved to ${formatStageLabel(newStageName)}`)
     } catch (err) {
       toast.error(err?.data?.error?.message || err?.error || 'Could not update stage')
     }
@@ -279,8 +257,8 @@ export function OpportunitiesKanban({ opportunities = [], opportunityStages = []
   if (!stageOrder.length) {
     return (
       <div className="rounded-2xl border border-dashed border-surface-border bg-white px-6 py-14 text-center">
-        <p className="text-sm font-medium text-ink">No opportunity stages configured</p>
-        <p className="mt-1 text-xs text-ink-muted">Add stages under Lead configuration → Opportunity stages.</p>
+        <p className="text-sm font-medium text-ink">No opportunity statuses configured</p>
+        <p className="mt-1 text-xs text-ink-muted">Add statuses under Lead configuration → Opportunity status.</p>
       </div>
     )
   }
@@ -300,16 +278,14 @@ export function OpportunitiesKanban({ opportunities = [], opportunityStages = []
             displayLabel={formatStageLabel(name)}
             opportunities={merged.byStage[name] || []}
             onOpen={handleOpen}
-            dealStageName={dealStageName}
             onCreateDeal={onCreateDeal}
           />
         ))}
         {merged.other.length > 0 ? (
           <KanbanOtherColumn
-            displayLabel="Other / unmapped stage"
+            displayLabel="Other / unmapped status"
             opportunities={merged.other}
             onOpen={handleOpen}
-            dealStageName={dealStageName}
             onCreateDeal={onCreateDeal}
           />
         ) : null}

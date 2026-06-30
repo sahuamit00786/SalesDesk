@@ -104,7 +104,7 @@ const WATCHABLE_FIELDS = [
   { value: 'status', label: 'Lifecycle status' },
   { value: 'source', label: 'Source channel' },
   { value: 'sourceId', label: 'Workspace source' },
-  { value: 'opportunityStage', label: 'Pipeline stage' },
+  { value: 'opportunityStatus', label: 'Pipeline status' },
   { value: 'assignedTo', label: 'Assigned to' },
   { value: 'email', label: 'Email' },
   { value: 'phone', label: 'Phone' },
@@ -179,7 +179,7 @@ const CONDITION_FIELD_GROUPS = [
   },
   {
     label: 'Pipeline',
-    options: [{ value: 'opportunityStage', label: 'Pipeline / lead status name' }],
+    options: [{ value: 'opportunityStatus', label: 'Pipeline / opportunity status' }],
   },
   {
     label: 'Contact & account',
@@ -211,7 +211,7 @@ function formatStatusLabel(key) {
 
 function ConditionValueControl({ field, value, operator, updateNodeData, id, leadSetup }) {
   const sources = Array.isArray(leadSetup?.sources) ? leadSetup.sources : []
-  const stages = Array.isArray(leadSetup?.opportunityStages) ? leadSetup.opportunityStages : []
+  const stages = Array.isArray(leadSetup?.opportunityStatuses) ? leadSetup.opportunityStatuses : []
 
   if (operator === 'is_empty' || operator === 'is_not_empty') {
     return null
@@ -286,24 +286,24 @@ function ConditionValueControl({ field, value, operator, updateNodeData, id, lea
     )
   }
 
-  if (field === 'opportunityStage') {
+  if (field === 'opportunityStatus') {
     return (
       <label className="block text-[11px] font-medium text-ink-muted">
-        Pipeline stage name
+        Pipeline status
         <select
           className="mt-0.5 w-full rounded-lg border border-surface-border bg-surface-muted px-2 py-1 text-xs text-ink"
           value={String(value ?? '')}
           onChange={(e) => updateNodeData(id, { value: e.target.value })}
         >
-          <option value="">Pick a stage…</option>
+          <option value="">Pick a status…</option>
           {stages.map((s) => (
-            <option key={s.id} value={String(s.name || '').trim()}>
+            <option key={s.id} value={s.id}>
               {s.name || s.id}
             </option>
           ))}
         </select>
         {stages.length === 0 ? (
-          <p className="mt-1 text-[10px] text-amber-700">Add lead statuses under Lead configuration.</p>
+          <p className="mt-1 text-[10px] text-amber-700">Add opportunity statuses under Lead configuration.</p>
         ) : null}
       </label>
     )
@@ -346,8 +346,8 @@ function ConditionFieldNode({ id, data, selected, updateNodeData, leadSetup }) {
     const f = e.target.value
     let v = defaultConditionValueForField(f)
     const sources = Array.isArray(leadSetup?.sources) ? leadSetup.sources : []
-    const stages = Array.isArray(leadSetup?.opportunityStages) ? leadSetup.opportunityStages : []
-    if (f === 'opportunityStage' && stages[0]?.name) v = String(stages[0].name).trim()
+    const stages = Array.isArray(leadSetup?.opportunityStatuses) ? leadSetup.opportunityStatuses : []
+    if (f === 'opportunityStatus' && stages[0]?.id) v = String(stages[0].id)
     if (f === 'sourceId' && sources[0]?.id) v = String(sources[0].id)
     updateNodeData(id, { field: f, value: v })
   }

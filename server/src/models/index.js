@@ -81,6 +81,7 @@ import { PublicHoliday } from './PublicHoliday.js'
 import { Notification } from './Notification.js'
 import { NotificationDeliveryLog } from './NotificationDeliveryLog.js'
 import { DealPayment } from './DealPayment.js'
+import { CampaignPayment } from './CampaignPayment.js'
 
 User.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
 Company.hasMany(User, { foreignKey: 'companyId', as: 'users' })
@@ -369,6 +370,14 @@ CampaignLead.belongsTo(User, { foreignKey: 'assignedUserId', as: 'campaignAssign
 Campaign.hasMany(CampaignLead, { foreignKey: 'campaignId', as: 'campaignLeads' })
 Lead.hasMany(CampaignLead, { foreignKey: 'leadId', as: 'campaignLeads' })
 
+CampaignPayment.belongsTo(Campaign, { foreignKey: 'campaignId', as: 'campaign' })
+CampaignPayment.belongsTo(CampaignLead, { foreignKey: 'campaignLeadId', as: 'campaignLead' })
+CampaignPayment.belongsTo(Lead, { foreignKey: 'leadId', as: 'lead' })
+CampaignPayment.belongsTo(User, { foreignKey: 'createdByUserId', as: 'createdBy' })
+Campaign.hasMany(CampaignPayment, { foreignKey: 'campaignId', as: 'payments' })
+CampaignLead.hasMany(CampaignPayment, { foreignKey: 'campaignLeadId', as: 'payments' })
+Lead.hasMany(CampaignPayment, { foreignKey: 'leadId', as: 'campaignPayments' })
+
 Workflow.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
 Workflow.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
 Workflow.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' })
@@ -502,6 +511,7 @@ export {
   Campaign,
   CampaignTeamMember,
   CampaignLead,
+  CampaignPayment,
   Workflow,
   WorkflowVersion,
   WorkflowRun,

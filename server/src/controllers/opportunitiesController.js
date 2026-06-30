@@ -1,7 +1,7 @@
 import Joi from 'joi'
 import { Op, fn, col, where as sqlWhere } from 'sequelize'
 import { parsePhoneNumber, parsePhoneNumberFromString } from 'libphonenumber-js/min'
-import { Activity, CustomField, CustomFieldValue, Deal, Lead, OpportunityStage, Tag, User } from '../models/index.js'
+import { Activity, CustomField, CustomFieldValue, Deal, Lead, OpportunityStatus, Tag, User } from '../models/index.js'
 import { serializeLeadCustomFields, upsertLeadCustomFields } from '../services/customFieldService.js'
 import { serializeDealForClient } from './dealsController.js'
 import { allowedWorkspaceIdsForUser } from '../services/userWorkspaceService.js'
@@ -123,6 +123,7 @@ const createOpportunitySchema = Joi.object({
   dealCurrency: Joi.string().trim().length(3).pattern(/^[A-Za-z]{3}$/).uppercase().default('USD'),
   /** When true, row is shown on the Deals pipeline (not only Opportunities). */
   pipelineDeal: Joi.boolean().default(false),
+  opportunityStatusId: Joi.string().uuid().allow('', null),
   customFields: Joi.object().default({}),
 }).required()
 
@@ -178,26 +179,16 @@ async function ensureCompanyTags(companyId, tags = [], workspaceId = null) {
   return clean
 }
 
-async function resolveInitialOpportunityStage(workspaceId, companyId, requested) {
-  const trimmed = requested !== undefined && requested !== null ? String(requested).trim() : ''
-  if (trimmed) return trimmed
-  const def = await OpportunityStage.findOne({
-    where: { workspaceId, companyId, isDefault: true },
-    order: [
-      ['sortOrder', 'ASC'],
-      ['createdAt', 'ASC'],
-    ],
+async function resolveInitialOpportunityStatus(workspaceId, companyId) {
+  const initial = await OpportunityStatus.findOne({
+    where: { workspaceId, companyId, isInitial: true },
+    order: [['sortOrder', 'ASC'], ['createdAt', 'ASC']],
   })
-  if (def) return def.name
-  const first = await OpportunityStage.findOne({
+  if (initial) return initial
+  return OpportunityStatus.findOne({
     where: { workspaceId, companyId },
-    order: [
-      ['sortOrder', 'ASC'],
-      ['createdAt', 'ASC'],
-    ],
+    order: [['sortOrder', 'ASC'], ['createdAt', 'ASC']],
   })
-  if (first) return first.name
-  return 'Lead Inbound'
 }
 
 /** Visibility + workspace scope for pipeline rows (leads marked as opportunities). */
@@ -254,7 +245,7 @@ function serializeLeadAsOpportunity(lead) {
     location: [plain.city, plain.state, plain.country].filter(Boolean).join(', ') || null,
     timezone: null,
     dealValue: plain.value,
-    currentStage: plain.opportunityStage || 'open',
+    currentStage: plain.oppStatus?.name || '',
     leadScore: plain.score,
     tags,
     lastActivityType: null,
@@ -271,6 +262,7 @@ function serializeLeadAsOpportunity(lead) {
 const leadPipelineIncludes = [
   { model: User, as: 'assignee', attributes: ['id', 'name', 'email'], required: false },
   { model: Tag, as: 'tags', attributes: ['id', 'name', 'color'], through: { attributes: [] }, required: false },
+  { model: OpportunityStatus, as: 'oppStatus', attributes: ['id', 'name'], required: false },
   {
     model: CustomFieldValue,
     as: 'customFieldValues',
@@ -286,8 +278,8 @@ export async function list(req, res, next) {
     const baseWhere = await leadPipelineBaseWhere(req)
 
     const stages = parseCsvParam(req.query.stage)
-    if (stages.length === 1) baseWhere.opportunityStage = stages[0]
-    else if (stages.length > 1) baseWhere.opportunityStage = { [Op.in]: stages }
+    if (stages.length === 1) baseWhere.opportunityStatus = stages[0]
+    else if (stages.length > 1) baseWhere.opportunityStatus = { [Op.in]: stages }
 
     const ownerUserIds = parseCsvParam(req.query.ownerUserId)
     if (ownerUserIds.length === 1) baseWhere.assignedTo = ownerUserIds[0]
@@ -320,7 +312,7 @@ export async function list(req, res, next) {
       fullName: 'contactName',
       companyName: 'company',
       leadScore: 'score',
-      currentStage: 'opportunityStage',
+      currentStage: 'createdAt',
     }
     const orderCol = sortMap[sortKey] || 'updatedAt'
 
@@ -407,7 +399,8 @@ export async function create(req, res, next) {
         err.publicMessage = 'Selected lead must be an opportunity'
         throw err
       }
-      const dealStage = await resolveInitialOpportunityStage(String(workspaceId), req.user.companyId, null)
+      const initialStatus = await resolveInitialOpportunityStatus(String(workspaceId), req.user.companyId)
+      const dealStage = initialStatus?.name || ''
       const ownerId = normalizeNullable(value.ownerUserId) || parent.assignedTo || req.user.id
       const fullName = String(value.fullName || '').trim() || parent.contactName || 'Lead'
       const companyName = String(value.companyName || '').trim() || parent.company || 'Unknown company'
@@ -465,10 +458,10 @@ export async function create(req, res, next) {
     }
 
     const normalizedLeadId = normalizeNullable(value.leadId)
-    // Converting an existing lead: always start at the workspace default opportunity stage.
-    // New pipeline records may still pass an explicit currentStage from the client (e.g. create modal).
-    const requestedInitialStage = normalizedLeadId ? null : value.currentStage
-    const currentStage = await resolveInitialOpportunityStage(String(workspaceId), req.user.companyId, requestedInitialStage)
+    const requestedStatusId = value.opportunityStatusId ? String(value.opportunityStatusId).trim() : null
+    const initialStatus = requestedStatusId
+      ? await OpportunityStatus.findOne({ where: { id: requestedStatusId, workspaceId: String(workspaceId), companyId: req.user.companyId } })
+      : await resolveInitialOpportunityStatus(String(workspaceId), req.user.companyId)
 
     if (normalizedLeadId) {
       const leadRow = await assertLeadForOpportunity({
@@ -489,7 +482,7 @@ export async function create(req, res, next) {
           : null
       const convertUpdates = {
         isOpportunity: true,
-        opportunityStage: currentStage,
+        opportunityStatus: initialStatus?.id || null,
         assignedTo: ownerId,
         contactName: value.fullName?.trim() || leadRow.contactName,
         company: value.companyName?.trim() || leadRow.company,
@@ -589,7 +582,7 @@ export async function create(req, res, next) {
           valueCurrency: value.dealCurrency || 'USD',
           requirement: value.dealDescription || null,
           tags: normalizedTags,
-          opportunityStage: value.currentStage || null,
+          opportunityStatus: initialStatus?.id || null,
           isOpportunity: true,
           source: 'manual',
         },
@@ -636,7 +629,7 @@ export async function create(req, res, next) {
       companyId: req.user.companyId,
       isDeleted: false,
       isOpportunity: true,
-      opportunityStage: currentStage,
+      opportunityStatus: initialStatus?.id || null,
     })
 
     if (normalizedTags.length) {
@@ -683,7 +676,6 @@ export async function update(req, res, next) {
     if (lead) {
       const hasTagsField = Object.prototype.hasOwnProperty.call(req.body || {}, 'tags')
       const hasCustomFieldsField = Object.prototype.hasOwnProperty.call(req.body || {}, 'customFields')
-      const previousStage = lead.opportunityStage || ''
       const beforePlain = lead.get({ plain: true })
       const beforeTags = (await lead.getTags({ attributes: ['name'] })).map((t) => String(t.name || '').trim().toLowerCase()).filter(Boolean)
 
@@ -694,7 +686,6 @@ export async function update(req, res, next) {
       if (value.jobTitle !== undefined) patch.designation = normalizeNullable(value.jobTitle)
       if (value.dealValue !== undefined) patch.value = value.dealValue
       if (value.leadScore !== undefined) patch.score = value.leadScore
-      if (value.currentStage !== undefined && String(value.currentStage).trim()) patch.opportunityStage = String(value.currentStage).trim()
       if (value.ownerUserId !== undefined) patch.assignedTo = normalizeNullable(value.ownerUserId)
       if (value.phoneNumber !== undefined) {
         const t = String(value.phoneNumber ?? '').trim()
@@ -744,27 +735,6 @@ export async function update(req, res, next) {
       }
 
       await lead.reload({ include: leadPipelineIncludes })
-
-      if (
-        value.currentStage !== undefined &&
-        String(value.currentStage).trim() &&
-        previousStage !== lead.opportunityStage
-      ) {
-        const actorName = await resolveActorDisplayName(req.user.id, req.user.email)
-        await Activity.create({
-          type: 'status_change',
-          body: `Opportunity stage changed from ${formatStageLabelForMessage(previousStage)} to ${formatStageLabelForMessage(lead.opportunityStage)} by ${actorName}`,
-          metadata: {
-            action: 'opportunity_stage_changed',
-            opportunityId: lead.id,
-            from: previousStage,
-            to: lead.opportunityStage,
-            actorUserId: req.user.id,
-          },
-          leadId: lead.id,
-          userId: req.user.id,
-        })
-      }
 
       if (hasTagsField) {
         const afterTags = (await lead.getTags({ attributes: ['name'] })).map((t) => String(t.name || '').trim().toLowerCase()).filter(Boolean)
@@ -818,15 +788,18 @@ export async function update(req, res, next) {
   }
 }
 
-export async function patchStage(req, res, next) {
+export async function patchStatus(req, res, next) {
   try {
-    const stage = String(req.body?.currentStage || '').trim()
-    if (!stage) {
-      const err = new Error('Validation failed')
-      err.status = 400
-      err.code = 'VALIDATION'
-      err.publicMessage = 'currentStage is required'
-      throw err
+    const opportunityStatusId = String(req.body?.opportunityStatusId || '').trim()
+    if (!opportunityStatusId) {
+      return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'opportunityStatusId is required' } })
+    }
+
+    const workspaceId = req.headers['x-workspace-id']
+    const companyId = req.user?.companyId
+    const newStatus = await OpportunityStatus.findOne({ where: { id: opportunityStatusId, companyId } })
+    if (!newStatus) {
+      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Opportunity status not found' } })
     }
 
     const baseWhere = await leadPipelineBaseWhere(req)
@@ -834,35 +807,38 @@ export async function patchStage(req, res, next) {
       where: { ...baseWhere, id: req.params.id },
       include: leadPipelineIncludes,
     })
-    if (lead) {
-      const previousStage = lead.opportunityStage || ''
-      if (previousStage === stage) {
-        return res.json({ success: true, data: serializeLeadAsOpportunity(lead), meta: {} })
-      }
-      await lead.update({ opportunityStage: stage })
-      await lead.reload({ include: leadPipelineIncludes })
-      const actorName = await resolveActorDisplayName(req.user.id, req.user.email)
-      await Activity.create({
-        type: 'status_change',
-        body: `Opportunity stage changed from ${formatStageLabelForMessage(previousStage)} to ${formatStageLabelForMessage(stage)} by ${actorName}`,
-        metadata: {
-          action: 'opportunity_stage_changed',
-          opportunityId: lead.id,
-          from: previousStage,
-          to: stage,
-          actorUserId: req.user.id,
-        },
-        leadId: lead.id,
-        userId: req.user.id,
-      })
+    if (!lead) {
+      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Opportunity not found' } })
+    }
+
+    const prevStatusId = lead.opportunityStatus
+    if (String(prevStatusId) === opportunityStatusId) {
       return res.json({ success: true, data: serializeLeadAsOpportunity(lead), meta: {} })
     }
 
-    const err = new Error('Opportunity not found')
-    err.status = 404
-    err.code = 'NOT_FOUND'
-    err.publicMessage = 'Opportunity not found'
-    throw err
+    const prevStatus = prevStatusId
+      ? await OpportunityStatus.findOne({ where: { id: prevStatusId, companyId }, attributes: ['name'] })
+      : null
+
+    await lead.update({ opportunityStatus: opportunityStatusId })
+    await lead.reload({ include: leadPipelineIncludes })
+
+    const actorName = await resolveActorDisplayName(req.user.id, req.user.email)
+    await Activity.create({
+      type: 'status_change',
+      body: `Opportunity status changed from ${formatStageLabelForMessage(prevStatus?.name || '')} to ${formatStageLabelForMessage(newStatus.name)} by ${actorName}`,
+      metadata: {
+        action: 'opportunity_status_changed',
+        opportunityId: lead.id,
+        from: prevStatus?.name || '',
+        to: newStatus.name,
+        actorUserId: req.user.id,
+      },
+      leadId: lead.id,
+      userId: req.user.id,
+    })
+
+    return res.json({ success: true, data: serializeLeadAsOpportunity(lead), meta: {} })
   } catch (e) {
     return next(e)
   }

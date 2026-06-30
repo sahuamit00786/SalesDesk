@@ -109,7 +109,8 @@ export async function updateMeeting(req, res, next) {
     const data = await service.updateMeeting(
       req.params.id,
       req.body,
-      workspaceId
+      workspaceId,
+      req.user.companyId
     );
 
     res.json({
@@ -127,7 +128,8 @@ export async function deleteMeeting(req, res, next) {
 
     await service.deleteMeeting(
       req.params.id,
-      workspaceId
+      workspaceId,
+      req.user.companyId
     );
 
     res.json({

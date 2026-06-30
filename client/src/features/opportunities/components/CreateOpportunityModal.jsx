@@ -7,7 +7,6 @@ import { CustomFieldsForm, validateCustomFieldsForm } from '@/features/leads/com
 import { useGetLeadFormMetaQuery } from '@/features/leads/leadsApi'
 import { useEffectiveCurrency } from '@/hooks/useEffectiveCurrency'
 
-const FALLBACK_STAGE_NAMES = ['Lead Inbound', 'New', 'Contacted', 'Qualified', 'Proposal Made', 'Negotiation', 'Won', 'Lost']
 const INDUSTRIES = ['Software / SaaS', 'FinTech', 'Healthcare', 'Logistics', 'Manufacturing', 'Education', 'Other']
 const COMPANY_SIZES = ['1-10 employees', '11-50 employees', '51-200 employees', '201-1000 employees', '1000+ employees']
 
@@ -35,41 +34,34 @@ export function CreateOpportunityModal({
   onSave,
   onSaveAndAddAnother,
   users = [],
-  opportunityStages = [],
+  opportunityStatuses = [],
   saving = false,
 }) {
   const effectiveCurrency = useEffectiveCurrency()
   const { data: formMetaData } = useGetLeadFormMetaQuery(undefined, { skip: !open })
   const customFieldDefs = useMemo(() => formMetaData?.data?.customFields || [], [formMetaData])
-  const [form, setForm] = useState(() => ({ ...EMPTY_FORM, currentStage: 'Lead Inbound' }))
+  const [form, setForm] = useState(() => ({ ...EMPTY_FORM, opportunityStatusId: '' }))
   const [error, setError] = useState('')
   const [customFieldErrors, setCustomFieldErrors] = useState({})
 
-  const defaultStage = useMemo(() => {
-    if (opportunityStages.length) {
-      const d = opportunityStages.find((s) => s.isDefault)
-      return d?.name || opportunityStages[0]?.name || 'Lead Inbound'
-    }
-    return 'Lead Inbound'
-  }, [opportunityStages])
-
-  const stageOptions = useMemo(() => {
-    if (opportunityStages.length) return opportunityStages.map((s) => s.name).filter(Boolean)
-    return FALLBACK_STAGE_NAMES
-  }, [opportunityStages])
+  const defaultStatusId = useMemo(() => {
+    const sorted = [...opportunityStatuses].sort((a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0))
+    const initial = sorted.find((s) => s.isInitial)
+    return (initial || sorted[0])?.id || ''
+  }, [opportunityStatuses])
 
   useEffect(() => {
     if (open) {
       setForm((prev) => ({
         ...EMPTY_FORM,
-        currentStage: defaultStage,
+        opportunityStatusId: defaultStatusId,
         ownerUserId: users[0]?.id || prev.ownerUserId || '',
         dealCurrency: effectiveCurrency,
       }))
       setError('')
       setCustomFieldErrors({})
     }
-  }, [open, users, defaultStage, effectiveCurrency])
+  }, [open, users, defaultStatusId, effectiveCurrency])
 
   const ownerOptions = useMemo(
     () => users.map((u) => ({ id: u.id, label: u.name || u.email || 'User', email: u.email || '' })),
@@ -103,7 +95,6 @@ export function CreateOpportunityModal({
   async function submit(kind) {
     if (!form.fullName.trim()) return setError('Full name is required')
     if (!form.companyName.trim()) return setError('Company is required')
-    if (!form.currentStage.trim()) return setError('Pipeline status is required')
     const cfErrors = validateCustomFieldsForm(customFieldDefs, form.customFields)
     if (Object.keys(cfErrors).length) {
       setCustomFieldErrors(cfErrors)
@@ -115,7 +106,7 @@ export function CreateOpportunityModal({
       await onSaveAndAddAnother(normalizedPayload(), () =>
         setForm({
           ...EMPTY_FORM,
-          currentStage: defaultStage,
+          opportunityStatusId: defaultStatusId,
           ownerUserId: users[0]?.id || '',
           dealCurrency: effectiveCurrency,
         }),
@@ -254,8 +245,9 @@ export function CreateOpportunityModal({
               </label>
               <label>
                 <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Pipeline status</p>
-                <select className="h-8 w-full rounded-md border border-surface-border px-2 text-xs" value={form.currentStage} onChange={(e) => patch('currentStage', e.target.value)}>
-                  {stageOptions.map((x) => <option key={x} value={x}>{x}</option>)}
+                <select className="h-8 w-full rounded-md border border-surface-border px-2 text-xs" value={form.opportunityStatusId} onChange={(e) => patch('opportunityStatusId', e.target.value)}>
+                  <option value="">Select status</option>
+                  {opportunityStatuses.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </label>
               <label>

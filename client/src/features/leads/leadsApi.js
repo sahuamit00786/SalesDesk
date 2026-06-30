@@ -53,22 +53,6 @@ export const leadsApi = baseApi.injectEndpoints({
       query: (id) => ({ url: `/leads/setup/tags/${id}`, method: 'DELETE' }),
       invalidatesTags: [{ type: 'Lead', id: 'SETUP' }, { type: 'Lead', id: 'FORM_META' }],
     }),
-    createOpportunityStage: build.mutation({
-      query: (body) => ({ url: '/leads/setup/opportunity-stages', method: 'POST', body }),
-      invalidatesTags: [{ type: 'Lead', id: 'SETUP' }, { type: 'Lead', id: 'FORM_META' }],
-    }),
-    updateOpportunityStage: build.mutation({
-      query: ({ id, ...body }) => ({ url: `/leads/setup/opportunity-stages/${id}`, method: 'PATCH', body }),
-      invalidatesTags: [{ type: 'Lead', id: 'SETUP' }, { type: 'Lead', id: 'FORM_META' }],
-    }),
-    reorderOpportunityStages: build.mutation({
-      query: (body) => ({ url: '/leads/setup/opportunity-stages/reorder', method: 'POST', body }),
-      invalidatesTags: [{ type: 'Lead', id: 'SETUP' }, { type: 'Lead', id: 'FORM_META' }],
-    }),
-    deleteOpportunityStage: build.mutation({
-      query: (id) => ({ url: `/leads/setup/opportunity-stages/${id}`, method: 'DELETE' }),
-      invalidatesTags: [{ type: 'Lead', id: 'SETUP' }, { type: 'Lead', id: 'FORM_META' }],
-    }),
     createOpportunityStatus: build.mutation({
       query: (body) => ({ url: '/leads/setup/opportunity-statuses', method: 'POST', body }),
       invalidatesTags: [{ type: 'Lead', id: 'SETUP' }, { type: 'Lead', id: 'FORM_META' }],
@@ -381,10 +365,6 @@ export const {
   useCreateLeadTagMutation,
   useUpdateLeadTagMutation,
   useDeleteLeadTagMutation,
-  useCreateOpportunityStageMutation,
-  useUpdateOpportunityStageMutation,
-  useReorderOpportunityStagesMutation,
-  useDeleteOpportunityStageMutation,
   useCreateOpportunityStatusMutation,
   useUpdateOpportunityStatusMutation,
   useDeleteOpportunityStatusMutation,

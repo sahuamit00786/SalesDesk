@@ -22,7 +22,7 @@ import toast from 'react-hot-toast'
 import { PageShell } from '@/components/layout/PageShell'
 import { CreateOpportunityModal } from '@/features/opportunities/components/CreateOpportunityModal'
 import { OpportunitiesKanban, formatStageLabel } from '@/features/opportunities/components/OpportunitiesKanban'
-import { useCreateOpportunityMutation, usePatchOpportunityStageMutation } from '@/features/opportunities/opportunitiesApi'
+import { useCreateOpportunityMutation, usePatchOpportunityStatusMutation } from '@/features/opportunities/opportunitiesApi'
 import { useCreateDealMutation } from '@/features/deals/dealsApi'
 import { useGetLeadFormMetaQuery, useGetLeadsQuery } from '@/features/leads/leadsApi'
 import { selectWorkspaceList } from '@/features/workspace/workspaceSlice'
@@ -33,8 +33,6 @@ import { Select } from '@/components/ui/Select'
 import { DataGrid } from '@/components/shared/DataGrid'
 import { formatDealMoney } from '@/features/deals/dealCurrencies'
 import { MixedMoneyValue } from '@/components/shared/MixedMoneyValue'
-
-const STAGE_FILTER_FALLBACK = ['Lead Inbound', 'New', 'Contacted', 'Qualified', 'Proposal', 'Won', 'Lost']
 
 const SORT_OPTIONS = [
   { value: 'updatedAt:desc', label: 'Recently updated' },
@@ -86,7 +84,7 @@ function pipelineRowFromLead(lead) {
     companyName: (lead.company || '').trim() || 'Unknown company',
     dealValue: lead.value,
     dealCurrency: lead.valueCurrency || lead.value_currency || 'USD',
-    currentStage: lead.opportunityStage || 'open',
+    currentStage: lead.oppStatus?.name || '',
     leadScore: lead.score,
     tags: (lead.tags || []).map((t) => String(t.name || t).trim().toLowerCase()).filter(Boolean),
     lastActivityType: null,
@@ -105,7 +103,6 @@ const PIPELINE_SORT_MAP = {
   companyName: 'company',
   leadScore: 'score',
   createdAt: 'createdAt',
-  currentStage: 'opportunityStage',
 }
 
 export function PipelinePage() {
@@ -153,23 +150,18 @@ export function PipelinePage() {
   const { data, isLoading, isFetching } = useGetLeadsQuery(listQuery)
   const { data: formMetaData } = useGetLeadFormMetaQuery()
   const [createOpportunity, { isLoading: saving }] = useCreateOpportunityMutation()
-  const [patchStage, { isLoading: updatingStage }] = usePatchOpportunityStageMutation()
+  const [patchOpportunityStatus, { isLoading: updatingStage }] = usePatchOpportunityStatusMutation()
   const [createDealFromOpp] = useCreateDealMutation()
 
   const rows = useMemo(() => (data?.data || []).map(pipelineRowFromLead), [data?.data])
   const total = data?.meta?.total || 0
   const totalPages = Math.max(1, Math.ceil(total / (mode === 'kanban' ? listQuery.limit : limit)))
   const users = formMetaData?.data?.users || []
-  const opportunityStages = formMetaData?.data?.opportunityStages || []
+  const opportunityStatuses = formMetaData?.data?.opportunityStatuses || []
 
-  const stageFilterOptions = useMemo(() => {
-    const names = opportunityStages.map((s) => s.name).filter(Boolean)
-    if (names.length) return names
-    return STAGE_FILTER_FALLBACK
-  }, [opportunityStages])
-  const dealStageName = useMemo(
-    () => opportunityStages.find((stage) => stage?.isDealStatus)?.name || '',
-    [opportunityStages],
+  const stageFilterOptions = useMemo(
+    () => opportunityStatuses.map((s) => s.name).filter(Boolean),
+    [opportunityStatuses],
   )
 
   useEffect(() => {
@@ -303,11 +295,13 @@ export function PipelinePage() {
     await addOpportunityToDealsPipeline(row)
   }
 
-  async function handleStageChange(row, nextStage) {
-    if (!nextStage || nextStage === row.currentStage) return
+  async function handleStageChange(row, nextStageName) {
+    if (!nextStageName || nextStageName === row.currentStage) return
+    const status = opportunityStatuses.find((s) => s.name === nextStageName)
+    if (!status) return
     try {
-      await patchStage({ id: row.id, currentStage: nextStage }).unwrap()
-      toast.success(`Status updated to ${formatStageLabel(nextStage)}`)
+      await patchOpportunityStatus({ id: row.id, opportunityStatusId: status.id }).unwrap()
+      toast.success(`Status updated to ${formatStageLabel(nextStageName)}`)
     } catch (err) {
       toast.error(err?.data?.error?.message || err?.error || 'Could not update status')
     }
@@ -370,11 +364,11 @@ export function PipelinePage() {
               aria-label={`Pipeline status for ${row.fullName || 'opportunity'}`}
             >
               {!row.currentStage ? <option value="">Select status</option> : null}
-              {opportunityStages
-                .filter((stage) => stage?.name)
-                .map((stage) => (
-                  <option key={`${row.id}-${stage.name}`} value={stage.name}>
-                    {formatStageLabel(stage.name)}
+              {opportunityStatuses
+                .filter((s) => s?.name)
+                .map((s) => (
+                  <option key={`${row.id}-${s.name}`} value={s.name}>
+                    {formatStageLabel(s.name)}
                   </option>
                 ))}
             </Select>
@@ -447,21 +441,19 @@ export function PipelinePage() {
             >
               Open
             </button>
-            {dealStageName && row.currentStage === dealStageName ? (
-              <button
-                type="button"
-                onClick={(event) => handleCreateDeal(row, event)}
-                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 text-[11px] font-semibold text-emerald-800 shadow-sm hover:bg-emerald-100/90"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Add deal
-              </button>
-            ) : null}
+            <button
+              type="button"
+              onClick={(event) => handleCreateDeal(row, event)}
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 text-[11px] font-semibold text-emerald-800 shadow-sm hover:bg-emerald-100/90"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add deal
+            </button>
           </div>
         ),
       },
     ],
-    [opportunityStages, updatingStage, dealStageName, navigate],
+    [opportunityStatuses, updatingStage, navigate],
   )
 
   const onPipelineRowClick = useCallback(
@@ -473,7 +465,7 @@ export function PipelinePage() {
 
   return (
     <PageShell fullWidth>
-      <div className="flex h-[calc(100dvh-89px)] min-h-0 flex-col gap-3 px-2 py-2 lg:px-4 lg:py-3">
+      <div className="flex h-[calc(100dvh-4.5rem)] min-h-0 flex-col gap-3 px-2 py-2 lg:px-4 lg:py-3">
         <div className="flex flex-col gap-3 rounded-2xl border border-surface-border bg-gradient-to-br from-white via-slate-50 to-slate-50 px-4 py-4 sm:px-5">
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
             <div className="rounded-xl border border-white/80 bg-white/90 px-3 py-2 shadow-sm">
@@ -772,9 +764,8 @@ export function PipelinePage() {
               <div className="min-h-0 flex-1">
                 <OpportunitiesKanban
                   opportunities={rows}
-                  opportunityStages={opportunityStages}
+                  opportunityStatuses={opportunityStatuses}
                   isLoading={isLoading}
-                  dealStageName={dealStageName}
                   onCreateDeal={(row) => addOpportunityToDealsPipeline(row)}
                 />
               </div>
@@ -831,7 +822,7 @@ export function PipelinePage() {
         onSave={handleSave}
         onSaveAndAddAnother={handleSaveAddAnother}
         users={users}
-        opportunityStages={opportunityStages}
+        opportunityStatuses={opportunityStatuses}
         saving={saving}
       />
 

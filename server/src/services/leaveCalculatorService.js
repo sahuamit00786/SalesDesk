@@ -186,7 +186,7 @@ export async function validateLeaveRequest({
 
   const today = new Date().toISOString().slice(0, 10)
   const isSick = String(lt.code || '').toUpperCase() === 'SL'
-  if (!allowPastForSick && !isSick && fromStr < today) {
+  if (!allowPastForSick && isSick && fromStr < today) {
     return { ok: false, message: 'Cannot apply leave for past dates (except sick leave)' }
   }
 

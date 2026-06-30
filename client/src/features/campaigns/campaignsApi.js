@@ -93,10 +93,69 @@ export const campaignsApi = baseApi.injectEndpoints({
         { type: 'Campaign', id: `${arg.campaignId}-leads` },
       ],
     }),
+
+    getCampaignReport: build.query({
+      query: ({ id, ...params }) => ({ url: `/campaigns/${id}/report`, params }),
+      providesTags: (_r, _e, arg) => [{ type: 'Campaign', id: `${arg.id}-report` }],
+    }),
+
+    // Campaign Payments
+    getCampaignLeadPayments: build.query({
+      query: ({ campaignId, leadId }) => `/campaigns/${campaignId}/leads/${leadId}/payments`,
+      providesTags: (_r, _e, arg) => [{ type: 'Campaign', id: `${arg.campaignId}-${arg.leadId}-payments` }],
+    }),
+    createCampaignPayment: build.mutation({
+      query: ({ campaignId, leadId, ...body }) => ({
+        url: `/campaigns/${campaignId}/leads/${leadId}/payments`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: (_r, _e, arg) => [
+        { type: 'Campaign', id: arg.campaignId },
+        { type: 'Campaign', id: `${arg.campaignId}-leads` },
+        { type: 'Campaign', id: `${arg.campaignId}-${arg.leadId}-payments` },
+        { type: 'Campaign', id: 'LIST' },
+      ],
+      async onQueryStarted(_arg, { queryFulfilled }) {
+        try { await queryFulfilled; toast.success('Payment recorded.') } catch { toast.error('Could not record payment.') }
+      },
+    }),
+    patchCampaignPayment: build.mutation({
+      query: ({ campaignId, leadId, paymentId, ...body }) => ({
+        url: `/campaigns/${campaignId}/leads/${leadId}/payments/${paymentId}`,
+        method: 'PATCH',
+        body,
+      }),
+      invalidatesTags: (_r, _e, arg) => [
+        { type: 'Campaign', id: arg.campaignId },
+        { type: 'Campaign', id: `${arg.campaignId}-leads` },
+        { type: 'Campaign', id: `${arg.campaignId}-${arg.leadId}-payments` },
+        { type: 'Campaign', id: 'LIST' },
+      ],
+      async onQueryStarted(_arg, { queryFulfilled }) {
+        try { await queryFulfilled; toast.success('Payment updated.') } catch { toast.error('Could not update payment.') }
+      },
+    }),
+    deleteCampaignPayment: build.mutation({
+      query: ({ campaignId, leadId, paymentId }) => ({
+        url: `/campaigns/${campaignId}/leads/${leadId}/payments/${paymentId}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: (_r, _e, arg) => [
+        { type: 'Campaign', id: arg.campaignId },
+        { type: 'Campaign', id: `${arg.campaignId}-leads` },
+        { type: 'Campaign', id: `${arg.campaignId}-${arg.leadId}-payments` },
+        { type: 'Campaign', id: 'LIST' },
+      ],
+      async onQueryStarted(_arg, { queryFulfilled }) {
+        try { await queryFulfilled; toast.success('Payment deleted.') } catch { toast.error('Could not delete payment.') }
+      },
+    }),
   }),
 })
 
 export const {
+  useGetCampaignReportQuery,
   useListCampaignsQuery,
   useGetCampaignQuery,
   useGetCampaignLeadsQuery,
@@ -109,4 +168,8 @@ export const {
   useAddCampaignMembersMutation,
   useRemoveCampaignMemberMutation,
   useDistributeCampaignLeadsMutation,
+  useGetCampaignLeadPaymentsQuery,
+  useCreateCampaignPaymentMutation,
+  usePatchCampaignPaymentMutation,
+  useDeleteCampaignPaymentMutation,
 } = campaignsApi

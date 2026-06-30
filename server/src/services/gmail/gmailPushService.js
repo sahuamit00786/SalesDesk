@@ -1,5 +1,6 @@
 import { Op } from 'sequelize'
 import { OAuth2Client } from 'google-auth-library'
+import { google } from 'googleapis'
 import { CompanyGoogleToken, Lead, LeadEmail } from '../../models/index.js'
 import { getGoogleOAuthClient } from '../google/googleEnv.js'
 import { parseGmailMessage } from './gmailMessageParse.js'
