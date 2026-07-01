@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Sms, Call } from 'iconsax-react'
+import { Mail, Phone } from 'lucide-react'
 import { LeadNestLogo } from '@/components/shared/LeadNestLogo'
 
 const EMAIL = 'sahuamit00786@gmail.com'
@@ -41,14 +41,14 @@ export function FooterSection() {
                 href={`mailto:${EMAIL}`}
                 className="flex items-center gap-2 text-sm text-violet-600/70 transition hover:text-violet-700"
               >
-                <Sms size={16} className="shrink-0" aria-hidden />
+                <Mail size={16} className="shrink-0" aria-hidden />
                 {EMAIL}
               </a>
               <a
                 href={`tel:${PHONE_TEL}`}
                 className="flex items-center gap-2 text-sm text-violet-600/70 transition hover:text-violet-700"
               >
-                <Call size={16} className="shrink-0" aria-hidden />
+                <Phone size={16} className="shrink-0" aria-hidden />
                 {PHONE}
               </a>
             </div>

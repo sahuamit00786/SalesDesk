@@ -33,6 +33,7 @@ export function AddDealDrawer({
   const [dealValue, setDealValue] = useState('')
   const [dealCurrency, setDealCurrency] = useState('USD')
   const [ownerUserId, setOwnerUserId] = useState('')
+  const [forecastCategory, setForecastCategory] = useState('pipeline')
 
   useEffect(() => {
     if (!open) return
@@ -41,6 +42,7 @@ export function AddDealDrawer({
     setDealValue('')
     setDealCurrency(effectiveCurrency)
     setOwnerUserId(users[0]?.id || '')
+    setForecastCategory('pipeline')
     setSelectedOppId(fixedOpportunityLeadId || '')
   }, [open, fixedOpportunityLeadId, users, effectiveCurrency])
 
@@ -101,6 +103,7 @@ export function AddDealDrawer({
         value: Number(dealValue || 0),
         valueCurrency: normalizeDealCurrency(dealCurrency),
         ownerUserId: ownerUserId || null,
+        forecastCategory: forecastCategory || 'pipeline',
       }).unwrap()
       toast.success('Deal created')
       onCreated?.()
@@ -229,6 +232,24 @@ export function AddDealDrawer({
               </option>
             ))}
           </select>
+        </label>
+
+        <label className="block text-xs font-medium text-neutral-600">
+          Forecast category
+          <select
+            className="mt-1 w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm"
+            value={forecastCategory}
+            onChange={(e) => setForecastCategory(e.target.value)}
+          >
+            <option value="pipeline">Pipeline</option>
+            <option value="best_case">Best Case</option>
+            <option value="commit">Commit</option>
+            <option value="closed">Closed</option>
+            <option value="omitted">Omitted</option>
+          </select>
+          <p className="mt-1 text-[11px] text-neutral-400">
+            Used for revenue forecasting and pipeline reports.
+          </p>
         </label>
 
         <button

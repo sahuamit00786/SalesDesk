@@ -1,25 +1,26 @@
 import { CalendarCheck, AlertTriangle, CheckCircle, Percent } from 'lucide-react'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
 import { DashboardChartCard } from '@/features/dashboard/components/DashboardChartCard'
+import { CHART_COLORS } from '@/features/dashboard/dummyDashboardData'
+import { DataGrid } from '@/components/shared/DataGrid'
 import { ReportKpiCard } from './ReportKpiCard'
-import { ReportTable } from './ReportTable'
 import { ChartSkeleton, KpiSkeleton } from './ChartSkeleton'
 import { useGetFollowupsReportQuery } from '@/features/analytics/analyticsApi'
-import { ReportKpiGrid, ReportChartGrid, ReportTableSection } from '@/features/analytics/ReportLayout'
+import { ReportKpiGrid, ReportChartGrid, ReportTableSection, ReportStatusBadge } from '@/features/analytics/ReportLayout'
 
 const fmtDate = (d) => d ? new Date(d).toLocaleString() : '—'
 
 const LINEUP_COLS = [
-  { key: 'lead', label: 'Lead', render: (v) => <span className="font-medium text-ink">{v}</span> },
-  { key: 'scheduledAt', label: 'Scheduled', render: (v) => fmtDate(v) },
-  { key: 'assignee', label: 'Assignee' },
-  { key: 'remark', label: 'Note', render: (v) => <span className="text-xs text-ink-muted">{v || '—'}</span> },
-  { key: 'status', label: 'Status' },
+  { field: 'lead', headerName: 'Lead', renderCell: ({ value }) => <span className="font-medium text-ink">{value}</span> },
+  { field: 'scheduledAt', headerName: 'Scheduled', renderCell: ({ value }) => fmtDate(value) },
+  { field: 'assignee', headerName: 'Assignee' },
+  { field: 'remark', headerName: 'Note', renderCell: ({ value }) => <span className="text-xs text-ink-muted">{value || '—'}</span> },
+  { field: 'status', headerName: 'Status', renderCell: ({ value }) => <ReportStatusBadge status={value} /> },
 ]
 
 const OVERDUE_COLS = [
   ...LINEUP_COLS,
-  { key: 'daysOverdue', label: 'Days overdue', render: (v) => <span className="font-semibold text-rose-600">{v ?? 0}</span> },
+  { field: 'daysOverdue', headerName: 'Days overdue', renderCell: ({ value }) => <span className="font-semibold text-rose-600">{value ?? 0}</span> },
 ]
 
 export function FollowupsTab({ queryParams }) {
@@ -33,11 +34,11 @@ export function FollowupsTab({ queryParams }) {
     <div id="report-export-root" className="space-y-4">
       <ReportKpiGrid>
         {isLoading ? Array.from({ length: 5 }).map((_, i) => <KpiSkeleton key={i} />) : <>
-          <ReportKpiCard label="Upcoming" value={kpis.upcoming ?? 0} icon={CalendarCheck} iconBg="bg-blue-50" iconColor="text-blue-600" />
+          <ReportKpiCard label="Upcoming" value={kpis.upcoming ?? 0} icon={CalendarCheck} />
           <ReportKpiCard label="Overdue" value={kpis.overdue ?? 0} icon={AlertTriangle} iconBg="bg-rose-50" iconColor="text-rose-600" />
           <ReportKpiCard label="Completed (period)" value={kpis.completedInPeriod ?? 0} icon={CheckCircle} iconBg="bg-emerald-50" iconColor="text-emerald-600" />
           <ReportKpiCard label="Total (period)" value={kpis.totalInPeriod ?? 0} icon={CalendarCheck} />
-          <ReportKpiCard label="Completion rate" value={`${kpis.completionRate ?? 0}%`} icon={Percent} iconBg="bg-purple-50" iconColor="text-purple-600" />
+          <ReportKpiCard label="Completion rate" value={`${kpis.completionRate ?? 0}%`} icon={Percent} />
         </>}
       </ReportKpiGrid>
 
@@ -50,8 +51,8 @@ export function FollowupsTab({ queryParams }) {
                 <XAxis dataKey="name" tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip />
-                <Bar dataKey="created" name="Created" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="done" name="Done" fill="#10b981" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="created" name="Created" fill={CHART_COLORS.primary} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="done" name="Done" fill={CHART_COLORS.success} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -59,11 +60,31 @@ export function FollowupsTab({ queryParams }) {
       </ReportChartGrid>
 
       <ReportTableSection title="Upcoming follow-ups lineup" subtitle="Scheduled next — act before they become overdue">
-        <ReportTable columns={LINEUP_COLS} rows={tables.upcoming || []} isLoading={isLoading} maxH="max-h-[360px]" />
+        <DataGrid
+          columns={LINEUP_COLS}
+          data={tables.upcoming || []}
+          loading={isLoading}
+          showColumnToggle={false}
+          showExportCsv={false}
+          autoHeight={false}
+          maxHeightClass="max-h-[360px]"
+          className="rounded-none border-0 shadow-none"
+          emptyTitle="No upcoming follow-ups"
+        />
       </ReportTableSection>
 
       <ReportTableSection title="Overdue follow-ups" subtitle="Past due — needs immediate attention">
-        <ReportTable columns={OVERDUE_COLS} rows={tables.overdue || []} isLoading={isLoading} maxH="max-h-[360px]" />
+        <DataGrid
+          columns={OVERDUE_COLS}
+          data={tables.overdue || []}
+          loading={isLoading}
+          showColumnToggle={false}
+          showExportCsv={false}
+          autoHeight={false}
+          maxHeightClass="max-h-[360px]"
+          className="rounded-none border-0 shadow-none"
+          emptyTitle="No overdue follow-ups"
+        />
       </ReportTableSection>
     </div>
   )

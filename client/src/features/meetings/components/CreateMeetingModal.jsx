@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
-import { CalendarClock, Presentation, Users, X } from 'lucide-react'
+import { CalendarClock, Presentation, Search, Users, X } from 'lucide-react'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Textarea } from '@/components/ui/Textarea'
 import { cn } from '@/utils/cn'
 import { useCreateMeetingMutation, useUpdateMeetingMutation } from '../meetingsApi'
+import { useGetLeadsQuery } from '@/features/leads/leadsApi'
 import { MeetingBotSetupHint } from '@/features/meetings/components/MeetingBotSetupHint'
 
 function getInitialForm(initialData) {
@@ -18,6 +19,7 @@ function getInitialForm(initialData) {
       scheduledEnd: '',
       participants: [],
       recordingBotConsent: false,
+      leadId: '',
     }
   }
 
@@ -29,7 +31,12 @@ function getInitialForm(initialData) {
     scheduledEnd: initialData.scheduledEnd ? initialData.scheduledEnd.slice(0, 16) : '',
     participants: initialData.participants?.map((p) => ({ userId: p.userId })) || [],
     recordingBotConsent: Boolean(initialData.recordingBotConsent),
+    leadId: initialData.leadId || '',
   }
+}
+
+function leadLabel(lead) {
+  return lead.contactName || lead.company || lead.title || lead.email || 'Untitled lead'
 }
 
 function FieldLabel({ children, htmlFor }) {
@@ -45,12 +52,25 @@ export function CreateMeetingModal({ open, onClose, users = [], leadId, initialD
   const [updateMeeting, { isLoading: updating }] = useUpdateMeetingMutation()
 
   const isEdit = Boolean(initialData?.id)
+  const lockedLeadId = initialData?.leadId || leadId || null
   const [form, setForm] = useState(getInitialForm(initialData))
+  const [leadSearch, setLeadSearch] = useState('')
+  const [leadPickerOpen, setLeadPickerOpen] = useState(false)
+  const [selectedLead, setSelectedLead] = useState(null)
+
+  const { data: leadResults, isFetching: leadsLoading } = useGetLeadsQuery(
+    { search: leadSearch, limit: 8, page: 1 },
+    { skip: !open || Boolean(lockedLeadId) || leadSearch.trim().length < 1 },
+  )
+  const leadOptions = useMemo(() => leadResults?.data || [], [leadResults])
 
   useEffect(() => {
     if (!open) return
     // eslint-disable-next-line react-hooks/set-state-in-effect -- reset fields when opening for create/edit
     setForm(getInitialForm(initialData))
+    setLeadSearch('')
+    setLeadPickerOpen(false)
+    setSelectedLead(initialData?.lead || null)
   }, [open, initialData])
 
   if (!open) return null
@@ -73,14 +93,23 @@ export function CreateMeetingModal({ open, onClose, users = [], leadId, initialD
 
   async function submit() {
     try {
-      if (!leadId && !initialData?.leadId) {
+      const resolvedLeadId = lockedLeadId || form.leadId
+      if (!resolvedLeadId) {
         toast.error('Lead is required')
+        return
+      }
+      if (!form.title.trim()) {
+        toast.error('Title is required')
+        return
+      }
+      if (!form.scheduledStart || !form.scheduledEnd) {
+        toast.error('Start and end time are required')
         return
       }
 
       const payload = {
         ...form,
-        leadId: initialData?.leadId || leadId,
+        leadId: resolvedLeadId,
         scheduledStart: new Date(form.scheduledStart).toISOString(),
         scheduledEnd: new Date(form.scheduledEnd).toISOString(),
         recordingBotConsent: Boolean(form.recordingBotConsent),
@@ -113,6 +142,9 @@ export function CreateMeetingModal({ open, onClose, users = [], leadId, initialD
   function handleClose() {
     onClose()
     setForm(getInitialForm(null))
+    setLeadSearch('')
+    setSelectedLead(null)
+    setLeadPickerOpen(false)
   }
 
   const busy = creating || updating
@@ -171,6 +203,76 @@ export function CreateMeetingModal({ open, onClose, users = [], leadId, initialD
                 onChange={(e) => update('title', e.target.value)}
               />
             </div>
+
+            {!lockedLeadId ? (
+              <div className="sm:col-span-2">
+                <FieldLabel htmlFor="meeting-lead">Lead</FieldLabel>
+                {selectedLead ? (
+                  <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm">
+                    <span className="truncate font-medium text-ink">{leadLabel(selectedLead)}</span>
+                    <button
+                      type="button"
+                      className="shrink-0 text-xs font-semibold text-brand-700 hover:underline"
+                      onClick={() => {
+                        setSelectedLead(null)
+                        update('leadId', '')
+                        setLeadSearch('')
+                      }}
+                    >
+                      Change
+                    </button>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" aria-hidden />
+                    <input
+                      id="meeting-lead"
+                      type="text"
+                      placeholder="Search leads by name, company, or email…"
+                      className={cn(
+                        'w-full rounded-xl border border-slate-300 bg-white py-2 pl-10 pr-3 text-sm text-ink shadow-sm',
+                        'outline-none transition-all duration-150 hover:border-slate-400',
+                        'focus:border-brand-500 focus:ring-2 focus:ring-brand-500/15',
+                      )}
+                      value={leadSearch}
+                      onChange={(e) => {
+                        setLeadSearch(e.target.value)
+                        setLeadPickerOpen(true)
+                      }}
+                      onFocus={() => setLeadPickerOpen(true)}
+                    />
+                    {leadPickerOpen && leadSearch.trim().length > 0 ? (
+                      <ul className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
+                        {leadsLoading ? (
+                          <li className="px-3 py-2 text-xs text-ink-muted">Searching…</li>
+                        ) : leadOptions.length === 0 ? (
+                          <li className="px-3 py-2 text-xs text-ink-muted">No leads found.</li>
+                        ) : (
+                          leadOptions.map((lead) => (
+                            <li key={lead.id}>
+                              <button
+                                type="button"
+                                className="flex w-full flex-col items-start rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-50"
+                                onClick={() => {
+                                  setSelectedLead(lead)
+                                  update('leadId', lead.id)
+                                  setLeadPickerOpen(false)
+                                }}
+                              >
+                                <span className="font-medium text-ink">{leadLabel(lead)}</span>
+                                {lead.company && lead.contactName ? (
+                                  <span className="text-xs text-ink-muted">{lead.company}</span>
+                                ) : null}
+                              </button>
+                            </li>
+                          ))
+                        )}
+                      </ul>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            ) : null}
 
             <div>
               <FieldLabel htmlFor="meeting-type">Type</FieldLabel>

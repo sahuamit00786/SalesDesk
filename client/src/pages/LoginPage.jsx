@@ -1,7 +1,6 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import gsap from 'gsap'
 import { BarChart3, Kanban, ShieldCheck } from 'lucide-react'
 import { useLoginMutation } from '@/features/auth/authApi'
 import { useAppSelector } from '@/app/hooks'
@@ -50,25 +49,23 @@ export function LoginPage() {
   const [login, { isLoading }] = useLoginMutation()
   const formRef = useRef(null)
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     const root = formRef.current
-    if (!root) return undefined
-    const ctx = gsap.context(() => {
-      const fields = root.querySelectorAll('[data-field]')
-      gsap.fromTo(
-        fields,
-        { opacity: 0, y: 14 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.42,
-          stagger: 0.07,
-          ease: 'power2.out',
-          delay: 0.32,
-        },
-      )
-    }, root)
-    return () => ctx.revert()
+    if (!root) return
+    const fields = Array.from(root.querySelectorAll('[data-field]'))
+    fields.forEach((el, i) => {
+      el.style.opacity = '0'
+      el.style.transform = 'translateY(14px)'
+      el.style.transition = 'none'
+    })
+    const timer = setTimeout(() => {
+      fields.forEach((el, i) => {
+        el.style.transition = `opacity 0.42s ease ${0.32 + i * 0.07}s, transform 0.42s ease ${0.32 + i * 0.07}s`
+        el.style.opacity = '1'
+        el.style.transform = 'translateY(0)'
+      })
+    }, 16)
+    return () => clearTimeout(timer)
   }, [])
 
   if (token) {

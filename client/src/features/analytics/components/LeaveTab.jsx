@@ -1,21 +1,22 @@
 import { Umbrella, CalendarCheck, Clock, XCircle } from 'lucide-react'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
 import { DashboardChartCard } from '@/features/dashboard/components/DashboardChartCard'
+import { DataGrid } from '@/components/shared/DataGrid'
 import { ReportKpiCard } from './ReportKpiCard'
-import { ReportTable } from './ReportTable'
 import { ChartSkeleton, KpiSkeleton } from './ChartSkeleton'
+import { CHART_COLORS } from '@/features/dashboard/dummyDashboardData'
 import { useGetLeaveReportQuery } from '@/features/analytics/analyticsApi'
-import { ReportKpiGrid, ReportChartGrid, ReportTableSection } from '@/features/analytics/ReportLayout'
+import { ReportKpiGrid, ReportChartGrid, ReportTableSection, ReportStatusBadge } from '@/features/analytics/ReportLayout'
 
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString() : '—'
 
 const LEAVE_COLS = [
-  { key: 'employee', label: 'Employee', render: (v) => <span className="font-medium text-ink">{v}</span> },
-  { key: 'leaveType', label: 'Leave type' },
-  { key: 'fromDate', label: 'From', render: (v) => fmtDate(v) },
-  { key: 'toDate', label: 'To', render: (v) => fmtDate(v) },
-  { key: 'days', label: 'Days', render: (v) => <span className="font-semibold">{v}</span> },
-  { key: 'status', label: 'Status', render: (v) => <span className="capitalize">{v}</span> },
+  { field: 'employee', headerName: 'Employee', renderCell: ({ value }) => <span className="font-medium text-ink">{value}</span> },
+  { field: 'leaveType', headerName: 'Leave type' },
+  { field: 'fromDate', headerName: 'From', renderCell: ({ value }) => fmtDate(value) },
+  { field: 'toDate', headerName: 'To', renderCell: ({ value }) => fmtDate(value) },
+  { field: 'days', headerName: 'Days', renderCell: ({ value }) => <span className="font-semibold">{value}</span> },
+  { field: 'status', headerName: 'Status', renderCell: ({ value }) => <ReportStatusBadge status={value} /> },
 ]
 
 export function LeaveTab({ queryParams }) {
@@ -39,27 +40,27 @@ export function LeaveTab({ queryParams }) {
       <ReportChartGrid>
         <DashboardChartCard title="Leave by type" subtitle="Approved days per leave type">
           {isLoading ? <ChartSkeleton /> : (
-            <ResponsiveContainer width="100%" height={240}>
+            <ResponsiveContainer width="100%" height={200}>
               <BarChart data={charts.byType || []}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="name" tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip />
-                <Bar dataKey="days" name="Days" fill="#14b8a6" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="days" name="Days" fill={CHART_COLORS.primary} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
         </DashboardChartCard>
         <DashboardChartCard title="Leave by employee" subtitle="Approved vs pending days">
           {isLoading ? <ChartSkeleton /> : (
-            <ResponsiveContainer width="100%" height={240}>
+            <ResponsiveContainer width="100%" height={200}>
               <BarChart data={charts.byEmployee || []}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="name" tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip />
-                <Bar dataKey="approved" name="Approved" fill="#10b981" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="pending" name="Pending" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="approved" name="Approved" fill={CHART_COLORS.success} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="pending" name="Pending" fill={CHART_COLORS.warning} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -67,7 +68,17 @@ export function LeaveTab({ queryParams }) {
       </ReportChartGrid>
 
       <ReportTableSection title="Leave requests" subtitle="By employee and leave type in selected period">
-        <ReportTable columns={LEAVE_COLS} rows={requests} isLoading={isLoading} maxH="max-h-[480px]" />
+        <DataGrid
+          columns={LEAVE_COLS}
+          data={requests}
+          loading={isLoading}
+          showColumnToggle={false}
+          showExportCsv={false}
+          autoHeight={false}
+          maxHeightClass="max-h-[480px]"
+          className="rounded-none border-0 shadow-none"
+          emptyTitle="No leave requests in this period"
+        />
       </ReportTableSection>
     </div>
   )

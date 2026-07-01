@@ -43,12 +43,12 @@
     "react-native-gifted-charts": "^1.4.20",
     "react-native-fast-image": "^8.6.3",
     "react-native-linear-gradient": "^2.8.3",
-    "react-native-blur": "^4.3.2",
     "@react-native-masked-view/masked-view": "^0.3.1",
     "react-native-svg": "^15.2.0",
-    "react-native-call-log": "^1.1.1"
+    "react-native-call-log": "^1.0.6"
   },
   "devDependencies": {
+    "@react-native-community/cli": "^12.3.6",
     "@babel/core": "^7.20.0",
     "@babel/preset-env": "^7.20.0",
     "@babel/runtime": "^7.20.0",

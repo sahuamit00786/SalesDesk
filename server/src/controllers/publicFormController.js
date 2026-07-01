@@ -1,5 +1,17 @@
 import path from 'node:path'
 import { WebForm, WebFormField, WebFormSubmission, LeadFile } from '../models/index.js'
+
+const ALLOWED_UPLOAD_MIME_TYPES = new Set([
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/plain', 'text/csv',
+  'audio/mpeg', 'audio/mp4', 'audio/webm', 'audio/ogg',
+  'video/mp4', 'video/webm', 'video/ogg',
+])
 import { getRedis } from '../config/redis.js'
 import { checkAndHandleDuplicate } from '../services/duplicateCheckService.js'
 import { generateEmbedScript, serializePublicForm } from '../services/embedScriptService.js'
@@ -122,6 +134,17 @@ export async function submitForm(req, res, next) {
     for (const f of Array.isArray(req.files) ? req.files : []) {
       if (!filesByField[f.fieldname]) filesByField[f.fieldname] = []
       filesByField[f.fieldname].push(f)
+    }
+
+    // Validate MIME types for all uploaded files
+    const allUploadedFiles = Array.isArray(req.files) ? req.files : req.file ? [req.file] : []
+    for (const f of allUploadedFiles) {
+      if (!ALLOWED_UPLOAD_MIME_TYPES.has(f.mimetype)) {
+        return res.status(400).json({
+          success: false,
+          error: { message: `File type "${f.mimetype}" is not allowed. Supported: images, PDF, Word, Excel, CSV, audio, video.` },
+        })
+      }
     }
 
     const validationErrors = validateFields(fieldValues, form.fields, filesByField)

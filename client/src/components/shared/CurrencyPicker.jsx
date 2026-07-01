@@ -1,4 +1,4 @@
-import { DollarCircle } from 'iconsax-react'
+import { DollarSign } from 'lucide-react'
 import { PRIMARY_CURRENCY_OPTIONS } from '@/features/deals/dealCurrencies'
 import { cn } from '@/utils/cn'
 
@@ -6,7 +6,7 @@ export function CurrencyPicker({ value, onChange, label = 'Base currency', requi
   return (
     <div className={className}>
       <p className="flex items-center gap-2 text-sm font-medium text-ink">
-        <DollarCircle size={18} variant="Linear" />
+        <DollarSign size={18} />
         {label}
         {required ? <span className="text-red-500">*</span> : null}
       </p>

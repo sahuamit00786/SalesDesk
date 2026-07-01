@@ -192,14 +192,16 @@ export async function adjustLeaveBalance(req, res, next) {
     if (!isHrAdmin(hrRole)) {
       return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Admin only' } })
     }
-    const { userId, leaveTypeId, year, allocated } = req.body || {}
+    const { userId, leaveTypeId, year, allocated, reason } = req.body || {}
     if (!userId || !leaveTypeId) {
       return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'userId and leaveTypeId required' } })
     }
     const y = Number(year) || new Date().getFullYear()
     const row = await getOrCreateBalance(userId, leaveTypeId, req.user.companyId, y)
     if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Leave type not found' } })
-    await row.update({ allocated: Number(allocated) })
+    const updates = { allocated: Number(allocated) }
+    if (reason !== undefined) updates.adjustmentNote = reason ? String(reason).trim() : null
+    await row.update(updates)
     await refreshBalanceAvailable(row)
     return res.json({ success: true, data: row, meta: {} })
   } catch (e) {
@@ -419,9 +421,17 @@ async function finalizeLeaveApproval(request, approverId) {
     throw err
   }
   await sequelize.transaction(async (t) => {
-    await request.update({ status: 'approved', approvedBy: approverId, rejectionReason: null }, { transaction: t })
     // Re-read with exclusive row lock so concurrent approvals on the same balance serialise here
     await balance.reload({ transaction: t, lock: t.LOCK.UPDATE })
+    // Validate sufficient balance after acquiring the lock (prevents race conditions)
+    const effectiveAvailable = Math.max(0, Number(balance.allocated || 0) - Number(balance.used))
+    if (effectiveAvailable < Number(request.days)) {
+      const err = new Error('Insufficient leave balance')
+      err.status = 400
+      err.code = 'INSUFFICIENT_BALANCE'
+      throw err
+    }
+    await request.update({ status: 'approved', approvedBy: approverId, rejectionReason: null }, { transaction: t })
     const newUsed = Number(balance.used) + Number(request.days)
     const newPending = Math.max(0, Number(balance.pending) - Number(request.days))
     const newAvailable = Math.max(0, Number(balance.allocated || 0) - newUsed - newPending)
@@ -661,10 +671,21 @@ export async function createHoliday(req, res, next) {
     if (!name?.trim() || !date) {
       return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Name and date required' } })
     }
+    const dateStr = String(date).slice(0, 10)
+    const existing = await PublicHoliday.findOne({
+      where: { companyId: req.user.companyId, date: dateStr },
+      attributes: ['id'],
+    })
+    if (existing) {
+      return res.status(409).json({
+        success: false,
+        error: { code: 'CONFLICT', message: 'A holiday already exists on this date.' },
+      })
+    }
     const row = await PublicHoliday.create({
       companyId: req.user.companyId,
       name: String(name).trim(),
-      date: String(date).slice(0, 10),
+      date: dateStr,
       description: description || null,
     })
     return res.status(201).json({ success: true, data: row, meta: {} })
@@ -744,6 +765,159 @@ export async function markAllNotificationsRead(req, res, next) {
       { where: { userId: req.user.id, companyId: req.user.companyId, isRead: false } },
     )
     return res.json({ success: true, data: { ok: true }, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+/**
+ * GET /leave/pending-approvals
+ * Returns pending leave requests from direct reports (employees whose managerId = req.user.id).
+ * HR managers/admins still see all pending leaves via getAllLeaves.
+ */
+export async function getPendingApprovals(req, res, next) {
+  try {
+    // Find all users who have this user as their manager
+    const reports = await User.findAll({
+      where: { managerId: req.user.id, companyId: req.user.companyId, isActive: true },
+      attributes: ['id'],
+    })
+
+    if (!reports.length) {
+      return res.json({ success: true, data: [], meta: { total: 0 } })
+    }
+
+    const reportIds = reports.map((u) => u.id)
+    const rows = await LeaveRequest.findAll({
+      where: {
+        companyId: req.user.companyId,
+        userId: { [Op.in]: reportIds },
+        status: 'pending',
+      },
+      include: leaveInclude,
+      order: [['appliedAt', 'DESC']],
+    })
+
+    return res.json({ success: true, data: rows, meta: { total: rows.length } })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+/**
+ * POST /leave/:id/manager-approve
+ * Allows a manager to approve a leave request from one of their direct reports.
+ */
+export async function managerApproveLeave(req, res, next) {
+  try {
+    const request = await LeaveRequest.findOne({
+      where: { id: req.params.id, companyId: req.user.companyId },
+      include: [{ model: User, as: 'user' }],
+    })
+    if (!request) {
+      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Leave request not found' } })
+    }
+
+    // Ensure the applicant reports to this manager
+    const applicant = request.user || (await User.findByPk(request.userId, { attributes: ['id', 'managerId', 'name', 'email'] }))
+    if (!applicant || String(applicant.managerId) !== String(req.user.id)) {
+      return res.status(403).json({
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'You can only approve leave requests from your direct reports' },
+      })
+    }
+
+    if (request.status !== 'pending') {
+      return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Request is not pending' } })
+    }
+
+    await finalizeLeaveApproval(request, req.user.id)
+
+    const typeName = (await request.getLeaveType())?.name || 'Leave'
+    await createNotification({
+      userId: request.userId,
+      companyId: req.user.companyId,
+      title: 'Leave approved',
+      message: `Your ${typeName} from ${request.fromDate} to ${request.toDate} was approved by your manager.`,
+      type: 'leave',
+      link: '/leave',
+    })
+
+    return res.json({
+      success: true,
+      data: await LeaveRequest.findByPk(request.id, { include: leaveInclude }),
+      meta: {},
+    })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+/**
+ * POST /leave/:id/manager-reject
+ * Allows a manager to reject a leave request from one of their direct reports.
+ */
+export async function managerRejectLeave(req, res, next) {
+  try {
+    const rejectionReason = String(req.body?.rejectionReason || '').trim()
+    if (!rejectionReason) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VALIDATION', message: 'Rejection reason is required' },
+      })
+    }
+
+    const request = await LeaveRequest.findOne({
+      where: { id: req.params.id, companyId: req.user.companyId },
+      include: [{ model: User, as: 'user' }],
+    })
+    if (!request) {
+      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Leave request not found' } })
+    }
+
+    // Ensure the applicant reports to this manager
+    const applicant = request.user || (await User.findByPk(request.userId, { attributes: ['id', 'managerId', 'name', 'email'] }))
+    if (!applicant || String(applicant.managerId) !== String(req.user.id)) {
+      return res.status(403).json({
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'You can only reject leave requests from your direct reports' },
+      })
+    }
+
+    if (request.status !== 'pending') {
+      return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Request is not pending' } })
+    }
+
+    const balance = await getOrCreateBalance(
+      request.userId,
+      request.leaveTypeId,
+      request.companyId,
+      new Date(request.fromDate).getFullYear(),
+    )
+
+    await sequelize.transaction(async (t) => {
+      await request.update({ status: 'rejected', rejectionReason, approvedBy: req.user.id }, { transaction: t })
+      if (balance) {
+        const newPending = Math.max(0, Number(balance.pending) - Number(request.days))
+        const newAvailable = Math.max(0, Number(balance.allocated || 0) - Number(balance.used) - newPending)
+        await balance.update({ pending: newPending, available: newAvailable }, { transaction: t })
+      }
+    })
+
+    await createNotification({
+      userId: request.userId,
+      companyId: req.user.companyId,
+      title: 'Leave rejected',
+      message: `Your leave was rejected by your manager: ${rejectionReason}`,
+      type: 'leave',
+      link: '/leave',
+    })
+
+    return res.json({
+      success: true,
+      data: await LeaveRequest.findByPk(request.id, { include: leaveInclude }),
+      meta: {},
+    })
   } catch (e) {
     return next(e)
   }

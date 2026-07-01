@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom'
 import { BadgeDollarSign, CheckCircle2, Clock, Filter, X, XCircle } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
 import { PageStack } from '@/components/layout/PageStack'
-import { PageFilterBar } from '@/components/layout/PageFilterBar'
 import { DataGrid } from '@/components/shared/DataGrid'
 import { SkeletonTable } from '@/components/shared/SkeletonLoader'
 import { useListAllPaymentsQuery } from '@/features/deals/dealPaymentsApi'
@@ -196,189 +195,205 @@ export function DealPaymentsPage() {
     [],
   )
 
+  const paymentsFilterBar = (
+    <div className="relative" data-filter-dropdown>
+      <button
+        type="button"
+        onClick={() => setFilterOpen((v) => !v)}
+        className="inline-flex h-10 items-center gap-2 rounded-xl border border-surface-border bg-white px-3 text-xs font-semibold text-ink shadow-sm hover:bg-surface-subtle"
+      >
+        <Filter className="h-3.5 w-3.5 text-ink-muted" />
+        Filters
+        {activeFilterCount > 0 ? (
+          <span className="rounded-full bg-[var(--brand-primary)] px-1.5 py-0.5 text-[10px] font-bold text-white">
+            {activeFilterCount}
+          </span>
+        ) : null}
+      </button>
+
+      {filterOpen ? (
+        <div className="absolute right-0 top-11 z-30 w-80 rounded-xl border border-surface-border bg-white p-4 shadow-lg">
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-xs font-semibold text-ink">Filters</p>
+            <button type="button" onClick={() => setFilterOpen(false)} className="text-ink-muted hover:text-ink">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            <label className="block">
+              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+                Status
+              </span>
+              <select
+                className="h-9 w-full rounded-lg border border-surface-border px-2 text-sm"
+                value={status}
+                onChange={(e) => {
+                  setStatus(e.target.value)
+                  setPage(1)
+                }}
+              >
+                <option value="">All statuses</option>
+                {STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {s.charAt(0).toUpperCase() + s.slice(1)}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+                Payment mode
+              </span>
+              <select
+                className="h-9 w-full rounded-lg border border-surface-border px-2 text-sm"
+                value={mode}
+                onChange={(e) => {
+                  setMode(e.target.value)
+                  setPage(1)
+                }}
+              >
+                <option value="">All modes</option>
+                {MODES.map((m) => (
+                  <option key={m} value={m}>
+                    {m.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="grid grid-cols-2 gap-2">
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+                  Date from
+                </span>
+                <input
+                  type="date"
+                  className="h-9 w-full rounded-lg border border-surface-border px-2 text-sm"
+                  value={dateFrom}
+                  onChange={(e) => {
+                    setDateFrom(e.target.value)
+                    setPage(1)
+                  }}
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+                  Date to
+                </span>
+                <input
+                  type="date"
+                  className="h-9 w-full rounded-lg border border-surface-border px-2 text-sm"
+                  value={dateTo}
+                  onChange={(e) => {
+                    setDateTo(e.target.value)
+                    setPage(1)
+                  }}
+                />
+              </label>
+            </div>
+
+            <label className="block">
+              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+                Recorded by
+              </span>
+              <select
+                className="h-9 w-full rounded-lg border border-surface-border px-2 text-sm"
+                value={createdByUserId}
+                onChange={(e) => {
+                  setCreatedByUserId(e.target.value)
+                  setPage(1)
+                }}
+              >
+                <option value="">All users</option>
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name || u.email}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {activeFilterCount > 0 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  clearFilters()
+                  setFilterOpen(false)
+                }}
+                className="w-full rounded-lg border border-rose-200 bg-white py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+              >
+                Clear all filters
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  )
+
+  const paymentsTotals = (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-muted">
+      <span>
+        Total payments: <span className="font-semibold text-ink">{total.toLocaleString()}</span>
+      </span>
+      {rows.length > 0 ? (
+        <span>
+          Received on page:{' '}
+          <span className="font-semibold text-emerald-700">{fmtMoney(pageReceivedTotal)}</span>
+        </span>
+      ) : null}
+      {isFetching && !isLoading ? <span className="text-[10px]">Updating…</span> : null}
+    </div>
+  )
+
+  const paymentsToolbarRow = (
+    <div className="flex flex-wrap items-center gap-2 border-b border-brand-100 bg-brand-50/30 px-4 py-3">
+      {paymentsTotals}
+      <div className="ml-auto">{paymentsFilterBar}</div>
+    </div>
+  )
+
   return (
     <PageShell fullWidth mainClassName="pt-2 pb-4">
       <PageStack className="gap-3">
-
-
-        <PageFilterBar>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-muted">
-            <span>
-              Total payments: <span className="font-semibold text-ink">{total.toLocaleString()}</span>
-            </span>
-            {rows.length > 0 ? (
-              <span>
-                Received on page:{' '}
-                <span className="font-semibold text-emerald-700">{fmtMoney(pageReceivedTotal)}</span>
-              </span>
-            ) : null}
-            {isFetching && !isLoading ? <span className="text-[10px]">Updating…</span> : null}
-          </div>
-
-          <div className="relative ml-auto" data-filter-dropdown>
-            <button
-              type="button"
-              onClick={() => setFilterOpen((v) => !v)}
-              className="inline-flex h-9 items-center gap-2 rounded-xl border border-surface-border bg-white px-3 text-xs font-semibold text-ink shadow-sm hover:bg-surface-subtle"
-            >
-              <Filter className="h-3.5 w-3.5 text-ink-muted" />
-              Filters
-              {activeFilterCount > 0 ? (
-                <span className="rounded-full bg-[var(--brand-primary)] px-1.5 py-0.5 text-[10px] font-bold text-white">
-                  {activeFilterCount}
-                </span>
-              ) : null}
-            </button>
-
-            {filterOpen ? (
-              <div className="absolute right-0 top-11 z-30 w-80 rounded-xl border border-surface-border bg-white p-4 shadow-lg">
-                <div className="mb-3 flex items-center justify-between">
-                  <p className="text-xs font-semibold text-ink">Filters</p>
-                  <button type="button" onClick={() => setFilterOpen(false)} className="text-ink-muted hover:text-ink">
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-
-                <div className="space-y-3">
-                  <label className="block">
-                    <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
-                      Status
-                    </span>
-                    <select
-                      className="h-9 w-full rounded-lg border border-surface-border px-2 text-sm"
-                      value={status}
-                      onChange={(e) => {
-                        setStatus(e.target.value)
-                        setPage(1)
-                      }}
-                    >
-                      <option value="">All statuses</option>
-                      {STATUSES.map((s) => (
-                        <option key={s} value={s}>
-                          {s.charAt(0).toUpperCase() + s.slice(1)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="block">
-                    <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
-                      Payment mode
-                    </span>
-                    <select
-                      className="h-9 w-full rounded-lg border border-surface-border px-2 text-sm"
-                      value={mode}
-                      onChange={(e) => {
-                        setMode(e.target.value)
-                        setPage(1)
-                      }}
-                    >
-                      <option value="">All modes</option>
-                      {MODES.map((m) => (
-                        <option key={m} value={m}>
-                          {m.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <label className="block">
-                      <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
-                        Date from
-                      </span>
-                      <input
-                        type="date"
-                        className="h-9 w-full rounded-lg border border-surface-border px-2 text-sm"
-                        value={dateFrom}
-                        onChange={(e) => {
-                          setDateFrom(e.target.value)
-                          setPage(1)
-                        }}
-                      />
-                    </label>
-                    <label className="block">
-                      <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
-                        Date to
-                      </span>
-                      <input
-                        type="date"
-                        className="h-9 w-full rounded-lg border border-surface-border px-2 text-sm"
-                        value={dateTo}
-                        onChange={(e) => {
-                          setDateTo(e.target.value)
-                          setPage(1)
-                        }}
-                      />
-                    </label>
-                  </div>
-
-                  <label className="block">
-                    <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
-                      Recorded by
-                    </span>
-                    <select
-                      className="h-9 w-full rounded-lg border border-surface-border px-2 text-sm"
-                      value={createdByUserId}
-                      onChange={(e) => {
-                        setCreatedByUserId(e.target.value)
-                        setPage(1)
-                      }}
-                    >
-                      <option value="">All users</option>
-                      {users.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.name || u.email}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  {activeFilterCount > 0 ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        clearFilters()
-                        setFilterOpen(false)
-                      }}
-                      className="w-full rounded-lg border border-rose-200 bg-white py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50"
-                    >
-                      Clear all filters
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-            ) : null}
-          </div>
-        </PageFilterBar>
-
         <section className="overflow-hidden rounded-xl border border-surface-border bg-white shadow-sm">
           {isLoading ? (
-            <div className="p-4">
-              <SkeletonTable cols={8} rows={10} />
-            </div>
+            <>
+              {paymentsToolbarRow}
+              <div className="p-4">
+                <SkeletonTable cols={8} rows={10} />
+              </div>
+            </>
           ) : isError ? (
-            <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
-              <p className="text-sm font-medium text-rose-800">Could not load payments.</p>
-              <button
-                type="button"
-                onClick={() => refetch()}
-                className="mt-3 rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-xs font-semibold text-white"
-              >
-                Retry
-              </button>
-            </div>
+            <>
+              {paymentsToolbarRow}
+              <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+                <p className="text-sm font-medium text-rose-800">Could not load payments.</p>
+                <button
+                  type="button"
+                  onClick={() => refetch()}
+                  className="mt-3 rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-xs font-semibold text-white"
+                >
+                  Retry
+                </button>
+              </div>
+            </>
           ) : rows.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <BadgeDollarSign className="h-10 w-10 text-ink-faint" />
-              <p className="mt-3 text-sm font-medium text-ink">No payments found</p>
-              <p className="mt-1 max-w-sm text-xs text-ink-muted">
-                Record payments from a deal&apos;s Payments tab, or clear filters to see all records.
-              </p>
-              <Link to="/deals" className="mt-4 text-sm font-semibold text-brand-600 hover:underline">
-                Go to deals
-              </Link>
-            </div>
+            <>
+              {paymentsToolbarRow}
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <BadgeDollarSign className="h-10 w-10 text-ink-faint" />
+                <p className="mt-3 text-sm font-medium text-ink">No payments found</p>
+                <p className="mt-1 max-w-sm text-xs text-ink-muted">
+                  Record payments from a deal&apos;s Payments tab, or clear filters to see all records.
+                </p>
+                <Link to="/deals" className="mt-4 text-sm font-semibold text-brand-600 hover:underline">
+                  Go to deals
+                </Link>
+              </div>
+            </>
           ) : (
             <>
               <DataGrid
@@ -388,6 +403,8 @@ export function DealPaymentsPage() {
                 loading={isFetching && !isLoading}
                 searchable
                 showExportCsv
+                toolbarLeft={paymentsTotals}
+                toolbarRight={paymentsFilterBar}
                 csvFilename="deal-payments.csv"
                 hideFooter
                 getRowId={(row) => row.id}

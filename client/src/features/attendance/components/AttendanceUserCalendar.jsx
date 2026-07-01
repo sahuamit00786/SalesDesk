@@ -70,25 +70,25 @@ export function AttendanceUserCalendar({ logs = [], year, month, userName, weekl
   }, [year, month, logByDate, todayStr])
 
   return (
-    <div className="rounded-xl border border-surface-border bg-white p-4">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+    <div className="overflow-hidden rounded-2xl border border-surface-border bg-white shadow-sm ring-1 ring-black/[0.04]">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-surface-border/70 bg-gradient-to-r from-[#5B21B6]/[0.06] via-brand-50/40 to-white px-5 py-4">
         <div>
-          <p className="text-base font-semibold text-ink">
-            {userName || 'Team Member'}
+          <p className="text-base font-semibold tracking-tight text-ink">
+            {userName || 'My Attendance'}
           </p>
-          <p className="text-xs text-ink-muted">{MONTH_NAMES[month - 1]} {year}</p>
+          <p className="mt-0.5 text-sm text-ink-muted">{MONTH_NAMES[month - 1]} {year}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
           {LEGEND.map((l) => (
             <span key={l.status} className="flex items-center gap-1.5 text-[11px] text-ink-muted">
-              <span className={cn('h-2.5 w-2.5 rounded-full', l.dot)} />
+              <span className={cn('h-2 w-2 rounded-full', l.dot)} />
               {l.label}
             </span>
           ))}
         </div>
       </div>
 
-      <div className="mb-1 grid grid-cols-7 gap-1">
+      <div className="mb-1 grid grid-cols-7 gap-1 px-4 pt-4">
         {DAY_HEADERS.map((d) => (
           <div key={d} className="py-1 text-center text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
             {d}
@@ -96,7 +96,7 @@ export function AttendanceUserCalendar({ logs = [], year, month, userName, weekl
         ))}
       </div>
 
-      <div className="grid grid-cols-7 gap-1">
+      <div className="grid grid-cols-7 gap-1 px-4 pb-4">
         {cells.map((cell) => {
           if (cell.empty) return <div key={cell.key} className="min-h-[92px]" />
           const { day, dateStr, log, isFuture, isToday, isWeekOff } = cell

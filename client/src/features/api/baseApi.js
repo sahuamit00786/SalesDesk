@@ -145,6 +145,7 @@ export const baseApi = createApi({
     'Notification',
     'NotificationSettings',
     'NotificationDeliveryHistory',
+    'FilterPreset',
   ],
   endpoints: () => ({}),
 })

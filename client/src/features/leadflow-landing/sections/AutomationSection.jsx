@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { Flash, Hierarchy, Clock, Notification } from 'iconsax-react'
+import { Zap, Network, Clock, Bell } from 'lucide-react'
 import { animate } from 'animejs'
 import { Section } from '@/features/leadflow-landing/components/Section'
 import { usePrefersReducedMotion } from '@/features/leadflow-landing/hooks/usePrefersReducedMotion'
@@ -7,10 +7,10 @@ import { usePrefersReducedMotion } from '@/features/leadflow-landing/hooks/usePr
 const AUTOMATION_IMAGE = '/landing/workflow-editor.png'
 
 const features = [
-  { icon: Flash, text: 'Triggers: lead created, updated, and custom conditions', color: 'text-violet-600', bg: 'bg-violet-100' },
-  { icon: Hierarchy, text: 'Actions: assign owner, create follow-up task, round-robin rotation', color: 'text-emerald-600', bg: 'bg-emerald-100' },
+  { icon: Zap, text: 'Triggers: lead created, updated, and custom conditions', color: 'text-violet-600', bg: 'bg-violet-100' },
+  { icon: Network, text: 'Actions: assign owner, create follow-up task, round-robin rotation', color: 'text-emerald-600', bg: 'bg-emerald-100' },
   { icon: Clock, text: 'Delays, time-based nudges, and SLA guardrails', color: 'text-amber-600', bg: 'bg-amber-100' },
-  { icon: Notification, text: 'Audit trail for every workflow run with step-level history', color: 'text-sky-600', bg: 'bg-sky-100' },
+  { icon: Bell, text: 'Audit trail for every workflow run with step-level history', color: 'text-sky-600', bg: 'bg-sky-100' },
 ]
 
 export function AutomationSection() {
@@ -56,7 +56,7 @@ export function AutomationSection() {
             {features.map(({ icon: Icon, text, color, bg }) => (
               <li key={text} className="flex items-start gap-3">
                 <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${bg}`}>
-                  <Icon size={16} variant="Bulk" className={color} aria-hidden />
+                  <Icon size={16} className={color} aria-hidden />
                 </span>
                 <span className="pt-1 text-sm text-zinc-600">{text}</span>
               </li>

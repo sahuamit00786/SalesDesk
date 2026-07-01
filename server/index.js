@@ -20,6 +20,7 @@ import { startAttendanceJob } from './src/jobs/attendanceJob.js'
 import { startTaskDigestNotificationJob } from './src/jobs/taskDigestNotificationJob.js'
 import { startMeetingBotWorker } from './src/queues/meetingBotQueue.js'
 import { startNotificationEmailWorker } from './src/queues/notificationEmailQueue.js'
+import { startEmailSequenceWorker } from './src/queues/emailSequenceQueue.js'
 import { getRedis } from './src/config/redis.js'
 import { bullmqConnectionFromEnv } from './src/queues/connection.js'
 
@@ -110,6 +111,7 @@ async function start() {
   startEmailTemplateWorker()
   startNotificationEmailWorker()
   startWorkflowTriggerWorker()
+  startEmailSequenceWorker()
   if (bullConn) {
     // eslint-disable-next-line no-console
     console.log('BullMQ workers: email templates, workflows, meeting bot (when enabled)')

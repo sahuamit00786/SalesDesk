@@ -128,6 +128,7 @@ export async function getTodayStatus(req, res, next) {
 export async function checkIn(req, res, next) {
   try {
     const date = todayDateOnly()
+    const force = req.body?.force === true
 
     const openSession = await AttendanceSession.findOne({
       where: { userId: req.user.id, companyId: req.user.companyId, date, checkOutTime: null },
@@ -137,6 +138,24 @@ export async function checkIn(req, res, next) {
         success: false,
         error: { code: 'SESSION_OPEN', message: 'Please check out before checking in again.' },
       })
+    }
+
+    if (!force) {
+      const onLeave = await LeaveRequest.findOne({
+        where: {
+          userId: req.user.id,
+          status: 'approved',
+          fromDate: { [Op.lte]: date },
+          toDate: { [Op.gte]: date },
+        },
+        attributes: ['id'],
+      })
+      if (onLeave) {
+        return res.status(409).json({
+          success: false,
+          error: { code: 'ON_LEAVE', message: 'You have approved leave today. Pass force=true to check in anyway.' },
+        })
+      }
     }
 
     const now = new Date()

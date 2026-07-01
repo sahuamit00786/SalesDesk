@@ -1,31 +1,32 @@
-import { UserCircle, Activity, CheckSquare, Trophy, Phone } from 'lucide-react'
+import { UserCircle, Activity, CheckSquare, Trophy } from 'lucide-react'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
 import { DashboardChartCard } from '@/features/dashboard/components/DashboardChartCard'
+import { CHART_COLORS } from '@/features/dashboard/dummyDashboardData'
 import { useFormatChartCurrency } from '@/hooks/useEffectiveCurrency'
+import { DataGrid } from '@/components/shared/DataGrid'
 import { ReportKpiCard } from './ReportKpiCard'
-import { ReportTable } from './ReportTable'
 import { ChartSkeleton, KpiSkeleton } from './ChartSkeleton'
 import { useGetEmployeeMonthlyReportQuery } from '@/features/analytics/analyticsApi'
 import { ReportKpiGrid, ReportChartGrid, ReportTableSection } from '@/features/analytics/ReportLayout'
 
 const EMP_COLS_BASE = [
-  { key: 'name', label: 'Employee', render: (v) => <span className="font-medium text-ink">{v}</span> },
-  { key: 'leadsCreated', label: 'Leads created' },
-  { key: 'calls', label: 'Calls' },
-  { key: 'emails', label: 'Emails' },
-  { key: 'totalActivities', label: 'Activities' },
-  { key: 'tasksCompleted', label: 'Tasks done' },
-  { key: 'meetingsHeld', label: 'Meetings' },
-  { key: 'followupsDone', label: 'Follow-ups' },
-  { key: 'dealsWon', label: 'Deals won' },
-  { key: 'dealsWonValue', label: 'Won value' },
+  { field: 'name', headerName: 'Employee', renderCell: ({ value }) => <span className="font-medium text-ink">{value}</span> },
+  { field: 'leadsCreated', headerName: 'Leads created' },
+  { field: 'calls', headerName: 'Calls' },
+  { field: 'emails', headerName: 'Emails' },
+  { field: 'totalActivities', headerName: 'Activities' },
+  { field: 'tasksCompleted', headerName: 'Tasks done' },
+  { field: 'meetingsHeld', headerName: 'Meetings' },
+  { field: 'followupsDone', headerName: 'Follow-ups' },
+  { field: 'dealsWon', headerName: 'Deals won' },
+  { field: 'dealsWonValue', headerName: 'Won value' },
 ]
 
 export function EmployeeMonthlyTab({ queryParams }) {
   const fmtMoney = useFormatChartCurrency()
   const empCols = EMP_COLS_BASE.map((col) => (
-    col.key === 'dealsWonValue'
-      ? { ...col, render: (v) => fmtMoney(v) }
+    col.field === 'dealsWonValue'
+      ? { ...col, renderCell: ({ value }) => fmtMoney(value) }
       : col
   ))
   const { data, isLoading } = useGetEmployeeMonthlyReportQuery(queryParams)
@@ -45,22 +46,22 @@ export function EmployeeMonthlyTab({ queryParams }) {
       <ReportKpiGrid>
         {isLoading ? Array.from({ length: 4 }).map((_, i) => <KpiSkeleton key={i} />) : <>
           <ReportKpiCard label="Employees" value={kpis.employees ?? 0} icon={UserCircle} />
-          <ReportKpiCard label="Total activities" value={kpis.totalActivities ?? 0} icon={Activity} iconBg="bg-orange-50" iconColor="text-orange-600" />
-          <ReportKpiCard label="Tasks completed" value={kpis.totalTasksCompleted ?? 0} icon={CheckSquare} iconBg="bg-rose-50" iconColor="text-rose-600" />
+          <ReportKpiCard label="Total activities" value={kpis.totalActivities ?? 0} icon={Activity} />
+          <ReportKpiCard label="Tasks completed" value={kpis.totalTasksCompleted ?? 0} icon={CheckSquare} iconBg="bg-emerald-50" iconColor="text-emerald-600" />
           <ReportKpiCard label="Deals won" value={kpis.totalDealsWon ?? 0} icon={Trophy} iconBg="bg-emerald-50" iconColor="text-emerald-600" />
         </>}
       </ReportKpiGrid>
 
       <ReportChartGrid>
         <DashboardChartCard title="Activities by employee" className="lg:col-span-2">
-          {isLoading ? <ChartSkeleton height={220} /> : (
-            <ResponsiveContainer width="100%" height={220}>
+          {isLoading ? <ChartSkeleton height={200} /> : (
+            <ResponsiveContainer width="100%" height={200}>
               <BarChart data={charts.activitiesByEmployee || []}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="name" tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip />
-                <Bar dataKey="count" name="Activities" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="count" name="Activities" fill={CHART_COLORS.primary} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -68,7 +69,17 @@ export function EmployeeMonthlyTab({ queryParams }) {
       </ReportChartGrid>
 
       <ReportTableSection title="Employee monthly breakdown" subtitle="Full activity detail per team member">
-        <ReportTable columns={empCols} rows={employees} isLoading={isLoading} maxH="max-h-[520px]" />
+        <DataGrid
+          columns={empCols}
+          data={employees}
+          loading={isLoading}
+          showColumnToggle={false}
+          showExportCsv={false}
+          autoHeight={false}
+          maxHeightClass="max-h-[480px]"
+          className="rounded-none border-0 shadow-none"
+          emptyTitle="No employee activity in this period"
+        />
       </ReportTableSection>
     </div>
   )

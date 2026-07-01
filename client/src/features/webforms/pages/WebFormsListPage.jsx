@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ExternalLink, Eye, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { Download, ExternalLink, Eye, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Modal } from '@/components/ui/Modal'
 import { PageShell } from '@/components/layout/PageShell'
@@ -47,6 +47,25 @@ export function WebFormsListPage() {
 
   function openNewFormBuilder() {
     navigate('/forms/new/builder')
+  }
+
+  function exportCsv() {
+    const headers = ['Name', 'Title', 'Status', 'Display', 'Views', 'Submissions', 'Conversion', 'Updated']
+    const rows = forms.map((f) => {
+      const views = Number(f.totalViews || 0)
+      const subs = Number(f.totalSubmissions || 0)
+      const conv = views > 0 ? `${((subs / views) * 100).toFixed(1)}%` : '0.0%'
+      return [f.name, f.formTitle || '', f.status, f.displayType || 'inline', views, subs, conv, new Date(f.updatedAt).toLocaleString()]
+        .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+        .join(',')
+    })
+    const csv = [headers.join(','), ...rows].join('\n')
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'forms.csv'
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   async function activateForm(form) {
@@ -204,6 +223,10 @@ export function WebFormsListPage() {
             <Button type="button" variant="secondary" title="Refresh" onClick={() => refetch()}>
               <RefreshCw className="h-4 w-4" />
             </Button>
+            <Button type="button" variant="secondary" onClick={exportCsv} disabled={forms.length === 0}>
+              <Download className="h-4 w-4" />
+              Export CSV
+            </Button>
             <Button type="button" onClick={openNewFormBuilder}>
               <Plus className="h-4 w-4" />
               New form
@@ -218,6 +241,7 @@ export function WebFormsListPage() {
           loading={isLoading}
           searchable={false}
           showColumnToggle={false}
+          showExportCsv={false}
           defaultPageSize={20}
           emptyTitle="No forms yet"
           emptyDescription="Create your first form."

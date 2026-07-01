@@ -35,25 +35,27 @@ export function LeavePage() {
   }
 
   return (
-    <PageShell fullWidth flush>
-      <div className="flex min-h-0 flex-col">
-        <div className="shrink-0 space-y-4 px-4 py-4 sm:px-6">
+    <PageShell fullWidth>
+      <div>
+        <div className="space-y-4 px-2 py-2">
           <PendingLeaveBanner />
           <LeaveBalanceCard balances={balances} year={year} />
         </div>
 
-        <LeaveCalendarWorkspace
-          className="h-[calc(100vh-18rem)] min-h-[520px]"
-          myLeaves={myLeaves}
-          teamLeaves={teamLeaves}
-          holidays={holidays}
-          syncPeriod={{ year, month }}
-          onMonthChange={(y, m) => {
-            setYear(y)
-            setMonth(m)
-          }}
-          onApplied={onCalendarApplied}
-        />
+        <div className="px-2">
+          <LeaveCalendarWorkspace
+            className="h-[700px]"
+            myLeaves={myLeaves}
+            teamLeaves={teamLeaves}
+            holidays={holidays}
+            syncPeriod={{ year, month }}
+            onPeriodChange={(y, m) => {
+              setYear(y)
+              setMonth(m)
+            }}
+            onApplied={onCalendarApplied}
+          />
+        </div>
       </div>
     </PageShell>
   )

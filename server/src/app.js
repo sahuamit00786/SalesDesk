@@ -10,6 +10,7 @@ import v1 from './routes/v1/index.js'
 import publicRoutes from './routes/publicRoutes.js'
 import * as publicFormController from './controllers/publicFormController.js'
 import { errorHandler } from './middleware/errorHandler.js'
+import { auditLog } from './middleware/auditLog.js'
 
 const app = express()
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -58,14 +59,7 @@ app.use(
   )
 )
 
-app.use(
-  '/recordings',
-  express.static(
-    path.join(appRoot, 'recordings')
-  )
-)
-
-app.use('/api/v1', v1)
+app.use('/api/v1', auditLog, v1)
 app.use('/api/public', cors({ origin: true, credentials: false }), publicRoutes)
 app.get('/embed/form.js', cors({ origin: true, credentials: false }), publicFormController.embedScript)
 app.get('/f/:token', cors({ origin: true, credentials: false }), publicFormController.hostedFormPage)

@@ -3,21 +3,30 @@ import { cn } from '@/utils/cn'
 export function ReportKpiCard({
   label, value, hint, delta, deltaPositive = true,
   icon: Icon, iconBg = 'bg-brand-50', iconColor = 'text-brand-600',
-  accentColor,
+  accentColor, onClick, className,
 }) {
+  const Tag = onClick ? 'button' : 'div'
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-surface-border bg-white px-5 py-4 shadow-sm">
+    <Tag
+      type={onClick ? 'button' : undefined}
+      onClick={onClick}
+      className={cn(
+        'relative overflow-hidden rounded-xl border border-[#F7F5FB] bg-white px-3 py-2.5 text-left shadow-sm',
+        onClick && 'transition-colors hover:border-brand-300 hover:bg-brand-50/30',
+        className,
+      )}
+    >
       {/* Left accent bar */}
       {accentColor && (
-        <div className={`absolute inset-y-0 left-0 w-1 rounded-l-2xl ${accentColor}`} />
+        <div className={`absolute inset-y-0 left-0 w-1 rounded-l-xl ${accentColor}`} />
       )}
 
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-2.5">
         <div className="min-w-0 flex-1">
           <p className="text-[11px] font-semibold uppercase tracking-widest text-ink-faint">{label}</p>
-          <p className="mt-2 text-2xl font-extrabold tabular-nums text-ink sm:text-3xl">{value ?? '—'}</p>
+          <p className="mt-1 text-lg font-extrabold tabular-nums text-ink sm:text-xl">{value ?? '—'}</p>
           {(hint || delta) && (
-            <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
               {hint && <p className="text-xs text-ink-muted">{hint}</p>}
               {delta && (
                 <span className={cn(
@@ -31,11 +40,11 @@ export function ReportKpiCard({
           )}
         </div>
         {Icon && (
-          <div className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-xl shadow-sm', iconBg)}>
-            <Icon className={cn('h-5 w-5', iconColor)} />
+          <div className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-lg shadow-sm', iconBg)}>
+            <Icon className={cn('h-4 w-4', iconColor)} />
           </div>
         )}
       </div>
-    </div>
+    </Tag>
   )
 }

@@ -206,6 +206,8 @@ export function OpportunitiesKanban({ opportunities = [], opportunityStatuses = 
   const navigate = useNavigate()
   const [patchOpportunityStatus] = usePatchOpportunityStatusMutation()
   const [activeId, setActiveId] = useState(null)
+  // Optimistic local state: null means use the server-side `opportunities` prop
+  const [localOpportunities, setLocalOpportunities] = useState(null)
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -218,9 +220,12 @@ export function OpportunitiesKanban({ opportunities = [], opportunityStatuses = 
     return ordered.map((s) => s.name).filter(Boolean)
   }, [opportunityStatuses])
 
-  const merged = useMemo(() => groupByStage(opportunities, stageOrder), [opportunities, stageOrder])
+  // Use local optimistic state if present, else server data
+  const effectiveOpportunities = localOpportunities ?? opportunities
 
-  const activeOpp = useMemo(() => opportunities.find((o) => o.id === activeId), [activeId, opportunities])
+  const merged = useMemo(() => groupByStage(effectiveOpportunities, stageOrder), [effectiveOpportunities, stageOrder])
+
+  const activeOpp = useMemo(() => effectiveOpportunities.find((o) => o.id === activeId), [activeId, effectiveOpportunities])
 
   async function handleDragEnd(event) {
     const { active, over } = event
@@ -230,15 +235,30 @@ export function OpportunitiesKanban({ opportunities = [], opportunityStatuses = 
     if (!overId.startsWith('stage:')) return
     const newStageName = overId.slice('stage:'.length)
     const oppId = String(active.id)
-    const opp = opportunities.find((o) => o.id === oppId)
+    const opp = effectiveOpportunities.find((o) => o.id === oppId)
     if (!opp || opp.currentStage === newStageName) return
     const status = opportunityStatuses.find((s) => s.name === newStageName)
     if (!status) return
+
+    // Save original state for rollback
+    const originalOpportunities = [...effectiveOpportunities]
+
+    // 1. Optimistic update: move the card immediately
+    setLocalOpportunities(
+      originalOpportunities.map((o) =>
+        o.id === oppId ? { ...o, currentStage: newStageName } : o,
+      ),
+    )
+
     try {
       await patchOpportunityStatus({ id: oppId, opportunityStatusId: status.id }).unwrap()
       toast.success(`Moved to ${formatStageLabel(newStageName)}`)
+      // Clear local override so server data takes over
+      setLocalOpportunities(null)
     } catch (err) {
-      toast.error(err?.data?.error?.message || err?.error || 'Could not update stage')
+      // 3. Rollback on failure
+      setLocalOpportunities(originalOpportunities)
+      toast.error(err?.data?.error?.message || err?.error || 'Failed to move opportunity. Please try again.')
     }
   }
 

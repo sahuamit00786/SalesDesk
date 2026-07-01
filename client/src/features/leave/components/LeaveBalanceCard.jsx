@@ -30,7 +30,7 @@ export function LeaveBalanceCard({ balances = [], year }) {
           className="border-0 bg-transparent py-4"
         />
       ) : (
-        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {rows.map((b, i) => {
             const avail = Number(b.available ?? 0)
             const alloc = Number(b.allocated ?? 0)
@@ -43,12 +43,12 @@ export function LeaveBalanceCard({ balances = [], year }) {
               <div
                 key={b.id}
                 className={cn(
-                  'rounded-xl border bg-white px-4 py-3 shadow-sm',
+                  'rounded-2xl border bg-white px-5 py-4 shadow-sm ring-1 ring-black/[0.04]',
                   accent.border,
                 )}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className={cn('rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider', accent.pill)}>
+                  <span className={cn('rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider', accent.pill)}>
                     {b.leaveType?.code || b.leaveType?.name || 'Leave'}
                   </span>
                   <span className="text-xs text-ink-muted">{alloc} alloc.</span>
@@ -59,18 +59,23 @@ export function LeaveBalanceCard({ balances = [], year }) {
                   <span className="mb-0.5 text-xs text-ink-muted">days left</span>
                 </div>
 
-                <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-surface-subtle">
+                <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-surface-subtle">
                   <div
                     className={cn('h-full rounded-full transition-all duration-500', accent.bar)}
                     style={{ width: `${pct}%` }}
                   />
                 </div>
 
-                <div className="mt-1.5 flex justify-between text-[10px] text-ink-muted">
+                <div className="mt-2 flex justify-between text-[10px] text-ink-muted">
                   <span>{used} used</span>
                   {pending > 0 && <span className="text-amber-600">{pending} pending</span>}
                   <span>{pct}%</span>
                 </div>
+                {b.adjustmentNote ? (
+                  <p className="mt-1.5 truncate text-[10px] italic text-ink-faint" title={b.adjustmentNote}>
+                    Note: {b.adjustmentNote}
+                  </p>
+                ) : null}
               </div>
             )
           })}

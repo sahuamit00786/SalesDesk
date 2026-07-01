@@ -7,7 +7,7 @@ export const attendanceApi = baseApi.injectEndpoints({
       providesTags: [{ type: 'Attendance', id: 'TODAY' }],
     }),
     checkIn: build.mutation({
-      query: () => ({ url: '/attendance/check-in', method: 'POST' }),
+      query: (body) => ({ url: '/attendance/check-in', method: 'POST', body }),
       invalidatesTags: [{ type: 'Attendance', id: 'TODAY' }, { type: 'Attendance', id: 'ME' }],
     }),
     checkOut: build.mutation({

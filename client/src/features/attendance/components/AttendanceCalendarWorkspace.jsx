@@ -82,11 +82,11 @@ export function AttendanceCalendarWorkspace({
   )
 
   const leftSidebar = (
-    <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
+    <div className="rounded-2xl border border-surface-border bg-white p-4 shadow-sm ring-1 ring-black/[0.04]">
       {memberName ? (
-        <p className="mb-2 text-sm font-semibold text-gray-900">{memberName}</p>
+        <p className="mb-2 text-sm font-semibold text-ink">{memberName}</p>
       ) : null}
-      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-500">Legend</p>
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-ink-faint">Legend</p>
       <HrCalendarLegend items={legend} />
     </div>
   )
@@ -100,6 +100,7 @@ export function AttendanceCalendarWorkspace({
       EventComponent={EventComponent}
       leftSidebar={leftSidebar}
       showRightPanel={false}
+      showTodayList={false}
       highlightAttendanceStatus
       dayStatusByDate={dayStatusByDate}
       weeklyOffDays={weeklyOffDays}

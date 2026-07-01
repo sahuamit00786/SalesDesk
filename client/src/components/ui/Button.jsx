@@ -33,6 +33,10 @@ const variants = {
 
 export function Button({ variant = 'primary', className, type = 'button', ...props }) {
   return (
-    <button type={type} className={cn(variants[variant], className)} {...props} />
+    <button
+      type={type}
+      className={cn(variants[variant], 'disabled:pointer-events-none disabled:opacity-50', className)}
+      {...props}
+    />
   )
 }

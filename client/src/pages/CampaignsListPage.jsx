@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { BarChart3, CalendarDays, LineChart, ListChecks, Megaphone, MoreHorizontal, RefreshCw, ShoppingBag, Users } from 'lucide-react'
 import { SkeletonCards } from '@/components/shared/SkeletonLoader'
+import { EmptyState } from '@/components/shared/EmptyState'
 import { PageShell } from '@/components/layout/PageShell'
 import { PageFilterBar } from '@/components/layout/PageFilterBar'
 import { PageStack } from '@/components/layout/PageStack'
@@ -263,16 +264,19 @@ export function CampaignsListPage() {
         {isLoading ? (
           <SkeletonCards count={4} cols="grid-cols-1" cardHeight="h-36" />
         ) : rows.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-neutral-200 bg-neutral-50/80 p-8 text-center">
-            <p className="text-sm font-medium text-neutral-800">No campaigns yet</p>
-            <p className="mt-1 text-xs text-neutral-600">Create a campaign to assign a team and track stages.</p>
-            <Link
-              to="/campaigns/new"
-              className="mt-4 inline-flex rounded-xl bg-[var(--brand-primary)] px-4 py-2 text-xs font-semibold text-white hover:bg-[var(--brand-primary-dark)]"
-            >
-              Create your first campaign
-            </Link>
-          </div>
+          <EmptyState
+            icon={Megaphone}
+            title="No campaigns yet"
+            description="Create a campaign to assign a team and track lead stages."
+            action={
+              <Link
+                to="/campaigns/new"
+                className="inline-flex rounded-xl bg-[var(--brand-primary)] px-4 py-2 text-xs font-semibold text-white hover:bg-[var(--brand-primary-dark)]"
+              >
+                Create your first campaign
+              </Link>
+            }
+          />
         ) : (
           <ul className="flex flex-col gap-4">
             {rows.map((c, i) => (

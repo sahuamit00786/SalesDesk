@@ -6,14 +6,15 @@ import {
 import { DashboardChartCard } from '@/features/dashboard/components/DashboardChartCard'
 import { CHART_COLORS } from '@/features/dashboard/dummyDashboardData'
 import { useFormatChartCurrency } from '@/hooks/useEffectiveCurrency'
+import { DataGrid } from '@/components/shared/DataGrid'
 import { ReportKpiCard } from './ReportKpiCard'
-import { ReportTable } from './ReportTable'
 import { ChartSkeleton, KpiSkeleton } from './ChartSkeleton'
 import {
   useGetLeadsReportQuery, useGetDealsReportQuery,
   useGetActivitiesReportQuery, useGetTasksReportQuery, useGetTeamReportQuery,
 } from '@/features/analytics/analyticsApi'
 import { ASSIGNEE_WORKLOAD_COLS } from '@/features/analytics/reportColumns'
+import { ReportTableSection } from '@/features/analytics/ReportLayout'
 
 const SLICES = CHART_COLORS.slices
 
@@ -24,13 +25,12 @@ export function OverviewTab({ queryParams, from, to }) {
   const { data: dealsData, isLoading: l2 } = useGetDealsReportQuery(params)
   const { data: actData, isLoading: l3 } = useGetActivitiesReportQuery(params)
   const { data: tasksData, isLoading: l4 } = useGetTasksReportQuery(params)
-  const { data: teamData, isLoading: l5 } = useGetTeamReportQuery(params)
+  const { isLoading: l5 } = useGetTeamReportQuery(params)
 
   const leads = leadsData?.data
   const deals = dealsData?.data
   const act = actData?.data
   const tasks = tasksData?.data
-  const team = teamData?.data
   const loading = l1 || l2 || l3 || l4 || l5
 
   const assigneeWorkload = tasks?.tables?.assigneeWorkload || []
@@ -43,37 +43,37 @@ export function OverviewTab({ queryParams, from, to }) {
   const actKpis = act?.kpis || {}
 
   return (
-    <div id="report-export-root" className="space-y-6">
+    <div id="report-export-root" className="space-y-4">
 
       {/* KPI strip */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
         {loading ? Array.from({ length: 10 }).map((_, i) => <KpiSkeleton key={i} />) : <>
           <ReportKpiCard label="Total Leads" value={leads?.kpis?.total ?? 0} icon={Users} />
-          <ReportKpiCard label="New (period)" value={leads?.kpis?.newInPeriod ?? 0} icon={TrendingUp} iconBg="bg-blue-50" iconColor="text-blue-600" />
+          <ReportKpiCard label="New (period)" value={leads?.kpis?.newInPeriod ?? 0} icon={TrendingUp} />
           <ReportKpiCard label="Stale leads" value={leads?.kpis?.staleLeads ?? 0} sub="No activity 14d" icon={AlertTriangle} iconBg="bg-amber-50" iconColor="text-amber-600" />
-          <ReportKpiCard label="Pipeline value" value={fmtMoney(deals?.kpis?.pipelineValue ?? 0)} icon={DollarSign} iconBg="bg-emerald-50" iconColor="text-emerald-600" />
-          <ReportKpiCard label="Won value" value={fmtMoney(deals?.kpis?.wonValue ?? 0)} icon={Trophy} iconBg="bg-yellow-50" iconColor="text-yellow-600" />
-          <ReportKpiCard label="Win rate" value={`${deals?.kpis?.winRate ?? 0}%`} icon={Percent} iconBg="bg-purple-50" iconColor="text-purple-600" />
+          <ReportKpiCard label="Pipeline value" value={fmtMoney(deals?.kpis?.pipelineValue ?? 0)} icon={DollarSign} />
+          <ReportKpiCard label="Won value" value={fmtMoney(deals?.kpis?.wonValue ?? 0)} icon={Trophy} iconBg="bg-emerald-50" iconColor="text-emerald-600" />
+          <ReportKpiCard label="Win rate" value={`${deals?.kpis?.winRate ?? 0}%`} icon={Percent} />
           <ReportKpiCard label="Payments received" value={fmtMoney(deals?.kpis?.paymentsReceived ?? 0)} icon={BadgeDollarSign} iconBg="bg-emerald-50" iconColor="text-emerald-700" />
-          <ReportKpiCard label="Activities" value={actKpis.total ?? 0} icon={Megaphone} iconBg="bg-orange-50" iconColor="text-orange-600" />
-          <ReportKpiCard label="Open tasks" value={tasks?.kpis?.openTotal ?? 0} icon={ListTodo} iconBg="bg-sky-50" iconColor="text-sky-600" />
-          <ReportKpiCard label="Overdue tasks" value={tasks?.kpis?.overdue ?? 0} icon={CheckSquare} iconBg="bg-red-50" iconColor="text-red-600" />
+          <ReportKpiCard label="Activities" value={actKpis.total ?? 0} icon={Megaphone} />
+          <ReportKpiCard label="Open tasks" value={tasks?.kpis?.openTotal ?? 0} icon={ListTodo} />
+          <ReportKpiCard label="Overdue tasks" value={tasks?.kpis?.overdue ?? 0} icon={CheckSquare} iconBg="bg-rose-50" iconColor="text-rose-600" />
         </>}
       </div>
 
       {/* Activity summary strip */}
       <div className="grid grid-cols-3 gap-3 sm:grid-cols-5 lg:grid-cols-6">
         {[
-          { label: 'Calls', val: actKpis.calls ?? 0, color: 'bg-emerald-50 text-emerald-700' },
-          { label: 'Emails', val: actKpis.emails ?? 0, color: 'bg-blue-50 text-blue-700' },
-          { label: 'Meetings', val: actKpis.meetings ?? 0, color: 'bg-purple-50 text-purple-700' },
-          { label: 'Notes', val: actKpis.notes ?? 0, color: 'bg-amber-50 text-amber-700' },
-          { label: 'Follow-ups', val: actKpis.followupsCreated ?? 0, color: 'bg-sky-50 text-sky-700' },
-          { label: 'Follow-up rate', val: `${actKpis.followupRate ?? 0}%`, color: 'bg-rose-50 text-rose-700' },
+          { label: 'Calls', val: actKpis.calls ?? 0 },
+          { label: 'Emails', val: actKpis.emails ?? 0 },
+          { label: 'Meetings', val: actKpis.meetings ?? 0 },
+          { label: 'Notes', val: actKpis.notes ?? 0 },
+          { label: 'Follow-ups', val: actKpis.followupsCreated ?? 0 },
+          { label: 'Follow-up rate', val: `${actKpis.followupRate ?? 0}%` },
         ].map((c) => (
-          <div key={c.label} className={`rounded-xl border border-surface-border px-3 py-2.5 ${c.color}`}>
-            <p className="text-[10px] font-semibold uppercase tracking-wide opacity-70">{c.label}</p>
-            <p className="mt-0.5 text-lg font-bold tabular-nums">{loading ? '—' : c.val}</p>
+          <div key={c.label} className="rounded-xl border border-surface-border bg-white px-3 py-2.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-faint">{c.label}</p>
+            <p className="mt-0.5 text-lg font-bold tabular-nums text-ink">{loading ? '—' : c.val}</p>
           </div>
         ))}
       </div>
@@ -97,13 +97,13 @@ export function OverviewTab({ queryParams, from, to }) {
         )}
       </DashboardChartCard>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Lead status donut */}
         <DashboardChartCard title="Lead status distribution" subtitle="All leads by current status">
           {loading ? <ChartSkeleton /> : (
-            <ResponsiveContainer width="100%" height={260}>
+            <ResponsiveContainer width="100%" height={200}>
               <PieChart>
-                <Pie data={leads?.charts?.statusDist || []} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={65} outerRadius={100} paddingAngle={2}>
+                <Pie data={leads?.charts?.statusDist || []} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={2}>
                   {(leads?.charts?.statusDist || []).map((_, i) => <Cell key={i} fill={SLICES[i % SLICES.length]} />)}
                 </Pie>
                 <Tooltip formatter={(v) => [v, 'Leads']} />
@@ -116,7 +116,7 @@ export function OverviewTab({ queryParams, from, to }) {
         {/* Deal stage distribution */}
         <DashboardChartCard title="Deal stage distribution" subtitle="Open deals by pipeline stage">
           {loading ? <ChartSkeleton /> : (
-            <ResponsiveContainer width="100%" height={260}>
+            <ResponsiveContainer width="100%" height={200}>
               <BarChart data={deals?.charts?.stageDist || []} layout="vertical" margin={{ left: 10, right: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
                 <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
@@ -131,9 +131,9 @@ export function OverviewTab({ queryParams, from, to }) {
         {/* Lead source breakdown */}
         <DashboardChartCard title="Lead sources" subtitle="Where leads are coming from">
           {loading ? <ChartSkeleton /> : (
-            <ResponsiveContainer width="100%" height={260}>
+            <ResponsiveContainer width="100%" height={200}>
               <PieChart>
-                <Pie data={sourceDist} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} paddingAngle={2}
+                <Pie data={sourceDist} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={85} paddingAngle={2}
                   label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false}>
                   {sourceDist.map((_, i) => <Cell key={i} fill={SLICES[i % SLICES.length]} />)}
                 </Pie>
@@ -146,7 +146,7 @@ export function OverviewTab({ queryParams, from, to }) {
         {/* Tasks open by assignee */}
         <DashboardChartCard title="Open tasks by team member" subtitle="Current workload snapshot">
           {loading ? <ChartSkeleton /> : (
-            <ResponsiveContainer width="100%" height={260}>
+            <ResponsiveContainer width="100%" height={200}>
               <BarChart data={tasks?.charts?.byAssigneeOpen || []} layout="vertical" margin={{ left: 10, right: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
                 <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
@@ -182,9 +182,19 @@ export function OverviewTab({ queryParams, from, to }) {
       </div>
 
       {/* Assignee workload table */}
-      <DashboardChartCard title="Team task workload" subtitle="Open and overdue tasks by assignee">
-        <ReportTable columns={ASSIGNEE_WORKLOAD_COLS} rows={assigneeWorkload} loading={loading} emptyText="No task assignments" maxHeightClass="max-h-[320px]" />
-      </DashboardChartCard>
+      <ReportTableSection title="Team task workload" subtitle="Open and overdue tasks by assignee">
+        <DataGrid
+          columns={ASSIGNEE_WORKLOAD_COLS}
+          data={assigneeWorkload}
+          loading={loading}
+          showColumnToggle={false}
+          showExportCsv={false}
+          autoHeight={false}
+          maxHeightClass="max-h-[340px]"
+          className="rounded-none border-0 shadow-none"
+          emptyTitle="No task assignments"
+        />
+      </ReportTableSection>
 
       {/* Overdue tasks preview */}
       {overduePreview.length > 0 ? (

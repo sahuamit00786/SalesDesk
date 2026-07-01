@@ -1,4 +1,4 @@
-import { TickCircle } from 'iconsax-react'
+import { CheckCircle } from 'lucide-react'
 import { ONBOARDING_STEPS } from '@/features/onboarding/constants/onboardingOptions'
 import { cn } from '@/utils/cn'
 import { LeadNestLogo } from '@/components/shared/LeadNestLogo'
@@ -53,9 +53,9 @@ export function OnboardingSidebar({ activeStep, furthestStep, onSelectStep, prog
                 )}
               >
                 {completed ? (
-                  <TickCircle size={18} variant="Bold" />
+                  <CheckCircle size={18} />
                 ) : (
-                  <Icon size={16} variant={current ? 'Bold' : 'Linear'} />
+                  <Icon size={16} />
                 )}
               </span>
               <span className="min-w-0 pt-0.5">

@@ -15,4 +15,10 @@ export const sequelize = new Sequelize(database, username, password, {
     underscored: true,
     timestamps: true,
   },
+  pool: {
+    max: 20,
+    min: 5,
+    acquire: 30000,
+    idle: 10000,
+  },
 })

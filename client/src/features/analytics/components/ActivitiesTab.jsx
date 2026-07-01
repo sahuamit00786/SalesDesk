@@ -11,6 +11,7 @@ import { useGetActivitiesReportQuery } from '@/features/analytics/analyticsApi'
 
 const SLICES = CHART_COLORS.slices
 const DOW_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const HEATMAP_RGB = '59,115,245' // CHART_COLORS.primary as r,g,b
 
 function ActivityHeatmap({ heatmap }) {
   if (!heatmap?.length) return <p className="py-8 text-center text-sm text-ink-muted">No activity data</p>
@@ -39,7 +40,7 @@ function ActivityHeatmap({ heatmap }) {
               return (
                 <div key={h} title={`${DOW_LABELS[dow - 1]} ${h}:00 — ${count} activities`}
                   className="flex-1 h-5 rounded-sm cursor-default"
-                  style={{ backgroundColor: count === 0 ? '#F9F7FC' : `rgba(91,33,182,${0.1 + intensity * 0.85})` }} />
+                  style={{ backgroundColor: count === 0 ? '#F1F5F9' : `rgba(${HEATMAP_RGB},${0.1 + intensity * 0.85})` }} />
               )
             })}
           </div>
@@ -47,7 +48,7 @@ function ActivityHeatmap({ heatmap }) {
         <div className="flex items-center gap-2 mt-2">
           <span className="text-[10px] text-ink-muted">Less</span>
           {[0.1, 0.3, 0.5, 0.7, 0.9].map((i) => (
-            <div key={i} className="h-3 w-5 rounded-sm" style={{ backgroundColor: `rgba(91,33,182,${i})` }} />
+            <div key={i} className="h-3 w-5 rounded-sm" style={{ backgroundColor: `rgba(${HEATMAP_RGB},${i})` }} />
           ))}
           <span className="text-[10px] text-ink-muted">More</span>
         </div>
@@ -64,27 +65,27 @@ export function ActivitiesTab({ queryParams, from, to }) {
   const charts = d?.charts || {}
 
   return (
-    <div id="report-export-root" className="space-y-6">
+    <div id="report-export-root" className="space-y-4">
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
         {isLoading ? Array.from({ length: 8 }).map((_, i) => <KpiSkeleton key={i} />) : <>
           <ReportKpiCard label="Total activities" value={kpis.total ?? 0} icon={Megaphone} />
-          <ReportKpiCard label="Calls" value={kpis.calls ?? 0} icon={Phone} iconBg="bg-emerald-50" iconColor="text-emerald-600" />
-          <ReportKpiCard label="Emails" value={kpis.emails ?? 0} icon={Mail} iconBg="bg-blue-50" iconColor="text-blue-600" />
-          <ReportKpiCard label="Meetings" value={kpis.meetings ?? 0} icon={Video} iconBg="bg-purple-50" iconColor="text-purple-600" />
-          <ReportKpiCard label="Notes" value={kpis.notes ?? 0} icon={FileText} iconBg="bg-amber-50" iconColor="text-amber-600" />
-          <ReportKpiCard label="Follow-ups created" value={kpis.followupsCreated ?? 0} icon={Bell} iconBg="bg-sky-50" iconColor="text-sky-600" />
+          <ReportKpiCard label="Calls" value={kpis.calls ?? 0} icon={Phone} />
+          <ReportKpiCard label="Emails" value={kpis.emails ?? 0} icon={Mail} />
+          <ReportKpiCard label="Meetings" value={kpis.meetings ?? 0} icon={Video} />
+          <ReportKpiCard label="Notes" value={kpis.notes ?? 0} icon={FileText} />
+          <ReportKpiCard label="Follow-ups created" value={kpis.followupsCreated ?? 0} icon={Bell} />
           <ReportKpiCard label="Follow-ups done" value={kpis.followupsDone ?? 0} icon={Bell} iconBg="bg-emerald-50" iconColor="text-emerald-600" />
-          <ReportKpiCard label="Follow-up rate" value={`${kpis.followupRate ?? 0}%`} icon={Percent} iconBg="bg-rose-50" iconColor="text-rose-600" />
+          <ReportKpiCard label="Follow-up rate" value={`${kpis.followupRate ?? 0}%`} icon={Percent} />
         </>}
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <DashboardChartCard title="Activities by type" subtitle="Breakdown of all logged activities">
           {isLoading ? <ChartSkeleton /> : (
-            <ResponsiveContainer width="100%" height={260}>
+            <ResponsiveContainer width="100%" height={200}>
               <PieChart>
-                <Pie data={charts.typeDist || []} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={65} outerRadius={100} paddingAngle={2}>
+                <Pie data={charts.typeDist || []} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={2}>
                   {(charts.typeDist || []).map((_, i) => <Cell key={i} fill={SLICES[i % SLICES.length]} />)}
                 </Pie>
                 <Tooltip formatter={(v) => [v, 'Activities']} />
@@ -96,7 +97,7 @@ export function ActivitiesTab({ queryParams, from, to }) {
 
         <DashboardChartCard title="Activities by team member" subtitle="Top 10 most active members">
           {isLoading ? <ChartSkeleton /> : (
-            <ResponsiveContainer width="100%" height={260}>
+            <ResponsiveContainer width="100%" height={200}>
               <BarChart data={charts.byUser || []} layout="vertical" margin={{ left: 10, right: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
                 <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
@@ -130,7 +131,7 @@ export function ActivitiesTab({ queryParams, from, to }) {
 
         <DashboardChartCard title="Most active leads" subtitle="Top 10 leads by activity count">
           {isLoading ? <ChartSkeleton /> : (
-            <ResponsiveContainer width="100%" height={260}>
+            <ResponsiveContainer width="100%" height={200}>
               <BarChart data={charts.byLead || []} layout="vertical" margin={{ left: 10, right: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
                 <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
@@ -146,9 +147,9 @@ export function ActivitiesTab({ queryParams, from, to }) {
           {isLoading ? <ChartSkeleton /> : (
             <div className="flex flex-col items-center justify-center py-6 gap-6">
               <div className="grid grid-cols-2 gap-6 w-full max-w-xs">
-                <div className="rounded-xl border border-surface-border bg-sky-50 p-4 text-center">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-sky-600">Created</p>
-                  <p className="mt-1 text-3xl font-bold tabular-nums text-sky-700">{kpis.followupsCreated ?? 0}</p>
+                <div className="rounded-xl border border-surface-border bg-surface-subtle p-4 text-center">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Created</p>
+                  <p className="mt-1 text-3xl font-bold tabular-nums text-ink">{kpis.followupsCreated ?? 0}</p>
                 </div>
                 <div className="rounded-xl border border-surface-border bg-emerald-50 p-4 text-center">
                   <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600">Done</p>

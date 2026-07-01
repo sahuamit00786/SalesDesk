@@ -305,6 +305,8 @@ export function DealsPipelineKanban({
     else navigate(`/deals/${opp.id}`)
   }
   const [activeId, setActiveId] = useState(null)
+  // Optimistic local state: null means use the server-side `opportunities` prop
+  const [localOpportunities, setLocalOpportunities] = useState(null)
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -317,29 +319,47 @@ export function DealsPipelineKanban({
     return ordered.map((s) => s.name).filter(Boolean)
   }, [opportunityStatuses])
 
-  const { byStage, other } = useMemo(() => groupByStage(opportunities, stageOrder), [opportunities, stageOrder])
+  // Use local optimistic state if present, else server data
+  const effectiveOpportunities = localOpportunities ?? opportunities
 
-  const activeOpp = useMemo(() => opportunities.find((o) => o.id === activeId), [opportunities, activeId])
+  const { byStage, other } = useMemo(() => groupByStage(effectiveOpportunities, stageOrder), [effectiveOpportunities, stageOrder])
+
+  const activeOpp = useMemo(() => effectiveOpportunities.find((o) => o.id === activeId), [effectiveOpportunities, activeId])
 
   async function handleDragEnd(event) {
     const { active, over } = event
     setActiveId(null)
     if (!over?.id) return
-    const dragged = opportunities.find((o) => o.id === active.id)
+    const dragged = effectiveOpportunities.find((o) => o.id === active.id)
     if (!dragged) return
     const overId = String(over.id)
     if (!overId.startsWith('stage:')) return
     const nextStage = overId.slice('stage:'.length)
     if (!nextStage || nextStage === dragged.currentStage) return
+
+    // Save original state for rollback
+    const originalOpportunities = [...effectiveOpportunities]
+
+    // 1. Optimistic update: move the card immediately in local state
+    setLocalOpportunities(
+      originalOpportunities.map((o) =>
+        o.id === dragged.id ? { ...o, currentStage: nextStage } : o,
+      ),
+    )
+
     try {
       await patchStage({ id: dragged.id, currentStage: nextStage }).unwrap()
       toast.success(`Moved to ${formatStageLabel(nextStage)}`)
+      // Clear local override so server data takes over
+      setLocalOpportunities(null)
     } catch (err) {
-      toast.error(err?.data?.error?.message || err?.error || 'Could not update stage')
+      // 3. Rollback on failure
+      setLocalOpportunities(originalOpportunities)
+      toast.error(err?.data?.error?.message || err?.error || 'Failed to move deal. Please try again.')
     }
   }
 
-  if (isLoading && !opportunities.length) {
+  if (isLoading && !effectiveOpportunities.length) {
     return <SkeletonCards count={5} cols="grid-cols-1 sm:grid-cols-2 xl:grid-cols-3" cardHeight="h-44" />
   }
 

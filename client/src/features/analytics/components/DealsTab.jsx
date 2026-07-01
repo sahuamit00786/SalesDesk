@@ -4,8 +4,8 @@ import { DashboardChartCard } from '@/features/dashboard/components/DashboardCha
 import { CHART_COLORS } from '@/features/dashboard/dummyDashboardData'
 import { formatDealMoney } from '@/features/deals/dealCurrencies'
 import { useFormatChartCurrency } from '@/hooks/useEffectiveCurrency'
+import { DataGrid } from '@/components/shared/DataGrid'
 import { ReportKpiCard } from './ReportKpiCard'
-import { ReportTable } from './ReportTable'
 import { ChartSkeleton, KpiSkeleton } from './ChartSkeleton'
 import { useGetDealsReportQuery } from '@/features/analytics/analyticsApi'
 import { ReportKpiGrid, ReportChartGrid, ReportTableSection } from '@/features/analytics/ReportLayout'
@@ -16,18 +16,18 @@ const fmtDate = (d) => d ? new Date(d).toLocaleDateString() : '—'
 export function DealsTab({ queryParams }) {
   const fmtMoney = useFormatChartCurrency()
   const dealCols = [
-    { key: 'name', label: 'Deal', render: (v) => <span className="font-medium text-ink">{v || '—'}</span> },
-    { key: 'stage', label: 'Stage' },
-    { key: 'value', label: 'Value', render: (v, r) => <span className="font-semibold">{formatDealMoney(v, r.currency)}</span> },
-    { key: 'owner', label: 'Owner' },
-    { key: 'wonAt', label: 'Won date', render: (v) => fmtDate(v) },
+    { field: 'name', headerName: 'Deal', renderCell: ({ value }) => <span className="font-medium text-ink">{value || '—'}</span> },
+    { field: 'stage', headerName: 'Stage' },
+    { field: 'value', headerName: 'Value', renderCell: ({ value, row }) => <span className="font-semibold">{formatDealMoney(value, row.currency)}</span> },
+    { field: 'owner', headerName: 'Owner' },
+    { field: 'wonAt', headerName: 'Won date', renderCell: ({ value }) => fmtDate(value) },
   ]
   const createdCols = [
-    { key: 'name', label: 'Deal', render: (v) => <span className="font-medium text-ink">{v || '—'}</span> },
-    { key: 'stage', label: 'Stage' },
-    { key: 'value', label: 'Value', render: (v, r) => <span className="font-semibold">{formatDealMoney(v, r.currency)}</span> },
-    { key: 'owner', label: 'Owner' },
-    { key: 'createdAt', label: 'Created', render: (v) => fmtDate(v) },
+    { field: 'name', headerName: 'Deal', renderCell: ({ value }) => <span className="font-medium text-ink">{value || '—'}</span> },
+    { field: 'stage', headerName: 'Stage' },
+    { field: 'value', headerName: 'Value', renderCell: ({ value, row }) => <span className="font-semibold">{formatDealMoney(value, row.currency)}</span> },
+    { field: 'owner', headerName: 'Owner' },
+    { field: 'createdAt', headerName: 'Created', renderCell: ({ value }) => fmtDate(value) },
   ]
   const { data, isLoading } = useGetDealsReportQuery(queryParams)
   const d = data?.data
@@ -40,11 +40,11 @@ export function DealsTab({ queryParams }) {
       <ReportKpiGrid>
         {isLoading ? Array.from({ length: 7 }).map((_, i) => <KpiSkeleton key={i} />) : <>
           <ReportKpiCard label="Total deals" value={kpis.totalDeals ?? 0} icon={Briefcase} />
-          <ReportKpiCard label="Open deals" value={kpis.openDeals ?? 0} icon={TrendingUp} iconBg="bg-blue-50" iconColor="text-blue-600" />
-          <ReportKpiCard label="Pipeline value" value={fmtMoney(kpis.pipelineValue)} icon={DollarSign} iconBg="bg-emerald-50" iconColor="text-emerald-600" />
-          <ReportKpiCard label="Won value" value={fmtMoney(kpis.wonValue)} icon={Trophy} iconBg="bg-yellow-50" iconColor="text-yellow-600" />
-          <ReportKpiCard label="Win rate" value={`${kpis.winRate ?? 0}%`} icon={Percent} iconBg="bg-purple-50" iconColor="text-purple-600" />
-          <ReportKpiCard label="Payments received" value={fmtMoney(kpis.paymentsReceived)} icon={BadgeDollarSign} iconBg="bg-green-50" iconColor="text-green-600" />
+          <ReportKpiCard label="Open deals" value={kpis.openDeals ?? 0} icon={TrendingUp} />
+          <ReportKpiCard label="Pipeline value" value={fmtMoney(kpis.pipelineValue)} icon={DollarSign} />
+          <ReportKpiCard label="Won value" value={fmtMoney(kpis.wonValue)} icon={Trophy} iconBg="bg-emerald-50" iconColor="text-emerald-600" />
+          <ReportKpiCard label="Win rate" value={`${kpis.winRate ?? 0}%`} icon={Percent} />
+          <ReportKpiCard label="Payments received" value={fmtMoney(kpis.paymentsReceived)} icon={BadgeDollarSign} iconBg="bg-emerald-50" iconColor="text-emerald-600" />
           <ReportKpiCard label="Payments pending" value={fmtMoney(kpis.paymentsPending)} icon={BadgeDollarSign} iconBg="bg-amber-50" iconColor="text-amber-600" />
         </>}
       </ReportKpiGrid>
@@ -52,9 +52,9 @@ export function DealsTab({ queryParams }) {
       <ReportChartGrid>
         <DashboardChartCard title="Deals by stage">
           {isLoading ? <ChartSkeleton /> : (
-            <ResponsiveContainer width="100%" height={260}>
+            <ResponsiveContainer width="100%" height={200}>
               <PieChart>
-                <Pie data={charts.stageDist || []} dataKey="count" nameKey="name" cx="50%" cy="50%" innerRadius={65} outerRadius={100} paddingAngle={2}>
+                <Pie data={charts.stageDist || []} dataKey="count" nameKey="name" cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={2}>
                   {(charts.stageDist || []).map((_, i) => <Cell key={i} fill={SLICES[i % SLICES.length]} />)}
                 </Pie>
                 <Tooltip />
@@ -65,13 +65,13 @@ export function DealsTab({ queryParams }) {
         </DashboardChartCard>
         <DashboardChartCard title="Deals created — monthly trend">
           {isLoading ? <ChartSkeleton /> : (
-            <ResponsiveContainer width="100%" height={260}>
+            <ResponsiveContainer width="100%" height={200}>
               <LineChart data={charts.monthlyTrend || []}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="month" tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip />
-                <Line type="monotone" dataKey="created" stroke="#6366f1" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="created" stroke={CHART_COLORS.primary} strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           )}
@@ -79,11 +79,31 @@ export function DealsTab({ queryParams }) {
       </ReportChartGrid>
 
       <ReportTableSection title="Deals won in period" subtitle="Closed/won within selected date range">
-        <ReportTable columns={dealCols} rows={tables.wonInPeriod || []} isLoading={isLoading} maxH="max-h-[400px]" />
+        <DataGrid
+          columns={dealCols}
+          data={tables.wonInPeriod || []}
+          loading={isLoading}
+          showColumnToggle={false}
+          showExportCsv={false}
+          autoHeight={false}
+          maxHeightClass="max-h-[400px]"
+          className="rounded-none border-0 shadow-none"
+          emptyTitle="No deals won in this period"
+        />
       </ReportTableSection>
 
       <ReportTableSection title="Deals created in period" subtitle="New deals added in date range">
-        <ReportTable columns={createdCols} rows={tables.createdInPeriod || []} isLoading={isLoading} maxH="max-h-[400px]" />
+        <DataGrid
+          columns={createdCols}
+          data={tables.createdInPeriod || []}
+          loading={isLoading}
+          showColumnToggle={false}
+          showExportCsv={false}
+          autoHeight={false}
+          maxHeightClass="max-h-[400px]"
+          className="rounded-none border-0 shadow-none"
+          emptyTitle="No deals created in this period"
+        />
       </ReportTableSection>
     </div>
   )

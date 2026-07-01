@@ -1,5 +1,7 @@
+import { useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, RefreshCw } from 'lucide-react'
+import { Button } from '@/components/ui/Button'
 import { PageShell } from '@/components/layout/PageShell'
 import { PageStack } from '@/components/layout/PageStack'
 import { PageContentPanel } from '@/components/layout/PageContentPanel'
@@ -24,6 +26,8 @@ import { ReportFilterBar } from '@/features/analytics/ReportFilterBar'
 import { ReportExportMenu } from '@/features/analytics/ReportExportMenu'
 import { getReportMeta } from '@/features/analytics/reportTypes'
 import { useTeamUsersQuery } from '@/features/team/teamApi'
+import { useGetLeadFormMetaQuery } from '@/features/leads/leadsApi'
+import { STATUS_OPTIONS as LEAD_STATUS_OPTIONS, SOURCE_LABELS as LEAD_SOURCE_LABELS } from '@/features/leads/constants'
 import { exportReportPdf } from '@/features/analytics/exportPdf'
 import {
   exportOverview, exportLeads, exportDeals, exportActivities,
@@ -38,6 +42,12 @@ import {
   useGetPaymentsReportQuery, useGetLeaveReportQuery, useGetEmployeeMonthlyReportQuery,
   useGetDataHealthReportQuery,
 } from '@/features/analytics/analyticsApi'
+
+const LEAVE_STATUS_OPTIONS = ['pending', 'approved', 'rejected', 'cancelled']
+
+function capitalize(s) {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s
+}
 
 const TAB_MAP = {
   overview: OverviewTab,
@@ -69,21 +79,68 @@ export function ReportDetailPage() {
   const { data: teamData } = useTeamUsersQuery()
   const teamUsers = Array.isArray(teamData?.data?.items) ? teamData.data.items : []
 
-  const { data: leadsData } = useGetLeadsReportQuery(filters.queryParams)
-  const { data: dealsData } = useGetDealsReportQuery(filters.queryParams)
-  const { data: actData } = useGetActivitiesReportQuery(filters.queryParams)
-  const { data: meetingsData } = useGetMeetingsReportQuery(filters.queryParams)
-  const { data: tasksData } = useGetTasksReportQuery(filters.queryParams)
-  const { data: teamReportData } = useGetTeamReportQuery(filters.queryParams)
-  const { data: oppsData } = useGetOpportunitiesReportQuery(filters.queryParams)
-  const { data: followupsData } = useGetFollowupsReportQuery(filters.queryParams)
-  const { data: salesDocsData } = useGetSalesDocsReportQuery(filters.queryParams)
-  const { data: paymentsData } = useGetPaymentsReportQuery(filters.queryParams)
-  const { data: leaveData } = useGetLeaveReportQuery(filters.queryParams)
-  const { data: empMonthlyData } = useGetEmployeeMonthlyReportQuery(filters.queryParams)
-  const { data: dataHealthData } = useGetDataHealthReportQuery(filters.queryParams)
+  const { data: formMetaData } = useGetLeadFormMetaQuery()
+  const dealStatuses = useMemo(() => formMetaData?.data?.dealStatuses || [], [formMetaData])
+  const opportunityStatuses = useMemo(() => formMetaData?.data?.opportunityStatuses || [], [formMetaData])
+
+  const stageOptions = useMemo(() => {
+    // Deal.stage stores the stage name directly; Lead.opportunityStatus is a FK id.
+    if (type === 'deals') {
+      const source = dealStatuses.length ? dealStatuses : opportunityStatuses
+      return source.map((s) => s.name).filter(Boolean).map((name) => ({ value: name, label: name }))
+    }
+    if (type === 'opportunities') {
+      return opportunityStatuses.filter((s) => s.id && s.name).map((s) => ({ value: s.id, label: s.name }))
+    }
+    return []
+  }, [type, dealStatuses, opportunityStatuses])
+
+  const statusOptions = useMemo(() => {
+    if (type === 'leads' || type === 'opportunities') {
+      return LEAD_STATUS_OPTIONS.map((s) => ({ value: s, label: capitalize(s) }))
+    }
+    if (type === 'leave') {
+      return LEAVE_STATUS_OPTIONS.map((s) => ({ value: s, label: capitalize(s) }))
+    }
+    return []
+  }, [type])
+
+  const sourceOptions = useMemo(() => {
+    if (type !== 'leads') return []
+    return Object.entries(LEAD_SOURCE_LABELS).map(([value, label]) => ({ value, label }))
+  }, [type])
+
+  const { data: leadsData, refetch: refetchLeads } = useGetLeadsReportQuery(filters.queryParams)
+  const { data: dealsData, refetch: refetchDeals } = useGetDealsReportQuery(filters.queryParams)
+  const { data: actData, refetch: refetchAct } = useGetActivitiesReportQuery(filters.queryParams)
+  const { data: meetingsData, refetch: refetchMeetings } = useGetMeetingsReportQuery(filters.queryParams)
+  const { data: tasksData, refetch: refetchTasks } = useGetTasksReportQuery(filters.queryParams)
+  const { data: teamReportData, refetch: refetchTeam } = useGetTeamReportQuery(filters.queryParams)
+  const { data: oppsData, refetch: refetchOpps } = useGetOpportunitiesReportQuery(filters.queryParams)
+  const { data: followupsData, refetch: refetchFollowups } = useGetFollowupsReportQuery(filters.queryParams)
+  const { data: salesDocsData, refetch: refetchSalesDocs } = useGetSalesDocsReportQuery(filters.queryParams)
+  const { data: paymentsData, refetch: refetchPayments } = useGetPaymentsReportQuery(filters.queryParams)
+  const { data: leaveData, refetch: refetchLeave } = useGetLeaveReportQuery(filters.queryParams)
+  const { data: empMonthlyData, refetch: refetchEmpMonthly } = useGetEmployeeMonthlyReportQuery(filters.queryParams)
+  const { data: dataHealthData, refetch: refetchDataHealth } = useGetDataHealthReportQuery(filters.queryParams)
 
   const TabComponent = TAB_MAP[type]
+
+  const DATA_BY_TYPE = {
+    overview: leadsData, leads: leadsData, deals: dealsData, activities: actData,
+    meetings: meetingsData, tasks: tasksData, team: teamReportData, opportunities: oppsData,
+    followups: followupsData, 'sales-docs': salesDocsData, payments: paymentsData,
+    leave: leaveData, 'employee-monthly': empMonthlyData, 'data-health': dataHealthData,
+  }
+  const REFETCH_BY_TYPE = {
+    overview: refetchLeads, leads: refetchLeads, deals: refetchDeals, activities: refetchAct,
+    meetings: refetchMeetings, tasks: refetchTasks, team: refetchTeam, opportunities: refetchOpps,
+    followups: refetchFollowups, 'sales-docs': refetchSalesDocs, payments: refetchPayments,
+    leave: refetchLeave, 'employee-monthly': refetchEmpMonthly, 'data-health': refetchDataHealth,
+  }
+  const hasData = Boolean(DATA_BY_TYPE[type]?.data)
+  const handleRefresh = () => REFETCH_BY_TYPE[type]?.()
+  const handlePrint = () => window.print()
 
   const EXPORTABLE = new Set([
     'overview', 'leads', 'deals', 'activities', 'meetings', 'tasks', 'team',
@@ -114,18 +171,20 @@ export function ReportDetailPage() {
 
   return (
     <PageShell fullWidth>
-      <PageStack>
-        <PageContentPanel>
-          <div className="flex flex-wrap items-center gap-3">
-            <button
+      <PageStack className="gap-2">
+        <PageContentPanel className="no-print border-[#F7F5FB] !p-2.5 sm:!p-3">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <Button
               type="button"
+              variant="icon"
+              className="border border-[#F7F5FB]"
               onClick={() => navigate('/reports')}
-              className="flex h-10 w-10 items-center justify-center rounded-xl border border-surface-border text-ink-muted hover:bg-surface-subtle"
+              aria-label="Back to reports"
             >
               <ArrowLeft className="h-4 w-4" />
-            </button>
-            <div className={`flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br ${meta.iconGrad}`}>
-              <Icon className="h-5 w-5 text-white" />
+            </Button>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-50">
+              <Icon className="h-4 w-4 text-brand-600" />
             </div>
             <div className="min-w-0 flex-1">
               <p className="font-semibold text-ink">{meta.label}</p>
@@ -135,18 +194,35 @@ export function ReportDetailPage() {
         </PageContentPanel>
 
         <ReportFilterBar
+          className="no-print"
           filters={filters}
           meta={meta}
           teamUsers={teamUsers}
+          statusOptions={statusOptions}
+          stageOptions={stageOptions}
+          sourceOptions={sourceOptions}
           exportSlot={(
-            <ReportExportMenu
-              onExportXlsx={EXPORTABLE.has(type) ? handleExportXlsx : undefined}
-              onExportPdf={handleExportPdf}
-            />
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="icon"
+                className="border border-[#F7F5FB]"
+                onClick={handleRefresh}
+                aria-label="Refresh report data"
+              >
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+              <ReportExportMenu
+                onExportXlsx={EXPORTABLE.has(type) ? handleExportXlsx : undefined}
+                onExportPdf={handleExportPdf}
+                onPrint={handlePrint}
+                disabled={!hasData}
+              />
+            </div>
           )}
         />
 
-        <PageContentPanel>
+        <PageContentPanel className="border-[#F7F5FB] !p-2.5 sm:!p-3">
           {TabComponent ? (
             <TabComponent queryParams={filters.queryParams} from={filters.from} to={filters.to} />
           ) : (

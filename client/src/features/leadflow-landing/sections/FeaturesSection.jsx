@@ -1,20 +1,20 @@
 import { useRef } from 'react'
 import {
-  Buildings,
+  Building2,
   Calendar,
-  ChartSquare,
-  DocumentText,
-  Flash,
-  Kanban,
-  People,
-  ReceiptItem,
-  Routing,
+  BarChart2,
+  FileText,
+  Zap,
+  LayoutDashboard,
+  Users,
+  Receipt,
+  GitBranch,
   Shuffle,
-  Sms,
-  Speaker,
-  TaskSquare,
-  Timer1,
-} from 'iconsax-react'
+  Mail,
+  Megaphone,
+  CheckSquare,
+  Timer,
+} from 'lucide-react'
 import { use3DTilt } from '@/features/leadflow-landing/hooks/use3DTilt'
 import { useAnimeReveal } from '@/features/leadflow-landing/hooks/useAnimeReveal'
 import { Section } from '@/features/leadflow-landing/components/Section'
@@ -25,7 +25,7 @@ const FEATURES = [
   {
     title: 'Leads',
     summary: 'Full lifecycle from raw prospect to qualified opportunity — every touchpoint tracked',
-    icon: People,
+    icon: Users,
     tag: 'Core',
     span: 'lg:col-span-2',
     iconColor: 'text-violet-600',
@@ -46,7 +46,7 @@ const FEATURES = [
   {
     title: 'Pipeline',
     summary: 'Deals by pipeline status — list and board views with stage-by-stage revenue totals',
-    icon: Kanban,
+    icon: LayoutDashboard,
     span: '',
     iconColor: 'text-blue-600',
     iconBg: 'bg-blue-100',
@@ -56,7 +56,7 @@ const FEATURES = [
   {
     title: 'Deals & Payments',
     summary: 'Pipeline stages from Qualification to Won — with deal payment tracking built in',
-    icon: ReceiptItem,
+    icon: Receipt,
     tag: 'Sales',
     span: 'lg:col-span-2',
     iconColor: 'text-emerald-600',
@@ -67,7 +67,7 @@ const FEATURES = [
   {
     title: 'Email Inbox',
     summary: 'Send, receive, and track emails without leaving the CRM — full inbox inside the app',
-    icon: Sms,
+    icon: Mail,
     tag: 'Engage',
     span: 'lg:col-span-2',
     iconColor: 'text-cyan-600',
@@ -78,7 +78,7 @@ const FEATURES = [
   {
     title: 'Tasks & Calendar',
     summary: 'Follow-up tasks with list and calendar views — all linked to leads with due dates',
-    icon: TaskSquare,
+    icon: CheckSquare,
     span: '',
     iconColor: 'text-amber-600',
     iconBg: 'bg-amber-100',
@@ -98,7 +98,7 @@ const FEATURES = [
   {
     title: 'Automation',
     summary: 'No-code workflow rules — trigger email, tasks, or assignment automatically on events',
-    icon: Flash,
+    icon: Zap,
     tag: 'AI',
     span: '',
     iconColor: 'text-purple-600',
@@ -109,7 +109,7 @@ const FEATURES = [
   {
     title: 'Campaigns',
     summary: 'Coordinate multi-step outreach — assign leads to campaigns and track every stage',
-    icon: Speaker,
+    icon: Megaphone,
     span: '',
     iconColor: 'text-orange-600',
     iconBg: 'bg-orange-100',
@@ -119,7 +119,7 @@ const FEATURES = [
   {
     title: 'Quotations & Invoices',
     summary: 'Structured quotes and tax-ready invoices with PDF export — linked to deals',
-    icon: Timer1,
+    icon: Timer,
     tag: 'Finance',
     span: 'lg:col-span-2',
     iconColor: 'text-teal-600',
@@ -130,7 +130,7 @@ const FEATURES = [
   {
     title: 'Reports & Analytics',
     summary: 'Admin analytics across leads, deals, tasks, payments, leave, and team activity',
-    icon: ChartSquare,
+    icon: BarChart2,
     span: '',
     iconColor: 'text-indigo-600',
     iconBg: 'bg-indigo-100',
@@ -140,7 +140,7 @@ const FEATURES = [
   {
     title: 'HR & Attendance',
     summary: 'Check-in/out, leave requests, approval queue, and HR reports — same workspace',
-    icon: Buildings,
+    icon: Building2,
     tag: 'HR',
     span: '',
     iconColor: 'text-pink-600',
@@ -151,7 +151,7 @@ const FEATURES = [
   {
     title: 'Documents',
     summary: 'Central file store for contracts, presentations, and NDAs — linked to leads or deals',
-    icon: DocumentText,
+    icon: FileText,
     span: 'lg:col-span-2',
     iconColor: 'text-slate-600',
     iconBg: 'bg-slate-100',
@@ -213,7 +213,7 @@ function FeatureCard({ item }) {
               boxShadow: `0 4px 16px rgba(${r},0.20)`,
             }}
           >
-            <Icon size={22} variant="Bulk" className={item.iconColor} aria-hidden />
+            <Icon size={22} className={item.iconColor} aria-hidden />
           </span>
 
           {item.tag && (

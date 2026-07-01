@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowDownWideNarrow, ArrowUpNarrowWide, Phone, Search } from 'lucide-react'
+import { ArrowDownWideNarrow, ArrowUpNarrowWide, Phone, Plus, Search } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
 import { CreateMeetingModal } from '@/features/meetings/components/CreateMeetingModal'
 import { MeetingsListPanel } from '@/features/meetings/components/MeetingsListPanel'
@@ -39,6 +39,7 @@ export function MeetingsPage() {
   const [dateTo, setDateTo] = useState('')
   const [sortOrder, setSortOrder] = useState('asc')
   const [editMeeting, setEditMeeting] = useState(null)
+  const [creatingMeeting, setCreatingMeeting] = useState(false)
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchInput.trim()), 350)
@@ -72,28 +73,38 @@ export function MeetingsPage() {
     <PageShell fullWidth flush mainClassName="bg-white p-6">
       <div className="w-full min-h-full">
         <div className="w-full space-y-3 border-b border-gray-100 pb-3">
-          <div className="flex flex-wrap items-center gap-2">
-            {CHANNEL_TABS.map(({ id, label, Logo, logoClass }) => {
-              const active = channel === id
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setChannel(id)}
-                  className={cn(
-                    'inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition',
-                    active
-                      ? id === 'video'
-                        ? 'border-brand-300 bg-brand-50 text-indigo-900'
-                        : 'border-emerald-300 bg-emerald-50 text-emerald-900'
-                      : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50',
-                  )}
-                >
-                  <Logo className={logoClass} aria-hidden />
-                  {label}
-                </button>
-              )
-            })}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {CHANNEL_TABS.map(({ id, label, Logo, logoClass }) => {
+                const active = channel === id
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setChannel(id)}
+                    className={cn(
+                      'inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition',
+                      active
+                        ? id === 'video'
+                          ? 'border-brand-300 bg-brand-50 text-indigo-900'
+                          : 'border-emerald-300 bg-emerald-50 text-emerald-900'
+                        : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50',
+                    )}
+                  >
+                    <Logo className={logoClass} aria-hidden />
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
+            <button
+              type="button"
+              onClick={() => setCreatingMeeting(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand-primary)] px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--brand-primary-dark)]"
+            >
+              <Plus className="h-4 w-4" aria-hidden />
+              New meeting
+            </button>
           </div>
 
           <div className="flex flex-col gap-2 border-t border-gray-100 bg-white pt-3 sm:flex-row sm:flex-wrap sm:items-end">
@@ -160,9 +171,12 @@ export function MeetingsPage() {
       </div>
 
       <CreateMeetingModal
-        open={!!editMeeting}
+        open={!!editMeeting || creatingMeeting}
         initialData={editMeeting}
-        onClose={() => setEditMeeting(null)}
+        onClose={() => {
+          setEditMeeting(null)
+          setCreatingMeeting(false)
+        }}
         users={users}
         leadId={editMeeting?.leadId}
       />

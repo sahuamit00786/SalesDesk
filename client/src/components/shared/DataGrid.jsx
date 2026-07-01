@@ -147,6 +147,7 @@ function SelectAllCheckbox({ table }) {
  * @param {boolean} [striped=false]
  * @param {boolean} [compact=false]
  * @param {React.ReactNode} [toolbarRight]
+ * @param {React.ReactNode} [toolbarLeft]
  * @param {string} [csvFilename='export.csv']
  */
 export function DataGrid({
@@ -175,6 +176,7 @@ export function DataGrid({
   compact = false,
   density,
   toolbarRight,
+  toolbarLeft,
   csvFilename = 'export.csv',
   gridColumns: _gridColumns,
   hideFooter = false,
@@ -369,7 +371,7 @@ export function DataGrid({
   const from = filteredCount ? pageIndex * pageSize + 1 : 0
   const to = Math.min((pageIndex + 1) * pageSize, filteredCount)
 
-  const showToolbar = searchable || showColumnToggle || showExportCsv || toolbarRight
+  const showToolbar = searchable || showColumnToggle || showExportCsv || toolbarRight || toolbarLeft
   const hasRows = data.length > 0
   const noResults = hasRows && filteredCount === 0
   const isCompact = compact || density === 'compact'
@@ -416,7 +418,11 @@ export function DataGrid({
       )}
     >
       {showToolbar ? (
-        <div className="flex flex-wrap items-center justify-end gap-2 border-b border-brand-100 bg-brand-50/30 px-4 py-3">
+        <div className="flex flex-wrap items-center gap-2 border-b border-brand-100 bg-brand-50/30 px-4 py-3">
+          {toolbarLeft ? (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">{toolbarLeft}</div>
+          ) : null}
+          <div className="flex flex-wrap items-center justify-end gap-2 ml-auto">
             {toolbarRight}
             {showColumnToggle ? (
               <div className="relative" ref={columnMenuRef}>
@@ -508,6 +514,7 @@ export function DataGrid({
                 </div>
               </div>
             ) : null}
+          </div>
         </div>
       ) : null}
 

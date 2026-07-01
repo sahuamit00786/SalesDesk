@@ -84,7 +84,7 @@ export function LeaveConfigPage() {
   const [editForm, setEditForm] = useState({})
   const [lateHour, setLateHour] = useState(10)
   const [lateMinute, setLateMinute] = useState(0)
-  const [adjust, setAdjust] = useState({ userId: '', leaveTypeId: '', allocated: 12 })
+  const [adjust, setAdjust] = useState({ userId: '', leaveTypeId: '', allocated: 12, reason: '' })
   const [deleteTarget, setDeleteTarget] = useState(null)
 
   useEffect(() => {
@@ -188,6 +188,7 @@ export function LeaveConfigPage() {
         leaveTypeId: adjust.leaveTypeId,
         year,
         allocated: Number(adjust.allocated),
+        reason: adjust.reason.trim() || undefined,
       }).unwrap()
       toast.success('Balance updated')
     } catch (err) {
@@ -456,6 +457,14 @@ export function LeaveConfigPage() {
                       />
                     </FormField>
                   </div>
+                  <FormField label="Reason (optional)" htmlFor="balance-reason">
+                    <Input
+                      id="balance-reason"
+                      placeholder="e.g. Annual policy update, correction"
+                      value={adjust.reason}
+                      onChange={(e) => setAdjust((a) => ({ ...a, reason: e.target.value }))}
+                    />
+                  </FormField>
                   <div className="flex justify-end border-t border-surface-border/70 pt-4">
                     <Button type="submit" disabled={savingBalance}>
                       {savingBalance ? 'Saving…' : 'Save balance'}

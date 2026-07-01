@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Download, Layers, Plus, ChevronDown } from "lucide-react";
 import toast from "react-hot-toast";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { PageShell } from "@/components/layout/PageShell";
 import { PageStack } from "@/components/layout/PageStack";
 import { PageContentPanel } from "@/components/layout/PageContentPanel";
@@ -91,10 +91,38 @@ function downloadJsonAsCsv(name, rows) {
   URL.revokeObjectURL(url);
 }
 
+/** Convert filter object to URL search params */
+function filtersToParams(filters) {
+  const params = {}
+  if (filters.search) params.search = filters.search
+  if (filters.status?.length) params.status = filters.status.join(',')
+  if (filters.assignedTo?.length) params.assignedTo = filters.assignedTo.join(',')
+  if (filters.source?.length) params.source = filters.source.join(',')
+  if (filters.workspaceId) params.workspaceId = filters.workspaceId
+  return params
+}
+
+/** Convert URL search params to filter delta object */
+function paramsToFilters(searchParams) {
+  const filters = {}
+  const search = searchParams.get('search')
+  const status = searchParams.get('status')
+  const assignedTo = searchParams.get('assignedTo')
+  const source = searchParams.get('source')
+  const workspaceId = searchParams.get('workspaceId')
+  if (search) filters.search = search
+  if (status) filters.status = status.split(',').filter(Boolean)
+  if (assignedTo) filters.assignedTo = assignedTo.split(',').filter(Boolean)
+  if (source) filters.source = source.split(',').filter(Boolean)
+  if (workspaceId) filters.workspaceId = workspaceId
+  return filters
+}
+
 /** @param {{ variant?: 'leads' | 'opportunities' }} props */
 export function LeadsListPage({ variant = "leads" }) {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const isOpportunities = variant === "opportunities";
   const listPath = isOpportunities ? "/opportunities" : "/leads";
   const filters = useSelector(selectLeadFilters);
@@ -169,6 +197,12 @@ export function LeadsListPage({ variant = "leads" }) {
   useEffect(() => {
     dispatch(resetListSession());
     setFilterOpen(false);
+    // Hydrate filters from URL on mount
+    const fromUrl = paramsToFilters(searchParams)
+    if (Object.keys(fromUrl).length > 0) {
+      dispatch(setFilters(fromUrl))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch, listPath]);
 
   useEffect(() => {
@@ -373,8 +407,14 @@ export function LeadsListPage({ variant = "leads" }) {
               users={users}
               stageOptions={stageOptions}
               isOpportunities={isOpportunities}
-              onChange={(delta) => dispatch(setFilters(delta))}
-              onReset={() => dispatch(resetFilters())}
+              onChange={(delta) => {
+                dispatch(setFilters(delta))
+                setSearchParams(filtersToParams({ ...filters, ...delta }))
+              }}
+              onReset={() => {
+                dispatch(resetFilters())
+                setSearchParams({})
+              }}
               onDraftApply={(tree) => dispatch(setFilters({ filterTree: tree }))}
             />
           }
@@ -435,10 +475,12 @@ export function LeadsListPage({ variant = "leads" }) {
                   value={filters.status?.length === 1 ? filters.status[0] : ""}
                   onChange={(e) => {
                     const val = e.target.value;
-                    dispatch(setFilters({
+                    const delta = {
                       status: val ? [val] : [],
                       filterTree: upsertTreeRule(filters.filterTree, 'status', 'is_any_of', val),
-                    }));
+                    }
+                    dispatch(setFilters(delta));
+                    setSearchParams(filtersToParams({ ...filters, ...delta }))
                     dispatch(setPagination({ page: 1 }));
                   }}
                   className="h-9 appearance-none rounded-xl border border-surface-border bg-white pl-3 pr-8 text-xs font-medium text-ink outline-none focus:border-brand-400"
@@ -457,10 +499,12 @@ export function LeadsListPage({ variant = "leads" }) {
                   value={filters.assignedTo?.length === 1 ? filters.assignedTo[0] : ""}
                   onChange={(e) => {
                     const val = e.target.value;
-                    dispatch(setFilters({
+                    const delta = {
                       assignedTo: val ? [val] : [],
                       filterTree: upsertTreeRule(filters.filterTree, 'assignedTo', 'is', val),
-                    }));
+                    }
+                    dispatch(setFilters(delta));
+                    setSearchParams(filtersToParams({ ...filters, ...delta }))
                     dispatch(setPagination({ page: 1 }));
                   }}
                   className="h-9 w-36 appearance-none rounded-xl border border-surface-border bg-white pl-3 pr-8 text-xs font-medium text-ink outline-none focus:border-brand-400"

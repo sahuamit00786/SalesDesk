@@ -35,7 +35,7 @@ import { useTeamUsersQuery } from '@/features/team/teamApi'
 import { useGetTasksQuery } from '@/features/tasks/tasksApi'
 import { cn } from '@/utils/cn'
 
-const ACCENT = '#7c3aed'
+const ACCENT = 'var(--brand-primary, #5B21B6)'
 
 const VIEWS = [
   { id: 'list', label: 'List', icon: List },

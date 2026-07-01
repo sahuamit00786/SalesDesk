@@ -5,17 +5,18 @@ import {
 } from 'recharts'
 import { DashboardChartCard } from '@/features/dashboard/components/DashboardChartCard'
 import { CHART_COLORS } from '@/features/dashboard/dummyDashboardData'
+import { DataGrid } from '@/components/shared/DataGrid'
 import { ReportKpiCard } from './ReportKpiCard'
-import { ReportTable } from './ReportTable'
 import { ChartSkeleton, KpiSkeleton } from './ChartSkeleton'
 import { useGetTasksReportQuery } from '@/features/analytics/analyticsApi'
 import { ASSIGNEE_WORKLOAD_COLS, TASK_DETAIL_COLS } from '@/features/analytics/reportColumns'
+import { ReportTableSection } from '@/features/analytics/ReportLayout'
 
 const SLICES = CHART_COLORS.slices
 
 const OVERDUE_COLS = [
   ...TASK_DETAIL_COLS,
-  { key: 'daysOverdue', label: 'Days overdue', render: (v) => <span className="font-semibold text-rose-600">{v ?? 0}</span> },
+  { field: 'daysOverdue', headerName: 'Days overdue', renderCell: ({ value }) => <span className="font-semibold text-rose-600">{value ?? 0}</span> },
 ]
 
 export function TasksTab({ queryParams, from, to }) {
@@ -27,7 +28,7 @@ export function TasksTab({ queryParams, from, to }) {
   const tables = d?.tables || {}
 
   return (
-    <div id="report-export-root" className="space-y-6">
+    <div id="report-export-root" className="space-y-4">
       <div className="flex flex-wrap gap-3">
         <p className="flex-1 rounded-xl border border-surface-border bg-surface-subtle/60 px-4 py-2 text-sm text-ink-muted">
           Open/overdue counts = <span className="font-semibold text-ink">current state</span>. Created/completed = selected period.
@@ -41,21 +42,21 @@ export function TasksTab({ queryParams, from, to }) {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
         {isLoading ? Array.from({ length: 8 }).map((_, i) => <KpiSkeleton key={i} />) : <>
           <ReportKpiCard label="Created (period)" value={kpis.total ?? 0} icon={CheckSquare} />
-          <ReportKpiCard label="Open now" value={kpis.openTotal ?? 0} icon={ListTodo} iconBg="bg-blue-50" iconColor="text-blue-600" />
+          <ReportKpiCard label="Open now" value={kpis.openTotal ?? 0} icon={ListTodo} />
           <ReportKpiCard label="Completed" value={kpis.completed ?? 0} icon={CheckSquare} iconBg="bg-emerald-50" iconColor="text-emerald-600" />
           <ReportKpiCard label="Overdue" value={kpis.overdue ?? 0} icon={AlertTriangle} iconBg="bg-rose-50" iconColor="text-rose-600" />
           <ReportKpiCard label="Due today" value={kpis.dueToday ?? 0} icon={CalendarClock} iconBg="bg-amber-50" iconColor="text-amber-600" />
-          <ReportKpiCard label="Unassigned open" value={kpis.unassignedOpen ?? 0} icon={UserX} iconBg="bg-slate-50" iconColor="text-slate-600" />
-          <ReportKpiCard label="Completion rate" value={`${kpis.completionRate ?? 0}%`} icon={Percent} iconBg="bg-purple-50" iconColor="text-purple-600" />
+          <ReportKpiCard label="Unassigned open" value={kpis.unassignedOpen ?? 0} icon={UserX} />
+          <ReportKpiCard label="Completion rate" value={`${kpis.completionRate ?? 0}%`} icon={Percent} />
         </>}
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <DashboardChartCard title="Task status breakdown" subtitle="Open / in-progress / completed / overdue distribution">
           {isLoading ? <ChartSkeleton /> : (
-            <ResponsiveContainer width="100%" height={260}>
+            <ResponsiveContainer width="100%" height={200}>
               <PieChart>
-                <Pie data={charts.statusDist || []} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={65} outerRadius={100} paddingAngle={2}>
+                <Pie data={charts.statusDist || []} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={2}>
                   {(charts.statusDist || []).map((_, i) => <Cell key={i} fill={SLICES[i % SLICES.length]} />)}
                 </Pie>
                 <Tooltip formatter={(v) => [v, 'Tasks']} />
@@ -67,7 +68,7 @@ export function TasksTab({ queryParams, from, to }) {
 
         <DashboardChartCard title="Tasks by priority" subtitle="High / medium / low / none — completed vs pending">
           {isLoading ? <ChartSkeleton /> : (
-            <ResponsiveContainer width="100%" height={260}>
+            <ResponsiveContainer width="100%" height={200}>
               <BarChart data={charts.priorityDist || []} margin={{ bottom: 10 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="name" tick={{ fontSize: 11 }} />
@@ -99,7 +100,7 @@ export function TasksTab({ queryParams, from, to }) {
 
         <DashboardChartCard title="Tasks by assignee" subtitle="Who has the most tasks in the period?">
           {isLoading ? <ChartSkeleton /> : (
-            <ResponsiveContainer width="100%" height={260}>
+            <ResponsiveContainer width="100%" height={200}>
               <BarChart data={charts.byAssignee || []} layout="vertical" margin={{ left: 10, right: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
                 <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
@@ -113,7 +114,7 @@ export function TasksTab({ queryParams, from, to }) {
 
         <DashboardChartCard title="Overdue by assignee" subtitle="Who has the most overdue tasks right now?">
           {isLoading ? <ChartSkeleton /> : (
-            <ResponsiveContainer width="100%" height={260}>
+            <ResponsiveContainer width="100%" height={200}>
               <BarChart data={charts.byAssigneeOpen || []} layout="vertical" margin={{ left: 10, right: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
                 <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
@@ -127,17 +128,47 @@ export function TasksTab({ queryParams, from, to }) {
         </DashboardChartCard>
       </div>
 
-      <DashboardChartCard title="Team workload" subtitle="Full breakdown per assignee — open, overdue, period activity">
-        <ReportTable columns={ASSIGNEE_WORKLOAD_COLS} rows={tables.assigneeWorkload || []} loading={isLoading} emptyText="No task assignments" maxHeightClass="max-h-[320px]" />
-      </DashboardChartCard>
+      <ReportTableSection title="Team workload" subtitle="Full breakdown per assignee — open, overdue, period activity">
+        <DataGrid
+          columns={ASSIGNEE_WORKLOAD_COLS}
+          data={tables.assigneeWorkload || []}
+          loading={isLoading}
+          showColumnToggle={false}
+          showExportCsv={false}
+          autoHeight={false}
+          maxHeightClass="max-h-[340px]"
+          className="rounded-none border-0 shadow-none"
+          emptyTitle="No task assignments"
+        />
+      </ReportTableSection>
 
-      <DashboardChartCard title="Overdue tasks" subtitle="All tasks past their due date">
-        <ReportTable columns={OVERDUE_COLS} rows={tables.overdue || []} loading={isLoading} emptyText="No overdue tasks — great!" maxHeightClass="max-h-[400px]" />
-      </DashboardChartCard>
+      <ReportTableSection title="Overdue tasks" subtitle="All tasks past their due date">
+        <DataGrid
+          columns={OVERDUE_COLS}
+          data={tables.overdue || []}
+          loading={isLoading}
+          showColumnToggle={false}
+          showExportCsv={false}
+          autoHeight={false}
+          maxHeightClass="max-h-[420px]"
+          className="rounded-none border-0 shadow-none"
+          emptyTitle="No overdue tasks — great!"
+        />
+      </ReportTableSection>
 
-      <DashboardChartCard title="All open tasks" subtitle="Current open task list">
-        <ReportTable columns={TASK_DETAIL_COLS} rows={tables.openTasks || []} loading={isLoading} emptyText="No open tasks" maxHeightClass="max-h-[400px]" />
-      </DashboardChartCard>
+      <ReportTableSection title="All open tasks" subtitle="Current open task list">
+        <DataGrid
+          columns={TASK_DETAIL_COLS}
+          data={tables.openTasks || []}
+          loading={isLoading}
+          showColumnToggle={false}
+          showExportCsv={false}
+          autoHeight={false}
+          maxHeightClass="max-h-[420px]"
+          className="rounded-none border-0 shadow-none"
+          emptyTitle="No open tasks"
+        />
+      </ReportTableSection>
     </div>
   )
 }

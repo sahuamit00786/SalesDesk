@@ -24,6 +24,12 @@ export const Deal = sequelize.define(
     assignedTo: { type: DataTypes.UUID, allowNull: true, field: 'assigned_to' },
     ownerUserId: { type: DataTypes.UUID, allowNull: true, field: 'owner_user_id' },
     isDeleted: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false, field: 'is_deleted' },
+    forecastCategory: {
+      type: DataTypes.ENUM('pipeline', 'best_case', 'committed', 'closed_won', 'omitted'),
+      allowNull: true,
+      defaultValue: null,
+      field: 'forecast_category',
+    },
   },
   {
     tableName: 'deals',

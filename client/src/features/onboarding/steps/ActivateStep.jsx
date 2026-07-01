@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { Sms, TickCircle, UserAdd } from 'iconsax-react'
+import { Mail, CheckCircle, UserPlus } from 'lucide-react'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Button } from '@/components/ui/Button'
@@ -100,7 +100,7 @@ export function ActivateStep({ user, onGoogleConnected }) {
       />
 
       <div className="grid gap-10 lg:grid-cols-2 lg:gap-12">
-        <OnboardingFieldSection title="Invite a teammate" icon={UserAdd}>
+        <OnboardingFieldSection title="Invite a teammate" icon={UserPlus}>
           <p className="-mt-2 text-sm text-ink-muted">
             Send one invite now so your team can collaborate on leads and pipeline.
           </p>
@@ -132,7 +132,7 @@ export function ActivateStep({ user, onGoogleConnected }) {
               </Button>
               {inviteSent ? (
                 <span className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-600">
-                  <TickCircle size={18} variant="Bold" />
+                  <CheckCircle size={18} />
                   Sent
                 </span>
               ) : null}
@@ -140,7 +140,7 @@ export function ActivateStep({ user, onGoogleConnected }) {
           </div>
         </OnboardingFieldSection>
 
-        <OnboardingFieldSection title="Connect Google" icon={Sms}>
+        <OnboardingFieldSection title="Connect Google" icon={Mail}>
           <p className="-mt-2 text-sm text-ink-muted">
             Sync email and calendar for outreach, inbox, and meeting workflows.
           </p>
@@ -165,7 +165,7 @@ export function ActivateStep({ user, onGoogleConnected }) {
               </Button>
             ) : (
               <span className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-600">
-                <TickCircle size={18} variant="Bold" />
+                <CheckCircle size={18} />
                 Connected
               </span>
             )}

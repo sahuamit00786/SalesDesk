@@ -89,6 +89,17 @@ export const User = sequelize.define(
       allowNull: true,
       field: 'last_login_at',
     },
+    onboardedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'onboarded_at',
+    },
+    managerId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      field: 'manager_id',
+      references: { model: 'users', key: 'id' },
+    },
     companyId: {
       type: DataTypes.UUID,
       allowNull: true,

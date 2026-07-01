@@ -34,7 +34,7 @@ import { getRedis } from '../config/redis.js'
 import { autoAssignLead } from '../services/assignmentRulesService.js'
 import { findDuplicates, saveDuplicateRecord } from '../services/duplicateDetectionService.js'
 import { exportLeads, importLeads } from '../services/importExportService.js'
-import { recalculateScore } from '../services/leadScoringService.js'
+import { recalculateScore, recalculateLeadScore } from '../services/leadScoringService.js'
 import { leadAccessWhere } from '../services/leadVisibility.js'
 import { allowedWorkspaceIdsForUser } from '../services/userWorkspaceService.js'
 import { resolveListWorkspaceFilterId } from '../utils/resolveListWorkspaceFilter.js'
@@ -695,6 +695,15 @@ async function syncRepliesForLead({ lead, tokenRow, userId }) {
     refresh_token: tokenRow.refreshToken || undefined,
     expiry_date: tokenRow.expiryDate || undefined,
   })
+  oauth2Client.on('tokens', async (tokens) => {
+    await tokenRow.update({
+      accessToken: tokens.access_token || tokenRow.accessToken,
+      refreshToken: tokens.refresh_token || tokenRow.refreshToken,
+      expiryDate: tokens.expiry_date || tokenRow.expiryDate,
+      scope: tokens.scope || tokenRow.scope,
+      tokenType: tokens.token_type || tokenRow.tokenType,
+    })
+  })
   const gmail = google.gmail({ version: 'v1', auth: oauth2Client })
   const listResp = await gmail.users.messages.list({
     userId: 'me',
@@ -855,6 +864,23 @@ export async function list(req, res, next) {
       order: [[sort, order]],
       include,
     })
+
+    // Batch-load lead assignments (with avatar) to avoid N+1 queries
+    if (rows.length && (await hasLeadAssignmentsTable())) {
+      const leadIds = rows.map((l) => l.id)
+      const allAssignments = await LeadAssignment.findAll({
+        where: { leadId: { [Op.in]: leadIds } },
+        include: [{ model: User, as: 'assignee', attributes: ['id', 'name', 'email', 'avatar'], required: false }],
+      })
+      const assignmentMap = new Map()
+      for (const a of allAssignments) {
+        if (!assignmentMap.has(a.leadId)) assignmentMap.set(a.leadId, [])
+        assignmentMap.get(a.leadId).push(a)
+      }
+      for (const lead of rows) {
+        lead.dataValues.assignments = assignmentMap.get(lead.id) || []
+      }
+    }
 
     const data = await attachLeadListEngagement(rows, req.user.companyId)
 
@@ -1040,6 +1066,7 @@ export async function create(req, res, next) {
       metadata: { action: 'lead_created' },
     })
     await recalculateScore(lead.id)
+    recalculateLeadScore(lead, req.user.companyId).catch(console.error)
     await clearLeadListCache(workspaceId)
     await emitLeadWorkflowTriggers({
       eventType: 'lead_created',
@@ -1207,6 +1234,7 @@ export async function update(req, res, next) {
       }
     }
     await recalculateScore(lead.id)
+    recalculateLeadScore(lead, req.user.companyId).catch(console.error)
     await clearLeadListCache(lead.workspaceId)
     await emitLeadWorkflowTriggers({
       eventType: 'lead_updated',
@@ -3329,7 +3357,43 @@ export async function reorderCustomFieldsHandler(req, res, next) {
 export async function importRows(req, res, next) {
   try {
     const workspaceId = req.headers['x-workspace-id']
-    const results = await importLeads(workspaceId, req.user.companyId, req.user.id, req.body?.rows || [])
+    const companyId = req.user.companyId
+    const parsedRows = req.body?.rows || []
+
+    // Duplicate pre-check: bulk email check before importing
+    const skipDuplicates = Boolean(req.body?.skipDuplicates)
+    const updateExisting = Boolean(req.body?.updateExisting)
+
+    const emails = parsedRows.filter((r) => r.email).map((r) => String(r.email).toLowerCase().trim()).filter(Boolean)
+    if (emails.length > 0) {
+      const existing = await Lead.findAll({
+        where: { email: { [Op.in]: emails }, companyId, isDeleted: false },
+        attributes: ['email', 'id', 'title', 'contactName'],
+      })
+      const duplicateSet = new Set(existing.map((e) => String(e.email || '').toLowerCase()))
+      const duplicates = parsedRows
+        .filter((r) => r.email && duplicateSet.has(String(r.email).toLowerCase().trim()))
+        .map((r) => ({ csvRow: r, existingEmail: r.email }))
+
+      if (duplicates.length > 0 && !skipDuplicates && !updateExisting) {
+        return res.json({
+          success: true,
+          requiresDeduplication: true,
+          total: parsedRows.length,
+          newCount: parsedRows.length - duplicates.length,
+          duplicateCount: duplicates.length,
+          duplicates: duplicates.slice(0, 50), // return first 50 for preview
+        })
+      }
+
+      if (skipDuplicates && !updateExisting) {
+        // Filter out duplicate rows
+        const filteredRows = parsedRows.filter((r) => !r.email || !duplicateSet.has(String(r.email).toLowerCase().trim()))
+        req.body.rows = filteredRows
+      }
+    }
+
+    const results = await importLeads(workspaceId, companyId, req.user.id, req.body?.rows || [])
     await clearLeadListCache(workspaceId)
     if (results.createdLeadIds?.length) {
       await emitLeadWorkflowTriggersBulkImport({

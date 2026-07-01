@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight2 } from 'iconsax-react'
+import { ChevronRight } from 'lucide-react'
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
 import { animate, createTimeline, stagger } from 'animejs'
 import gsap from 'gsap'
@@ -232,7 +232,7 @@ export function HeroSection() {
             className="group inline-flex items-center gap-2 rounded-xl bg-violet-700 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-200 transition hover:bg-violet-600 active:scale-[0.98]"
           >
             Get started free
-            <ArrowRight2 size={16} className="transition group-hover:translate-x-0.5" aria-hidden />
+            <ChevronRight size={16} className="transition group-hover:translate-x-0.5" aria-hidden />
           </Link>
           <Link
             data-hero-cta

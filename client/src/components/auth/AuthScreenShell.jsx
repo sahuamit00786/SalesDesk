@@ -1,58 +1,28 @@
-import { useLayoutEffect, useRef } from 'react'
-import gsap from 'gsap'
 import { FloatingBg } from '@/features/leadflow-landing/components/FloatingBg'
+import { motion } from 'framer-motion'
+
+const fadeUp = (delay = 0) => ({
+  initial: { opacity: 0, y: 20 },
+  animate: { opacity: 1, y: 0 },
+  transition: { duration: 0.55, ease: [0.22, 1, 0.36, 1], delay },
+})
+
+const staggerContainer = {
+  animate: { transition: { staggerChildren: 0.09, delayChildren: 0.08 } },
+}
+
+const staggerChild = {
+  initial: { opacity: 0, y: 20 },
+  animate: { opacity: 1, y: 0, transition: { duration: 0.55, ease: [0.22, 1, 0.36, 1] } },
+}
 
 /**
  * Full-viewport auth layout — white + violet theme with floating shapes (matches landing).
  * @param {'login'|'register'} variant
  */
 export function AuthScreenShell({ variant = 'login', brand, eyebrow, title, subtitle, visual, children }) {
-  const rootRef = useRef(null)
-  const visualRef = useRef(null)
-  const cardRef = useRef(null)
-  const textBlockRef = useRef(null)
-
-  useLayoutEffect(() => {
-    const ctx = gsap.context(() => {
-      gsap.fromTo(
-        textBlockRef.current?.children || [],
-        { opacity: 0, y: 20 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.6,
-          stagger: 0.09,
-          ease: 'power2.out',
-          delay: 0.08,
-        },
-      )
-      gsap.fromTo(
-        visualRef.current,
-        { opacity: 0, y: 24 },
-        { opacity: 1, y: 0, duration: 0.75, ease: 'power3.out', delay: 0.22 },
-      )
-      gsap.fromTo(
-        cardRef.current,
-        { opacity: 0, y: 32, scale: 0.98 },
-        {
-          opacity: 1,
-          y: 0,
-          scale: 1,
-          duration: 0.8,
-          ease: 'power3.out',
-          delay: 0.14,
-        },
-      )
-    }, rootRef)
-
-    return () => ctx.revert()
-  }, [variant, title])
-
   return (
-    <div
-      ref={rootRef}
-      className="relative min-h-screen w-full overflow-hidden bg-gradient-to-br from-white via-violet-50/50 to-fuchsia-50/30 text-[#0a0714]"
-    >
+    <div className="relative min-h-screen w-full overflow-hidden bg-gradient-to-br from-white via-violet-50/50 to-fuchsia-50/30 text-[#0a0714]">
       <FloatingBg />
 
       <div className="pointer-events-none absolute -left-32 top-[-10%] h-[min(520px,70vw)] w-[min(520px,70vw)] rounded-full bg-violet-400/10 blur-3xl" aria-hidden />
@@ -60,29 +30,37 @@ export function AuthScreenShell({ variant = 'login', brand, eyebrow, title, subt
 
       <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-8 sm:px-6 lg:flex-row lg:items-center lg:gap-14 lg:px-8 lg:py-12">
         <aside className="flex flex-1 flex-col lg:max-w-[28rem]">
-          <div ref={textBlockRef} className="space-y-5">
+          <motion.div
+            className="space-y-5"
+            variants={staggerContainer}
+            initial="initial"
+            animate="animate"
+            key={`${variant}-${title}`}
+          >
             {brand ? (
-              <div className="w-fit">{brand}</div>
+              <motion.div className="w-fit" variants={staggerChild}>{brand}</motion.div>
             ) : eyebrow ? (
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-600">{eyebrow}</p>
+              <motion.p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-600" variants={staggerChild}>{eyebrow}</motion.p>
             ) : null}
-            <h1 className="font-display text-3xl font-bold leading-tight tracking-tight text-[#0a0714] sm:text-4xl lg:text-[2.65rem]">
+            <motion.h1 className="font-display text-3xl font-bold leading-tight tracking-tight text-[#0a0714] sm:text-4xl lg:text-[2.65rem]" variants={staggerChild}>
               {title}
-            </h1>
+            </motion.h1>
             {subtitle ? (
-              <p className="max-w-md text-base leading-relaxed text-zinc-500">{subtitle}</p>
+              <motion.p className="max-w-md text-base leading-relaxed text-zinc-500" variants={staggerChild}>{subtitle}</motion.p>
             ) : null}
-          </div>
-          <div ref={visualRef} className="mt-8 hidden lg:block">{visual}</div>
+          </motion.div>
+          <motion.div className="mt-8 hidden lg:block" {...fadeUp(0.22)}>{visual}</motion.div>
         </aside>
 
         <main className="mt-8 flex flex-1 justify-center lg:mt-0 lg:justify-end">
-          <div
-            ref={cardRef}
+          <motion.div
+            key={`${variant}-card`}
+            {...fadeUp(0.14)}
+            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1], delay: 0.14 }}
             className="w-full max-w-md rounded-3xl border border-violet-100/90 bg-white/95 p-6 shadow-[0_24px_80px_rgba(124,58,237,0.14),0_8px_24px_rgba(15,23,42,0.06)] backdrop-blur-md sm:p-8"
           >
             {children}
-          </div>
+          </motion.div>
         </main>
 
         {visual ? <div className="mt-8 lg:hidden">{visual}</div> : null}

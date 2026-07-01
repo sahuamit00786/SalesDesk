@@ -70,6 +70,8 @@ export default function InvoicePrintPage() {
         watermark={inv.status === 'draft' ? 'Draft' : null}
         currency={inv.currency || 'USD'}
         theme={inv.documentTheme || null}
+        payments={inv.payments || []}
+        invoiceStatus={inv.status}
       />
     </div>
   )

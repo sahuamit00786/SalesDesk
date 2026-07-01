@@ -430,6 +430,7 @@ export async function leaveReport(req, res, next) {
     const { companyId } = ctx
     const where = { companyId, fromDate: { [Op.lte]: to }, toDate: { [Op.gte]: from } }
     if (req.query.userId) where.userId = req.query.userId
+    if (req.query.status) where.status = req.query.status
 
     const [requests, byTypeRaw, byUserRaw] = await Promise.all([
       LeaveRequest.findAll({

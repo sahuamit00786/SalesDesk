@@ -1,7 +1,6 @@
-import { useCallback, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, Navigate, useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import gsap from 'gsap'
 import {
   BellRing,
   Building2,
@@ -77,18 +76,23 @@ export function RegisterPage() {
   const formRef = useRef(null)
   useAuthStepAnimation(step, stepRef)
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     const root = formRef.current
-    if (!root || step !== 'details') return undefined
-    const ctx = gsap.context(() => {
-      const fields = root.querySelectorAll('[data-field]')
-      gsap.fromTo(
-        fields,
-        { opacity: 0, y: 12 },
-        { opacity: 1, y: 0, duration: 0.4, stagger: 0.06, ease: 'power2.out', delay: 0.28 },
-      )
-    }, root)
-    return () => ctx.revert()
+    if (!root || step !== 'details') return
+    const fields = Array.from(root.querySelectorAll('[data-field]'))
+    fields.forEach((el) => {
+      el.style.opacity = '0'
+      el.style.transform = 'translateY(12px)'
+      el.style.transition = 'none'
+    })
+    const timer = setTimeout(() => {
+      fields.forEach((el, i) => {
+        el.style.transition = `opacity 0.4s ease ${0.28 + i * 0.06}s, transform 0.4s ease ${0.28 + i * 0.06}s`
+        el.style.opacity = '1'
+        el.style.transform = 'translateY(0)'
+      })
+    }, 16)
+    return () => clearTimeout(timer)
   }, [step])
 
   const goToOtp = useCallback((addr) => {

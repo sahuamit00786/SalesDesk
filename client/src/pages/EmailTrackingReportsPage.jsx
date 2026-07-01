@@ -13,6 +13,7 @@ import { Mail, MailOpen, MousePointerClick, Reply, RefreshCw } from 'lucide-reac
 import { PageShell } from '@/components/layout/PageShell'
 import { Button } from '@/components/ui/Button'
 import { Select } from '@/components/ui/Select'
+import { CHART_COLORS } from '@/features/dashboard/dummyDashboardData'
 import { useGetEmailTrackingReportQuery } from '@/features/email/emailApi'
 import { cn } from '@/utils/cn'
 
@@ -45,9 +46,9 @@ function pct(n, total) {
   return `${Math.round((n / total) * 100)}%`
 }
 
-function StatCard({ icon: Icon, label, value, sub, color }) {
+function StatCard({ icon: Icon, label, value, sub }) {
   return (
-    <div className={cn('rounded-2xl border border-surface-border bg-white p-4', color)}>
+    <div className="rounded-2xl border border-surface-border bg-white p-4">
       <div className="mb-2 flex items-center gap-2 text-ink-muted">
         <Icon className="h-4 w-4" />
         <span className="text-xs font-semibold uppercase tracking-wide">{label}</span>
@@ -59,10 +60,10 @@ function StatCard({ icon: Icon, label, value, sub, color }) {
 }
 
 const SOURCE_COLOR = {
-  direct: '#6366f1',
-  bulk: '#0ea5e9',
-  workflow: '#10b981',
-  'bulk/workflow': '#0ea5e9',
+  direct: CHART_COLORS.primary,
+  bulk: CHART_COLORS.secondary,
+  workflow: CHART_COLORS.ink,
+  'bulk/workflow': CHART_COLORS.secondary,
 }
 
 export function EmailTrackingReportsPage({ embedded = false }) {
@@ -158,21 +159,18 @@ export function EmailTrackingReportsPage({ embedded = false }) {
           label="Opened"
           value={summary.opened?.toLocaleString() ?? '—'}
           sub={`${pct(summary.opened, summary.sent)} open rate · ${summary.totalOpens?.toLocaleString() ?? 0} total opens`}
-          color="border-indigo-100"
         />
         <StatCard
           icon={MousePointerClick}
           label="Clicked"
           value={summary.clicked?.toLocaleString() ?? '—'}
           sub={`${pct(summary.clicked, summary.sent)} click rate · ${summary.totalClicks?.toLocaleString() ?? 0} total clicks`}
-          color="border-sky-100"
         />
         <StatCard
           icon={Reply}
           label="Replied"
           value={summary.replied?.toLocaleString() ?? '—'}
           sub={`${pct(summary.replied, summary.sent)} reply rate`}
-          color="border-emerald-100"
         />
       </div>
 
@@ -190,9 +188,9 @@ export function EmailTrackingReportsPage({ embedded = false }) {
               />
               <Legend wrapperStyle={{ fontSize: 12 }} />
               <Bar dataKey="sent" name="Sent" fill="#e5e7eb" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="opened" name="Opened" fill="#6366f1" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="clicked" name="Clicked" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="replied" name="Replied" fill="#10b981" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="opened" name="Opened" fill={CHART_COLORS.primary} radius={[4, 4, 0, 0]} />
+              <Bar dataKey="clicked" name="Clicked" fill={CHART_COLORS.secondary} radius={[4, 4, 0, 0]} />
+              <Bar dataKey="replied" name="Replied" fill={CHART_COLORS.success} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>

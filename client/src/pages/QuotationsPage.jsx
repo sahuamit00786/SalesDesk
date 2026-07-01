@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Download, Plus, RefreshCw } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { PageShell } from '@/components/layout/PageShell'
@@ -22,6 +22,7 @@ import { DealDetailPanel } from '@/features/deals/components/DealDetailPanel'
 import { useGetLeadFormMetaQuery } from '@/features/leads/leadsApi'
 
 export function QuotationsPage() {
+  const navigate = useNavigate()
   const [params] = useSearchParams()
   const leadFilter = params.get('leadId')
   const [drawerOpen, setDrawerOpen] = useState(Boolean(params.get('new')))
@@ -44,15 +45,16 @@ export function QuotationsPage() {
   const onConvert = useCallback(
     async (row) => {
       try {
-        await convert({ id: row.id }).unwrap()
-        const client = row.customerSnapshot?.contactName || row.customerSnapshot?.companyName
-        toast.success(client ? `Invoice created for ${client}` : 'Converted to invoice')
-        refetch()
+        const result = await convert({ id: row.id }).unwrap()
+        const invoice = result?.data?.data ?? result?.data ?? result
+        const invNum = invoice?.invoiceNumber
+        toast.success(invNum ? `Invoice ${invNum} created` : 'Converted to invoice')
+        navigate('/invoices')
       } catch (e) {
         toast.error(e?.data?.error?.message || 'Conversion failed')
       }
     },
-    [convert, refetch],
+    [convert, navigate],
   )
 
   const quotationColumns = useQuotationGridColumns({

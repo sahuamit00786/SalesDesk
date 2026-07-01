@@ -18,6 +18,21 @@ function fmtMoney(n, currency = 'USD') {
   }
 }
 
+function fmtDate(dt) {
+  if (!dt) return '—'
+  return new Date(dt).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+const PAYMENT_MODE_LABELS = {
+  bank_transfer: 'Bank transfer',
+  cash: 'Cash',
+  cheque: 'Cheque',
+  upi: 'UPI',
+  card: 'Card',
+  crypto: 'Crypto',
+  other: 'Other',
+}
+
 function BillToBlock({ surface, customer }) {
   return (
     <>
@@ -64,6 +79,10 @@ export function SalesDocumentPreview({
   bodyFont = null,
   /** When false, payment / bank block is hidden even if billing contains bank fields (invoice templates). */
   showBankDetails = true,
+  /** Array of InvoicePayment objects — shown in "Payments received" section on invoice variant. */
+  payments = [],
+  /** Invoice status — drives the stamp overlay and due-date coloring. */
+  invoiceStatus = null,
 }) {
   const p = Math.min(Math.max(Number(preset) || 1, 1), 8)
   const presetLabel =
@@ -105,6 +124,10 @@ export function SalesDocumentPreview({
     accent && headerTone === 'dark' ? 'text-white print:text-neutral-800' : 'text-neutral-800',
   )
 
+  // Due date shown in red when overdue
+  const isOverdue = variant === 'invoice' && invoiceStatus === 'overdue'
+  const secondaryDateStrong = isOverdue ? 'font-semibold text-red-600' : dateStrong
+
   const companyLines = [billing?.addressLine1, billing?.city, billing?.state, billing?.postalCode]
     .filter(Boolean)
     .join(', ')
@@ -142,7 +165,7 @@ export function SalesDocumentPreview({
         </p>
         {secondaryDate ? (
           <p className={cn('text-xs', labelMuted)}>
-            {secondaryDateLabel} <span className={dateStrong}>{secondaryDate}</span>
+            {secondaryDateLabel} <span className={secondaryDateStrong}>{secondaryDate}</span>
           </p>
         ) : null}
         {showPreset ? (
@@ -185,7 +208,7 @@ export function SalesDocumentPreview({
           {secondaryDate ? (
             <>
               {' · '}
-              {secondaryDateLabel} <span className={dateStrong}>{secondaryDate}</span>
+              {secondaryDateLabel} <span className={secondaryDateStrong}>{secondaryDate}</span>
             </>
           ) : null}
         </p>
@@ -205,7 +228,7 @@ export function SalesDocumentPreview({
           {secondaryDate ? (
             <>
               {' · '}
-              {secondaryDateLabel} <span className={dateStrong}>{secondaryDate}</span>
+              {secondaryDateLabel} <span className={secondaryDateStrong}>{secondaryDate}</span>
             </>
           ) : null}
         </p>
@@ -241,7 +264,7 @@ export function SalesDocumentPreview({
           </p>
           {secondaryDate ? (
             <p className={cn('text-xs', labelMuted)}>
-              {secondaryDateLabel} <span className={dateStrong}>{secondaryDate}</span>
+              {secondaryDateLabel} <span className={secondaryDateStrong}>{secondaryDate}</span>
             </p>
           ) : null}
           <p className="mt-4 text-[10px] uppercase tracking-wide text-white/50 print:text-neutral-400">{presetLabel}</p>
@@ -267,7 +290,7 @@ export function SalesDocumentPreview({
           </span>
           {secondaryDate ? (
             <span>
-              {secondaryDateLabel} <span className="font-medium text-neutral-800">{secondaryDate}</span>
+              {secondaryDateLabel} <span className={secondaryDateStrong}>{secondaryDate}</span>
             </span>
           ) : null}
         </div>
@@ -291,7 +314,7 @@ export function SalesDocumentPreview({
               {secondaryDate ? (
                 <p className="mt-1">
                   <span className="text-neutral-500">{secondaryDateLabel} </span>
-                  <span className="font-medium text-neutral-900">{secondaryDate}</span>
+                  <span className={secondaryDateStrong}>{secondaryDate}</span>
                 </p>
               ) : null}
               <p className="mt-2 text-[10px] uppercase tracking-wide text-neutral-400">{presetLabel}</p>
@@ -317,7 +340,7 @@ export function SalesDocumentPreview({
               </p>
               {secondaryDate ? (
                 <p className="text-xs text-neutral-600">
-                  {secondaryDateLabel} <span className="font-medium text-neutral-900">{secondaryDate}</span>
+                  {secondaryDateLabel} <span className={secondaryDateStrong}>{secondaryDate}</span>
                 </p>
               ) : null}
               <p className="mt-2 text-[10px] uppercase tracking-wide text-neutral-400">{presetLabel}</p>
@@ -339,7 +362,9 @@ export function SalesDocumentPreview({
             <p className="text-lg font-bold tabular-nums">{headerNumber}</p>
             <p className="text-[11px] text-neutral-600">
               {issueDate}
-              {secondaryDate ? ` · ${secondaryDate}` : ''}
+              {secondaryDate ? (
+                <> · <span className={secondaryDateStrong}>{secondaryDate}</span></>
+              ) : ''}
             </p>
           </div>
         </div>
@@ -364,13 +389,44 @@ export function SalesDocumentPreview({
   /** Full A4 logical height (96dpi) so short docs fill the sheet; spacer pushes totals/footer toward the bottom. */
   const pageMinH = 'min-h-[1123px]'
 
+  // Payment stamp config for invoice variant
+  const stampConfig =
+    variant === 'invoice' && invoiceStatus
+      ? invoiceStatus === 'paid'
+        ? { label: 'PAID', classes: 'border-emerald-600 text-emerald-600' }
+        : invoiceStatus === 'overdue'
+          ? { label: 'OVERDUE', classes: 'border-red-600 text-red-600' }
+          : invoiceStatus === 'partially_paid'
+            ? { label: 'PARTIAL', classes: 'border-amber-500 text-amber-600' }
+            : null
+      : null
+
+  // Payments received summary (for PDF section)
+  const totalPaid = payments.reduce((s, p) => s + Number(p.amount ?? 0), 0)
+  const balanceDueFromPayments = Math.max(0, Number(grandTotal ?? 0) - totalPaid)
+
   const inner = (
-    <div className={cn(shell, pageMinH, 'flex flex-col')} style={shellFont}>
+    <div className={cn(shell, pageMinH, 'relative flex flex-col')} style={shellFont}>
       {accent ? <div className="h-1 w-full shrink-0 print:h-0.5" style={accentBarStyle} aria-hidden /> : null}
 
+      {/* Draft watermark */}
       {watermark && watermark !== 'none' ? (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-[0.06] print:opacity-[0.08]">
           <span className="rotate-[-18deg] text-6xl font-black uppercase tracking-widest">{watermark}</span>
+        </div>
+      ) : null}
+
+      {/* Payment status stamp (PAID / OVERDUE / PARTIAL) */}
+      {stampConfig ? (
+        <div className="pointer-events-none absolute right-8 top-6 z-10 rotate-[-12deg] print:right-8 print:top-6">
+          <span
+            className={cn(
+              'block rounded border-2 border-current px-3 py-1 text-sm font-black uppercase tracking-widest opacity-55 print:opacity-50',
+              stampConfig.classes,
+            )}
+          >
+            {stampConfig.label}
+          </span>
         </div>
       ) : null}
 
@@ -523,6 +579,50 @@ export function SalesDocumentPreview({
             <p className="mt-3 border-t border-neutral-100 pt-3 font-mono text-[11px]">SWIFT / BIC: {billing.bankSwift}</p>
           ) : null}
           {billing.paymentInstructions ? <p className="mt-3 whitespace-pre-wrap">{billing.paymentInstructions}</p> : null}
+        </div>
+      ) : null}
+
+      {/* Payments received — shown on invoice PDF when payments exist */}
+      {variant === 'invoice' && payments.length > 0 ? (
+        <div className="shrink-0 border-t border-neutral-100 px-8 py-5 text-xs text-neutral-600">
+          <p className="font-semibold text-neutral-800">Payments received</p>
+          <table className="mt-2 w-full text-xs">
+            <thead>
+              <tr className="border-b border-neutral-200 text-left text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
+                <th className="pb-1.5 pr-4">Date</th>
+                <th className="pb-1.5 pr-4">Mode</th>
+                <th className="pb-1.5 pr-4">Reference</th>
+                <th className="pb-1.5 text-right">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {payments.map((pay) => (
+                <tr key={pay.id} className="border-b border-neutral-50">
+                  <td className="py-1 pr-4 text-neutral-700">{fmtDate(pay.paidAt)}</td>
+                  <td className="py-1 pr-4">{PAYMENT_MODE_LABELS[pay.mode] || pay.mode}</td>
+                  <td className="py-1 pr-4 text-neutral-500">{pay.reference || '—'}</td>
+                  <td className="py-1 text-right tabular-nums font-medium">{fmtMoney(pay.amount, currency)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t border-neutral-300">
+                <td colSpan={3} className="pt-2 font-semibold text-neutral-700">Total paid</td>
+                <td className="pt-2 text-right tabular-nums font-semibold text-emerald-700">{fmtMoney(totalPaid, currency)}</td>
+              </tr>
+              <tr>
+                <td colSpan={3} className="pt-0.5 font-semibold text-neutral-700">Balance due</td>
+                <td
+                  className={cn(
+                    'pt-0.5 text-right tabular-nums font-bold',
+                    balanceDueFromPayments > 0 ? 'text-red-600' : 'text-emerald-600',
+                  )}
+                >
+                  {fmtMoney(balanceDueFromPayments, currency)}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
         </div>
       ) : null}
 

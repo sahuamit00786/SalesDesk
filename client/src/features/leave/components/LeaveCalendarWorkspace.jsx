@@ -85,10 +85,10 @@ export function LeaveCalendarWorkspace({
 
   const leftSidebar = (
     <>
-      <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
-        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-500">Legend</p>
+      <div className="rounded-2xl border border-surface-border bg-white p-4 shadow-sm ring-1 ring-black/[0.04]">
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-ink-faint">Legend</p>
         <HrCalendarLegend items={LEGEND} />
-        <p className="mt-3 text-xs leading-relaxed text-gray-500">Click a day or leave block to apply or review leave.</p>
+        <p className="mt-3 text-xs leading-relaxed text-ink-muted">Click a day or leave block to apply or review leave.</p>
       </div>
       <LeaveRequestsSidebarPanel requests={myLeaves} />
     </>
@@ -104,6 +104,7 @@ export function LeaveCalendarWorkspace({
         EventComponent={EventComponent}
         leftSidebar={leftSidebar}
         showRightPanel={false}
+        showTodayList={false}
         selectable
         syncPeriod={syncPeriod}
         onPeriodChange={onPeriodChange}

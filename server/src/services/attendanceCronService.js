@@ -8,6 +8,7 @@ import {
   PublicHoliday,
   User,
 } from '../models/index.js'
+import { createNotification } from './notificationService.js'
 
 function dateOnlyStr(d = new Date()) {
   return d.toISOString().slice(0, 10)
@@ -79,6 +80,14 @@ export async function markAbsentForDate(dateStr = dateOnlyStr()) {
       date: dateStr,
       status: 'absent',
     })
+    createNotification({
+      userId: user.id,
+      companyId: user.companyId,
+      title: 'Marked absent',
+      message: `You were marked absent on ${dateStr}.`,
+      type: 'attendance',
+      link: '/attendance',
+    }).catch(() => {})
     created += 1
   }
   return created

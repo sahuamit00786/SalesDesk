@@ -50,7 +50,7 @@ export default {
           DEFAULT: '#ffffff',
           muted: '#F9F7FC',
           subtle: '#EDE9FE',
-          border: '#C4B5D9',
+          border: 'var(--surface-border, #E5DFF0)',
           field: '#5B21B6',
         },
         ink: {
@@ -101,6 +101,13 @@ export default {
         'lf-pulse-glow': 'lf-pulse-glow 4s ease-in-out infinite',
         'accordion-down': 'accordion-down 0.22s ease-out',
         'accordion-up': 'accordion-up 0.2s ease-out',
+      },
+      fontSize: {
+        'display': ['2rem', { lineHeight: '2.5rem', fontWeight: '700' }],
+        'heading': ['1.25rem', { lineHeight: '1.75rem', fontWeight: '600' }],
+        'subheading': ['1rem', { lineHeight: '1.5rem', fontWeight: '500' }],
+        'body': ['0.875rem', { lineHeight: '1.375rem', fontWeight: '400' }],
+        'caption': ['0.75rem', { lineHeight: '1.125rem', fontWeight: '400' }],
       },
       backgroundImage: {
         'lf-grid':

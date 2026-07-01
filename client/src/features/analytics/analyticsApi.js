@@ -6,6 +6,10 @@ export const analyticsApi = baseApi.injectEndpoints({
       query: () => '/analytics/dashboard',
       providesTags: [{ type: 'Analytics', id: 'DASHBOARD' }],
     }),
+    getDashboardSummary: build.query({
+      query: () => '/analytics/dashboard-summary',
+      providesTags: [{ type: 'Analytics', id: 'DASHBOARD_SUMMARY' }],
+    }),
     getNavBadges: build.query({
       query: () => '/analytics/nav-badges',
       providesTags: [{ type: 'Analytics', id: 'NAV_BADGES' }],
@@ -79,6 +83,7 @@ export const analyticsApi = baseApi.injectEndpoints({
 
 export const {
   useGetDashboardStatsQuery,
+  useGetDashboardSummaryQuery,
   useGetNavBadgesQuery,
   useGetDashboardChartsQuery,
   useGetLeadsReportQuery,

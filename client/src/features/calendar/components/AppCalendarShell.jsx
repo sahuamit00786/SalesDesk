@@ -33,6 +33,7 @@ export function AppCalendarShell({
   showFilters = false,
   showProfile = false,
   showMoreMenu = false,
+  showTodayList = true,
   selectable = true,
   defaultView = Views.MONTH,
   lockedTypes = null,
@@ -331,9 +332,9 @@ export function AppCalendarShell({
       highlightAttendanceStatus && 'calendar-attendance-mode',
       className,
     )}>
-      <div className="flex w-72 shrink-0 flex-col overflow-hidden border-r border-gray-200 bg-white">
+      <div className="flex w-72 shrink-0 flex-col overflow-hidden border-r border-surface-border bg-white">
         <div className="scrollbar-subtle space-y-6 overflow-y-auto p-4">
-          <div className="rounded-xl border border-brand-200 bg-white p-3 shadow-sm">
+          <div className="rounded-2xl border border-surface-border bg-white p-3 shadow-sm ring-1 ring-black/[0.04]">
             <MiniMonthPicker
               currentDate={currentDate}
               selectedDate={selectedDate}
@@ -362,15 +363,17 @@ export function AppCalendarShell({
             )
           ) : null}
 
-          <div className="space-y-6 rounded-xl border border-brand-200 bg-white p-3">
-            <TodayList events={allEvents} selectedDate={selectedDate} title="Today" onEventClick={handleEventClick} />
-            <TodayList
-              events={allEvents}
-              selectedDate={addDays(selectedDate, 1)}
-              title="Tomorrow"
-              onEventClick={handleEventClick}
-            />
-          </div>
+          {showTodayList && (
+            <div className="space-y-6 rounded-xl border border-brand-200 bg-white p-3">
+              <TodayList events={allEvents} selectedDate={selectedDate} title="Today" onEventClick={handleEventClick} />
+              <TodayList
+                events={allEvents}
+                selectedDate={addDays(selectedDate, 1)}
+                title="Tomorrow"
+                onEventClick={handleEventClick}
+              />
+            </div>
+          )}
         </div>
       </div>
 

@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { ArrowRight2 } from 'iconsax-react'
+import { ChevronRight } from 'lucide-react'
 import { LeadNestLogo } from '@/components/shared/LeadNestLogo'
 
 const nav = [
@@ -42,7 +42,7 @@ export function LandingNav() {
             className="inline-flex items-center gap-1.5 rounded-xl bg-violet-700 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-violet-200 transition hover:bg-violet-600 active:scale-[0.98]"
           >
             Get started
-            <ArrowRight2 size={14} aria-hidden />
+            <ChevronRight size={14} aria-hidden />
           </Link>
         </div>
       </div>

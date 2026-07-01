@@ -19,6 +19,7 @@ import {
 import { PageShell } from '@/components/layout/PageShell'
 import { SkeletonForm } from '@/components/shared/SkeletonLoader'
 import { DataGrid } from '@/components/shared/DataGrid'
+import { LeadSearchInput } from '@/components/shared/LeadSearchInput'
 import { RightDrawer } from '@/components/ui/RightDrawer'
 import { WorkflowCanvas } from '@/features/workflows/components/WorkflowCanvas'
 import {
@@ -45,26 +46,25 @@ const STATUS_LABEL = {
 }
 
 function TestRunModal({ open, onClose, workflowId, onRan }) {
-  const [leadId, setLeadId] = useState('')
+  const [selectedLead, setSelectedLead] = useState(null)
   const [testWorkflow, { isLoading }] = useTestWorkflowMutation()
 
   if (!open) return null
 
   const run = async (e) => {
     e.preventDefault()
-    const id = leadId.trim()
-    if (!id) {
-      toast.error('Enter a lead UUID.')
+    if (!selectedLead?.id) {
+      toast.error('Select a lead to test with.')
       return
     }
     try {
-      await testWorkflow({ id: workflowId, leadId: id }).unwrap()
+      await testWorkflow({ id: workflowId, leadId: selectedLead.id }).unwrap()
       toast.success('Test run started.')
       onRan?.()
       onClose()
-      setLeadId('')
+      setSelectedLead(null)
     } catch {
-      toast.error('Test run failed — check lead id and workflow.')
+      toast.error('Test run failed — check lead and workflow.')
     }
   }
 
@@ -74,26 +74,37 @@ function TestRunModal({ open, onClose, workflowId, onRan }) {
         <h2 className="text-lg font-semibold text-ink">Test workflow</h2>
         <p className="mt-1 text-sm text-ink-muted">Runs the graph for a lead in this workspace (same engine as live triggers).</p>
         <form onSubmit={run} className="mt-4 space-y-3">
-          <label className="block text-sm font-medium text-ink">
-            Lead ID (UUID)
-            <input
-              className="mt-1 w-full rounded-xl border border-surface-border bg-surface-muted px-3 py-2 font-mono text-sm"
-              value={leadId}
-              onChange={(e) => setLeadId(e.target.value)}
-              placeholder="00000000-0000-0000-0000-000000000000"
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-ink">Search lead</label>
+            <LeadSearchInput
+              onSelect={(lead) => setSelectedLead(lead)}
+              placeholder="Type a name or email…"
             />
-          </label>
+            {selectedLead && (
+              <p className="mt-1.5 text-xs text-ink-muted">
+                Selected: <span className="font-semibold text-ink">{selectedLead.name || selectedLead.email}</span>
+                {' '}
+                <button
+                  type="button"
+                  className="text-brand-600 hover:underline"
+                  onClick={() => setSelectedLead(null)}
+                >
+                  Clear
+                </button>
+              </p>
+            )}
+          </div>
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => { onClose(); setSelectedLead(null) }}
               className="rounded-xl border border-surface-border px-4 py-2 text-sm font-medium text-ink hover:bg-surface-muted"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || !selectedLead}
               className="inline-flex items-center gap-2 rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-900 disabled:opacity-60"
             >
               {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}

@@ -16,6 +16,24 @@ function oauthClient(credentials = null) {
       access_token: credentials.accessToken || undefined,
       expiry_date: credentials.expiryDate || undefined,
     })
+    // credentials is the live CompanyGoogleToken row when called via meetingService — persist
+    // whatever googleapis refreshes internally so the next call reuses the cached access token
+    // instead of re-hitting the refresh_token endpoint (excess refreshes trigger invalid_grant).
+    if (typeof credentials.update === 'function') {
+      client.on('tokens', async (tokens) => {
+        try {
+          await credentials.update({
+            accessToken: tokens.access_token || credentials.accessToken,
+            refreshToken: tokens.refresh_token || credentials.refreshToken,
+            expiryDate: tokens.expiry_date || credentials.expiryDate,
+            scope: tokens.scope || credentials.scope,
+            tokenType: tokens.token_type || credentials.tokenType,
+          })
+        } catch (e) {
+          console.error('[calendar] Failed to persist refreshed Google token:', e.message)
+        }
+      })
+    }
   } else {
     client.setCredentials({
       refresh_token: env.refreshToken,

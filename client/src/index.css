@@ -6,6 +6,11 @@
   :root {
     --brand-primary: #6d29d9;
     --brand-primary-dark: #5a22b8;
+    --surface-border: color-mix(in srgb, var(--brand-primary) 18%, white);
+    /* Mixed into slate-200 (not white) so this stays visible on border-collapse tables even
+       when a row's edge lands on a fractional device pixel (e.g. 125%/150% display scaling) —
+       a near-white border anti-aliases away on some rows but not others in that case. */
+    --grid-row-divider: color-mix(in srgb, var(--brand-primary) 14%, #e2e8f0);
     --surface-page: #f9f7fc;
     --chrome-header-height: 4.5rem; /* 72px — sidebar brand + main topbar */
     --sidebar-text: #ffffff;
@@ -213,8 +218,10 @@
     @apply divide-y-0;
   }
 
+  /* Row dividers live on <td>, not <tr> — border-collapse only resolves borders declared on
+     table cells, so a border-bottom set on <tr> silently fails to paint in Chromium/Firefox. */
   .cx-table tbody tr {
-    @apply border-b border-slate-200 transition-colors last:border-b-0;
+    @apply transition-colors;
   }
 
   .cx-table tbody tr:hover {
@@ -222,7 +229,29 @@
   }
 
   .cx-table tbody td {
-    @apply px-4 py-4 align-top;
+    @apply border-b border-slate-200 px-4 py-4 align-top;
+  }
+
+  .cx-table tbody tr:last-child td {
+    @apply border-b-0;
+  }
+
+  /* App DataGrid rows — theme-matched border/hover, vertically centered content */
+  .cx-table.cx-data-grid tbody tr:hover {
+    background-color: color-mix(in srgb, var(--brand-primary) 5%, white);
+  }
+
+  .cx-table.cx-data-grid tbody td {
+    @apply px-4 py-3.5 align-middle;
+    border-bottom: 1px solid var(--grid-row-divider);
+  }
+
+  .cx-table.cx-data-grid tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .cx-table.cx-data-grid.cx-table--dense tbody td {
+    @apply px-3 py-2.5;
   }
 
   .cx-table tbody td.cx-table-cell-actions {
@@ -420,6 +449,19 @@
 
   .cx-table--dense tbody td {
     @apply px-3 py-2.5;
+  }
+
+  /* Monthly summary table — smaller font, tighter rows */
+  .cx-summary-table .cx-table {
+    font-size: 0.75rem;
+  }
+
+  .cx-summary-table .cx-table.cx-data-grid thead th {
+    @apply py-2.5 text-[10px];
+  }
+
+  .cx-summary-table .cx-table tbody td {
+    @apply py-3;
   }
 
   /**

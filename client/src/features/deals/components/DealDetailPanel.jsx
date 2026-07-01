@@ -50,7 +50,7 @@ import {
 } from '@/features/leads/components/LeadTaskDrawer'
 import { TaskAttachmentIcons } from '@/features/leads/components/TaskAttachmentIcons'
 import { usePatchOpportunityStatusMutation } from '@/features/opportunities/opportunitiesApi'
-import { useGetDealQuery, usePatchDealStageMutation, useGetDealActivitiesQuery, useCreateDealActivityMutation } from '@/features/deals/dealsApi'
+import { useGetDealQuery, usePatchDealStageMutation, usePatchDealMutation, useGetDealActivitiesQuery, useCreateDealActivityMutation } from '@/features/deals/dealsApi'
 import { formatStageLabel } from '@/features/opportunities/components/OpportunitiesKanban'
 import { useGetDocumentsQuery, useUploadDocumentMutation } from '@/features/documents/documentsApi'
 import { DealInvoicesPanel, DealQuotationsPanel } from '@/features/deals/components/DealSalesDocsTabs'
@@ -390,6 +390,7 @@ export function DealDetailPanel({ open, onClose, opp, opportunityStatuses = [], 
   const [deleteTask] = useDeleteLeadTaskMutation()
   const [patchOpportunityStatus, { isLoading: changingOppStage }] = usePatchOpportunityStatusMutation()
   const [patchDealStage, { isLoading: changingDealStage }] = usePatchDealStageMutation()
+  const [patchDeal] = usePatchDealMutation()
   const [createDealActivity, { isLoading: loggingDealActivity }] = useCreateDealActivityMutation()
   const changingStage = changingOppStage || changingDealStage
   const [uploadDocument, { isLoading: uploadingDocument }] = useUploadDocumentMutation()
@@ -485,6 +486,25 @@ export function DealDetailPanel({ open, onClose, opp, opportunityStatuses = [], 
     isDealEntity ? card?.dealCurrency : lead?.valueCurrency ?? lead?.value_currency ?? card?.dealCurrency,
   )
   const dealDescription = String(lead?.requirement || card?.dealDescription || '').trim()
+  const forecastCategory = card?.forecastCategory || 'pipeline'
+
+  const FORECAST_LABELS = {
+    pipeline: 'Pipeline',
+    best_case: 'Best Case',
+    commit: 'Commit',
+    closed: 'Closed',
+    omitted: 'Omitted',
+  }
+
+  async function handleForecastChange(category) {
+    if (!dealId || category === forecastCategory) return
+    try {
+      await patchDeal({ id: dealId, forecastCategory: category }).unwrap()
+      toast.success('Forecast category updated')
+    } catch {
+      toast.error('Could not update forecast category')
+    }
+  }
 
   async function handleStageChange(nextStage) {
     if (!nextStage || nextStage === currentStage) {
@@ -659,6 +679,21 @@ export function DealDetailPanel({ open, onClose, opp, opportunityStatuses = [], 
                   <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap text-xs leading-relaxed text-neutral-700">
                     {dealDescription}
                   </p>
+                </div>
+              ) : null}
+              {dealId ? (
+                <div className="mt-2 border-t border-violet-100 pt-2">
+                  <p className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-brand-600">Forecast</p>
+                  <select
+                    className="w-full rounded-md border border-neutral-200 bg-white px-2 py-1 text-xs text-neutral-800 focus:border-brand-400 focus:outline-none"
+                    value={forecastCategory}
+                    onChange={(e) => handleForecastChange(e.target.value)}
+                    aria-label="Forecast category"
+                  >
+                    {Object.entries(FORECAST_LABELS).map(([val, label]) => (
+                      <option key={val} value={val}>{label}</option>
+                    ))}
+                  </select>
                 </div>
               ) : null}
             </div>

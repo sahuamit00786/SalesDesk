@@ -157,10 +157,10 @@ export function AttendancePage() {
   }
 
   return (
-    <PageShell fullWidth flush>
-      <div className="flex min-h-0 flex-col">
-        {/* Top bar: tabs + filters */}
-        <div className="shrink-0 border-b border-surface-border bg-white px-4 py-2 sm:px-5">
+    <PageShell fullWidth>
+      <div>
+        {/* Sticky top bar: tabs + filters */}
+        <div className="sticky top-0 z-10 border-b border-surface-border bg-white px-2 py-2">
           <div className="flex flex-wrap items-center gap-3">
             {/* Tabs */}
             <div className="flex items-center gap-1 rounded-xl bg-surface-subtle p-1">
@@ -254,13 +254,15 @@ export function AttendancePage() {
         {/* My Attendance tab */}
         {tab === 'my' && (
           myLoading ? (
-            <div className="flex-1 space-y-4 overflow-auto px-4 py-4 sm:px-6">
-              <SkeletonCalendar />
-              <SkeletonTable cols={4} rows={6} />
+            <div className="px-2 py-2">
+              <div className="space-y-5">
+                <SkeletonCalendar />
+                <SkeletonTable cols={4} rows={6} />
+              </div>
             </div>
           ) : (
-            <div className="flex-1 overflow-auto px-4 py-4 sm:px-6">
-              <div className="space-y-6">
+            <div className="px-2 py-2">
+              <div className="space-y-5">
                 <MyAttendanceStats stats={myStats} totalHours={myStats.totalHours} />
                 <AttendanceUserCalendar
                   logs={myLogs}
@@ -296,14 +298,16 @@ export function AttendancePage() {
         {/* Team tab */}
         {tab === 'team' && isManager && (
           teamLoading ? (
-            <div className="flex-1 space-y-4 overflow-auto px-4 py-4 sm:px-6">
-              <SkeletonCalendar />
-              <SkeletonTable cols={5} rows={6} />
+            <div className="px-2 py-2">
+              <div className="space-y-5">
+                <SkeletonCalendar />
+                <SkeletonTable cols={5} rows={6} />
+              </div>
             </div>
           ) : userId ? (
-            <div className="flex-1 overflow-auto px-4 py-4 sm:px-6">
+            <div className="px-2 py-2">
               {userDetailLoading ? (
-                <div className="space-y-4 py-2">
+                <div className="space-y-5">
                   <SkeletonCalendar />
                   <SkeletonTable cols={4} rows={5} />
                 </div>
@@ -318,27 +322,27 @@ export function AttendancePage() {
               )}
             </div>
           ) : (
-            <>
-              <AttendanceCalendarWorkspace
-                className="h-[calc(100vh-11rem)]"
-                mode="team"
-                logs={[]}
-                calendar={calendar}
-                weeklyOffDays={weeklyOffDays}
-                syncPeriod={{ year, month }}
-                onPeriodChange={(y, m) => {
-                  setYear(y)
-                  setMonth(m)
-                }}
-                onDayClick={setDayModal}
-              />
-              <div className="shrink-0 space-y-4 px-4 py-4 sm:px-6">
+            <div className="px-2 py-2">
+              <div className="space-y-5">
+                <AttendanceCalendarWorkspace
+                  className="h-[640px]"
+                  mode="team"
+                  logs={[]}
+                  calendar={calendar}
+                  weeklyOffDays={weeklyOffDays}
+                  syncPeriod={{ year, month }}
+                  onPeriodChange={(y, m) => {
+                    setYear(y)
+                    setMonth(m)
+                  }}
+                  onDayClick={setDayModal}
+                />
                 <MonthlySummaryTable
                   summary={summary}
                   onUserSelect={handleUserSelect}
                 />
               </div>
-            </>
+            </div>
           )
         )}
       </div>

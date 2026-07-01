@@ -1,18 +1,22 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   AlignCenter,
   AlignLeft,
   Bold,
+  Check,
   Image as ImageIcon,
   Italic,
   Link2,
   List,
   ListOrdered,
+  Loader2,
   Paperclip,
   RemoveFormatting,
   Underline,
 } from 'lucide-react'
 import { getFileUrl } from '@/features/documents/documentUtils'
+
+const AUTO_SAVE_DELAY = 1500 // 1.5 seconds after last keystroke
 
 function ToolbarButton({ onClick, title, children, disabled = false }) {
   return (
@@ -199,6 +203,35 @@ export function LeadRichNotesEditor({
 }) {
   const editorRef = useRef(null)
   const [attachmentBusy, setAttachmentBusy] = useState(false)
+  // Auto-save state: 'idle' | 'pending' | 'saving' | 'saved'
+  const [autoSaveStatus, setAutoSaveStatus] = useState('idle')
+  const autoSaveTimerRef = useRef(null)
+  const titleRef = useRef(title)
+
+  // Keep titleRef in sync so auto-save closure always uses fresh title
+  useEffect(() => { titleRef.current = title }, [title])
+
+  const triggerAutoSave = useCallback(() => {
+    if (!onSave || !isEditing) return
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+    setAutoSaveStatus('pending')
+    autoSaveTimerRef.current = setTimeout(async () => {
+      const html = stripEditorChromeForSave(editorRef.current)
+      setAutoSaveStatus('saving')
+      try {
+        await onSave({ title: titleRef.current, html, autoSave: true })
+        setAutoSaveStatus('saved')
+        setTimeout(() => setAutoSaveStatus('idle'), 2000)
+      } catch {
+        setAutoSaveStatus('idle')
+      }
+    }, AUTO_SAVE_DELAY)
+  }, [onSave, isEditing])
+
+  // Cleanup timer on unmount
+  useEffect(() => () => {
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+  }, [])
 
   useEffect(() => {
     const el = editorRef.current
@@ -287,6 +320,7 @@ export function LeadRichNotesEditor({
         className="min-h-[220px] max-h-[min(50vh,420px)] overflow-y-auto px-5 py-4 text-[15px] leading-relaxed text-ink outline-none [&_a]:text-brand-600 [&_a]:underline [&_li]:my-0.5 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-1.5 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5"
         onInput={() => {
           /* uncontrolled; parent reads on save */
+          triggerAutoSave()
         }}
       />
       <p className="border-t border-slate-100 px-5 pb-2 pt-1 text-[11px] text-ink-muted">
@@ -337,10 +371,44 @@ export function LeadRichNotesEditor({
           <ToolbarButton title="Normal paragraph" onClick={() => exec('formatBlock', 'p')}>
             <span className="text-xs font-semibold">¶</span>
           </ToolbarButton>
+          {/* Auto-save status indicator (only while editing) */}
+          {isEditing && autoSaveStatus !== 'idle' && (
+            <span
+              className="flex items-center gap-1 text-[11px] text-ink-muted"
+              aria-live="polite"
+              aria-label={
+                autoSaveStatus === 'pending' ? 'Waiting to auto-save'
+                : autoSaveStatus === 'saving' ? 'Auto-saving note'
+                : 'Note auto-saved'
+              }
+            >
+              {autoSaveStatus === 'pending' && (
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+              )}
+              {autoSaveStatus === 'saving' && (
+                <Loader2 className="h-3 w-3 animate-spin text-brand-500" />
+              )}
+              {autoSaveStatus === 'saved' && (
+                <Check className="h-3 w-3 text-emerald-500" />
+              )}
+              <span className="sr-only">
+                {autoSaveStatus === 'pending' ? 'Unsaved changes'
+                  : autoSaveStatus === 'saving' ? 'Saving…'
+                  : 'Saved'}
+              </span>
+              <span aria-hidden>
+                {autoSaveStatus === 'pending' ? 'Unsaved'
+                  : autoSaveStatus === 'saving' ? 'Saving…'
+                  : 'Saved'}
+              </span>
+            </span>
+          )}
           <button
             type="button"
             disabled={saving || attachmentBusy}
             onClick={() => {
+              if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+              setAutoSaveStatus('idle')
               const html = stripEditorChromeForSave(editorRef.current)
               onSave({ title, html })
             }}

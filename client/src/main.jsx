@@ -37,7 +37,13 @@ createRoot(document.getElementById('root')).render(
     <Provider store={store}>
       <BrowserRouter>
         <App />
-        <Toaster position="top-right" toastOptions={{ duration: 4000 }} />
+        {/* aria-live region for screen-reader toast announcements */}
+        <div role="status" aria-live="polite" aria-atomic="true" className="sr-only" id="toast-announcer" />
+        <Toaster
+          position="top-right"
+          toastOptions={{ duration: 4000 }}
+          containerProps={{ 'aria-label': 'Notifications' }}
+        />
       </BrowserRouter>
     </Provider>
   </StrictMode>,

@@ -7,6 +7,7 @@ import { requireAuth } from '../../middleware/auth.js'
 import { requireCompany } from '../../middleware/requireCompany.js'
 import { requirePermission } from '../../middleware/requirePermission.js'
 import { loadPermissions } from '../../middleware/loadPermissions.js'
+import { requireHrRole } from '../../middleware/requireHrRole.js'
 import * as authController from '../../controllers/authController.js'
 import * as analyticsController from '../../controllers/analyticsController.js'
 import * as analyticsReportsExtended from '../../controllers/analyticsReportsExtended.js'
@@ -45,6 +46,11 @@ import { handleGmailPubSubPushHttp } from '../../services/gmail/gmailPushService
 import meetingRoutes from '../meetingRoutes.js'
 import transcriptionRoutes from '../transcriptionRoutes.js'
 import aiMeetingRoutes from '../AiMeetingRoutes.js'
+import { getFilterPresets, createFilterPreset, deleteFilterPreset } from '../../controllers/filterPresetsController.js'
+import { getNotifications as getNotificationsV2, markNotificationRead as markNotificationReadV2, markAllRead, getUnreadCount } from '../../controllers/notificationController.js'
+import * as auditLogController from '../../controllers/auditLogController.js'
+import * as emailSequencesController from '../../controllers/emailSequencesController.js'
+import * as scoringRulesController from '../../controllers/scoringRulesController.js'
 
 const router = Router()
 const emailUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 24 * 1024 * 1024, files: 12 } })
@@ -63,6 +69,7 @@ const leaveUpload = multer({
 })
 
 const authLimiter = rateLimit({ routeKey: 'auth', windowSec: 60, max: 30 })
+const otpLimiter = rateLimit({ routeKey: 'otp', windowSec: 3600, max: 5 })
 const apiLimiter = rateLimit({ routeKey: 'api', windowSec: 60, max: 200 })
 
 router.get('/health', (_req, res) => {
@@ -78,6 +85,22 @@ router.post('/webhooks/gmail-pubsub', (req, res, next) => {
 router.get('/google/callback', apiLimiter, googleController.googleCallback)
 
 router.use('/meetings', requireAuth, requireCompany, meetingRoutes)
+
+// Authenticated recordings file serve — replaces the former public static /recordings route
+router.get('/recordings/:filename', requireAuth, requireCompany, (req, res) => {
+  const { filename } = req.params
+  // Prevent path traversal
+  if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+    return res.status(400).json({ success: false, error: 'Invalid filename' })
+  }
+  const recordingsDir = path.resolve(process.cwd(), 'recordings')
+  const filePath = path.join(recordingsDir, filename)
+  res.sendFile(filePath, (err) => {
+    if (err && !res.headersSent) {
+      res.status(404).json({ success: false, error: 'Recording not found' })
+    }
+  })
+})
 
 router.use(
   '/transcription',
@@ -96,17 +119,25 @@ router.use(
 
 
 router.post('/auth/register', authLimiter, authController.register)
-router.post('/auth/verify-email', authLimiter, authController.verifyEmail)
-router.post('/auth/resend-verification', authLimiter, authController.resendVerification)
+router.post('/auth/verify-email', otpLimiter, authController.verifyEmail)
+router.post('/auth/resend-verification', otpLimiter, authController.resendVerification)
 router.post('/auth/login', authLimiter, authController.login)
 router.post('/auth/refresh', authLimiter, authController.refresh)
-router.post('/auth/forgot-password', authLimiter, authController.forgotPassword)
-router.post('/auth/reset-password', authLimiter, authController.resetPassword)
+router.post('/auth/forgot-password', otpLimiter, authController.forgotPassword)
+router.post('/auth/reset-password', otpLimiter, authController.resetPassword)
 router.post('/auth/logout', requireAuth, authLimiter, authController.logout)
 router.get('/auth/invitations/preview', authLimiter, teamController.previewInvitation)
 router.post('/auth/invitations/accept', authLimiter, teamController.acceptInvitation)
 router.post('/auth/sso/google', authLimiter, teamController.googleSsoPlaceholder)
 router.get('/auth/me', requireAuth, apiLimiter, authController.me)
+router.post('/auth/complete-onboarding', requireAuth, apiLimiter, async (req, res) => {
+  try {
+    await req.user.update({ onboardedAt: new Date() })
+    return res.json({ success: true })
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message })
+  }
+})
 router.patch('/company/me', requireAuth, apiLimiter, companyController.patchMyCompany)
 router.post('/company/me/provision-workspace', requireAuth, apiLimiter, companyController.provisionMyWorkspace)
 
@@ -402,6 +433,11 @@ router.delete('/activities/types/:typeId', requireAuth, apiLimiter, requireCompa
 router.post('/activities/booking-link', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'edit'), activitiesController.createBookingLink)
 router.get('/activities/reminders/upcoming', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'view'), activitiesController.listUpcomingReminders)
 router.post('/activities/:activityId/reminders', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'edit'), activitiesController.createReminder)
+
+// Filter presets (saved filter configurations per user/workspace/module)
+router.get('/filter-presets', requireAuth, apiLimiter, requireCompany, getFilterPresets)
+router.post('/filter-presets', requireAuth, apiLimiter, requireCompany, createFilterPreset)
+router.delete('/filter-presets/:id', requireAuth, apiLimiter, requireCompany, deleteFilterPreset)
 
 router.get('/leads/duplicates', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'view'), duplicateLeadsController.list)
 router.delete('/leads/duplicates/:id', requireAuth, apiLimiter, requireCompany, loadPermissions, requirePermission('leads', 'edit'), duplicateLeadsController.remove)
@@ -1204,45 +1240,76 @@ router.get('/attendance/today', requireAuth, apiLimiter, requireCompany, attenda
 router.post('/attendance/check-in', requireAuth, apiLimiter, requireCompany, attendanceController.checkIn)
 router.post('/attendance/check-out', requireAuth, apiLimiter, requireCompany, attendanceController.checkOut)
 router.get('/attendance/me', requireAuth, apiLimiter, requireCompany, attendanceController.getMyAttendance)
-router.get('/attendance/team', requireAuth, apiLimiter, requireCompany, attendanceController.getTeamAttendance)
-router.get('/attendance/day/:date', requireAuth, apiLimiter, requireCompany, attendanceController.getDayDetail)
-router.get('/attendance/export', requireAuth, apiLimiter, requireCompany, attendanceController.exportAttendanceCsv)
-router.post('/attendance/logs', requireAuth, apiLimiter, requireCompany, attendanceController.createAttendanceLog)
-router.put('/attendance/logs/:id', requireAuth, apiLimiter, requireCompany, attendanceController.editAttendanceLog)
+router.get('/attendance/team', requireAuth, apiLimiter, requireCompany, requireHrRole('manager'), attendanceController.getTeamAttendance)
+router.get('/attendance/day/:date', requireAuth, apiLimiter, requireCompany, requireHrRole('manager'), attendanceController.getDayDetail)
+router.get('/attendance/export', requireAuth, apiLimiter, requireCompany, requireHrRole('manager'), attendanceController.exportAttendanceCsv)
+router.post('/attendance/logs', requireAuth, apiLimiter, requireCompany, requireHrRole('admin'), attendanceController.createAttendanceLog)
+router.put('/attendance/logs/:id', requireAuth, apiLimiter, requireCompany, requireHrRole('manager'), attendanceController.editAttendanceLog)
 
 // —— HR: Leave ——
 router.get('/leave/types', requireAuth, apiLimiter, requireCompany, leaveController.getLeaveTypes)
-router.post('/leave/types', requireAuth, apiLimiter, requireCompany, leaveController.createLeaveType)
-router.put('/leave/types/:id', requireAuth, apiLimiter, requireCompany, leaveController.updateLeaveType)
-router.delete('/leave/types/:id', requireAuth, apiLimiter, requireCompany, leaveController.deleteLeaveType)
+router.post('/leave/types', requireAuth, apiLimiter, requireCompany, requireHrRole('admin'), leaveController.createLeaveType)
+router.put('/leave/types/:id', requireAuth, apiLimiter, requireCompany, requireHrRole('admin'), leaveController.updateLeaveType)
+router.delete('/leave/types/:id', requireAuth, apiLimiter, requireCompany, requireHrRole('admin'), leaveController.deleteLeaveType)
 router.get('/leave/balance/me', requireAuth, apiLimiter, requireCompany, leaveController.getMyLeaveBalance)
-router.get('/leave/balance/:userId', requireAuth, apiLimiter, requireCompany, leaveController.getUserLeaveBalance)
-router.post('/leave/balance/adjust', requireAuth, apiLimiter, requireCompany, leaveController.adjustLeaveBalance)
+router.get('/leave/balance/:userId', requireAuth, apiLimiter, requireCompany, requireHrRole('manager'), leaveController.getUserLeaveBalance)
+router.post('/leave/balance/adjust', requireAuth, apiLimiter, requireCompany, requireHrRole('admin'), leaveController.adjustLeaveBalance)
 router.get('/leave/preview-days', requireAuth, apiLimiter, requireCompany, leaveController.previewLeaveDays)
 router.get('/leave/settings', requireAuth, apiLimiter, requireCompany, leaveController.getLeaveSettings)
-router.put('/leave/settings', requireAuth, apiLimiter, requireCompany, leaveController.updateLeaveSettings)
+router.put('/leave/settings', requireAuth, apiLimiter, requireCompany, requireHrRole('admin'), leaveController.updateLeaveSettings)
 router.post('/leave/requests', requireAuth, apiLimiter, requireCompany, leaveUpload.single('document'), leaveController.applyLeave)
 router.get('/leave/requests/me', requireAuth, apiLimiter, requireCompany, leaveController.getMyLeaves)
-router.get('/leave/requests/all', requireAuth, apiLimiter, requireCompany, leaveController.getAllLeaves)
-router.post('/leave/requests/bulk-approve', requireAuth, apiLimiter, requireCompany, leaveController.bulkApproveLeaves)
-router.post('/leave/requests/:id/approve', requireAuth, apiLimiter, requireCompany, leaveController.approveLeave)
-router.post('/leave/requests/:id/reject', requireAuth, apiLimiter, requireCompany, leaveController.rejectLeave)
+router.get('/leave/requests/all', requireAuth, apiLimiter, requireCompany, requireHrRole('manager'), leaveController.getAllLeaves)
+router.post('/leave/requests/bulk-approve', requireAuth, apiLimiter, requireCompany, requireHrRole('manager'), leaveController.bulkApproveLeaves)
+router.post('/leave/requests/:id/approve', requireAuth, apiLimiter, requireCompany, requireHrRole('manager'), leaveController.approveLeave)
+router.post('/leave/requests/:id/reject', requireAuth, apiLimiter, requireCompany, requireHrRole('manager'), leaveController.rejectLeave)
 router.post('/leave/requests/:id/cancel', requireAuth, apiLimiter, requireCompany, leaveController.cancelLeave)
 router.get('/leave/calendar', requireAuth, apiLimiter, requireCompany, leaveController.getTeamLeaveCalendar)
 router.get('/leave/holidays', requireAuth, apiLimiter, requireCompany, leaveController.getPublicHolidays)
-router.post('/leave/holidays', requireAuth, apiLimiter, requireCompany, leaveController.createHoliday)
-router.put('/leave/holidays/:id', requireAuth, apiLimiter, requireCompany, leaveController.updateHoliday)
-router.delete('/leave/holidays/:id', requireAuth, apiLimiter, requireCompany, leaveController.deleteHoliday)
+router.post('/leave/holidays', requireAuth, apiLimiter, requireCompany, requireHrRole('admin'), leaveController.createHoliday)
+router.put('/leave/holidays/:id', requireAuth, apiLimiter, requireCompany, requireHrRole('admin'), leaveController.updateHoliday)
+router.delete('/leave/holidays/:id', requireAuth, apiLimiter, requireCompany, requireHrRole('admin'), leaveController.deleteHoliday)
+
+// —— HR: Leave — Manager Approval ——
+router.get('/leave/pending-approvals', requireAuth, apiLimiter, requireCompany, requireHrRole('manager'), leaveController.getPendingApprovals)
+router.post('/leave/:id/approve', requireAuth, apiLimiter, requireCompany, requireHrRole('manager'), leaveController.managerApproveLeave)
+router.post('/leave/:id/reject', requireAuth, apiLimiter, requireCompany, requireHrRole('manager'), leaveController.managerRejectLeave)
 
 // —— HR: Notifications ——
-router.get('/notifications', requireAuth, apiLimiter, requireCompany, leaveController.getNotifications)
-router.patch('/notifications/:id/read', requireAuth, apiLimiter, requireCompany, leaveController.markNotificationRead)
+// Static paths must come before /:id param routes to avoid param matching
+router.get('/notifications/unread-count', requireAuth, apiLimiter, requireCompany, getUnreadCount)
+router.post('/notifications/read-all', requireAuth, apiLimiter, requireCompany, markAllRead)
 router.post('/notifications/mark-all-read', requireAuth, apiLimiter, requireCompany, leaveController.markAllNotificationsRead)
+router.get('/notifications', requireAuth, apiLimiter, requireCompany, getNotificationsV2)
+router.post('/notifications/:id/read', requireAuth, apiLimiter, requireCompany, markNotificationReadV2)
+router.patch('/notifications/:id/read', requireAuth, apiLimiter, requireCompany, leaveController.markNotificationRead)
 
 router.get('/track/open', emailTrackingController.trackOpen)
 router.get('/track/click', emailTrackingController.trackClick)
 router.get('/unsubscribe', emailTrackingController.unsubscribe)
 router.get('/email/tracking/reports', requireAuth, apiLimiter, requireCompany, emailReportsController.getEmailTrackingReport)
+
+// —— Audit Logs (admin only) ——
+router.get('/audit-logs', requireAuth, apiLimiter, requireCompany, auditLogController.getAuditLogs)
+
+// —— Email Sequences / Drip Campaigns ——
+router.get('/email-sequences', requireAuth, apiLimiter, requireCompany, emailSequencesController.listSequences)
+router.post('/email-sequences', requireAuth, apiLimiter, requireCompany, emailSequencesController.createSequence)
+router.get('/email-sequences/:id', requireAuth, apiLimiter, requireCompany, emailSequencesController.getSequence)
+router.put('/email-sequences/:id', requireAuth, apiLimiter, requireCompany, emailSequencesController.updateSequence)
+router.delete('/email-sequences/:id', requireAuth, apiLimiter, requireCompany, emailSequencesController.deleteSequence)
+router.post('/email-sequences/:id/enroll', requireAuth, apiLimiter, requireCompany, emailSequencesController.enrollLead)
+router.post('/email-sequences/:id/unenroll', requireAuth, apiLimiter, requireCompany, emailSequencesController.unenrollLead)
+router.get('/email-sequences/:id/enrollments', requireAuth, apiLimiter, requireCompany, emailSequencesController.getEnrollments)
+
+// —— Lead Scoring Engine ——
+// Static sub-paths must come before /:id param routes
+router.post('/scoring-rules/reorder', requireAuth, apiLimiter, requireCompany, scoringRulesController.reorderScoringRules)
+router.post('/scoring-rules/recalculate', requireAuth, apiLimiter, requireCompany, scoringRulesController.recalculateAllLeadScores)
+router.get('/scoring-rules', requireAuth, apiLimiter, requireCompany, scoringRulesController.getScoringRules)
+router.post('/scoring-rules', requireAuth, apiLimiter, requireCompany, scoringRulesController.createScoringRule)
+router.put('/scoring-rules/:id', requireAuth, apiLimiter, requireCompany, scoringRulesController.updateScoringRule)
+router.delete('/scoring-rules/:id', requireAuth, apiLimiter, requireCompany, scoringRulesController.deleteScoringRule)
 
 router.use((_req, res) => {
   res.status(404).json({

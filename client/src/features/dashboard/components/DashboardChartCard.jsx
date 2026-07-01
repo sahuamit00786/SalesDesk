@@ -4,15 +4,15 @@ export function DashboardChartCard({ title, subtitle, children, className }) {
   return (
     <section
       className={cn(
-        'rounded-2xl border border-surface-border bg-white p-4 shadow-sm sm:p-5',
+        'rounded-xl border border-[#F7F5FB] bg-white p-2.5 shadow-sm sm:p-3',
         className,
       )}
     >
-      <div className="mb-3">
+      <div className="mb-2">
         <h2 className="text-sm font-semibold text-ink">{title}</h2>
         {subtitle ? <p className="mt-0.5 text-xs text-ink-muted">{subtitle}</p> : null}
       </div>
-      <div className="min-h-[240px] w-full">{children}</div>
+      <div className="min-h-[180px] w-full">{children}</div>
     </section>
   )
 }

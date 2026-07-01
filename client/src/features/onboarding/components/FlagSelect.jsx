@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDown2, SearchNormal1 } from 'iconsax-react'
+import { ChevronDown, Search } from 'lucide-react'
 import { Input } from '@/components/ui/Input'
 import { controlClassName } from '@/components/ui/fieldTokens'
 import { cn } from '@/utils/cn'
@@ -106,9 +106,8 @@ export function FlagSelect({
             <span className="text-ink-faint">{placeholder}</span>
           )}
         </span>
-        <ArrowDown2
+        <ChevronDown
           size={16}
-          variant="Linear"
           className={cn('shrink-0 text-ink-faint transition-transform', open && 'rotate-180')}
         />
       </button>
@@ -117,9 +116,8 @@ export function FlagSelect({
         <div className="absolute z-50 mt-1.5 w-full overflow-hidden rounded-xl border border-brand-200/70 bg-white shadow-lg shadow-brand-900/10">
           <div className="border-b border-brand-100/80 p-2">
             <div className="relative">
-              <SearchNormal1
+              <Search
                 size={16}
-                variant="Linear"
                 className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint"
               />
               <Input

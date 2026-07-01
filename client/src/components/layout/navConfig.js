@@ -48,7 +48,7 @@ export const ROUTE_META = {
   },
   '/deals': {
     title: 'Deals Pipeline',
-    sub: '',
+    sub: 'Active sales pipeline — track and manage committed deals through to close',
   },
   '/deal-payments': {
     title: 'Deal Payments',
@@ -72,7 +72,7 @@ export const ROUTE_META = {
   },
   '/opportunities': {
     title: 'Opportunities',
-    sub: 'Pipeline deals — leads marked as opportunities, same tools as Leads with pipeline status front and center',
+    sub: 'Potential prospects not yet in the active sales pipeline — qualify and convert to deals',
   },
   '/activities': {
     title: 'Activities',

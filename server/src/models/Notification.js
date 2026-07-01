@@ -34,6 +34,16 @@ export const Notification = sequelize.define(
       allowNull: false,
       defaultValue: 'info',
     },
+    resourceType: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+      field: 'resource_type',
+    },
+    resourceId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      field: 'resource_id',
+    },
     isRead: {
       type: DataTypes.BOOLEAN,
       allowNull: false,

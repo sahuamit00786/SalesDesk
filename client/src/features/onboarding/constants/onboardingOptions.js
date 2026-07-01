@@ -1,27 +1,27 @@
 import {
   Briefcase,
   Building,
-  Chart,
+  BarChart2,
   Cpu,
-  Data,
-  DollarSquare,
+  Database,
+  DollarSign,
   Flag,
-  Global,
-  Health,
-  Home2,
+  Globe,
+  Heart,
+  Home,
   Link2,
-  More,
-  People,
-  Setting2,
+  MoreHorizontal,
+  Users,
+  Settings,
   ShoppingCart,
-  Teacher,
+  GraduationCap,
   Truck,
-} from 'iconsax-react'
+} from 'lucide-react'
 import { findCountryByCode, getAllCountries } from '@/constants/geo'
 
 export const ONBOARDING_STEPS = [
   { id: 'company', label: 'Company', description: 'Profile & industry', icon: Building },
-  { id: 'scale', label: 'Organisation', description: 'Team & lead volume', icon: People },
+  { id: 'scale', label: 'Organisation', description: 'Team & lead volume', icon: Users },
   { id: 'goals', label: 'Goals', description: 'Priorities & tools', icon: Flag },
   { id: 'activate', label: 'Activate', description: 'Invite & connect', icon: Link2 },
 ]
@@ -30,14 +30,14 @@ export const INDUSTRY_OPTIONS = [
   { id: 'b2b_saas', label: 'B2B SaaS', icon: Cpu },
   { id: 'agency', label: 'Agency', icon: Briefcase },
   { id: 'manufacturing', label: 'Manufacturing', icon: Building },
-  { id: 'real_estate', label: 'Real estate', icon: Home2 },
-  { id: 'healthcare', label: 'Healthcare', icon: Health },
-  { id: 'finance', label: 'Finance', icon: DollarSquare },
+  { id: 'real_estate', label: 'Real estate', icon: Home },
+  { id: 'healthcare', label: 'Healthcare', icon: Heart },
+  { id: 'finance', label: 'Finance', icon: DollarSign },
   { id: 'ecommerce', label: 'E-commerce', icon: ShoppingCart },
-  { id: 'education', label: 'Education', icon: Teacher },
+  { id: 'education', label: 'Education', icon: GraduationCap },
   { id: 'professional_services', label: 'Professional services', icon: Briefcase },
   { id: 'logistics', label: 'Logistics', icon: Truck },
-  { id: 'other', label: 'Other', icon: More },
+  { id: 'other', label: 'Other', icon: MoreHorizontal },
 ]
 /** @deprecated Use getAllCountries() from @/constants/geo */
 export const COUNTRY_OPTIONS = getAllCountries().map((c) => ({ code: c.code, label: c.name }))
@@ -58,14 +58,14 @@ export const LEADS_OPTIONS = [
 ]
 
 export const GOAL_OPTIONS = [
-  { id: 'pipeline_visibility', label: 'Pipeline visibility', icon: Chart },
-  { id: 'lead_routing', label: 'Lead routing', icon: People },
+  { id: 'pipeline_visibility', label: 'Pipeline visibility', icon: BarChart2 },
+  { id: 'lead_routing', label: 'Lead routing', icon: Users },
   { id: 'email_automation', label: 'Email automation', icon: Link2 },
   { id: 'meeting_notes', label: 'Meeting notes', icon: Briefcase },
-  { id: 'reporting', label: 'Reporting', icon: Data },
-  { id: 'team_collaboration', label: 'Team collaboration', icon: People },
-  { id: 'hr_attendance', label: 'HR / Attendance', icon: Health },
-  { id: 'other', label: 'Other', icon: More },
+  { id: 'reporting', label: 'Reporting', icon: Database },
+  { id: 'team_collaboration', label: 'Team collaboration', icon: Users },
+  { id: 'hr_attendance', label: 'HR / Attendance', icon: Heart },
+  { id: 'other', label: 'Other', icon: MoreHorizontal },
 ]
 
 export const TOOL_OPTIONS = [
@@ -82,8 +82,8 @@ export const TOOL_OPTIONS = [
 
 export const STEP_ICONS = {
   company: Building,
-  scale: Chart,
-  goals: Setting2,
+  scale: BarChart2,
+  goals: Settings,
   activate: Link2,
 }
 

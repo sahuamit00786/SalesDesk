@@ -1,4 +1,4 @@
-import { Add, Global, Link2 } from 'iconsax-react'
+import { Plus, Globe, Link2 } from 'lucide-react'
 import { Input } from '@/components/ui/Input'
 import { ChoiceCard } from '@/features/onboarding/components/ChoiceCard'
 import { CountryPicker } from '@/features/onboarding/components/CountryPicker'
@@ -67,7 +67,7 @@ export function CompanyStep({
         {errors.industry ? <p className="text-xs text-red-600">{errors.industry}</p> : null}
       </OnboardingFieldSection>
 
-      <OnboardingFieldSection title="Country" hint="Where is your company based?" icon={Global}>
+      <OnboardingFieldSection title="Country" hint="Where is your company based?" icon={Globe}>
         <CountryPicker
           value={countryCode}
           onChange={setCountryCode}
@@ -99,7 +99,7 @@ export function CompanyStep({
             onClick={() => setWebsiteLater(false)}
             className="inline-flex items-center gap-2 rounded-xl border border-dashed border-brand-300 bg-brand-50/50 px-4 py-3 text-sm font-semibold text-brand-700 transition-colors hover:border-brand-400 hover:bg-brand-50"
           >
-            <Add size={18} variant="Linear" />
+            <Plus size={18} />
             Add website
           </button>
         ) : (

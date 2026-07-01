@@ -4,10 +4,11 @@ import {
   ClipboardList, Clock, ScrollText, SlidersHorizontal, Umbrella,
 } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
-import { useGetAttendanceTodayQuery } from '@/features/attendance/attendanceApi'
+import { useGetAttendanceTodayQuery, useGetMyAttendanceQuery } from '@/features/attendance/attendanceApi'
 import { useGetMyLeaveBalanceQuery, useGetAllLeavesQuery } from '@/features/leave/leaveApi'
 import { useIsHrManagerOrAdmin } from '@/features/hr/useHrRole'
 import { ReportKpiCard } from '@/features/analytics/components/ReportKpiCard'
+import { LeaveApprovalList } from '@/features/leave/components/LeaveApprovalList'
 import { cn } from '@/utils/cn'
 
 const BALANCE_COLORS = [
@@ -50,18 +51,23 @@ function SectionHeading({ children }) {
 }
 
 export function HRDashboardPage() {
-  const year = new Date().getFullYear()
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = now.getMonth() + 1
   const isManager = useIsHrManagerOrAdmin()
 
   const { data: todayData } = useGetAttendanceTodayQuery()
   const { data: balanceData } = useGetMyLeaveBalanceQuery(year)
   const { data: pendingData } = useGetAllLeavesQuery({ status: 'pending' }, { skip: !isManager })
+  const { data: monthData } = useGetMyAttendanceQuery({ year, month })
 
   const today = todayData?.data
   const balances = (balanceData?.data || []).filter(
     (b) => b.leaveType?.id || b.leaveType?.name || b.leaveType?.code,
   )
   const pendingCount = pendingData?.data?.length ?? 0
+  const monthStats = monthData?.data?.stats || {}
+  const presentDays = (monthStats.present || 0) + (monthStats.late || 0)
 
   const totalAvailable = balances.reduce((s, b) => s + Number(b.available || 0), 0)
   const totalUsed = balances.reduce((s, b) => s + Number(b.used || 0), 0)
@@ -82,7 +88,7 @@ export function HRDashboardPage() {
 
   return (
     <PageShell fullWidth>
-      <div className="min-h-full bg-[#f8f9fc] px-4 py-6 sm:px-6">
+      <div className="min-h-full bg-[#f8f9fc] px-2 py-2">
 
         {/* ── KPI strip ── */}
         <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -126,12 +132,13 @@ export function HRDashboardPage() {
             />
           )}
           <ReportKpiCard
-            label="Leave year"
-            value={year}
-            hint="Balances reset each year"
+            label="This month"
+            value={presentDays}
+            hint={`${monthStats.absent || 0} absent · ${monthStats.late || 0} late`}
             icon={CalendarCheck}
-            iconBg="bg-slate-100"
-            iconColor="text-ink-muted"
+            iconBg="bg-teal-50"
+            iconColor="text-teal-600"
+            accentColor="bg-teal-400"
           />
         </div>
 
@@ -187,11 +194,19 @@ export function HRDashboardPage() {
           />
         </div>
 
+        {/* ── Pending Approvals (managers only) ── */}
+        {isManager && pendingCount > 0 ? (
+          <div className="mb-8">
+            <SectionHeading>Pending approvals ({pendingCount})</SectionHeading>
+            <LeaveApprovalList />
+          </div>
+        ) : null}
+
         {/* ── Leave balance ── */}
         {balances.length > 0 && (
           <>
             <SectionHeading>Leave balance — {year}</SectionHeading>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {balances.map((b, i) => {
                 const avail = Number(b.available || 0)
                 const alloc = Number(b.allocated || 0)
@@ -203,7 +218,7 @@ export function HRDashboardPage() {
                   <div
                     key={b.id}
                     className={cn(
-                      'rounded-2xl border bg-white px-5 py-4 shadow-sm',
+                      'rounded-2xl border bg-white px-5 py-4 shadow-sm ring-1 ring-black/[0.04]',
                       color.border,
                     )}
                   >
@@ -213,7 +228,7 @@ export function HRDashboardPage() {
                       </p>
                     </div>
                     <div className="flex items-end gap-1.5">
-                      <span className="text-3xl font-extrabold tabular-nums leading-none text-ink">
+                      <span className="text-2xl font-extrabold tabular-nums leading-none text-ink">
                         {avail}
                       </span>
                       <span className="mb-0.5 text-sm text-ink-muted">/ {alloc} days left</span>

@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { ArrowLeft2, ArrowRight2 } from 'iconsax-react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useAppSelector } from '@/app/hooks'
 import { Button } from '@/components/ui/Button'
 import { OnboardingProvisioningOverlay } from '@/features/onboarding/components/OnboardingProvisioningOverlay'
@@ -55,7 +55,7 @@ export function OnboardingWizard() {
             {wizard.activeStep > 0 ? (
               <Button type="button" variant="secondary" onClick={wizard.goBack} disabled={wizard.isLoading}>
                 <span className="inline-flex items-center gap-1.5">
-                  <ArrowLeft2 size={16} />
+                  <ChevronLeft size={16} />
                   Back
                 </span>
               </Button>
@@ -72,7 +72,7 @@ export function OnboardingWizard() {
               >
                 <span className="inline-flex items-center gap-1.5">
                   {wizard.isLoading ? 'Saving…' : 'Continue'}
-                  {!wizard.isLoading ? <ArrowRight2 size={16} /> : null}
+                  {!wizard.isLoading ? <ChevronRight size={16} /> : null}
                 </span>
               </Button>
             ) : (

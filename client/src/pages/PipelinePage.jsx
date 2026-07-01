@@ -465,7 +465,7 @@ export function PipelinePage() {
 
   return (
     <PageShell fullWidth>
-      <div className="flex h-[calc(100dvh-4.5rem)] min-h-0 flex-col gap-3 px-2 py-2 lg:px-4 lg:py-3">
+      <div className="flex h-[calc(100dvh-4.5rem)] min-h-0 flex-col gap-3 px-2 py-2">
         <div className="flex flex-col gap-3 rounded-2xl border border-surface-border bg-gradient-to-br from-white via-slate-50 to-slate-50 px-4 py-4 sm:px-5">
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
             <div className="rounded-xl border border-white/80 bg-white/90 px-3 py-2 shadow-sm">

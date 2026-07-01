@@ -14,6 +14,9 @@ function groupByExpr(groupBy, field) {
   return `DATE_FORMAT(${field}, '%Y-%m-%d')`
 }
 
+const ALLOWED_GROUP_BY = new Set(['day', 'week', 'month', 'source', 'none'])
+const ALLOWED_SOURCE = new Set(['all', 'direct', 'bulk', 'workflow'])
+
 export async function getEmailTrackingReport(req, res, next) {
   try {
     const companyId = req.user.companyId
@@ -24,6 +27,13 @@ export async function getEmailTrackingReport(req, res, next) {
     const dateTo = parseDate(req.query.dateTo, now)
     const source = req.query.source || 'all' // 'direct' | 'bulk' | 'workflow' | 'all'
     const groupBy = req.query.groupBy || 'day' // 'day' | 'week' | 'month' | 'source' | 'none'
+
+    if (!ALLOWED_GROUP_BY.has(groupBy)) {
+      return res.status(400).json({ success: false, error: 'Invalid parameter' })
+    }
+    if (!ALLOWED_SOURCE.has(source)) {
+      return res.status(400).json({ success: false, error: 'Invalid parameter' })
+    }
 
     // Resolve workspace scope
     const workspaceParam = req.query.workspaceId || req.headers['x-workspace-id'] || null
@@ -77,18 +87,27 @@ export async function getEmailTrackingReport(req, res, next) {
     // ── Template emails (LeadEmailLog) ────────────────────────────────────────
     const logRows = []
     if (source === 'all' || source === 'bulk' || source === 'workflow') {
-      const sourceCond = source === 'all' ? '' : `AND source = '${source}'`
       const logGroupExpr = groupBy === 'source'
         ? 'source'
         : groupBy === 'none'
           ? `'all'`
           : groupByExpr(groupBy, 'sent_at')
 
+      // Source label is safe: whitelisted above, but use a fixed expression to avoid any interpolation risk
+      const sourceLabel = groupBy === 'source' ? 'source' : `'${source === 'all' ? 'bulk/workflow' : source}'`
+
+      // Use replacements for the source filter to avoid SQL injection
       const logReplacements = [companyId, ...workspaceIds, dateFrom, dateTo]
+      let sourceCond = ''
+      if (source !== 'all') {
+        sourceCond = 'AND source = ?'
+        logReplacements.push(source)
+      }
+
       const logSql = `
         SELECT
           ${logGroupExpr} AS period,
-          ${groupBy === 'source' ? 'source' : `'${source === 'all' ? 'bulk/workflow' : source}'`} AS source,
+          ${sourceLabel} AS source,
           COUNT(*) AS sent,
           SUM(opened_at IS NOT NULL) AS opened,
           SUM(clicked_at IS NOT NULL) AS clicked,

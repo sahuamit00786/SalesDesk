@@ -80,8 +80,14 @@ import { LeaveRequest } from './LeaveRequest.js'
 import { PublicHoliday } from './PublicHoliday.js'
 import { Notification } from './Notification.js'
 import { NotificationDeliveryLog } from './NotificationDeliveryLog.js'
+import { FilterPreset } from './FilterPreset.js'
 import { DealPayment } from './DealPayment.js'
 import { CampaignPayment } from './CampaignPayment.js'
+import { AuditLog } from './AuditLog.js'
+import { EmailSequence } from './EmailSequence.js'
+import { EmailSequenceStep } from './EmailSequenceStep.js'
+import { EmailSequenceEnrollment } from './EmailSequenceEnrollment.js'
+import { ScoringRule } from './ScoringRule.js'
 
 User.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
 Company.hasMany(User, { foreignKey: 'companyId', as: 'users' })
@@ -181,6 +187,8 @@ User.hasMany(LeadFollowup, { foreignKey: 'createdBy', as: 'createdLeadFollowups'
 AssignmentRule.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
 Workspace.hasMany(AssignmentRule, { foreignKey: 'workspaceId', as: 'assignmentRules' })
 Lead.belongsToMany(User, { through: LeadAssignment, foreignKey: 'leadId', otherKey: 'userId', as: 'assignedUsers' })
+LeadAssignment.belongsTo(User, { foreignKey: 'userId', as: 'assignee' })
+User.hasMany(LeadAssignment, { foreignKey: 'userId', as: 'leadAssignments' })
 
 Deal.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
 Workspace.hasMany(Deal, { foreignKey: 'workspaceId', as: 'deals' })
@@ -441,6 +449,34 @@ DuplicateLead.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
 DuplicateLead.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
 DuplicateLead.belongsTo(User, { foreignKey: 'createdByUserId', as: 'createdBy' })
 
+FilterPreset.belongsTo(User, { foreignKey: 'userId', as: 'user' })
+User.hasMany(FilterPreset, { foreignKey: 'userId', as: 'filterPresets' })
+
+// Manager self-referential FK
+User.belongsTo(User, { foreignKey: 'managerId', as: 'manager' })
+User.hasMany(User, { foreignKey: 'managerId', as: 'directReports' })
+
+// EmailSequence associations
+EmailSequence.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
+Company.hasMany(EmailSequence, { foreignKey: 'companyId', as: 'emailSequences' })
+EmailSequence.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
+Workspace.hasMany(EmailSequence, { foreignKey: 'workspaceId', as: 'emailSequences' })
+EmailSequence.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' })
+User.hasMany(EmailSequence, { foreignKey: 'createdBy', as: 'createdEmailSequences' })
+
+EmailSequenceStep.belongsTo(EmailSequence, { foreignKey: 'sequenceId', as: 'sequence' })
+EmailSequence.hasMany(EmailSequenceStep, { foreignKey: 'sequenceId', as: 'steps' })
+
+EmailSequenceEnrollment.belongsTo(EmailSequence, { foreignKey: 'sequenceId', as: 'sequence' })
+EmailSequence.hasMany(EmailSequenceEnrollment, { foreignKey: 'sequenceId', as: 'enrollments' })
+EmailSequenceEnrollment.belongsTo(Lead, { foreignKey: 'leadId', as: 'lead' })
+Lead.hasMany(EmailSequenceEnrollment, { foreignKey: 'leadId', as: 'sequenceEnrollments' })
+EmailSequenceEnrollment.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
+
+// ScoringRule associations
+ScoringRule.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
+Company.hasMany(ScoringRule, { foreignKey: 'companyId', as: 'scoringRules' })
+
 export {
   sequelize,
   User,
@@ -525,4 +561,10 @@ export {
   Notification,
   NotificationDeliveryLog,
   DuplicateLead,
+  FilterPreset,
+  AuditLog,
+  EmailSequence,
+  EmailSequenceStep,
+  EmailSequenceEnrollment,
+  ScoringRule,
 }

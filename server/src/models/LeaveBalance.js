@@ -51,6 +51,11 @@ export const LeaveBalance = sequelize.define(
       allowNull: false,
       defaultValue: 0,
     },
+    adjustmentNote: {
+      type: DataTypes.STRING(500),
+      allowNull: true,
+      field: 'adjustment_note',
+    },
   },
   {
     tableName: 'leave_balances',

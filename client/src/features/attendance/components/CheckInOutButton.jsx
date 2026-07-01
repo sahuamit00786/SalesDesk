@@ -51,6 +51,7 @@ export function CheckInOutButton() {
   const [checkOut, { isLoading: checkingOut }] = useCheckOutMutation()
   const [summaryOpen, setSummaryOpen] = useState(false)
   const [summaryText, setSummaryText] = useState('')
+  const [onLeaveOpen, setOnLeaveOpen] = useState(false)
 
   const today = data?.data
   const hasOpenSession = Boolean(today?.hasOpenSession)
@@ -60,13 +61,21 @@ export function CheckInOutButton() {
   const totalHours = today?.totalHours ?? 0
   const busy = checkingIn || checkingOut || isLoading
 
-  async function onCheckIn() {
+  async function doCheckIn(force = false) {
     try {
-      const res = await checkIn().unwrap()
+      const res = await checkIn(force ? { force: true } : undefined).unwrap()
       toast.success(`Checked in at ${res.data?.checkInLabel || 'now'}`)
     } catch (err) {
+      if (err?.data?.error?.code === 'ON_LEAVE') {
+        setOnLeaveOpen(true)
+        return
+      }
       toast.error(err?.data?.error?.message || 'Check-in failed')
     }
+  }
+
+  function onCheckIn() {
+    doCheckIn(false)
   }
 
   async function onCheckOut() {
@@ -122,6 +131,33 @@ export function CheckInOutButton() {
           Check in
         </Button>
       )}
+
+      <Modal
+        open={onLeaveOpen}
+        onClose={() => setOnLeaveOpen(false)}
+        title="You have approved leave today"
+      >
+        <p className="mb-4 text-sm text-ink">
+          You have an approved leave scheduled for today. Are you sure you want to check in?
+        </p>
+        <div className="flex justify-end gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            className="!h-9 !text-xs"
+            onClick={() => setOnLeaveOpen(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            className="!h-9 !text-xs"
+            onClick={() => { setOnLeaveOpen(false); doCheckIn(true) }}
+          >
+            Check in anyway
+          </Button>
+        </div>
+      </Modal>
 
       <Modal open={summaryOpen} onClose={() => setSummaryOpen(false)} title="Check-out summary">
         <p className="mb-4 text-sm text-ink">{summaryText}</p>

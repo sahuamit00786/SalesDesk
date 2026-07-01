@@ -1,4 +1,4 @@
-import { Flag, Setting2 } from 'iconsax-react'
+import { Flag, Settings } from 'lucide-react'
 import { ChoiceChip } from '@/features/onboarding/components/ChoiceChipGrid'
 import { OnboardingFieldSection } from '@/features/onboarding/components/OnboardingFieldSection'
 import { OnboardingStepHeader } from '@/features/onboarding/components/OnboardingStepHeader'
@@ -52,7 +52,7 @@ export function GoalsToolsStep({
         {errors.goals ? <p className="text-xs text-red-600">{errors.goals}</p> : null}
       </OnboardingFieldSection>
 
-      <OnboardingFieldSection title="Current tools" hint="Optional" icon={Setting2}>
+      <OnboardingFieldSection title="Current tools" hint="Optional" icon={Settings}>
         <div className="flex flex-wrap gap-2">
           {TOOL_OPTIONS.map((opt) => (
             <ChoiceChip

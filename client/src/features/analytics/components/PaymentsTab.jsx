@@ -4,11 +4,11 @@ import { DashboardChartCard } from '@/features/dashboard/components/DashboardCha
 import { CHART_COLORS } from '@/features/dashboard/dummyDashboardData'
 import { formatDealMoney } from '@/features/deals/dealCurrencies'
 import { useFormatChartCurrency } from '@/hooks/useEffectiveCurrency'
+import { DataGrid } from '@/components/shared/DataGrid'
 import { ReportKpiCard } from './ReportKpiCard'
-import { ReportTable } from './ReportTable'
 import { ChartSkeleton, KpiSkeleton } from './ChartSkeleton'
 import { useGetPaymentsReportQuery } from '@/features/analytics/analyticsApi'
-import { ReportKpiGrid, ReportChartGrid, ReportTableSection } from '@/features/analytics/ReportLayout'
+import { ReportKpiGrid, ReportChartGrid, ReportTableSection, ReportStatusBadge } from '@/features/analytics/ReportLayout'
 
 const SLICES = CHART_COLORS.slices
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString() : '—'
@@ -16,13 +16,13 @@ const fmtDate = (d) => d ? new Date(d).toLocaleDateString() : '—'
 export function PaymentsTab({ queryParams }) {
   const fmtMoney = useFormatChartCurrency()
   const ledgerCols = [
-    { key: 'lead', label: 'Lead', render: (v) => <span className="font-medium text-ink">{v}</span> },
-    { key: 'source', label: 'Source', render: (v) => <span className="capitalize">{v}</span> },
-    { key: 'deal', label: 'Deal / Invoice' },
-    { key: 'amount', label: 'Amount', render: (v, r) => <span className="font-semibold text-emerald-700">{formatDealMoney(v, r.currency)}</span> },
-    { key: 'mode', label: 'Mode', render: (v) => <span className="capitalize">{String(v).replace(/_/g, ' ')}</span> },
-    { key: 'status', label: 'Status', render: (v) => <span className="capitalize">{v}</span> },
-    { key: 'date', label: 'Date', render: (v) => fmtDate(v) },
+    { field: 'lead', headerName: 'Lead', renderCell: ({ value }) => <span className="font-medium text-ink">{value}</span> },
+    { field: 'source', headerName: 'Source', renderCell: ({ value }) => <span className="capitalize">{value}</span> },
+    { field: 'deal', headerName: 'Deal / Invoice' },
+    { field: 'amount', headerName: 'Amount', renderCell: ({ value, row }) => <span className="font-semibold text-emerald-700">{formatDealMoney(value, row.currency)}</span> },
+    { field: 'mode', headerName: 'Mode', renderCell: ({ value }) => <span className="capitalize">{String(value).replace(/_/g, ' ')}</span> },
+    { field: 'status', headerName: 'Status', renderCell: ({ value }) => <ReportStatusBadge status={value} /> },
+    { field: 'date', headerName: 'Date', renderCell: ({ value }) => fmtDate(value) },
   ]
   const { data, isLoading } = useGetPaymentsReportQuery(queryParams)
   const d = data?.data
@@ -44,9 +44,9 @@ export function PaymentsTab({ queryParams }) {
       <ReportChartGrid>
         <DashboardChartCard title="Payments by mode">
           {isLoading ? <ChartSkeleton /> : (
-            <ResponsiveContainer width="100%" height={240}>
+            <ResponsiveContainer width="100%" height={200}>
               <PieChart>
-                <Pie data={charts.byMode || []} dataKey="value" nameKey="mode" cx="50%" cy="50%" innerRadius={55} outerRadius={90} paddingAngle={2}>
+                <Pie data={charts.byMode || []} dataKey="value" nameKey="mode" cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={2}>
                   {(charts.byMode || []).map((_, i) => <Cell key={i} fill={SLICES[i % SLICES.length]} />)}
                 </Pie>
                 <Tooltip formatter={(v) => fmtMoney(v)} />
@@ -57,13 +57,13 @@ export function PaymentsTab({ queryParams }) {
         </DashboardChartCard>
         <DashboardChartCard title="Payments by status">
           {isLoading ? <ChartSkeleton /> : (
-            <ResponsiveContainer width="100%" height={240}>
+            <ResponsiveContainer width="100%" height={200}>
               <BarChart data={charts.byStatus || []}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="status" tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip formatter={(v) => fmtMoney(v)} />
-                <Bar dataKey="value" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="value" fill={CHART_COLORS.primary} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -71,7 +71,17 @@ export function PaymentsTab({ queryParams }) {
       </ReportChartGrid>
 
       <ReportTableSection title="Payment ledger by lead" subtitle="All deal and invoice payments in period">
-        <ReportTable columns={ledgerCols} rows={ledger} isLoading={isLoading} maxH="max-h-[480px]" />
+        <DataGrid
+          columns={ledgerCols}
+          data={ledger}
+          loading={isLoading}
+          showColumnToggle={false}
+          showExportCsv={false}
+          autoHeight={false}
+          maxHeightClass="max-h-[480px]"
+          className="rounded-none border-0 shadow-none"
+          emptyTitle="No payments in this period"
+        />
       </ReportTableSection>
     </div>
   )

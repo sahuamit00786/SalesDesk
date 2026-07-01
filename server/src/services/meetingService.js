@@ -13,6 +13,12 @@ import { Op } from "sequelize";
 import { deleteCalendarEvent } from "../services/google/googleCalendarService.js";
 import { notifyMeetingParticipants } from "../services/notification/meetingNotificationService.js"
 
+/**
+ * Returns the live CompanyGoogleToken row (not a plain object) so googleCalendarService
+ * can persist refreshed access tokens back to it — without this, every call re-exercises
+ * the refresh_token instead of reusing the ~1hr access token, which trips Google's
+ * invalid_grant rate limiting and forces the user to reconnect Google in Integrations.
+ */
 async function resolveCalendarCredentials(companyId) {
   if (!companyId) return null
   const token = await CompanyGoogleToken.findOne({
@@ -22,11 +28,7 @@ async function resolveCalendarCredentials(companyId) {
   if (!token?.refreshToken) return null
   const scope = token.scope || ''
   if (!scope.includes('calendar.events') && !scope.includes('calendar')) return null
-  return {
-    refreshToken: token.refreshToken,
-    accessToken: token.accessToken || null,
-    expiryDate: token.expiryDate || null,
-  }
+  return token
 }
 
 /** Only persist fields the client is allowed to set (avoids `...req.body` overwriting Google columns). */

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { TickCircle } from 'iconsax-react'
+import { CheckCircle } from 'lucide-react'
 import { cn } from '@/utils/cn'
 
 const DEFAULT_STEPS = [
@@ -74,7 +74,7 @@ export function OnboardingProvisioningOverlay({ open, serverSteps }) {
                     !done && !current && 'border-surface-border bg-white text-ink-faint',
                   )}
                 >
-                  {done ? <TickCircle size={16} variant="Bold" /> : i + 1}
+                  {done ? <CheckCircle size={16} /> : i + 1}
                 </span>
                 <span className={cn('text-sm font-medium', current ? 'text-ink' : 'text-ink-muted')}>
                   {step.label}

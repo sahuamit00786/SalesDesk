@@ -1,7 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
-import { ChevronDown, ChevronRight, Search } from 'lucide-react'
+import { useEffect, useMemo, useState, useRef } from 'react'
+import { ChevronDown, ChevronRight, Search, Bookmark, BookmarkCheck, Trash2, X } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { STATUS_OPTIONS, SOURCE_OPTIONS, SOURCE_LABELS } from '@/features/leads/constants'
+import {
+  useGetFilterPresetsQuery,
+  useCreateFilterPresetMutation,
+  useDeleteFilterPresetMutation,
+} from '@/features/leads/filterPresetsApi'
 
 /* ── helpers ──────────────────────────────────────── */
 
@@ -454,6 +459,112 @@ function SectionGroup({ group, draft, onChange, users, search }) {
   )
 }
 
+/* ── Simple mode row ─────────────────────────────── */
+
+function SimpleFilterRow({ filters, onChange, onReset, users, stageOptions, isOpportunities }) {
+  return (
+    <div className="space-y-3">
+      {/* Search */}
+      <div>
+        <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Search</label>
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
+          <input
+            className="h-9 w-full rounded-xl border border-surface-border bg-white pl-9 pr-3 text-sm text-ink outline-none focus:border-brand-500"
+            placeholder="Search by name, email, company…"
+            value={filters.search || ''}
+            onChange={(e) => onChange({ search: e.target.value })}
+          />
+        </div>
+      </div>
+
+      {/* Status */}
+      <div>
+        <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Status</label>
+        <select
+          className={cn(ctrl, 'w-full')}
+          value={filters.status?.length === 1 ? filters.status[0] : ''}
+          onChange={(e) => onChange({ status: e.target.value ? [e.target.value] : [] })}
+        >
+          <option value="">All statuses</option>
+          {STATUS_OPTIONS.map((s) => (
+            <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Source */}
+      <div>
+        <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Source</label>
+        <select
+          className={cn(ctrl, 'w-full')}
+          value={filters.source?.length === 1 ? filters.source[0] : ''}
+          onChange={(e) => onChange({ source: e.target.value ? [e.target.value] : [] })}
+        >
+          <option value="">All sources</option>
+          {SOURCE_OPTIONS.map((s) => (
+            <option key={s} value={s}>{SOURCE_LABELS[s] || cap(s)}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Assigned To */}
+      {users.length > 0 ? (
+        <div>
+          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Assigned to</label>
+          <select
+            className={cn(ctrl, 'w-full')}
+            value={filters.assignedTo?.length === 1 ? filters.assignedTo[0] : ''}
+            onChange={(e) => onChange({ assignedTo: e.target.value ? [e.target.value] : [] })}
+          >
+            <option value="">Anyone</option>
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>{u.name || u.email}</option>
+            ))}
+          </select>
+        </div>
+      ) : null}
+
+      {/* Date range */}
+      <div>
+        <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Created date range</label>
+        <div className="flex items-center gap-2">
+          <input
+            type="date"
+            className={cn(ctrl, 'flex-1')}
+            value={filters.createdFrom || ''}
+            onChange={(e) => onChange({ createdFrom: e.target.value })}
+          />
+          <span className="text-xs text-ink-faint">–</span>
+          <input
+            type="date"
+            className={cn(ctrl, 'flex-1')}
+            value={filters.createdTo || ''}
+            onChange={(e) => onChange({ createdTo: e.target.value })}
+          />
+        </div>
+      </div>
+
+      <div className="mt-4 flex items-center justify-between border-t border-surface-border pt-3">
+        <button
+          type="button"
+          onClick={onReset}
+          className="text-sm text-ink-faint underline underline-offset-2 hover:text-ink"
+        >
+          Clear all
+        </button>
+        <button
+          type="button"
+          onClick={() => onChange({})}
+          className="rounded-xl bg-brand-600 px-5 py-2 text-sm font-medium text-white hover:bg-brand-700"
+        >
+          Apply
+        </button>
+      </div>
+    </div>
+  )
+}
+
 /* ── main export ─────────────────────────────────── */
 
 export function FilterBuilder({
@@ -466,8 +577,29 @@ export function FilterBuilder({
   isOpportunities = false,
   onDraftApply,
 }) {
+  const [filterMode, setFilterMode] = useState('simple') // 'simple' | 'advanced'
   const [fieldSearch, setFieldSearch] = useState('')
   const [draft, setDraft] = useState(() => buildInitialDraft())
+  // Preset save/load state
+  const [savePresetOpen, setSavePresetOpen] = useState(false)
+  const [presetName, setPresetName] = useState('')
+  const [presetsDropOpen, setPresetsDropOpen] = useState(false)
+  const presetsRef = useRef(null)
+  const module = isOpportunities ? 'opportunities' : 'leads'
+  const { data: presetsData } = useGetFilterPresetsQuery(module)
+  const [createPreset, { isLoading: savingPreset }] = useCreateFilterPresetMutation()
+  const [deletePreset] = useDeleteFilterPresetMutation()
+  const presets = presetsData?.data || []
+
+  useEffect(() => {
+    function handler(e) {
+      if (presetsRef.current && !presetsRef.current.contains(e.target)) {
+        setPresetsDropOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
 
   useEffect(() => {
     const base = buildInitialDraft()
@@ -533,6 +665,133 @@ export function FilterBuilder({
 
   return (
     <div className="flex flex-col" style={{ minHeight: 0 }}>
+      {/* Mode toggle + preset controls */}
+      <div className="mb-3 flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-ink">
+            {filterMode === 'simple' ? 'Quick Filters' : 'Advanced Filters'}
+          </span>
+          <button
+            type="button"
+            onClick={() => setFilterMode(filterMode === 'simple' ? 'advanced' : 'simple')}
+            className="flex items-center gap-1 rounded-lg border border-surface-border px-2.5 py-1.5 text-xs font-medium text-ink-muted hover:bg-surface-subtle hover:text-ink transition-colors"
+          >
+            {filterMode === 'simple' ? 'Advanced ↓' : 'Simple ↑'}
+          </button>
+        </div>
+        <div className="flex items-center gap-1.5">
+          {/* My Filters dropdown */}
+          <div className="relative" ref={presetsRef}>
+            <button
+              type="button"
+              onClick={() => setPresetsDropOpen((o) => !o)}
+              className="flex items-center gap-1 rounded-lg border border-surface-border px-2.5 py-1.5 text-xs font-medium text-ink-muted hover:bg-surface-subtle hover:text-ink transition-colors"
+            >
+              <BookmarkCheck className="h-3.5 w-3.5" />
+              My Filters
+            </button>
+            {presetsDropOpen ? (
+              <div className="absolute right-0 top-full z-50 mt-1 w-52 rounded-xl border border-surface-border bg-white shadow-lg">
+                {presets.length === 0 ? (
+                  <p className="px-4 py-3 text-xs text-ink-muted">No saved filters yet</p>
+                ) : (
+                  <ul>
+                    {presets.map((p) => (
+                      <li key={p.id} className="flex items-center justify-between gap-2 px-3 py-2 hover:bg-surface-subtle">
+                        <button
+                          type="button"
+                          className="flex-1 text-left text-xs font-medium text-ink truncate"
+                          onClick={() => {
+                            try {
+                              const parsed = JSON.parse(p.filterJson || '{}')
+                              onChange(parsed)
+                            } catch {}
+                            setPresetsDropOpen(false)
+                          }}
+                        >
+                          {p.name}
+                        </button>
+                        <button
+                          type="button"
+                          className="shrink-0 rounded p-1 text-ink-faint hover:text-red-600"
+                          aria-label="Delete filter preset"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            deletePreset(p.id)
+                          }}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ) : null}
+          </div>
+          {/* Save Filter button */}
+          <button
+            type="button"
+            onClick={() => setSavePresetOpen(true)}
+            className="flex items-center gap-1 rounded-lg border border-surface-border px-2.5 py-1.5 text-xs font-medium text-ink-muted hover:bg-surface-subtle hover:text-ink transition-colors"
+          >
+            <Bookmark className="h-3.5 w-3.5" />
+            Save
+          </button>
+        </div>
+      </div>
+
+      {/* Save preset modal */}
+      {savePresetOpen ? (
+        <div className="mb-3 rounded-xl border border-brand-200 bg-brand-50 p-3">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-semibold text-ink">Name this filter</p>
+            <button type="button" onClick={() => setSavePresetOpen(false)} aria-label="Close" className="text-ink-faint hover:text-ink">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              className="h-8 flex-1 rounded-lg border border-surface-border bg-white px-2.5 text-sm text-ink outline-none focus:border-brand-500"
+              placeholder="e.g. Hot leads this month"
+              value={presetName}
+              onChange={(e) => setPresetName(e.target.value)}
+            />
+            <button
+              type="button"
+              disabled={!presetName.trim() || savingPreset}
+              onClick={async () => {
+                try {
+                  await createPreset({ name: presetName.trim(), module, filterJson: JSON.stringify(filters) })
+                  setPresetName('')
+                  setSavePresetOpen(false)
+                } catch {}
+              }}
+              className="h-8 rounded-lg bg-brand-600 px-3 text-xs font-semibold text-white disabled:opacity-50 hover:bg-brand-700"
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Simple mode */}
+      {filterMode === 'simple' ? (
+        <SimpleFilterRow
+          filters={filters}
+          onChange={onChange}
+          onReset={onReset}
+          users={users}
+          stageOptions={stageOptions}
+          isOpportunities={isOpportunities}
+        />
+      ) : null}
+
+      {/* Advanced mode */}
+      {filterMode === 'advanced' ? (
+        <>
+
       {/* Field search */}
       <div className="relative mb-3">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
@@ -592,6 +851,8 @@ export function FilterBuilder({
           </button>
         </div>
       </div>
+        </>
+      ) : null}
     </div>
   )
 }

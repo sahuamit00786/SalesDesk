@@ -1,4 +1,4 @@
-export function ChartSkeleton({ height = 260 }) {
+export function ChartSkeleton({ height = 180 }) {
   return (
     <div
       className="flex items-center justify-center animate-pulse rounded-xl bg-[#F9F7FC]"

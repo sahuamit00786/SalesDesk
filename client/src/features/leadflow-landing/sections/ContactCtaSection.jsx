@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Sms, Call, ArrowRight2 } from 'iconsax-react'
+import { Mail, Phone, ChevronRight } from 'lucide-react'
 import { Section } from '@/features/leadflow-landing/components/Section'
 
 const EMAIL = 'sahuamit00786@gmail.com'
@@ -48,24 +48,24 @@ export function ContactCtaSection() {
             className="group inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-white px-7 text-sm font-semibold text-violet-800 shadow-lg transition hover:bg-violet-50 active:scale-[0.98]"
           >
             Create free account
-            <ArrowRight2 size={16} className="transition group-hover:translate-x-0.5" aria-hidden />
+            <ChevronRight size={16} className="transition group-hover:translate-x-0.5" aria-hidden />
           </Link>
           <a
             href={`mailto:${EMAIL}`}
             className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-white/25 bg-white/10 px-7 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/20"
           >
-            <Sms size={16} aria-hidden />
+            <Mail size={16} aria-hidden />
             Email us
           </a>
         </div>
 
         <div className="mt-10 flex flex-col items-center gap-3 text-sm text-violet-300/70 sm:flex-row sm:justify-center sm:gap-8">
           <a href={`mailto:${EMAIL}`} className="inline-flex items-center gap-2 transition hover:text-white">
-            <Sms size={16} aria-hidden />
+            <Mail size={16} aria-hidden />
             {EMAIL}
           </a>
           <a href={`tel:${PHONE_TEL}`} className="inline-flex items-center gap-2 transition hover:text-white">
-            <Call size={16} aria-hidden />
+            <Phone size={16} aria-hidden />
             {PHONE}
           </a>
         </div>
