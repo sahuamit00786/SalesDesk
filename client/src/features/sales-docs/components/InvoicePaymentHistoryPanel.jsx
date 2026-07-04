@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { cn } from '@/utils/cn'
@@ -86,11 +87,23 @@ export function InvoicePaymentHistoryPanel({ invoiceId, onClose }) {
   const grandTotal = Number(inv?.grandTotal ?? 0)
   const amountPaid = Number(inv?.amountPaid ?? 0)
   const balanceDue = Math.max(0, grandTotal - amountPaid)
+  // Mirrors server rule: only issued / partially paid / overdue invoices accept payments
+  const canRecordPayment = ['issued', 'partially_paid', 'overdue'].includes(inv?.status)
+  const blockedReason =
+    inv?.status === 'draft'
+      ? 'This invoice is still a draft. Set its status to Issued before recording payments.'
+      : inv?.status === 'paid'
+        ? 'This invoice is fully paid.'
+        : `Payments cannot be recorded on a ${inv?.status} invoice.`
 
   async function handleRecord() {
     const amt = Number(amount)
     if (!Number.isFinite(amt) || amt <= 0) {
       toast.error('Enter a valid amount')
+      return
+    }
+    if (amt > balanceDue + 0.009) {
+      toast.error(`Amount exceeds balance due (${fmtMoney(balanceDue, currency)})`)
       return
     }
     try {
@@ -176,6 +189,11 @@ export function InvoicePaymentHistoryPanel({ invoiceId, onClose }) {
           </div>
 
           {/* Record payment */}
+          {!canRecordPayment ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+              {blockedReason}
+            </div>
+          ) : (
           <div className="rounded-xl border border-surface-border bg-surface-subtle p-4">
             <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-ink-muted">Record payment</p>
             <div className="flex flex-col gap-3">
@@ -231,8 +249,18 @@ export function InvoicePaymentHistoryPanel({ invoiceId, onClose }) {
                   {recording ? 'Saving…' : 'Save payment'}
                 </Button>
               </div>
+              {inv.dealId ? (
+                <p className="text-xs leading-relaxed text-ink-faint">
+                  Payments on this invoice are also recorded on the linked deal — see{' '}
+                  <Link to="/deal-payments" className="font-medium text-brand-600 hover:underline">
+                    Deal Payments
+                  </Link>
+                  .
+                </p>
+              ) : null}
             </div>
           </div>
+          )}
         </div>
       )}
     </RightDrawer>

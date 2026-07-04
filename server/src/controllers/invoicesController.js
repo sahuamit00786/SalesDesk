@@ -1,19 +1,20 @@
 import Joi from 'joi'
-import { Transaction } from 'sequelize'
+import { Op, Transaction } from 'sequelize'
 import {
   sequelize,
   Invoice,
   InvoiceItem,
   InvoicePayment,
-  InvoiceTemplate,
+  SalesDocTemplate,
   WorkspaceBillingProfile,
   Lead,
   Deal,
+  DealPayment,
   Quotation,
 } from '../models/index.js'
 import { requireWorkspaceFromRequest } from '../services/workspaceScope.js'
 import { aggregateInvoiceTotals } from '../services/salesTotals.js'
-import { buildInvoiceNumber } from '../services/docNumberFormat.js'
+import { allocateInvoiceNumber } from '../services/docNumberFormat.js'
 import { buildCustomerSnapshotFromLead, mergeBillingIntoPaymentSnapshot } from '../services/salesCustomerSnapshot.js'
 import { recordInvoiceCreatedOnLead } from '../services/leadSalesDocActivity.js'
 import { resolveLeadAndDealForSalesDoc } from '../services/salesDocLeadDealResolve.js'
@@ -120,13 +121,20 @@ function serializeInvoice(inv, items = [], payments = []) {
   }
 }
 
+// Statuses that may accept payments. Draft must be issued first; cancelled/refunded are terminal.
+const PAYABLE_STATUSES = ['issued', 'partially_paid', 'overdue']
+// Statuses derived purely from recorded payments — never settable by hand.
+const PAYMENT_DERIVED_STATUSES = ['paid', 'partially_paid']
+const MONEY_EPSILON = 0.009
+
 function deriveInvoiceStatus(amountPaid, grandTotal, priorStatus) {
   const paid = Number(amountPaid) || 0
   const total = Number(grandTotal) || 0
   if (priorStatus === 'cancelled' || priorStatus === 'refunded') return priorStatus
-  if (paid <= 0 && priorStatus === 'draft') return 'draft'
   if (paid >= total && total > 0) return 'paid'
   if (paid > 0 && paid < total) return 'partially_paid'
+  // No payments: paid/partially_paid fall back to issued (e.g. after removing payments)
+  if (PAYMENT_DERIVED_STATUSES.includes(priorStatus)) return 'issued'
   if (priorStatus === 'draft') return 'draft'
   return priorStatus || 'issued'
 }
@@ -140,9 +148,30 @@ export async function listInvoices(req, res, next) {
     const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 25))
     const offset = (page - 1) * limit
 
+    const INVOICE_STATUSES = ['draft', 'issued', 'partially_paid', 'paid', 'overdue', 'cancelled', 'refunded']
+    const status = INVOICE_STATUSES.includes(req.query.status) ? req.query.status : null
+    const dateFrom = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.dateFrom || '')) ? req.query.dateFrom : null
+    const dateTo = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.dateTo || '')) ? req.query.dateTo : null
+    const createdBy = req.query.createdBy || null
+    const minAmount = req.query.minAmount !== undefined && req.query.minAmount !== '' ? Number(req.query.minAmount) : null
+    const maxAmount = req.query.maxAmount !== undefined && req.query.maxAmount !== '' ? Number(req.query.maxAmount) : null
+
     const where = { workspaceId, companyId: req.user.companyId }
     if (leadId) where.leadId = leadId
     if (dealId) where.dealId = dealId
+    if (status) where.status = status
+    if (createdBy) where.ownerUserId = createdBy
+    if (dateFrom || dateTo) {
+      where.issueDate = {}
+      if (dateFrom) where.issueDate[Op.gte] = dateFrom
+      if (dateTo) where.issueDate[Op.lte] = dateTo
+    }
+    if (minAmount != null && !Number.isNaN(minAmount)) {
+      where.grandTotal = { ...(where.grandTotal || {}), [Op.gte]: minAmount }
+    }
+    if (maxAmount != null && !Number.isNaN(maxAmount)) {
+      where.grandTotal = { ...(where.grandTotal || {}), [Op.lte]: maxAmount }
+    }
 
     const { rows, count } = await Invoice.findAndCountAll({
       where,
@@ -152,6 +181,29 @@ export async function listInvoices(req, res, next) {
       include: listIncludes,
     })
 
+    const summaryRows = await Invoice.findAll({
+      where,
+      attributes: [
+        'status',
+        [sequelize.fn('COUNT', sequelize.col('Invoice.id')), 'cnt'],
+        [sequelize.fn('SUM', sequelize.col('grand_total')), 'total'],
+        [sequelize.fn('SUM', sequelize.col('amount_paid')), 'paid'],
+      ],
+      group: ['status'],
+      raw: true,
+    })
+    const byStatus = {}
+    let totalValue = 0
+    let totalPaid = 0
+    for (const r of summaryRows) {
+      const cnt = Number(r.cnt) || 0
+      const total = Number(r.total) || 0
+      const paid = Number(r.paid) || 0
+      byStatus[r.status] = { count: cnt, total, paid }
+      totalValue += total
+      totalPaid += paid
+    }
+
     return res.json({
       success: true,
       data: {
@@ -160,7 +212,15 @@ export async function listInvoices(req, res, next) {
         page,
         limit,
       },
-      meta: {},
+      meta: {
+        summary: {
+          byStatus,
+          totalValue,
+          totalPaid,
+          totalOutstanding: Math.max(0, totalValue - totalPaid),
+          totalCount: count,
+        },
+      },
     })
   } catch (e) {
     return next(e)
@@ -210,11 +270,12 @@ export async function createInvoice(req, res, next) {
 
     let template = null
     if (value.invoiceTemplateId) {
-      template = await InvoiceTemplate.findOne({
+      template = await SalesDocTemplate.findOne({
         where: {
           id: value.invoiceTemplateId,
           workspaceId,
           companyId: req.user.companyId,
+          docType: 'invoice',
         },
       })
       if (!template) {
@@ -261,13 +322,7 @@ export async function createInvoice(req, res, next) {
         )
       }
 
-      let invoiceNumber = buildInvoiceNumber(issueDate, billing.invoiceNextSeq)
-      if (template?.autoNumbering) {
-        invoiceNumber = `${template.numberPrefix}-${template.nextNumber}`
-        await template.increment('nextNumber', { by: 1, transaction })
-      } else {
-        await billing.increment('invoiceNextSeq', { by: 1, transaction })
-      }
+      const invoiceNumber = await allocateInvoiceNumber({ billing, template, issueDate, transaction })
 
       let status = value.status
       if (status === 'draft') status = 'draft'
@@ -369,12 +424,33 @@ export async function patchInvoice(req, res, next) {
     })
     if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Not found' } })
 
+    if (value.status && PAYMENT_DERIVED_STATUSES.includes(value.status)) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_STATE',
+          message: 'Paid and partially paid statuses are derived from recorded payments and cannot be set manually',
+        },
+      })
+    }
+
     let totals = null
     if (value.items) {
       totals = aggregateInvoiceTotals(value.items, {
         roundOff: value.roundOff ?? Number(row.roundOff),
         shipping: value.shipping ?? Number(row.shipping),
         adjustment: value.adjustment ?? Number(row.adjustment),
+      })
+    }
+
+    const alreadyPaid = Number(row.amountPaid) || 0
+    if (totals && alreadyPaid > 0 && totals.grandTotal + MONEY_EPSILON < alreadyPaid) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_STATE',
+          message: `New total (${totals.grandTotal.toFixed(2)}) is below the amount already paid (${alreadyPaid.toFixed(2)}). Remove payments first.`,
+        },
       })
     }
 
@@ -411,11 +487,12 @@ export async function patchInvoice(req, res, next) {
         updates.invoiceTemplateId = value.invoiceTemplateId || null
         let tpl = null
         if (updates.invoiceTemplateId) {
-          tpl = await InvoiceTemplate.findOne({
+          tpl = await SalesDocTemplate.findOne({
             where: {
               id: updates.invoiceTemplateId,
               workspaceId,
               companyId: req.user.companyId,
+              docType: 'invoice',
             },
             transaction,
           })
@@ -495,13 +572,45 @@ export async function recordInvoicePayment(req, res, next) {
       return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: error.message } })
     }
 
-    const invoice = await Invoice.findOne({
-      where: { id: req.params.id, workspaceId, companyId: req.user.companyId },
-    })
-    if (!invoice) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Not found' } })
+    const DEAL_PAYMENT_MODES = ['bank_transfer', 'cash', 'cheque', 'upi', 'card', 'crypto', 'other']
 
+    let failure = null
     await sequelize.transaction(async (t) => {
-      await InvoicePayment.create({
+      // Lock the invoice row so concurrent payments serialize and cannot overshoot the balance
+      const invoice = await Invoice.findOne({
+        where: { id: req.params.id, workspaceId, companyId: req.user.companyId },
+        transaction: t,
+        lock: Transaction.LOCK.UPDATE,
+      })
+      if (!invoice) {
+        failure = { status: 404, code: 'NOT_FOUND', message: 'Not found' }
+        return
+      }
+      if (!PAYABLE_STATUSES.includes(invoice.status)) {
+        failure = {
+          status: 400,
+          code: 'INVALID_STATE',
+          message:
+            invoice.status === 'draft'
+              ? 'Draft invoices cannot accept payments. Save the invoice as issued first.'
+              : `Payments cannot be recorded on a ${invoice.status} invoice`,
+        }
+        return
+      }
+
+      const existing = await InvoicePayment.findAll({ where: { invoiceId: invoice.id }, transaction: t })
+      const alreadyPaid = existing.reduce((s, p) => s + Number(p.amount), 0)
+      const balanceDue = Number(invoice.grandTotal) - alreadyPaid
+      if (value.amount > balanceDue + MONEY_EPSILON) {
+        failure = {
+          status: 400,
+          code: 'OVERPAYMENT',
+          message: `Payment exceeds balance due (${balanceDue.toFixed(2)} ${invoice.currency || ''})`.trim(),
+        }
+        return
+      }
+
+      const payment = await InvoicePayment.create({
         invoiceId: invoice.id,
         amount: value.amount,
         paidAt: value.paidAt,
@@ -510,8 +619,31 @@ export async function recordInvoicePayment(req, res, next) {
         recordedByUserId: req.user.id,
       }, { transaction: t })
 
-      const payments = await InvoicePayment.findAll({ where: { invoiceId: invoice.id }, transaction: t })
-      const sumPaid = payments.reduce((s, p) => s + Number(p.amount), 0)
+      // Mirror the payment onto the linked deal so deal revenue stays in sync
+      if (invoice.dealId) {
+        const deal = await Deal.findOne({
+          where: { id: invoice.dealId, workspaceId, companyId: req.user.companyId, isDeleted: false },
+          transaction: t,
+        })
+        if (deal) {
+          await DealPayment.create({
+            dealId: deal.id,
+            workspaceId,
+            companyId: req.user.companyId,
+            amount: value.amount,
+            currency: invoice.currency || 'USD',
+            paymentDate: new Date(value.paidAt).toISOString().slice(0, 10),
+            mode: DEAL_PAYMENT_MODES.includes(value.mode) ? value.mode : 'other',
+            reference: value.reference || null,
+            notes: `Synced from invoice ${invoice.invoiceNumber}`,
+            status: 'received',
+            createdByUserId: req.user.id,
+            invoicePaymentId: payment.id,
+          }, { transaction: t })
+        }
+      }
+
+      const sumPaid = alreadyPaid + value.amount
       const newStatus = deriveInvoiceStatus(sumPaid, invoice.grandTotal, invoice.status)
 
       await invoice.update({
@@ -520,7 +652,13 @@ export async function recordInvoicePayment(req, res, next) {
       }, { transaction: t })
     })
 
-    const full = await Invoice.findByPk(invoice.id, {
+    if (failure) {
+      return res
+        .status(failure.status)
+        .json({ success: false, error: { code: failure.code, message: failure.message } })
+    }
+
+    const full = await Invoice.findByPk(req.params.id, {
       include: [
         { model: InvoiceItem, as: 'items' },
         { model: InvoicePayment, as: 'payments' },
@@ -551,6 +689,7 @@ export async function deleteInvoicePayment(req, res, next) {
     if (!payment) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Payment not found' } })
 
     await sequelize.transaction(async (t) => {
+      await DealPayment.destroy({ where: { invoicePaymentId: payment.id }, transaction: t })
       await payment.destroy({ transaction: t })
 
       const remaining = await InvoicePayment.findAll({ where: { invoiceId: invoice.id }, transaction: t })
@@ -588,6 +727,12 @@ export async function deleteInvoice(req, res, next) {
     }
 
     await sequelize.transaction(async (transaction) => {
+      const paymentIds = (
+        await InvoicePayment.findAll({ where: { invoiceId: row.id }, attributes: ['id'], transaction })
+      ).map((p) => p.id)
+      if (paymentIds.length) {
+        await DealPayment.destroy({ where: { invoicePaymentId: paymentIds }, transaction })
+      }
       await InvoicePayment.destroy({ where: { invoiceId: row.id }, transaction })
       await InvoiceItem.destroy({ where: { invoiceId: row.id }, transaction })
       const linkedQuotes = await Quotation.findAll({

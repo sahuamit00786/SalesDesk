@@ -3,7 +3,8 @@ import toast from 'react-hot-toast'
 import { Plus, Trash2 } from 'lucide-react'
 import { RightDrawer } from '@/components/ui/RightDrawer'
 import { cn } from '@/utils/cn'
-import { useCreateInvoiceMutation, useGetInvoiceTemplatesQuery } from '@/features/sales-docs/invoicesApi'
+import { useCreateInvoiceMutation } from '@/features/sales-docs/invoicesApi'
+import { useGetSalesDocTemplatesQuery } from '@/features/sales-docs/salesDocTemplatesApi'
 import { useGetDealsQuery } from '@/features/deals/dealsApi'
 import { INVOICE_PRESET_LABELS } from '@/features/sales-docs/presetLabels'
 import { useEffectiveCurrency } from '@/hooks/useEffectiveCurrency'
@@ -45,7 +46,7 @@ export function CreateInvoiceDrawer({ open, onClose, initialLeadId = null }) {
     },
     { skip: !open },
   )
-  const { data: tplRes } = useGetInvoiceTemplatesQuery()
+  const { data: tplRes } = useGetSalesDocTemplatesQuery({ docType: 'invoice' })
 
   const deals = dealsRes?.data || []
   const templates = tplRes?.data?.items ?? tplRes?.items ?? []

@@ -27,7 +27,11 @@ export const campaignsApi = baseApi.injectEndpoints({
     }),
     patchCampaign: build.mutation({
       query: ({ id, ...body }) => ({ url: `/campaigns/${id}`, method: 'PATCH', body }),
-      invalidatesTags: (_r, _e, arg) => [{ type: 'Campaign', id: 'LIST' }, { type: 'Campaign', id: arg.id }],
+      invalidatesTags: (_r, _e, arg) => [
+        { type: 'Campaign', id: 'LIST' },
+        { type: 'Campaign', id: arg.id },
+        { type: 'Campaign', id: `${arg.id}-report` },
+      ],
       async onQueryStarted(_arg, { queryFulfilled }) {
         try { await queryFulfilled; toast.success('Campaign updated.') } catch { toast.error('Could not update campaign.') }
       },
@@ -41,6 +45,7 @@ export const campaignsApi = baseApi.injectEndpoints({
       invalidatesTags: (_r, _e, arg) => [
         { type: 'Campaign', id: arg.campaignId },
         { type: 'Campaign', id: `${arg.campaignId}-leads` },
+        { type: 'Campaign', id: `${arg.campaignId}-report` },
         { type: 'Campaign', id: 'LIST' },
       ],
       async onQueryStarted(_arg, { queryFulfilled }) {
@@ -56,6 +61,7 @@ export const campaignsApi = baseApi.injectEndpoints({
       invalidatesTags: (_r, _e, arg) => [
         { type: 'Campaign', id: arg.campaignId },
         { type: 'Campaign', id: `${arg.campaignId}-leads` },
+        { type: 'Campaign', id: `${arg.campaignId}-report` },
         { type: 'Campaign', id: 'LIST' },
       ],
       async onQueryStarted(_arg, { queryFulfilled }) {
@@ -67,6 +73,7 @@ export const campaignsApi = baseApi.injectEndpoints({
       invalidatesTags: (_r, _e, arg) => [
         { type: 'Campaign', id: arg.campaignId },
         { type: 'Campaign', id: `${arg.campaignId}-leads` },
+        { type: 'Campaign', id: `${arg.campaignId}-report` },
         { type: 'Campaign', id: 'LIST' },
       ],
     }),
@@ -75,28 +82,74 @@ export const campaignsApi = baseApi.injectEndpoints({
       invalidatesTags: (_r, _e, arg) => [
         { type: 'Campaign', id: arg.campaignId },
         { type: 'Campaign', id: `${arg.campaignId}-leads` },
+        { type: 'Campaign', id: `${arg.campaignId}-report` },
         { type: 'Campaign', id: 'LIST' },
       ],
     }),
     addCampaignMembers: build.mutation({
       query: ({ campaignId, userIds }) => ({ url: `/campaigns/${campaignId}/members`, method: 'POST', body: { userIds } }),
-      invalidatesTags: (_r, _e, arg) => [{ type: 'Campaign', id: arg.campaignId }, { type: 'Campaign', id: 'LIST' }],
+      invalidatesTags: (_r, _e, arg) => [
+        { type: 'Campaign', id: arg.campaignId },
+        { type: 'Campaign', id: `${arg.campaignId}-report` },
+        { type: 'Campaign', id: 'LIST' },
+      ],
     }),
     removeCampaignMember: build.mutation({
       query: ({ campaignId, userId }) => ({ url: `/campaigns/${campaignId}/members/${userId}`, method: 'DELETE' }),
-      invalidatesTags: (_r, _e, arg) => [{ type: 'Campaign', id: arg.campaignId }, { type: 'Campaign', id: 'LIST' }],
+      invalidatesTags: (_r, _e, arg) => [
+        { type: 'Campaign', id: arg.campaignId },
+        { type: 'Campaign', id: `${arg.campaignId}-report` },
+        { type: 'Campaign', id: 'LIST' },
+      ],
     }),
     distributeCampaignLeads: build.mutation({
       query: ({ campaignId, ...body }) => ({ url: `/campaigns/${campaignId}/distribute`, method: 'POST', body }),
       invalidatesTags: (_r, _e, arg) => [
         { type: 'Campaign', id: arg.campaignId },
         { type: 'Campaign', id: `${arg.campaignId}-leads` },
+        { type: 'Campaign', id: `${arg.campaignId}-report` },
       ],
     }),
 
     getCampaignReport: build.query({
       query: ({ id, ...params }) => ({ url: `/campaigns/${id}/report`, params }),
       providesTags: (_r, _e, arg) => [{ type: 'Campaign', id: `${arg.id}-report` }],
+    }),
+
+    // Custom stage editor
+    patchCampaignStages: build.mutation({
+      query: ({ campaignId, stages }) => ({ url: `/campaigns/${campaignId}/stages`, method: 'PATCH', body: { stages } }),
+      invalidatesTags: (_r, _e, arg) => [
+        { type: 'Campaign', id: arg.campaignId },
+        { type: 'Campaign', id: `${arg.campaignId}-leads` },
+        { type: 'Campaign', id: `${arg.campaignId}-report` },
+        { type: 'Campaign', id: 'LIST' },
+      ],
+      async onQueryStarted(_arg, { queryFulfilled }) {
+        try { await queryFulfilled; toast.success('Stages updated.') } catch { toast.error('Could not update stages.') }
+      },
+    }),
+
+    // Stage change history for one campaign lead
+    getCampaignLeadStageHistory: build.query({
+      query: ({ campaignId, leadId }) => `/campaigns/${campaignId}/leads/${leadId}/stage-history`,
+      providesTags: (_r, _e, arg) => [{ type: 'Campaign', id: `${arg.campaignId}-${arg.leadId}-stage-history` }],
+    }),
+
+    // CSV exports (raw text via responseHandler, downloaded client-side)
+    exportCampaignLeadsCsv: build.query({
+      query: ({ campaignId, ...params }) => ({
+        url: `/campaigns/${campaignId}/leads/export`,
+        params,
+        responseHandler: (response) => response.text(),
+      }),
+    }),
+    exportCampaignPaymentsCsv: build.query({
+      query: ({ campaignId, ...params }) => ({
+        url: `/campaigns/${campaignId}/payments/export`,
+        params,
+        responseHandler: (response) => response.text(),
+      }),
     }),
 
     // Campaign Payments
@@ -114,6 +167,7 @@ export const campaignsApi = baseApi.injectEndpoints({
         { type: 'Campaign', id: arg.campaignId },
         { type: 'Campaign', id: `${arg.campaignId}-leads` },
         { type: 'Campaign', id: `${arg.campaignId}-${arg.leadId}-payments` },
+        { type: 'Campaign', id: `${arg.campaignId}-report` },
         { type: 'Campaign', id: 'LIST' },
       ],
       async onQueryStarted(_arg, { queryFulfilled }) {
@@ -130,6 +184,7 @@ export const campaignsApi = baseApi.injectEndpoints({
         { type: 'Campaign', id: arg.campaignId },
         { type: 'Campaign', id: `${arg.campaignId}-leads` },
         { type: 'Campaign', id: `${arg.campaignId}-${arg.leadId}-payments` },
+        { type: 'Campaign', id: `${arg.campaignId}-report` },
         { type: 'Campaign', id: 'LIST' },
       ],
       async onQueryStarted(_arg, { queryFulfilled }) {
@@ -145,6 +200,7 @@ export const campaignsApi = baseApi.injectEndpoints({
         { type: 'Campaign', id: arg.campaignId },
         { type: 'Campaign', id: `${arg.campaignId}-leads` },
         { type: 'Campaign', id: `${arg.campaignId}-${arg.leadId}-payments` },
+        { type: 'Campaign', id: `${arg.campaignId}-report` },
         { type: 'Campaign', id: 'LIST' },
       ],
       async onQueryStarted(_arg, { queryFulfilled }) {
@@ -172,4 +228,8 @@ export const {
   useCreateCampaignPaymentMutation,
   usePatchCampaignPaymentMutation,
   useDeleteCampaignPaymentMutation,
+  usePatchCampaignStagesMutation,
+  useGetCampaignLeadStageHistoryQuery,
+  useLazyExportCampaignLeadsCsvQuery,
+  useLazyExportCampaignPaymentsCsvQuery,
 } = campaignsApi

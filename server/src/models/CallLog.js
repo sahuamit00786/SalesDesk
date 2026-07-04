@@ -12,13 +12,46 @@ primaryKey:true
 
 leadId:{
 type:DataTypes.UUID,
-allowNull:false,
+allowNull:true,
 field:'lead_id'
+},
+
+companyId:{
+type:DataTypes.UUID,
+allowNull:false,
+field:'company_id'
+},
+
+workspaceId:{
+type:DataTypes.UUID,
+allowNull:true,
+field:'workspace_id'
 },
 
 ownerUserId:{
 type:DataTypes.UUID,
 field:'owner_user_id'
+},
+
+// Raw caller identity as read from the device call log — kept even when
+// leadId is set, since it can differ from the lead's saved contact name.
+callerName:{
+type:DataTypes.STRING(255),
+field:'caller_name'
+},
+
+phoneNumber:{
+type:DataTypes.STRING(32),
+field:'phone_number'
+},
+
+source:{
+type:DataTypes.ENUM(
+'manual',
+'device_sync'
+),
+allowNull:false,
+defaultValue:'manual'
 },
 
 callType:{

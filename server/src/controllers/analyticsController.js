@@ -1529,17 +1529,19 @@ export async function dashboardCharts(req, res, next) {
       }),
     ])
 
-    // Enrich oppStatusDist with names from OpportunityStatus table
-    const oppStatusIds = oppStatusDistRaw.map((r) => r.opportunityStatus).filter(Boolean)
-    let oppStatusNameMap = {}
-    if (oppStatusIds.length) {
-      const statuses = await OpportunityStatus.findAll({
-        where: { id: { [Op.in]: oppStatusIds } },
-        attributes: ['id', 'name'],
-        raw: true,
-      })
-      oppStatusNameMap = Object.fromEntries(statuses.map((s) => [s.id, s.name]))
-    }
+    // Pull the full configured pipeline (same statuses shown on the opportunities kanban board)
+    // so the chart reflects every stage, not just the ones with data in this period.
+    const allOppStatuses = await OpportunityStatus.findAll({
+      where: { workspaceId, companyId },
+      attributes: ['id', 'name', 'sortOrder'],
+      order: [['sortOrder', 'ASC']],
+      raw: true,
+    })
+    const oppStatusNameMap = Object.fromEntries(allOppStatuses.map((s) => [s.id, s.name]))
+    const oppStatusCountMap = Object.fromEntries(oppStatusDistRaw.map((r) => [r.opportunityStatus, Number(r.count)]))
+    const pipelineByStatusMap = Object.fromEntries(
+      pipelineByStatusRaw.map((r) => [r.opportunityStatus, { count: Number(r.count), value: Number(r.totalValue) }]),
+    )
 
     // Merge pipeline trend (created + won per month)
     const trendMap = {}
@@ -1627,17 +1629,19 @@ export async function dashboardCharts(req, res, next) {
         charts: {
           leadStatusDist: leadStatusDist.map((r) => ({ name: capitalize(r.status), value: Number(r.count) })),
           oppStatusDist: (() => {
-            const configured = oppStatusDistRaw
-              .filter((r) => oppStatusNameMap[r.opportunityStatus])
-              .map((r) => ({ name: oppStatusNameMap[r.opportunityStatus], value: Number(r.count) }))
-            if (configured.length) return configured
+            if (allOppStatuses.length) {
+              return allOppStatuses.map((s) => ({ name: s.name, value: oppStatusCountMap[s.id] || 0 }))
+            }
             return oppStatusByLeadStatus.map((r) => ({ name: capitalize(r.status || 'new'), value: Number(r.count) }))
           })(),
           pipelineByStage: (() => {
-            const configured = pipelineByStatusRaw
-              .filter((r) => oppStatusNameMap[r.opportunityStatus])
-              .map((r) => ({ name: oppStatusNameMap[r.opportunityStatus], count: Number(r.count), value: Number(r.totalValue) }))
-            if (configured.length) return configured
+            if (allOppStatuses.length) {
+              return allOppStatuses.map((s) => ({
+                name: s.name,
+                count: pipelineByStatusMap[s.id]?.count || 0,
+                value: pipelineByStatusMap[s.id]?.value || 0,
+              }))
+            }
             return oppStatusByLeadStatus.map((r) => ({ name: capitalize(r.status || 'new'), count: Number(r.count), value: Number(r.totalValue) }))
           })(),
           pipelineTrend,

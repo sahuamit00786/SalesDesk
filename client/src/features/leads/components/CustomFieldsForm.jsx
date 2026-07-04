@@ -59,6 +59,7 @@ function CustomFieldInput({ field, fieldValue, onChange, compact }) {
             'w-full rounded-xl border border-surface-border px-3.5 py-2 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none',
             compact ? 'min-h-20 text-xs' : 'min-h-24 text-sm',
           )}
+          placeholder={`Enter your ${field.label}`}
           value={fieldValue ?? ''}
           onChange={(e) => onChange(e.target.value)}
         />
@@ -109,6 +110,7 @@ function CustomFieldInput({ field, fieldValue, onChange, compact }) {
         <Input
           className={controlClass}
           type="number"
+          placeholder={`Enter your ${field.label}`}
           value={fieldValue ?? ''}
           onChange={(e) => onChange(e.target.value)}
         />
@@ -118,6 +120,7 @@ function CustomFieldInput({ field, fieldValue, onChange, compact }) {
         <Input
           className={controlClass}
           type="email"
+          placeholder={`Enter your ${field.label}`}
           value={fieldValue ?? ''}
           onChange={(e) => onChange(e.target.value)}
         />
@@ -156,6 +159,7 @@ function CustomFieldInput({ field, fieldValue, onChange, compact }) {
         <Input
           className={controlClass}
           type="text"
+          placeholder={`Enter your ${field.label}`}
           value={fieldValue ?? ''}
           onChange={(e) => onChange(e.target.value)}
         />

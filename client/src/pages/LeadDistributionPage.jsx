@@ -90,16 +90,12 @@ export function LeadDistributionPage() {
   const [statusFilter, setStatusFilter] = useState(() => [])
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false)
   const statusDropdownRef = useRef(null)
-  const [stageFilter, setStageFilter] = useState('')
-  const [stageDropdownOpen, setStageDropdownOpen] = useState(false)
-  const stageDropdownRef = useRef(null)
   const [selectedLeadIds, setSelectedLeadIds] = useState(() => new Set())
   const [selectingAll, setSelectingAll] = useState(false)
   const [assignModalOpen, setAssignModalOpen] = useState(false)
   const [callerOrder, setCallerOrder] = useState([])
   const { data: formMeta } = useGetLeadFormMetaQuery()
   const users = formMeta?.data?.users || []
-  const opportunityStatuses = formMeta?.data?.opportunityStatuses || []
 
   const listFilterParams = useMemo(() => {
     const p = {
@@ -113,9 +109,8 @@ export function LeadDistributionPage() {
     if (statusFilter.length > 0) {
       p.status = [...statusFilter].sort().join(',')
     }
-    if (recordType !== 'leads' && stageFilter) p.stage = stageFilter
     return p
-  }, [debouncedSearch, recordType, statusFilter, stageFilter])
+  }, [debouncedSearch, recordType, statusFilter])
 
   const listParams = useMemo(
     () => ({ ...listFilterParams, page, limit }),
@@ -140,11 +135,7 @@ export function LeadDistributionPage() {
 
   useEffect(() => {
     setPage(1)
-  }, [debouncedSearch, recordType, statusFilterKey, stageFilter])
-
-  useEffect(() => {
-    if (recordType === 'leads') setStageFilter('')
-  }, [recordType])
+  }, [debouncedSearch, recordType, statusFilterKey])
 
   useEffect(() => {
     if (!statusDropdownOpen) return
@@ -164,25 +155,6 @@ export function LeadDistributionPage() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [statusDropdownOpen])
-
-  useEffect(() => {
-    if (!stageDropdownOpen) return
-    function onDocMouseDown(e) {
-      const el = stageDropdownRef.current
-      if (el && !el.contains(e.target)) setStageDropdownOpen(false)
-    }
-    document.addEventListener('mousedown', onDocMouseDown)
-    return () => document.removeEventListener('mousedown', onDocMouseDown)
-  }, [stageDropdownOpen])
-
-  useEffect(() => {
-    if (!stageDropdownOpen) return
-    function onKey(e) {
-      if (e.key === 'Escape') setStageDropdownOpen(false)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [stageDropdownOpen])
 
   function toggleStatusOption(id) {
     setStatusFilter((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
@@ -315,10 +287,6 @@ export function LeadDistributionPage() {
 
   const assignDisabled = selectionCount === 0
   const selectAllCap = Math.min(total, DISTRIBUTE_MAX_LEADS)
-  const stageFilterLabel = stageFilter
-    ? opportunityStatuses.find((s) => s.id === stageFilter)?.name || stageFilter
-    : 'All stages'
-  const showStageFilter = recordType !== 'leads' && opportunityStatuses.length > 0
 
   const leadDistColumns = useMemo(
     () => [
@@ -358,13 +326,6 @@ export function LeadDistributionPage() {
         headerName: 'Status',
         width: 120,
         renderCell: ({ row }) => <LeadStatusBadge status={row.status} />,
-      },
-      {
-        field: 'stage',
-        headerName: 'Stage',
-        width: 120,
-        valueGetter: (_v, row) =>
-          row.isOpportunity ? row.oppStatus?.name || '—' : '—',
       },
       {
         field: 'company',
@@ -486,81 +447,6 @@ export function LeadDistributionPage() {
                 </div>
               ) : null}
             </div>
-            {showStageFilter ? (
-              <>
-                <span className="mx-0.5 h-5 w-px shrink-0 bg-surface-border" aria-hidden />
-                <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-ink-muted">Stage</span>
-                <div className="relative shrink-0" ref={stageDropdownRef}>
-                  <button
-                    type="button"
-                    id="lead-dist-stage-trigger"
-                    aria-haspopup="listbox"
-                    aria-expanded={stageDropdownOpen}
-                    aria-controls="lead-dist-stage-listbox"
-                    onClick={() => setStageDropdownOpen((o) => !o)}
-                    className={cn(
-                      'inline-flex h-8 max-w-[11rem] items-center gap-1.5 rounded-lg border px-2.5 py-1 text-left text-[11px] font-semibold transition sm:h-9 sm:max-w-[14rem] sm:px-3 sm:text-xs',
-                      stageFilter
-                        ? 'border-brand-300 bg-brand-50 text-brand-900'
-                        : 'border-surface-border bg-white text-ink-muted hover:border-brand-200 hover:bg-brand-50/40 hover:text-ink',
-                    )}
-                  >
-                    <span className="min-w-0 flex-1 truncate">{stageFilterLabel}</span>
-                    <ChevronDown
-                      className={cn('h-3.5 w-3.5 shrink-0 opacity-60 transition', stageDropdownOpen && 'rotate-180')}
-                      aria-hidden
-                    />
-                  </button>
-                  {stageDropdownOpen ? (
-                    <div
-                      id="lead-dist-stage-listbox"
-                      role="listbox"
-                      aria-labelledby="lead-dist-stage-trigger"
-                      className="absolute left-0 top-[calc(100%+4px)] z-50 w-[min(calc(100vw-2rem),16rem)] rounded-xl border border-surface-border bg-white py-1 shadow-lg ring-1 ring-black/5"
-                      onMouseDown={(e) => e.preventDefault()}
-                    >
-                      <ul className="max-h-56 overflow-y-auto py-1">
-                        <li role="option" aria-selected={!stageFilter}>
-                          <button
-                            type="button"
-                            className={cn(
-                              'flex w-full px-3 py-2 text-left text-sm hover:bg-surface-subtle',
-                              !stageFilter && 'bg-brand-50/60 font-semibold text-brand-900',
-                            )}
-                            onClick={() => {
-                              setStageFilter('')
-                              setStageDropdownOpen(false)
-                            }}
-                          >
-                            All stages
-                          </button>
-                        </li>
-                        {opportunityStatuses.map((s) => {
-                          const active = stageFilter === s.id
-                          return (
-                            <li key={s.id} role="option" aria-selected={active}>
-                              <button
-                                type="button"
-                                className={cn(
-                                  'flex w-full px-3 py-2 text-left text-sm hover:bg-surface-subtle',
-                                  active && 'bg-brand-50/60 font-semibold text-brand-900',
-                                )}
-                                onClick={() => {
-                                  setStageFilter(s.id)
-                                  setStageDropdownOpen(false)
-                                }}
-                              >
-                                {s.name || s.id}
-                              </button>
-                            </li>
-                          )
-                        })}
-                      </ul>
-                    </div>
-                  ) : null}
-                </div>
-              </>
-            ) : null}
             <span className="mx-0.5 h-5 w-px shrink-0 bg-surface-border" aria-hidden />
             <p className="shrink-0 whitespace-nowrap pl-0.5 text-[11px] text-ink-muted sm:text-xs">
               <span className="font-semibold text-ink">{isLoading ? '—' : total}</span> unassigned

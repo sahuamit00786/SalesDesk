@@ -761,8 +761,47 @@ export function AddLeadModal({
             ) : null}
           </section>
 
+          <section className="space-y-3 rounded-2xl border border-surface-border p-3">
+            <LeadFieldGroup label="Requirement">
+              <IconTextarea
+                wrapperClassName="w-full"
+                icon={ScanLine}
+                className="min-h-24"
+                placeholder="What they need, timeline, constraints…"
+                value={form.requirement}
+                onChange={(e) => setForm((f) => ({ ...f, requirement: e.target.value }))}
+              />
+            </LeadFieldGroup>
+          </section>
+
+          <section className="space-y-3 rounded-2xl border border-surface-border p-3">
+            <LeadFieldGroup label="Budget">
+              <div className="flex gap-2">
+                <select
+                  className="h-10 shrink-0 rounded-xl border border-surface-border bg-white px-2 text-xs font-semibold text-ink"
+                  value={form.valueCurrency || effectiveCurrency}
+                  onChange={(e) => setForm((f) => ({ ...f, valueCurrency: e.target.value }))}
+                >
+                  {DEAL_CURRENCY_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.value}
+                    </option>
+                  ))}
+                </select>
+                <IconInput
+                  wrapperClassName="min-w-0 flex-1"
+                  icon={CircleDollarSign}
+                  placeholder="0"
+                  type="number"
+                  value={form.value}
+                  onChange={(e) => setForm((f) => ({ ...f, value: Number(e.target.value || 0) }))}
+                />
+              </div>
+            </LeadFieldGroup>
+          </section>
+
           <section className="space-y-3 rounded-2xl border border-surface-border p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Lead Classification</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Lead Source</p>
             <div className="space-y-3">
               <div className="grid grid-cols-[1fr_auto] gap-3">
                 <Select value={form.sourceId} onChange={(e) => setForm((f) => ({ ...f, sourceId: e.target.value }))}>
@@ -795,84 +834,25 @@ export function AddLeadModal({
                 </LeadFieldGroup>
               ) : null}
             </div>
-            <LeadTagsInput
-              value={form.tags}
-              availableTags={availableTags}
-              onChange={(tags) => setForm((f) => ({ ...f, tags }))}
-              onCreateTag={({ name, color }) => createLeadTag({ name, color }).unwrap()}
-            />
-            {!defaultIsOpportunity ? (
-            <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-surface-border bg-slate-50 px-3 py-2.5">
-              <input
-                type="checkbox"
-                className="mt-0.5 h-4 w-4 rounded border-surface-border text-brand-600 focus:ring-brand-500"
-                checked={asOpportunity}
-                onChange={(e) => setAsOpportunity(e.target.checked)}
+          </section>
+
+          {customFieldDefs.length ? (
+            <section className="space-y-3 rounded-2xl border border-surface-border p-4">
+              <CustomFieldsForm
+                fields={customFieldDefs}
+                value={form.customFields}
+                errors={customFieldErrors}
+                showErrors={Object.keys(customFieldErrors).length > 0}
+                embedded
+                title={null}
+                onChange={(customFields) => setForm((f) => ({ ...f, customFields }))}
               />
-              <span>
-                <span className="text-sm font-semibold text-ink">Save as sales opportunity</span>
-                <span className="mt-0.5 block text-xs leading-snug text-ink-muted">
-                  Creates or updates this row in the Leads table with <code className="rounded bg-white/80 px-1">is_opportunity</code> so it appears in Pipeline and Opportunities.
-                </span>
-              </span>
-            </label>
-            ) : null}
-          </section>
-
-          <section className="space-y-3 rounded-2xl border border-surface-border p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Deal & Budget</p>
-            <LeadFieldGroup label="Budget">
-              <div className="flex gap-2">
-                <select
-                  className="h-10 shrink-0 rounded-xl border border-surface-border bg-white px-2 text-xs font-semibold text-ink"
-                  value={form.valueCurrency || effectiveCurrency}
-                  onChange={(e) => setForm((f) => ({ ...f, valueCurrency: e.target.value }))}
-                >
-                  {DEAL_CURRENCY_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.value}
-                    </option>
-                  ))}
-                </select>
-                <IconInput
-                  wrapperClassName="min-w-0 flex-1"
-                  icon={CircleDollarSign}
-                  placeholder="0"
-                  type="number"
-                  value={form.value}
-                  onChange={(e) => setForm((f) => ({ ...f, value: Number(e.target.value || 0) }))}
-                />
-              </div>
-            </LeadFieldGroup>
-          </section>
-
-          <section className="space-y-3 rounded-2xl border border-surface-border p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Notes & Requirement</p>
-            <LeadFieldGroup label="Requirement">
-              <IconTextarea
-                wrapperClassName="w-full"
-                icon={ScanLine}
-                className="min-h-24"
-                placeholder="What they need, timeline, constraints…"
-                value={form.requirement}
-                onChange={(e) => setForm((f) => ({ ...f, requirement: e.target.value }))}
-              />
-            </LeadFieldGroup>
-          </section>
-
-          <CustomFieldsForm
-            fields={customFieldDefs}
-            value={form.customFields}
-            errors={customFieldErrors}
-            showErrors={Object.keys(customFieldErrors).length > 0}
-            embedded
-            onChange={(customFields) => setForm((f) => ({ ...f, customFields }))}
-          />
+            </section>
+          ) : null}
 
           <section className="space-y-3 rounded-2xl border border-surface-border p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Assignment</p>
             <div className="space-y-2">
-              <p className="text-xs text-ink-muted">Assign to one or more users</p>
               <div className="relative">
                 <button
                   type="button"
@@ -927,6 +907,16 @@ export function AddLeadModal({
                 ) : null}
               </div>
             </div>
+          </section>
+
+          <section className="space-y-3 rounded-2xl border border-surface-border p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Tags</p>
+            <LeadTagsInput
+              value={form.tags}
+              availableTags={availableTags}
+              onChange={(tags) => setForm((f) => ({ ...f, tags }))}
+              onCreateTag={({ name, color }) => createLeadTag({ name, color }).unwrap()}
+            />
           </section>
         </form>
       ) : (

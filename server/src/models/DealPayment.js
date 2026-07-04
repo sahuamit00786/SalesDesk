@@ -24,6 +24,7 @@ export const DealPayment = sequelize.define(
       defaultValue: 'received',
     },
     createdByUserId: { type: DataTypes.UUID, allowNull: true, field: 'created_by_user_id' },
+    invoicePaymentId: { type: DataTypes.UUID, allowNull: true, field: 'invoice_payment_id' },
   },
   {
     tableName: 'deal_payments',

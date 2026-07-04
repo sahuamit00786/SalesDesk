@@ -195,8 +195,22 @@
   }
 
   .cx-table.cx-data-grid thead th button svg {
-    color: #ffffff;
-    opacity: 0.95;
+    transition: color 0.15s ease, opacity 0.15s ease;
+  }
+
+  /* DataGrid toolbar — theme tint so it follows the workspace color, not static purple */
+  .cx-data-grid-toolbar {
+    border-bottom: 1px solid color-mix(in srgb, var(--brand-primary) 18%, white);
+    background-color: color-mix(in srgb, var(--brand-primary) 4%, white);
+  }
+
+  /* When the grid has no toolbar the header touches the rounded container — round it */
+  .cx-table.cx-data-grid.cx-data-grid--flush thead tr:first-child th:first-child {
+    border-top-left-radius: calc(1rem - 1px);
+  }
+
+  .cx-table.cx-data-grid.cx-data-grid--flush thead tr:first-child th:last-child {
+    border-top-right-radius: calc(1rem - 1px);
   }
 
   /* DataGrid pagination footer — workspace theme tint */
@@ -238,7 +252,20 @@
 
   /* App DataGrid rows — theme-matched border/hover, vertically centered content */
   .cx-table.cx-data-grid tbody tr:hover {
-    background-color: color-mix(in srgb, var(--brand-primary) 5%, white);
+    background-color: color-mix(in srgb, var(--brand-primary) 6%, white);
+  }
+
+  /* Selected rows — theme tint + left accent bar */
+  .cx-table.cx-data-grid tbody tr.cx-row-selected {
+    background-color: color-mix(in srgb, var(--brand-primary) 8%, white);
+  }
+
+  .cx-table.cx-data-grid tbody tr.cx-row-selected:hover {
+    background-color: color-mix(in srgb, var(--brand-primary) 12%, white);
+  }
+
+  .cx-table.cx-data-grid tbody tr.cx-row-selected td:first-child {
+    box-shadow: inset 2px 0 0 var(--brand-primary);
   }
 
   .cx-table.cx-data-grid tbody td {

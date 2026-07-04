@@ -69,3 +69,41 @@ export function formatDocListDate(iso) {
     return '—'
   }
 }
+
+export function formatDocMoney(n, c = 'USD') {
+  const v = Number(n ?? 0)
+  try {
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency: c }).format(v)
+  } catch {
+    return `${c} ${v.toFixed(2)}`
+  }
+}
+
+export const QUOTATION_STATUS_META = {
+  draft: { label: 'Draft', cls: 'bg-surface-subtle text-ink-muted' },
+  sent: { label: 'Sent', cls: 'bg-sky-50 text-sky-800' },
+  viewed: { label: 'Viewed', cls: 'bg-blue-50 text-blue-800' },
+  accepted: { label: 'Accepted', cls: 'bg-emerald-50 text-emerald-800' },
+  rejected: { label: 'Rejected', cls: 'bg-red-50 text-red-700' },
+  expired: { label: 'Expired', cls: 'bg-amber-50 text-amber-800' },
+  converted: { label: 'Converted', cls: 'bg-emerald-100 text-emerald-900' },
+}
+
+export const INVOICE_STATUS_META = {
+  draft: { label: 'Draft', cls: 'bg-surface-subtle text-ink-muted' },
+  issued: { label: 'Issued', cls: 'bg-blue-50 text-blue-800' },
+  partially_paid: { label: 'Partial', cls: 'bg-amber-50 text-amber-800' },
+  paid: { label: 'Paid', cls: 'bg-emerald-50 text-emerald-800' },
+  overdue: { label: 'Overdue', cls: 'bg-red-50 text-red-700' },
+  cancelled: { label: 'Cancelled', cls: 'bg-surface-subtle text-ink-faint line-through' },
+  refunded: { label: 'Refunded', cls: 'bg-purple-50 text-purple-800' },
+}
+
+export function SalesDocStatusBadge({ status, variant = 'quotation' }) {
+  const meta = (variant === 'invoice' ? INVOICE_STATUS_META : QUOTATION_STATUS_META)[status]
+  return (
+    <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', meta?.cls || 'bg-surface-subtle text-ink-muted')}>
+      {meta?.label || status}
+    </span>
+  )
+}

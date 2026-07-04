@@ -32,6 +32,8 @@ export const WORKFLOW_FOLLOWUP_DELAY_PRESETS = [
 export const WORKFLOW_NODE_TYPES = {
   triggerLeadCreated: 'Lead created',
   triggerLeadUpdated: 'Lead updated',
+  triggerCampaignStageChanged: 'Campaign stage changed',
+  triggerCampaignPaymentReceived: 'Campaign payment received',
   conditionField: 'Condition',
   delayWait: 'Delay',
   actionAssignOwner: 'Assign owner',
@@ -51,6 +53,16 @@ export const WORKFLOW_NODE_PALETTE = [
     items: [
       { type: 'triggerLeadCreated', label: 'Lead created', hint: 'Fires once when a new lead is saved.' },
       { type: 'triggerLeadUpdated', label: 'Lead updated', hint: 'Fires after any lead field change (use conditions to narrow).' },
+      {
+        type: 'triggerCampaignStageChanged',
+        label: 'Campaign stage changed',
+        hint: 'Fires when a lead moves to a new stage in any campaign.',
+      },
+      {
+        type: 'triggerCampaignPaymentReceived',
+        label: 'Campaign payment received',
+        hint: 'Fires when a campaign payment is recorded with status "received".',
+      },
     ],
   },
   {

@@ -1,84 +1,70 @@
 import React from 'react';
-import { createStackNavigator } from '@react-navigation/stack';
-import BottomTabs from './BottomTabs';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import MainTabs from './MainTabs';
+import { ROUTES } from './routes';
 
-import LeadDetailScreen       from '../screens/leads/LeadDetailScreen';
-import AddLeadScreen          from '../screens/leads/AddLeadScreen';
-import EditLeadScreen         from '../screens/leads/EditLeadScreen';
-import AttendanceDetailScreen from '../screens/attendance/AttendanceDetailScreen';
-import TeamMemberDetailScreen from '../screens/profile/TeamMemberDetailScreen';
-import TeamListScreen         from '../screens/profile/TeamListScreen';
-import EditProfileScreen      from '../screens/profile/EditProfileScreen';
-import ChangePasswordScreen   from '../screens/profile/ChangePasswordScreen';
-import ProfileScreen          from '../screens/profile/ProfileScreen';
-import CampaignsListScreen    from '../screens/campaigns/CampaignsListScreen';
-import CampaignDetailScreen   from '../screens/campaigns/CampaignDetailScreen';
-import CallSyncScreen         from '../screens/callsync/CallSyncScreen';
-import DealDetailScreen       from '../screens/deals/DealDetailScreen';
-import LeaveScreen            from '../screens/leave/LeaveScreen';
-import NotificationsScreen    from '../screens/notifications/NotificationsScreen';
-import CalendarScreen         from '../screens/calendar/CalendarScreen';
+import LeadDetailScreen from '../features/leads/screens/LeadDetailScreen';
+import LeadFormScreen from '../features/leads/screens/LeadFormScreen';
+import TasksListScreen from '../features/tasks/screens/TasksListScreen';
+import ActivitiesFeedScreen from '../features/activities/screens/ActivitiesFeedScreen';
+import CallsListScreen from '../features/calls/screens/CallsListScreen';
+import MeetingsListScreen from '../features/meetings/screens/MeetingsListScreen';
+import MeetingDetailScreen from '../features/meetings/screens/MeetingDetailScreen';
+import MeetingFormScreen from '../features/meetings/screens/MeetingFormScreen';
+import CalendarScreen from '../features/calendar/screens/CalendarScreen';
+import DocumentsBrowserScreen from '../features/documents/screens/DocumentsBrowserScreen';
+import TeamListScreen from '../features/team/screens/TeamListScreen';
+import TeamMemberDetailScreen from '../features/team/screens/TeamMemberDetailScreen';
+import InvitationsScreen from '../features/team/screens/InvitationsScreen';
+import RolesScreen from '../features/team/screens/RolesScreen';
+import ProfileScreen from '../features/settings/screens/ProfileScreen';
+import EditProfileScreen from '../features/settings/screens/EditProfileScreen';
+import AppearanceScreen from '../features/settings/screens/AppearanceScreen';
+import SecurityScreen from '../features/settings/screens/SecurityScreen';
+import AttendanceScreen from '../features/attendance/screens/AttendanceScreen';
+import LeaveScreen from '../features/leave/screens/LeaveScreen';
+import NotificationsScreen from '../features/notifications/screens/NotificationsScreen';
 
-const Stack = createStackNavigator();
+const Stack = createNativeStackNavigator();
 
-const slideFromRight = ({ current, layouts }) => ({
-  cardStyle: {
-    transform: [{
-      translateX: current.progress.interpolate({
-        inputRange:  [0, 1],
-        outputRange: [layouts.screen.width, 0],
-      }),
-    }],
-  },
-});
+export default function AppStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
+      <Stack.Screen name={ROUTES.TABS} component={MainTabs} />
 
-const slideFromBottom = ({ current, layouts }) => ({
-  cardStyle: {
-    transform: [{
-      translateY: current.progress.interpolate({
-        inputRange:  [0, 1],
-        outputRange: [layouts.screen.height, 0],
-      }),
-    }],
-  },
-});
+      {/* Leads */}
+      <Stack.Screen name={ROUTES.LEAD_DETAIL} component={LeadDetailScreen} />
+      <Stack.Screen name={ROUTES.ADD_LEAD} component={LeadFormScreen} options={{ animation: 'slide_from_bottom' }} />
+      <Stack.Screen name={ROUTES.EDIT_LEAD} component={LeadFormScreen} options={{ animation: 'slide_from_bottom' }} />
+      <Stack.Screen name={ROUTES.OPPORTUNITY_DETAIL} component={LeadDetailScreen} />
 
-const AppStack = () => (
-  <Stack.Navigator
-    screenOptions={{ headerShown: false, cardStyleInterpolator: slideFromRight }}
-  >
-    <Stack.Screen name="Tabs" component={BottomTabs} />
+      {/* Engage */}
+      <Stack.Screen name={ROUTES.TASKS} component={TasksListScreen} />
+      <Stack.Screen name={ROUTES.CALLS} component={CallsListScreen} />
+      <Stack.Screen name={ROUTES.MEETINGS} component={MeetingsListScreen} />
+      <Stack.Screen name={ROUTES.MEETING_DETAIL} component={MeetingDetailScreen} />
+      <Stack.Screen name={ROUTES.MEETING_FORM} component={MeetingFormScreen} options={{ animation: 'slide_from_bottom' }} />
+      <Stack.Screen name={ROUTES.CALENDAR} component={CalendarScreen} />
+      <Stack.Screen name={ROUTES.ACTIVITY_LEGACY} component={ActivitiesFeedScreen} />
 
-    {/* Leads */}
-    <Stack.Screen name="LeadDetail"  component={LeadDetailScreen} />
-    <Stack.Screen name="AddLead"     component={AddLeadScreen}   options={{ cardStyleInterpolator: slideFromBottom }} />
-    <Stack.Screen name="EditLead"    component={EditLeadScreen}  options={{ cardStyleInterpolator: slideFromBottom }} />
+      {/* Workspace */}
+      <Stack.Screen name={ROUTES.DOCUMENTS} component={DocumentsBrowserScreen} />
+      <Stack.Screen name={ROUTES.ATTENDANCE} component={AttendanceScreen} />
+      <Stack.Screen name={ROUTES.LEAVE} component={LeaveScreen} />
+      <Stack.Screen name={ROUTES.NOTIFICATIONS} component={NotificationsScreen} />
 
-    {/* Deals */}
-    <Stack.Screen name="DealDetail"  component={DealDetailScreen} />
+      {/* Admin */}
+      <Stack.Screen name={ROUTES.TEAM_LIST} component={TeamListScreen} />
+      <Stack.Screen name={ROUTES.TEAM_MEMBER_DETAIL} component={TeamMemberDetailScreen} />
+      <Stack.Screen name={ROUTES.INVITATIONS} component={InvitationsScreen} />
+      <Stack.Screen name={ROUTES.ROLES} component={RolesScreen} />
 
-    {/* HR */}
-    <Stack.Screen name="Leave"            component={LeaveScreen} />
-    <Stack.Screen name="AttendanceDetail" component={AttendanceDetailScreen} />
-
-    {/* Notifications + Calendar */}
-    <Stack.Screen name="Notifications" component={NotificationsScreen} />
-    <Stack.Screen name="Calendar"      component={CalendarScreen} />
-
-    {/* Call History */}
-    <Stack.Screen name="CallSync" component={CallSyncScreen} />
-
-    {/* Campaigns */}
-    <Stack.Screen name="Campaigns"      component={CampaignsListScreen} />
-    <Stack.Screen name="CampaignDetail" component={CampaignDetailScreen} />
-
-    {/* Profile */}
-    <Stack.Screen name="Profile"          component={ProfileScreen} />
-    <Stack.Screen name="TeamMemberDetail" component={TeamMemberDetailScreen} />
-    <Stack.Screen name="TeamList"         component={TeamListScreen} />
-    <Stack.Screen name="EditProfile"      component={EditProfileScreen}      options={{ cardStyleInterpolator: slideFromBottom }} />
-    <Stack.Screen name="ChangePassword"   component={ChangePasswordScreen}   options={{ cardStyleInterpolator: slideFromBottom }} />
-  </Stack.Navigator>
-);
-
-export default AppStack;
+      {/* Account */}
+      <Stack.Screen name={ROUTES.PROFILE} component={ProfileScreen} />
+      <Stack.Screen name={ROUTES.EDIT_PROFILE} component={EditProfileScreen} options={{ animation: 'slide_from_bottom' }} />
+      <Stack.Screen name={ROUTES.CHANGE_PASSWORD} component={SecurityScreen} options={{ animation: 'slide_from_bottom' }} />
+      <Stack.Screen name={ROUTES.SETTINGS_APPEARANCE} component={AppearanceScreen} options={{ animation: 'slide_from_bottom' }} />
+      <Stack.Screen name={ROUTES.SETTINGS_SECURITY} component={SecurityScreen} options={{ animation: 'slide_from_bottom' }} />
+    </Stack.Navigator>
+  );
+}

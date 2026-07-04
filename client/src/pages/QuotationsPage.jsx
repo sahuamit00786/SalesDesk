@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { Download, Plus, RefreshCw } from 'lucide-react'
+import { Download, Plus, RefreshCw, SlidersHorizontal } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { PageShell } from '@/components/layout/PageShell'
 import { PageStack } from '@/components/layout/PageStack'
@@ -9,56 +9,92 @@ import { PageContentPanel } from '@/components/layout/PageContentPanel'
 import { Button } from '@/components/ui/Button'
 import {
   useGetQuotationsQuery,
-  usePatchQuotationMutation,
   useConvertQuotationToInvoiceMutation,
   useDeleteQuotationMutation,
 } from '@/features/sales-docs/quotationsApi'
-import { CreateQuotationDrawer } from '@/features/sales-docs/components/CreateQuotationDrawer'
-import { AssignToDealDrawer } from '@/features/sales-docs/components/AssignToDealDrawer'
 import { useQuotationGridColumns } from '@/features/sales-docs/components/useQuotationGridColumns'
+import { SalesDocStatCards } from '@/features/sales-docs/components/SalesDocStatCards'
+import { QUOTATION_STATUS_META, formatDocMoney } from '@/features/sales-docs/components/SalesDocListCells'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { DataGrid } from '@/components/shared/DataGrid'
 import { DealDetailPanel } from '@/features/deals/components/DealDetailPanel'
-import { useGetLeadFormMetaQuery } from '@/features/leads/leadsApi'
+import { useGetLeadFormMetaQuery, useGetLeadsQuery } from '@/features/leads/leadsApi'
+import { SalesDocFiltersModal } from '@/features/sales-docs/components/SalesDocFiltersModal'
 
 export function QuotationsPage() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const leadFilter = params.get('leadId')
-  const [drawerOpen, setDrawerOpen] = useState(Boolean(params.get('new')))
-  const [initialLead, setInitialLead] = useState(leadFilter || null)
-  const [assignQuotation, setAssignQuotation] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
+  const [convertTarget, setConvertTarget] = useState(null)
   const [selectedDeal, setSelectedDeal] = useState(null)
 
   const { data: formMetaData } = useGetLeadFormMetaQuery()
   const rawDealStatuses = formMetaData?.data?.dealStatuses || []
   const opportunityStatuses = formMetaData?.data?.opportunityStatuses || []
   const dealStatuses = rawDealStatuses.length ? rawDealStatuses : opportunityStatuses
+  const users = formMetaData?.data?.users || []
 
-  const queryArg = useMemo(() => ({ limit: 50, ...(leadFilter ? { leadId: leadFilter } : {}) }), [leadFilter])
+  const { data: leadsRes } = useGetLeadsQuery({ page: 1, limit: 400, search: '' })
+  const leads = leadsRes?.data || []
+
+  const [statusFilter, setStatusFilter] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [leadIdFilter, setLeadIdFilter] = useState(leadFilter || '')
+  const [createdByFilter, setCreatedByFilter] = useState('')
+  const [minAmount, setMinAmount] = useState('')
+  const [maxAmount, setMaxAmount] = useState('')
+  const [filtersOpen, setFiltersOpen] = useState(false)
+
+  const activeFilterCount = [statusFilter, dateFrom, dateTo, minAmount, maxAmount, leadIdFilter, createdByFilter].filter(
+    (v) => v !== '',
+  ).length
+
+  function clearFilters() {
+    setStatusFilter('')
+    setDateFrom('')
+    setDateTo('')
+    setMinAmount('')
+    setMaxAmount('')
+    setLeadIdFilter('')
+    setCreatedByFilter('')
+  }
+
+  const queryArg = useMemo(
+    () => ({
+      limit: 100,
+      ...(leadIdFilter ? { leadId: leadIdFilter } : {}),
+      ...(statusFilter ? { status: statusFilter } : {}),
+      ...(dateFrom ? { dateFrom } : {}),
+      ...(dateTo ? { dateTo } : {}),
+      ...(createdByFilter ? { createdBy: createdByFilter } : {}),
+      ...(minAmount !== '' ? { minAmount } : {}),
+      ...(maxAmount !== '' ? { maxAmount } : {}),
+    }),
+    [leadIdFilter, statusFilter, dateFrom, dateTo, createdByFilter, minAmount, maxAmount],
+  )
   const { data, isLoading, refetch } = useGetQuotationsQuery(queryArg)
   const [convert, { isLoading: converting }] = useConvertQuotationToInvoiceMutation()
-  const [patchQuotation] = usePatchQuotationMutation()
   const [deleteQuotation, { isLoading: deleting }] = useDeleteQuotationMutation()
 
-  const onConvert = useCallback(
-    async (row) => {
-      try {
-        const result = await convert({ id: row.id }).unwrap()
-        const invoice = result?.data?.data ?? result?.data ?? result
-        const invNum = invoice?.invoiceNumber
-        toast.success(invNum ? `Invoice ${invNum} created` : 'Converted to invoice')
-        navigate('/invoices')
-      } catch (e) {
-        toast.error(e?.data?.error?.message || 'Conversion failed')
-      }
-    },
-    [convert, navigate],
-  )
+  const onConvert = useCallback((row) => setConvertTarget(row), [])
+
+  async function confirmConvert() {
+    if (!convertTarget?.id) return
+    try {
+      const result = await convert({ id: convertTarget.id }).unwrap()
+      const invoice = result?.data?.data ?? result?.data ?? result
+      const invNum = invoice?.invoiceNumber
+      toast.success(invNum ? `Invoice ${invNum} created` : 'Converted to invoice')
+      setConvertTarget(null)
+      navigate('/invoices')
+    } catch (e) {
+      toast.error(e?.data?.error?.message || 'Conversion failed')
+    }
+  }
 
   const quotationColumns = useQuotationGridColumns({
-    setAssignQuotation,
     setDeleteTarget,
     deleting,
     converting,
@@ -79,11 +115,39 @@ export function QuotationsPage() {
   }
 
   const rows = data?.data?.items ?? data?.items ?? []
+  const summary = data?.meta?.summary
+
+  const statCards = useMemo(() => {
+    if (!summary) return []
+    const by = summary.byStatus || {}
+    const count = (k) => by[k]?.count || 0
+    return [
+      {
+        key: 'total',
+        label: 'Total value',
+        value: formatDocMoney(summary.totalValue),
+        tone: 'brand',
+      },
+      { key: 'draft', label: 'Draft', value: count('draft'), tone: 'neutral' },
+      { key: 'sent', label: 'Sent / Viewed', value: count('sent') + count('viewed'), tone: 'sky' },
+      { key: 'accepted', label: 'Accepted', value: count('accepted'), tone: 'emerald' },
+      { key: 'converted', label: 'Converted', value: count('converted'), tone: 'emerald' },
+    ]
+  }, [summary])
 
   return (
     <PageShell fullWidth>
       <PageStack>
-        <PageFilterBar>
+        <PageFilterBar className="flex-nowrap overflow-x-auto">
+          <Button type="button" variant="secondary" onClick={() => setFiltersOpen(true)} className="relative">
+            <SlidersHorizontal className="h-4 w-4" />
+            Filters
+            {activeFilterCount > 0 ? (
+              <span className="ml-1 flex h-5 w-5 items-center justify-center rounded-full bg-brand-600 text-[11px] font-semibold text-white">
+                {activeFilterCount}
+              </span>
+            ) : null}
+          </Button>
           <Button type="button" variant="secondary" title="Refresh" onClick={() => refetch()}>
             <RefreshCw className="h-4 w-4" />
           </Button>
@@ -104,31 +168,41 @@ export function QuotationsPage() {
           >
             <Download className="h-4 w-4" />
           </Button>
-          <Link
-            to="/quotations/templates"
-            className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl border border-surface-border bg-white px-4 text-sm font-medium text-ink hover:border-brand-200 hover:bg-brand-50"
-          >
-            Templates
-          </Link>
-          <Link
-            to="/quotations/new"
-            className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-surface-border bg-white px-4 text-sm font-medium text-ink hover:border-brand-200 hover:bg-brand-50"
-          >
-            Full editor
-          </Link>
           <div className="ml-auto flex gap-2">
-            <Button
-              type="button"
-              onClick={() => {
-                setInitialLead(leadFilter || null)
-                setDrawerOpen(true)
-              }}
+            <Link
+              to={leadIdFilter ? `/quotations/new?leadId=${encodeURIComponent(leadIdFilter)}` : '/quotations/new'}
+              className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-medium text-white hover:bg-brand-700"
             >
               <Plus className="h-4 w-4" />
-              Quick add
-            </Button>
+              New quotation
+            </Link>
           </div>
         </PageFilterBar>
+
+        <SalesDocFiltersModal
+          open={filtersOpen}
+          onClose={() => setFiltersOpen(false)}
+          statusMeta={QUOTATION_STATUS_META}
+          leads={leads}
+          users={users}
+          statusFilter={statusFilter}
+          onStatusFilterChange={setStatusFilter}
+          dateFrom={dateFrom}
+          onDateFromChange={setDateFrom}
+          dateTo={dateTo}
+          onDateToChange={setDateTo}
+          minAmount={minAmount}
+          onMinAmountChange={setMinAmount}
+          maxAmount={maxAmount}
+          onMaxAmountChange={setMaxAmount}
+          leadIdFilter={leadIdFilter}
+          onLeadIdFilterChange={setLeadIdFilter}
+          createdByFilter={createdByFilter}
+          onCreatedByFilterChange={setCreatedByFilter}
+          onClear={clearFilters}
+        />
+
+        <SalesDocStatCards cards={statCards} />
 
         <PageContentPanel flush>
           <DataGrid
@@ -147,22 +221,22 @@ export function QuotationsPage() {
         </PageContentPanel>
       </PageStack>
 
-      <CreateQuotationDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} initialLeadId={initialLead} />
-
-      <AssignToDealDrawer
-        open={Boolean(assignQuotation)}
-        onClose={() => setAssignQuotation(null)}
-        docLabel={assignQuotation?.quotationNumber}
-        docType="Quotation"
-        currentDealId={assignQuotation?.dealId}
-        leadId={assignQuotation?.leadId || null}
-        onAssign={async (dealId) => {
-          await patchQuotation({ id: assignQuotation.id, dealId }).unwrap()
-          toast.success('Quotation assigned to deal')
-          setAssignQuotation(null)
-          refetch()
-        }}
-      />
+      <ConfirmDialog
+        open={Boolean(convertTarget)}
+        onClose={() => setConvertTarget(null)}
+        onConfirm={confirmConvert}
+        title="Convert to invoice?"
+        description="An invoice is created from this quotation and the quotation becomes locked."
+        confirmLabel="Convert"
+        loading={converting}
+      >
+        <p>
+          Convert quotation{' '}
+          <span className="font-semibold text-ink">{convertTarget?.quotationNumber || 'this quotation'}</span> into a
+          new invoice? The quotation will be marked as converted and can no longer be edited. Payments are collected
+          on the invoice.
+        </p>
+      </ConfirmDialog>
 
       <ConfirmDialog
         open={Boolean(deleteTarget)}

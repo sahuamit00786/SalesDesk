@@ -1,0 +1,38 @@
+import { get, post, put, patch, del } from '../../api/client';
+
+// Endpoint parity: client/src/features/leads/leadsApi.js · leads use sort+order params.
+export const leadsApi = {
+  list: (params) => get('/leads', params),
+  detail: (id) => get(`/leads/${id}`),
+  formMeta: () => get('/leads/form-meta'),
+  create: (body) => post('/leads', body),
+  update: (id, body) => put(`/leads/${id}`, body),
+  patchStatus: (id, body) => patch(`/leads/${id}/status`, body), // { status, lostReason?, notes? }
+  remove: (id) => del(`/leads/${id}`),
+  bulk: (body) => post('/leads/bulk', body), // { ids, action: assign|update|delete|export, payload }
+
+  // Sub-resources
+  activities: (id, params) => get(`/leads/${id}/activities`, params),
+  addActivity: (id, body) => post(`/leads/${id}/activities`, body),
+  notes: (id) => get(`/leads/${id}/notes`),
+  addNote: (id, body) => post(`/leads/${id}/notes`, body),
+  updateNote: (id, noteId, body) => patch(`/leads/${id}/notes/${noteId}`, body),
+  deleteNote: (id, noteId) => del(`/leads/${id}/notes/${noteId}`),
+  tasks: (id) => get(`/leads/${id}/tasks`),
+  addTask: (id, body) => post(`/leads/${id}/tasks`, body),
+  updateTask: (id, taskId, body) => patch(`/leads/${id}/tasks/${taskId}`, body),
+  deleteTask: (id, taskId) => del(`/leads/${id}/tasks/${taskId}`),
+  followups: (id) => get(`/leads/${id}/followups`),
+  addFollowup: (id, body) => post(`/leads/${id}/followups`, body),
+  updateFollowup: (id, followupId, body) => patch(`/leads/${id}/followups/${followupId}`, body),
+  deleteFollowup: (id, followupId) => del(`/leads/${id}/followups/${followupId}`),
+  files: (id) => get(`/leads/${id}/files`),
+};
+
+export const opportunitiesApi = {
+  // List = leads with isOpportunity=true (web parity)
+  list: (params) => get('/leads', { ...params, isOpportunity: true }),
+  create: (body) => post('/opportunities', body),
+  update: (id, body) => put(`/opportunities/${id}`, body),
+  patchStatus: (id, opportunityStatusId) => patch(`/opportunities/${id}/status`, { opportunityStatusId }),
+};

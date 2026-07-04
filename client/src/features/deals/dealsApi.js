@@ -38,6 +38,13 @@ export const dealsApi = baseApi.injectEndpoints({
         { type: 'Deal', id: arg.id },
       ],
     }),
+    deleteDeal: build.mutation({
+      query: (id) => ({ url: `/deals/${id}`, method: 'DELETE' }),
+      invalidatesTags: (_r, _e, id) => [
+        { type: 'Deal', id: 'LIST' },
+        { type: 'Deal', id },
+      ],
+    }),
     getDealActivities: build.query({
       query: ({ id, ...params }) => ({ url: `/deals/${id}/activities`, params }),
       providesTags: (_r, _e, arg) => [{ type: 'DealActivity', id: `${arg.id}-LIST` }],
@@ -55,6 +62,7 @@ export const {
   useCreateDealMutation,
   usePatchDealStageMutation,
   usePatchDealMutation,
+  useDeleteDealMutation,
   useGetDealActivitiesQuery,
   useCreateDealActivityMutation,
 } = dealsApi

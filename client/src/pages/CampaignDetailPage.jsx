@@ -10,6 +10,9 @@ import {
   CalendarDays,
   ChevronDown,
   DollarSign,
+  Download,
+  History,
+  ListOrdered,
   Shuffle,
   Target,
   Trash2,
@@ -29,12 +32,26 @@ import {
   usePatchCampaignLeadStageMutation,
   useRemoveCampaignLeadMutation,
   useDistributeCampaignLeadsMutation,
+  useLazyExportCampaignLeadsCsvQuery,
+  useLazyExportCampaignPaymentsCsvQuery,
 } from '@/features/campaigns/campaignsApi'
 import { CampaignPaymentsDrawer } from '@/features/campaigns/components/CampaignPaymentsDrawer'
+import { CampaignStageEditorDrawer } from '@/features/campaigns/components/CampaignStageEditorDrawer'
+import { CampaignStageHistoryDrawer } from '@/features/campaigns/components/CampaignStageHistoryDrawer'
 import { formatDealMoney } from '@/features/deals/dealCurrencies'
 import { AddLeadsDrawer } from '@/features/campaigns/components/AddLeadsDrawer'
 import { AddMembersDrawer } from '@/features/campaigns/components/AddMembersDrawer'
 import { cn } from '@/utils/cn'
+
+function downloadCsvText(csvText, filename) {
+  const blob = new Blob([csvText], { type: 'text/csv' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
 
 function initials(name) {
   return String(name || '')
@@ -203,6 +220,11 @@ export function CampaignDetailPage() {
   const [addLeadsOpen, setAddLeadsOpen] = useState(false)
   const [addMembersOpen, setAddMembersOpen] = useState(false)
   const [removeConfirmId, setRemoveConfirmId] = useState(null)
+  const [stageEditorOpen, setStageEditorOpen] = useState(false)
+  const [stageHistory, setStageHistory] = useState(null) // { leadId, leadName }
+
+  const [triggerExportLeads, { isFetching: exportingLeads }] = useLazyExportCampaignLeadsCsvQuery()
+  const [triggerExportPayments, { isFetching: exportingPayments }] = useLazyExportCampaignPaymentsCsvQuery()
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(q.trim()), 300)
@@ -283,6 +305,26 @@ export function CampaignDetailPage() {
     }
   }
 
+  const onExportLeads = async () => {
+    try {
+      const csv = await triggerExportLeads({ campaignId: id }).unwrap()
+      downloadCsvText(csv, `campaign-${id}-leads.csv`)
+      toast.success('Leads exported')
+    } catch {
+      toast.error('Export failed')
+    }
+  }
+
+  const onExportPayments = async () => {
+    try {
+      const csv = await triggerExportPayments({ campaignId: id }).unwrap()
+      downloadCsvText(csv, `campaign-${id}-payments.csv`)
+      toast.success('Payments exported')
+    } catch {
+      toast.error('Export failed')
+    }
+  }
+
   const toggleSelect = (leadId) => {
     setSelected((prev) => {
       const next = new Set(prev)
@@ -293,6 +335,10 @@ export function CampaignDetailPage() {
   }
 
   const stageOptions = stages.length ? stages : displayFunnel
+  const stageLabelByKey = useMemo(
+    () => Object.fromEntries(stageOptions.map((s) => [s.key, s.label])),
+    [stageOptions],
+  )
 
   const rosterColumns = useMemo(
     () => [
@@ -362,21 +408,35 @@ export function CampaignDetailPage() {
       {
         field: 'stageKey',
         headerName: 'Campaign stage',
-        width: 160,
+        width: 190,
         sortable: false,
-        renderCell: ({ row }) => (
-          <Select
-            value={row.stageKey}
-            disabled={patching}
-            onChange={(e) => onStageChange(row.lead?.id, e.target.value)}
-            onClick={(e) => e.stopPropagation()}
-            className="max-w-[9.5rem] cursor-pointer text-xs font-semibold"
-          >
-            {stageOptions.map((s) => (
-              <option key={s.key} value={s.key}>{s.label}</option>
-            ))}
-          </Select>
-        ),
+        renderCell: ({ row }) => {
+          const leadId = row.lead?.id
+          const leadName = (row.lead?.contactName || row.lead?.title || '').trim() || 'Lead'
+          return (
+            <div className="flex items-center gap-1.5">
+              <Select
+                value={row.stageKey}
+                disabled={patching}
+                onChange={(e) => onStageChange(leadId, e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                className="max-w-[9.5rem] cursor-pointer text-xs font-semibold"
+              >
+                {stageOptions.map((s) => (
+                  <option key={s.key} value={s.key}>{s.label}</option>
+                ))}
+              </Select>
+              <button
+                type="button"
+                title="Stage history"
+                onClick={(e) => { e.stopPropagation(); setStageHistory({ leadId, leadName }) }}
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
+              >
+                <History className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )
+        },
       },
       {
         field: 'owner',
@@ -536,6 +596,35 @@ export function CampaignDetailPage() {
                       <Shuffle className="h-3.5 w-3.5" />
                       {distributing ? 'Distributing…' : 'Distribute unassigned'}
                     </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => setStageEditorOpen(true)}
+                    >
+                      <ListOrdered className="h-3.5 w-3.5" />
+                      Edit stages
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      disabled={exportingLeads}
+                      onClick={onExportLeads}
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      {exportingLeads ? 'Exporting…' : 'Export leads'}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      disabled={exportingPayments}
+                      onClick={onExportPayments}
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      {exportingPayments ? 'Exporting…' : 'Export payments'}
+                    </Button>
                     <Link
                       to={`/campaigns/${id}/report`}
                       className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-sm font-semibold text-neutral-700 shadow-sm hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 transition"
@@ -651,6 +740,20 @@ export function CampaignDetailPage() {
         leadName={paymentsDrawer?.leadName}
         currency={campaignCurrency}
         campaignName={campaign?.name}
+      />
+      <CampaignStageEditorDrawer
+        open={stageEditorOpen}
+        onClose={() => setStageEditorOpen(false)}
+        campaignId={id}
+        stages={stageOptions}
+      />
+      <CampaignStageHistoryDrawer
+        open={!!stageHistory}
+        onClose={() => setStageHistory(null)}
+        campaignId={id}
+        leadId={stageHistory?.leadId}
+        leadName={stageHistory?.leadName}
+        stageLabelByKey={stageLabelByKey}
       />
     </PageShell>
   )

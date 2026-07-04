@@ -301,6 +301,56 @@ export async function create(req, res, next) {
   }
 }
 
+const patchDealSchema = Joi.object({
+  name: Joi.string().trim().min(1).max(255),
+  description: Joi.string().trim().max(65535).allow('', null),
+  value: Joi.number().min(0),
+  valueCurrency: Joi.string().trim().length(3).pattern(/^[A-Za-z]{3}$/).uppercase(),
+  ownerUserId: Joi.string().uuid().allow(null, ''),
+}).min(1)
+
+export async function update(req, res, next) {
+  try {
+    const { error, value } = patchDealSchema.validate(req.body || {}, { abortEarly: false, stripUnknown: true })
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VALIDATION', message: error.details.map((d) => d.message).join(', ') },
+      })
+    }
+    const workspaceId = req.headers['x-workspace-id']
+    if (!workspaceId) {
+      return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'workspaceId is required' } })
+    }
+    const access = await leadAccessWhere(req.user)
+    const deal = await Deal.findOne({
+      where: {
+        ...access,
+        id: req.params.id,
+        workspaceId: String(workspaceId),
+        isDeleted: false,
+      },
+      include: dealIncludes,
+    })
+    if (!deal) {
+      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Deal not found' } })
+    }
+
+    const updates = {}
+    if (value.name !== undefined) updates.name = value.name
+    if (value.description !== undefined) updates.description = normalizeNullable(value.description)
+    if (value.value !== undefined) updates.value = value.value
+    if (value.valueCurrency !== undefined) updates.valueCurrency = normalizeDealCurrency(value.valueCurrency)
+    if (value.ownerUserId !== undefined) updates.assignedTo = normalizeNullable(value.ownerUserId)
+
+    await deal.update(updates)
+    await deal.reload({ include: dealIncludes })
+    return res.json({ success: true, data: serializeDealForClient(deal), meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
 export async function patchStage(req, res, next) {
   try {
     const stage = String(req.body?.currentStage || '').trim()

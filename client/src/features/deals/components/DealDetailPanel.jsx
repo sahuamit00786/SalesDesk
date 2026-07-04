@@ -50,7 +50,7 @@ import {
 } from '@/features/leads/components/LeadTaskDrawer'
 import { TaskAttachmentIcons } from '@/features/leads/components/TaskAttachmentIcons'
 import { usePatchOpportunityStatusMutation } from '@/features/opportunities/opportunitiesApi'
-import { useGetDealQuery, usePatchDealStageMutation, usePatchDealMutation, useGetDealActivitiesQuery, useCreateDealActivityMutation } from '@/features/deals/dealsApi'
+import { useGetDealQuery, usePatchDealStageMutation, useGetDealActivitiesQuery, useCreateDealActivityMutation } from '@/features/deals/dealsApi'
 import { formatStageLabel } from '@/features/opportunities/components/OpportunitiesKanban'
 import { useGetDocumentsQuery, useUploadDocumentMutation } from '@/features/documents/documentsApi'
 import { DealInvoicesPanel, DealQuotationsPanel } from '@/features/deals/components/DealSalesDocsTabs'
@@ -305,7 +305,7 @@ function ContactRow({ Icon, label, value, href, tone = 'violet', compact = false
   return (
     <div
       className={cn(
-        'flex items-start gap-2 rounded-md border border-neutral-200/90 bg-white px-2.5 py-1.5',
+        'flex items-start gap-2 rounded-md border border-neutral-200/80 bg-neutral-50/70 px-2.5 py-1.5',
         compact ? '' : 'gap-3 px-3 py-2',
       )}
     >
@@ -390,7 +390,6 @@ export function DealDetailPanel({ open, onClose, opp, opportunityStatuses = [], 
   const [deleteTask] = useDeleteLeadTaskMutation()
   const [patchOpportunityStatus, { isLoading: changingOppStage }] = usePatchOpportunityStatusMutation()
   const [patchDealStage, { isLoading: changingDealStage }] = usePatchDealStageMutation()
-  const [patchDeal] = usePatchDealMutation()
   const [createDealActivity, { isLoading: loggingDealActivity }] = useCreateDealActivityMutation()
   const changingStage = changingOppStage || changingDealStage
   const [uploadDocument, { isLoading: uploadingDocument }] = useUploadDocumentMutation()
@@ -486,25 +485,6 @@ export function DealDetailPanel({ open, onClose, opp, opportunityStatuses = [], 
     isDealEntity ? card?.dealCurrency : lead?.valueCurrency ?? lead?.value_currency ?? card?.dealCurrency,
   )
   const dealDescription = String(lead?.requirement || card?.dealDescription || '').trim()
-  const forecastCategory = card?.forecastCategory || 'pipeline'
-
-  const FORECAST_LABELS = {
-    pipeline: 'Pipeline',
-    best_case: 'Best Case',
-    commit: 'Commit',
-    closed: 'Closed',
-    omitted: 'Omitted',
-  }
-
-  async function handleForecastChange(category) {
-    if (!dealId || category === forecastCategory) return
-    try {
-      await patchDeal({ id: dealId, forecastCategory: category }).unwrap()
-      toast.success('Forecast category updated')
-    } catch {
-      toast.error('Could not update forecast category')
-    }
-  }
 
   async function handleStageChange(nextStage) {
     if (!nextStage || nextStage === currentStage) {
@@ -621,8 +601,8 @@ export function DealDetailPanel({ open, onClose, opp, opportunityStatuses = [], 
       />
       <div className="relative flex h-full max-h-dvh w-full max-w-full overflow-hidden bg-white shadow-xl animate-in slide-in-from-right duration-200 ease-out lg:max-w-[min(1180px,92vw)]">
         {/* Sidebar — compact, single violet accent */}
-        <aside className="hidden h-full w-[228px] shrink-0 flex-col overflow-y-auto border-r border-neutral-200 bg-white scrollbar-subtle lg:flex xl:w-[244px]">
-          <div className="flex flex-col gap-2 p-3">
+        <aside className="hidden h-full w-[248px] shrink-0 flex-col overflow-y-auto border-r border-neutral-200 bg-neutral-50/60 scrollbar-subtle lg:flex xl:w-[268px]">
+          <div className="flex flex-col gap-3 p-3.5">
             {tags.length > 0 ? (
               <div className="flex flex-wrap gap-1">
                 {tags.slice(0, 6).map((t, i) => {
@@ -640,20 +620,25 @@ export function DealDetailPanel({ open, onClose, opp, opportunityStatuses = [], 
               </div>
             ) : null}
 
-            <div className="rounded-lg border border-brand-200/80 bg-slate-50 p-3">
+            <div className="rounded-xl border border-brand-200/70 bg-white p-3.5 shadow-sm">
               <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-[9px] font-semibold uppercase tracking-wide text-brand-600">
-                    Deal · #{shortDealId(card)}
-                  </p>
-                  <h2 id="deal-detail-title" className="mt-1 text-[15px] font-semibold leading-snug text-neutral-900">
-                    {dealDisplayName || company}
-                  </h2>
-                  {dealDisplayName ? (
-                    <p className="mt-0.5 truncate text-xs text-neutral-500">{company}</p>
-                  ) : jobTitle ? (
-                    <p className="mt-0.5 truncate text-xs text-neutral-500">{jobTitle}</p>
-                  ) : null}
+                <div className="flex min-w-0 items-start gap-2.5">
+                  <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-50 text-brand-700 ring-1 ring-brand-200/70">
+                    <BadgeDollarSign className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-[9px] font-semibold uppercase tracking-wide text-brand-600">
+                      Deal · #{shortDealId(card)}
+                    </p>
+                    <h2 id="deal-detail-title" className="mt-0.5 truncate text-[15px] font-semibold leading-snug text-neutral-900">
+                      {dealDisplayName || company}
+                    </h2>
+                    {dealDisplayName ? (
+                      <p className="truncate text-xs text-neutral-500">{company}</p>
+                    ) : jobTitle ? (
+                      <p className="truncate text-xs text-neutral-500">{jobTitle}</p>
+                    ) : null}
+                  </div>
                 </div>
                 <button
                   type="button"
@@ -665,7 +650,7 @@ export function DealDetailPanel({ open, onClose, opp, opportunityStatuses = [], 
                   Open
                 </button>
               </div>
-              <div className="mt-2.5 flex items-end justify-between gap-2 border-t border-violet-100 pt-2">
+              <div className="mt-3 flex items-end justify-between gap-2 border-t border-brand-100 pt-2.5">
                 <p className="text-[9px] font-semibold uppercase tracking-wide text-brand-600">
                   {currentStageLabel || 'Stage'}
                 </p>
@@ -674,34 +659,19 @@ export function DealDetailPanel({ open, onClose, opp, opportunityStatuses = [], 
                 </p>
               </div>
               {dealDescription ? (
-                <div className="mt-2 border-t border-violet-100 pt-2">
+                <div className="mt-2.5 border-t border-brand-100 pt-2.5">
                   <p className="text-[9px] font-semibold uppercase tracking-wide text-brand-600">Description</p>
                   <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap text-xs leading-relaxed text-neutral-700">
                     {dealDescription}
                   </p>
                 </div>
               ) : null}
-              {dealId ? (
-                <div className="mt-2 border-t border-violet-100 pt-2">
-                  <p className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-brand-600">Forecast</p>
-                  <select
-                    className="w-full rounded-md border border-neutral-200 bg-white px-2 py-1 text-xs text-neutral-800 focus:border-brand-400 focus:outline-none"
-                    value={forecastCategory}
-                    onChange={(e) => handleForecastChange(e.target.value)}
-                    aria-label="Forecast category"
-                  >
-                    {Object.entries(FORECAST_LABELS).map(([val, label]) => (
-                      <option key={val} value={val}>{label}</option>
-                    ))}
-                  </select>
-                </div>
-              ) : null}
             </div>
 
-            <div className="rounded-lg border border-neutral-200 bg-neutral-50/80 p-2.5">
-              <p className="mb-1.5 text-[9px] font-semibold uppercase tracking-wide text-brand-600">Contact</p>
+            <div className="rounded-xl border border-neutral-200 bg-white p-3 shadow-sm">
+              <p className="mb-2 text-[9px] font-semibold uppercase tracking-wide text-brand-600">Contact</p>
               <div className="space-y-1.5">
-                <div className="flex items-center gap-2 rounded-md border border-neutral-200 bg-white px-2 py-1.5">
+                <div className="flex items-center gap-2 rounded-md border border-neutral-200/80 bg-neutral-50/70 px-2.5 py-1.5">
                   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-brand-200 bg-slate-50 text-[9px] font-semibold text-brand-700">
                     {initials(fullName)}
                   </span>
@@ -727,10 +697,10 @@ export function DealDetailPanel({ open, onClose, opp, opportunityStatuses = [], 
               </div>
             </div>
 
-            <div className="rounded-lg border border-neutral-200 bg-neutral-50/80 p-2.5">
-              <p className="mb-1.5 text-[9px] font-semibold uppercase tracking-wide text-brand-600">Salesperson</p>
+            <div className="rounded-xl border border-neutral-200 bg-white p-3 shadow-sm">
+              <p className="mb-2 text-[9px] font-semibold uppercase tracking-wide text-brand-600">Salesperson</p>
               {owner ? (
-                <div className="flex items-center gap-2 rounded-md border border-neutral-200 bg-white px-2 py-1.5">
+                <div className="flex items-center gap-2 rounded-md border border-neutral-200/80 bg-neutral-50/70 px-2.5 py-1.5">
                   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-brand-200 bg-slate-50 text-[9px] font-semibold text-brand-700">
                     {initials(owner.name || owner.email)}
                   </span>
@@ -742,13 +712,13 @@ export function DealDetailPanel({ open, onClose, opp, opportunityStatuses = [], 
                   </div>
                 </div>
               ) : (
-                <p className="rounded-md border border-dashed border-neutral-300 bg-white px-2 py-1.5 text-xs text-neutral-400">
+                <p className="rounded-md border border-dashed border-neutral-300 bg-neutral-50/70 px-2.5 py-1.5 text-xs text-neutral-400">
                   Unassigned
                 </p>
               )}
             </div>
 
-            <p className="text-[10px] text-neutral-400">Created {formatDate(opp.createdAt)}</p>
+            <p className="px-0.5 text-[10px] text-neutral-400">Created {formatDate(opp.createdAt)}</p>
           </div>
         </aside>
 

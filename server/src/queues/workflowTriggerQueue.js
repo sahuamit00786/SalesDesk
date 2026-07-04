@@ -16,11 +16,19 @@ export function getWorkflowTriggerQueue() {
   return queue
 }
 
+/** BullMQ retries re-run the whole job; job progress records what already ran so retries skip it. */
+function progressField(job, key) {
+  const p = job.progress
+  return p && typeof p === 'object' && Array.isArray(p[key]) ? p[key] : []
+}
+
 async function processWorkflowTriggerJob(job) {
   if (job.name === 'bulk') {
     const { leadIds, companyId, workspaceId, actorUserId } = job.data
     const eventType = 'lead_created'
+    const doneLeadIds = new Set(progressField(job, 'doneLeadIds').map(String))
     for (const leadId of leadIds) {
+      if (doneLeadIds.has(String(leadId))) continue
       const row = await Lead.findByPk(leadId)
       if (!row) continue
       const summary = await runLeadWorkflowTriggersForLead({
@@ -42,11 +50,14 @@ async function processWorkflowTriggerJob(job) {
           metadata: { action: 'workflow_triggers_completed', eventType, viaQueue: true, ...summary },
         })
       }
+      doneLeadIds.add(String(leadId))
+      await job.updateProgress({ doneLeadIds: [...doneLeadIds] }).catch(() => {})
     }
     return { ok: true, processed: leadIds.length }
   }
 
   const { eventType, companyId, workspaceId, actorUserId, leadPlain, beforePlain } = job.data
+  const doneWorkflowIds = new Set(progressField(job, 'doneWorkflowIds').map(String))
   const summary = await runLeadWorkflowTriggersForLead({
     eventType,
     lead: leadPlain,
@@ -54,6 +65,11 @@ async function processWorkflowTriggerJob(job) {
     companyId,
     workspaceId,
     actorUserId,
+    skipWorkflowIds: doneWorkflowIds,
+    onWorkflowProcessed: async (workflowId) => {
+      doneWorkflowIds.add(workflowId)
+      await job.updateProgress({ doneWorkflowIds: [...doneWorkflowIds] }).catch(() => {})
+    },
   })
   const leadId = leadPlain?.id
   if (leadId && summary.matched > 0) {
@@ -80,7 +96,14 @@ export async function tryEnqueueLeadWorkflowTrigger({ eventType, lead, before, c
   const leadPlain = typeof lead?.get === 'function' ? lead.get({ plain: true }) : { ...lead }
   const beforePlain = before ? (typeof before.get === 'function' ? before.get({ plain: true }) : { ...before }) : null
   if (!leadPlain?.id) return false
-  const matchCount = await countActiveWorkflowTriggersForEvent({ eventType, companyId, workspaceId })
+  // Pass lead/before so watchFields-only triggers don't enqueue no-op jobs
+  const matchCount = await countActiveWorkflowTriggersForEvent({
+    eventType,
+    companyId,
+    workspaceId,
+    lead: leadPlain,
+    before: beforePlain,
+  })
   if (matchCount < 1) return false
   await q.add(
     'single',
@@ -125,6 +148,13 @@ export function startWorkflowTriggerWorker() {
   if (!connection) return null
   const concurrency = Math.max(1, Math.min(20, Number(process.env.WORKFLOW_TRIGGER_QUEUE_CONCURRENCY || 4)))
   worker = new Worker(QUEUE_NAME, processWorkflowTriggerJob, { connection, concurrency })
-  worker.on('error', () => {})
+  worker.on('error', (err) => {
+    // eslint-disable-next-line no-console
+    console.error('[workflow] trigger worker error:', err?.message || err)
+  })
+  worker.on('failed', (job, err) => {
+    // eslint-disable-next-line no-console
+    console.error(`[workflow] trigger job ${job?.id || '?'} failed:`, err?.message || err)
+  })
   return worker
 }

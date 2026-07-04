@@ -1,40 +1,62 @@
-import React, { useEffect } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import { createStackNavigator } from '@react-navigation/stack';
-import { useAuthStore } from '../store/authStore';
-import { setNavigationRef } from '../services/api';
+import React from 'react';
+import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { navRef } from './navRef';
+import { useAuthStore } from '../stores/authStore';
+import { useUiStore } from '../stores/uiStore';
+import { useTheme } from '../design-system/ThemeProvider';
 import AuthStack from './AuthStack';
 import AppStack from './AppStack';
-import LoaderOverlay from '../components/feedback/LoaderOverlay';
+import BiometricGateScreen from '../features/auth/screens/BiometricGateScreen';
 
-const Root = createStackNavigator();
+const Root = createNativeStackNavigator();
 
-const RootNavigator = () => {
-  const { isLoggedIn, isBootstrapped, bootstrap } = useAuthStore();
+function BootSplash() {
+  const theme = useTheme();
+  return (
+    <View style={[styles.boot, { backgroundColor: theme.colors.page }]}>
+      <ActivityIndicator size="large" color={theme.brand} />
+    </View>
+  );
+}
 
-  useEffect(() => { bootstrap(); }, []);
+export default function Navigation() {
+  const status = useAuthStore((s) => s.status);
+  const biometricEnabled = useUiStore((s) => s.biometricEnabled);
+  const unlocked = useUiStore((s) => s.unlocked);
+  const theme = useTheme();
+  const locked = status === 'authed' && biometricEnabled && !unlocked;
 
-  if (!isBootstrapped) return <LoaderOverlay visible />;
+  const navTheme = {
+    ...(theme.dark ? DarkTheme : DefaultTheme),
+    colors: {
+      ...(theme.dark ? DarkTheme.colors : DefaultTheme.colors),
+      primary: theme.brand,
+      background: theme.colors.page,
+      card: theme.colors.card,
+      text: theme.colors.ink,
+      border: theme.colors.border,
+    },
+  };
+
+  if (status === 'boot') return <BootSplash />;
 
   return (
-    <Root.Navigator screenOptions={{ headerShown: false, animationEnabled: false }}>
-      {isLoggedIn
-        ? <Root.Screen name="App"  component={AppStack} />
-        : <Root.Screen name="Auth" component={AuthStack} />
-      }
-    </Root.Navigator>
+    <NavigationContainer ref={navRef} theme={navTheme}>
+      <Root.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>
+        {status !== 'authed' ? (
+          <Root.Screen name="Auth" component={AuthStack} />
+        ) : locked ? (
+          <Root.Screen name="BiometricGate" component={BiometricGateScreen} />
+        ) : (
+          <Root.Screen name="App" component={AppStack} />
+        )}
+      </Root.Navigator>
+    </NavigationContainer>
   );
-};
+}
 
-const Navigation = ({ navigationRef }) => (
-  <NavigationContainer
-    ref={(ref) => {
-      navigationRef.current = ref;
-      setNavigationRef(ref);
-    }}
-  >
-    <RootNavigator />
-  </NavigationContainer>
-);
-
-export default Navigation;
+const styles = StyleSheet.create({
+  boot: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+});

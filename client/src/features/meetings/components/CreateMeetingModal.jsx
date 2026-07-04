@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { CalendarClock, Presentation, Search, Users, X } from 'lucide-react'
 import { Input } from '@/components/ui/Input'
@@ -7,7 +7,6 @@ import { Textarea } from '@/components/ui/Textarea'
 import { cn } from '@/utils/cn'
 import { useCreateMeetingMutation, useUpdateMeetingMutation } from '../meetingsApi'
 import { useGetLeadsQuery } from '@/features/leads/leadsApi'
-import { MeetingBotSetupHint } from '@/features/meetings/components/MeetingBotSetupHint'
 
 function getInitialForm(initialData) {
   if (!initialData) {
@@ -41,11 +40,13 @@ function leadLabel(lead) {
 
 function FieldLabel({ children, htmlFor }) {
   return (
-    <label htmlFor={htmlFor} className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+    <label htmlFor={htmlFor} className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
       {children}
     </label>
   )
 }
+
+const compactFieldClassName = 'h-9 px-3 text-[13px] border-slate-300 hover:border-slate-400'
 
 export function CreateMeetingModal({ open, onClose, users = [], leadId, initialData = null }) {
   const [createMeeting, { isLoading: creating }] = useCreateMeetingMutation()
@@ -57,12 +58,24 @@ export function CreateMeetingModal({ open, onClose, users = [], leadId, initialD
   const [leadSearch, setLeadSearch] = useState('')
   const [leadPickerOpen, setLeadPickerOpen] = useState(false)
   const [selectedLead, setSelectedLead] = useState(null)
+  const leadFieldRef = useRef(null)
 
   const { data: leadResults, isFetching: leadsLoading } = useGetLeadsQuery(
-    { search: leadSearch, limit: 8, page: 1 },
-    { skip: !open || Boolean(lockedLeadId) || leadSearch.trim().length < 1 },
+    { search: leadSearch.trim(), limit: 10, page: 1 },
+    { skip: !open || Boolean(lockedLeadId) || !leadPickerOpen },
   )
   const leadOptions = useMemo(() => leadResults?.data || [], [leadResults])
+
+  useEffect(() => {
+    if (!leadPickerOpen) return
+    function handleClick(e) {
+      if (leadFieldRef.current && !leadFieldRef.current.contains(e.target)) {
+        setLeadPickerOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [leadPickerOpen])
 
   useEffect(() => {
     if (!open) return
@@ -158,23 +171,29 @@ export function CreateMeetingModal({ open, onClose, users = [], leadId, initialD
       }}
     >
       <div
-        className="flex max-h-[min(92vh,880px)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-surface-border bg-white shadow-2xl ring-1 ring-black/5"
+        className="flex max-h-[min(90vh,720px)] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-surface-border bg-white shadow-2xl ring-1 ring-black/5"
         role="dialog"
         aria-modal="true"
         aria-labelledby="meeting-modal-title"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <header className="shrink-0 border-b border-surface-border bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 px-6 py-4 text-white">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex min-w-0 items-start gap-3">
-              <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/15">
-                <Presentation className="h-5 w-5 text-white/95" aria-hidden />
+        <header
+          className="shrink-0 border-b border-surface-border px-5 py-3 text-white"
+          style={{
+            background:
+              'linear-gradient(to right, var(--brand-primary-dark), var(--brand-primary))',
+          }}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-start gap-2.5">
+              <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/10 ring-1 ring-white/15">
+                <Presentation className="h-4 w-4 text-white/95" aria-hidden />
               </span>
               <div className="min-w-0">
-                <h2 id="meeting-modal-title" className="text-lg font-semibold tracking-tight">
+                <h2 id="meeting-modal-title" className="text-sm font-semibold tracking-tight">
                   {isEdit ? 'Edit meeting' : 'Schedule a meeting'}
                 </h2>
-                <p className="mt-0.5 text-xs text-white/70">
+                <p className="mt-0.5 text-[11px] leading-snug text-white/70">
                   {isEdit
                     ? 'Update timing, agenda, or attendees. Changes sync to your calendar when saved.'
                     : 'Pick a time window, add context, and invite teammates. A Meet link is created when possible.'}
@@ -183,21 +202,22 @@ export function CreateMeetingModal({ open, onClose, users = [], leadId, initialD
             </div>
             <button
               type="button"
-              className="shrink-0 rounded-lg p-2 text-white/75 transition hover:bg-white/10 hover:text-white"
+              className="shrink-0 rounded-lg p-1.5 text-white/75 transition hover:bg-white/10 hover:text-white"
               aria-label="Close"
               onClick={handleClose}
             >
-              <X className="h-5 w-5" aria-hidden />
+              <X className="h-4 w-4" aria-hidden />
             </button>
           </div>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-          <div className="grid gap-5 sm:grid-cols-2">
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          <div className="grid gap-3.5 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <FieldLabel htmlFor="meeting-title">Title</FieldLabel>
               <Input
                 id="meeting-title"
+                className={compactFieldClassName}
                 placeholder="e.g. Product walkthrough with Acme"
                 value={form.title}
                 onChange={(e) => update('title', e.target.value)}
@@ -208,7 +228,7 @@ export function CreateMeetingModal({ open, onClose, users = [], leadId, initialD
               <div className="sm:col-span-2">
                 <FieldLabel htmlFor="meeting-lead">Lead</FieldLabel>
                 {selectedLead ? (
-                  <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm">
+                  <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-300 bg-slate-50 px-3 py-1.5 text-[13px]">
                     <span className="truncate font-medium text-ink">{leadLabel(selectedLead)}</span>
                     <button
                       type="button"
@@ -224,13 +244,13 @@ export function CreateMeetingModal({ open, onClose, users = [], leadId, initialD
                   </div>
                 ) : (
                   <div className="relative">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" aria-hidden />
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-muted" aria-hidden />
                     <input
                       id="meeting-lead"
                       type="text"
                       placeholder="Search leads by name, company, or email…"
                       className={cn(
-                        'w-full rounded-xl border border-slate-300 bg-white py-2 pl-10 pr-3 text-sm text-ink shadow-sm',
+                        'h-9 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-[13px] text-ink shadow-sm',
                         'outline-none transition-all duration-150 hover:border-slate-400',
                         'focus:border-brand-500 focus:ring-2 focus:ring-brand-500/15',
                       )}
@@ -241,18 +261,18 @@ export function CreateMeetingModal({ open, onClose, users = [], leadId, initialD
                       }}
                       onFocus={() => setLeadPickerOpen(true)}
                     />
-                    {leadPickerOpen && leadSearch.trim().length > 0 ? (
-                      <ul className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
+                    {leadPickerOpen ? (
+                      <ul className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
                         {leadsLoading ? (
-                          <li className="px-3 py-2 text-xs text-ink-muted">Searching…</li>
+                          <li className="px-3 py-1.5 text-xs text-ink-muted">Searching…</li>
                         ) : leadOptions.length === 0 ? (
-                          <li className="px-3 py-2 text-xs text-ink-muted">No leads found.</li>
+                          <li className="px-3 py-1.5 text-xs text-ink-muted">No leads found.</li>
                         ) : (
                           leadOptions.map((lead) => (
                             <li key={lead.id}>
                               <button
                                 type="button"
-                                className="flex w-full flex-col items-start rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-50"
+                                className="flex w-full flex-col items-start rounded-md px-3 py-1.5 text-left text-[13px] hover:bg-slate-50"
                                 onClick={() => {
                                   setSelectedLead(lead)
                                   update('leadId', lead.id)
@@ -276,7 +296,12 @@ export function CreateMeetingModal({ open, onClose, users = [], leadId, initialD
 
             <div>
               <FieldLabel htmlFor="meeting-type">Type</FieldLabel>
-              <Select id="meeting-type" value={form.meetingType} onChange={(e) => update('meetingType', e.target.value)}>
+              <Select
+                id="meeting-type"
+                className={compactFieldClassName}
+                value={form.meetingType}
+                onChange={(e) => update('meetingType', e.target.value)}
+              >
                 <option value="demo">Demo</option>
                 <option value="follow_up">Follow up</option>
                 <option value="closing">Closing</option>
@@ -289,12 +314,12 @@ export function CreateMeetingModal({ open, onClose, users = [], leadId, initialD
             <div>
               <FieldLabel htmlFor="meeting-start">Starts</FieldLabel>
               <div className="relative">
-                <CalendarClock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" aria-hidden />
+                <CalendarClock className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-muted" aria-hidden />
                 <input
                   id="meeting-start"
                   type="datetime-local"
                   className={cn(
-                    'w-full rounded-xl border border-slate-300 bg-white py-2 pl-10 pr-3 text-sm text-ink shadow-sm',
+                    'h-9 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-[13px] text-ink shadow-sm',
                     'outline-none transition-all duration-150 hover:border-slate-400',
                     'focus:border-brand-500 focus:ring-2 focus:ring-brand-500/15',
                   )}
@@ -307,12 +332,12 @@ export function CreateMeetingModal({ open, onClose, users = [], leadId, initialD
             <div>
               <FieldLabel htmlFor="meeting-end">Ends</FieldLabel>
               <div className="relative">
-                <CalendarClock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" aria-hidden />
+                <CalendarClock className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-muted" aria-hidden />
                 <input
                   id="meeting-end"
                   type="datetime-local"
                   className={cn(
-                    'w-full rounded-xl border border-slate-300 bg-white py-2 pl-10 pr-3 text-sm text-ink shadow-sm',
+                    'h-9 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-[13px] text-ink shadow-sm',
                     'outline-none transition-all duration-150 hover:border-slate-400',
                     'focus:border-brand-500 focus:ring-2 focus:ring-brand-500/15',
                   )}
@@ -326,35 +351,38 @@ export function CreateMeetingModal({ open, onClose, users = [], leadId, initialD
               <FieldLabel htmlFor="meeting-agenda">Agenda & notes</FieldLabel>
               <Textarea
                 id="meeting-agenda"
-                rows={4}
+                rows={3}
+                className="text-[13px]"
                 placeholder="Goals, talking points, or prep links…"
                 value={form.agenda}
                 onChange={(e) => update('agenda', e.target.value)}
               />
             </div>
 
-            <label className="sm:col-span-2 flex cursor-pointer items-start gap-3 rounded-xl border border-surface-border bg-gradient-to-br from-slate-50 to-white p-4 shadow-sm">
+            {/* Recording bot consent — disabled for now
+            <label className="sm:col-span-2 flex cursor-pointer items-start gap-2.5 rounded-lg border border-surface-border bg-gradient-to-br from-slate-50 to-white p-3 shadow-sm">
               <input
                 type="checkbox"
-                className="mt-1 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500/30"
+                className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500/30"
                 checked={form.recordingBotConsent}
                 onChange={(e) => update('recordingBotConsent', e.target.checked)}
               />
-              <span className="min-w-0 text-sm">
+              <span className="min-w-0 text-[13px]">
                 <span className="font-medium text-ink">Enable AI recording bot</span>
-                <span className="mt-1 block text-xs leading-relaxed text-ink-muted">
+                <span className="mt-0.5 block text-[11px] leading-relaxed text-ink-muted">
                   After you confirm, the server can join Meet to record, transcribe, and summarize. Requires server setup
                   (FFmpeg, Playwright, Groq key).
                 </span>
-                <div className="mt-2">
+                <div className="mt-1.5">
                   <MeetingBotSetupHint />
                 </div>
               </span>
             </label>
+            */}
 
             <div className="sm:col-span-2">
               <FieldLabel>Attendees</FieldLabel>
-              <div className="max-h-52 overflow-auto rounded-xl border border-slate-200 bg-slate-50/50 p-2">
+              <div className="max-h-40 overflow-auto rounded-lg border border-slate-200 bg-slate-50/50 p-1.5">
                 {users.length === 0 ? (
                   <p className="px-2 py-6 text-center text-xs text-ink-muted">No users available to invite.</p>
                 ) : (
@@ -367,7 +395,7 @@ export function CreateMeetingModal({ open, onClose, users = [], leadId, initialD
                             type="button"
                             onClick={() => toggleParticipant(user.id)}
                             className={cn(
-                              'flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition',
+                              'flex w-full items-center justify-between gap-3 rounded-md px-2.5 py-1.5 text-left text-[13px] transition',
                               selected
                                 ? 'bg-slate-100 text-brand-900 ring-1 ring-brand-200/80'
                                 : 'text-ink hover:bg-white hover:shadow-sm',
@@ -375,7 +403,12 @@ export function CreateMeetingModal({ open, onClose, users = [], leadId, initialD
                           >
                             <span className="flex min-w-0 items-center gap-2">
                               <Users className="h-4 w-4 shrink-0 text-ink-muted" aria-hidden />
-                              <span className="truncate font-medium">{user.name || user.email}</span>
+                              <span className="flex min-w-0 flex-col">
+                                <span className="truncate font-medium">{user.name || user.email}</span>
+                                {user.name && user.email ? (
+                                  <span className="truncate text-[11px] text-ink-muted">{user.email}</span>
+                                ) : null}
+                              </span>
                             </span>
                             <span
                               className={cn(
@@ -396,12 +429,12 @@ export function CreateMeetingModal({ open, onClose, users = [], leadId, initialD
           </div>
         </div>
 
-        <footer className="shrink-0 border-t border-surface-border bg-slate-50/80 px-6 py-4">
+        <footer className="shrink-0 border-t border-surface-border bg-slate-50/80 px-5 py-3">
           <div className="flex flex-wrap items-center justify-end gap-2">
             <button
               type="button"
               onClick={handleClose}
-              className="h-10 rounded-xl border border-surface-border bg-white px-4 text-sm font-medium text-ink shadow-sm transition hover:bg-slate-50"
+              className="h-9 rounded-lg border border-surface-border bg-white px-3.5 text-[13px] font-medium text-ink shadow-sm transition hover:bg-slate-50"
             >
               Cancel
             </button>
@@ -409,7 +442,7 @@ export function CreateMeetingModal({ open, onClose, users = [], leadId, initialD
               type="button"
               disabled={busy}
               onClick={() => void submit()}
-              className="h-10 rounded-xl bg-[var(--brand-primary)] px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--brand-primary-dark)] disabled:opacity-50"
+              className="h-9 rounded-lg bg-[var(--brand-primary)] px-4 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[var(--brand-primary-dark)] disabled:opacity-50"
             >
               {busy ? (isEdit ? 'Saving…' : 'Creating…') : isEdit ? 'Save changes' : 'Create meeting'}
             </button>

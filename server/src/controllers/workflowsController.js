@@ -93,9 +93,19 @@ export async function list(req, res, next) {
         : null
       const def = p.definitionJson || {}
       const nodes = Array.isArray(def.nodes) ? def.nodes : []
-      const TRIGGER_NODE_TYPES = new Set(['triggerLeadCreated', 'triggerLeadUpdated'])
+      const TRIGGER_NODE_TYPES = new Set([
+        'triggerLeadCreated',
+        'triggerLeadUpdated',
+        'triggerCampaignStageChanged',
+        'triggerCampaignPaymentReceived',
+      ])
       const triggerNode = nodes.find((n) => TRIGGER_NODE_TYPES.has(n.type))
-      const TRIGGER_LABELS = { triggerLeadCreated: 'Lead created', triggerLeadUpdated: 'Lead updated' }
+      const TRIGGER_LABELS = {
+        triggerLeadCreated: 'Lead created',
+        triggerLeadUpdated: 'Lead updated',
+        triggerCampaignStageChanged: 'Campaign stage changed',
+        triggerCampaignPaymentReceived: 'Campaign payment received',
+      }
       const triggerLabel = TRIGGER_LABELS[triggerNode?.type] ?? null
       const stepCount = nodes.filter((n) => !TRIGGER_NODE_TYPES.has(n.type)).length
       return {
@@ -186,12 +196,39 @@ export async function remove(req, res, next) {
   }
 }
 
+const TRIGGER_NODE_TYPES_FOR_VALIDATION = [
+  'triggerLeadCreated',
+  'triggerLeadUpdated',
+  'triggerCampaignStageChanged',
+  'triggerCampaignPaymentReceived',
+]
+
+const KNOWN_NODE_TYPES = new Set([
+  ...TRIGGER_NODE_TYPES_FOR_VALIDATION,
+  'conditionField',
+  'delayWait',
+  'actionAssignOwner',
+  'actionCreateTask',
+  'actionCreateFollowup',
+  'actionSendEmailTemplate',
+])
+
 function validateWorkflowDefinition(def) {
   const nodes = Array.isArray(def?.nodes) ? def.nodes : []
+  const edges = Array.isArray(def?.edges) ? def.edges : []
   const errors = []
-  const hasTrigger = nodes.some((n) => n.type === 'triggerLeadCreated' || n.type === 'triggerLeadUpdated')
+  const hasTrigger = nodes.some((n) => TRIGGER_NODE_TYPES_FOR_VALIDATION.includes(n.type))
   if (!hasTrigger) errors.push('Workflow must have a trigger node')
+  const nodeIds = new Set(nodes.map((n) => n.id))
+  for (const edge of edges) {
+    if (!nodeIds.has(edge.source)) errors.push(`Edge "${edge.id || '?'}" points from a missing node ("${edge.source}")`)
+    if (!nodeIds.has(edge.target)) errors.push(`Edge "${edge.id || '?'}" points to a missing node ("${edge.target}")`)
+  }
   for (const node of nodes) {
+    if (!KNOWN_NODE_TYPES.has(node.type)) {
+      errors.push(`Node "${node.id}": unknown type "${node.type}"`)
+      continue
+    }
     if (node.type === 'actionAssignOwner') {
       const ids = Array.isArray(node.data?.userIds) ? node.data.userIds.filter(Boolean) : []
       const single = String(node.data?.userId || '').trim()
@@ -252,13 +289,17 @@ export async function testRun(req, res, next) {
     })
     if (!lead) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Lead not found' } })
     const def = wf.definitionJson || {}
-    const trigger =
-      (def.nodes || []).find((n) => n.type === 'triggerLeadCreated') ||
-      (def.nodes || []).find((n) => n.type === 'triggerLeadUpdated')
+    const trigger = (def.nodes || []).find((n) => TRIGGER_NODE_TYPES_FOR_VALIDATION.includes(n.type))
     if (!trigger) {
-      return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Workflow has no lead trigger node' } })
+      return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Workflow has no trigger node' } })
     }
-    const eventType = trigger.type === 'triggerLeadUpdated' ? 'lead_updated' : 'lead_created'
+    const eventTypeByTriggerNode = {
+      triggerLeadCreated: 'lead_created',
+      triggerLeadUpdated: 'lead_updated',
+      triggerCampaignStageChanged: 'campaign_lead_stage_changed',
+      triggerCampaignPaymentReceived: 'campaign_payment_received',
+    }
+    const eventType = eventTypeByTriggerNode[trigger.type] || 'lead_created'
     await startWorkflowRun({
       workflow: wf,
       triggerNode: trigger,

@@ -1,11 +1,35 @@
 import { Download, Mail, Pencil, Trash2, UserCog } from 'lucide-react'
 
-export function BulkActionsBar({ count, onBulkEmail, onAssign, onEdit, onExport, onDelete, onClear }) {
+export function BulkActionsBar({
+  count,
+  onBulkEmail,
+  onAssign,
+  onEdit,
+  onExport,
+  onDelete,
+  onClear,
+  pageCount = 0,
+  total = 0,
+  onSelectAll,
+  selectingAll = false,
+  entityLabel = 'records',
+}) {
   if (!count) return null
+  const canSelectAll = onSelectAll && count === pageCount && total > pageCount
   return (
     <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 animate-in slide-in-from-bottom-3">
       <div className="flex flex-wrap items-center justify-center gap-2 rounded-2xl bg-ink px-4 py-3 text-white shadow-2xl">
         <span className="text-sm font-medium">{count} selected</span>
+        {canSelectAll ? (
+          <button
+            type="button"
+            onClick={onSelectAll}
+            disabled={selectingAll}
+            className="inline-flex h-8 items-center gap-1 rounded-xl bg-white/10 px-3 text-xs font-semibold text-brand-200 hover:bg-white/15 disabled:opacity-60"
+          >
+            {selectingAll ? 'Selecting…' : `Select all ${total} ${entityLabel}`}
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={onBulkEmail}

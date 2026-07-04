@@ -114,11 +114,11 @@ export const leadsApi = baseApi.injectEndpoints({
     }),
     deleteLead: build.mutation({
       query: (id) => ({ url: `/leads/${id}`, method: 'DELETE' }),
-      invalidatesTags: [{ type: 'Lead', id: 'LIST' }],
+      invalidatesTags: [{ type: 'Lead', id: 'LIST' }, { type: 'Lead', id: 'ARCHIVED_LIST' }],
     }),
     bulkLeads: build.mutation({
       query: (body) => ({ url: '/leads/bulk', method: 'POST', body }),
-      invalidatesTags: [{ type: 'Lead', id: 'LIST' }],
+      invalidatesTags: [{ type: 'Lead', id: 'LIST' }, { type: 'Lead', id: 'ARCHIVED_LIST' }],
     }),
     resolveLeadsByIds: build.mutation({
       query: (ids) => ({ url: '/leads/resolve-by-ids', method: 'POST', body: { ids } }),
@@ -350,6 +350,22 @@ export const leadsApi = baseApi.injectEndpoints({
     exportLeads: build.mutation({
       query: (body) => ({ url: '/leads/export', method: 'POST', body }),
     }),
+    getArchivedLeads: build.query({
+      query: (params) => ({ url: '/leads/archived', params }),
+      providesTags: [{ type: 'Lead', id: 'ARCHIVED_LIST' }],
+    }),
+    restoreLead: build.mutation({
+      query: (id) => ({ url: `/leads/${id}/restore`, method: 'POST' }),
+      invalidatesTags: [{ type: 'Lead', id: 'ARCHIVED_LIST' }, { type: 'Lead', id: 'LIST' }],
+    }),
+    deleteLeadPermanently: build.mutation({
+      query: (id) => ({ url: `/leads/${id}/permanent`, method: 'DELETE' }),
+      invalidatesTags: [{ type: 'Lead', id: 'ARCHIVED_LIST' }],
+    }),
+    bulkArchivedLeads: build.mutation({
+      query: (body) => ({ url: '/leads/archived/bulk', method: 'POST', body }),
+      invalidatesTags: [{ type: 'Lead', id: 'ARCHIVED_LIST' }, { type: 'Lead', id: 'LIST' }],
+    }),
   }),
 })
 
@@ -421,4 +437,8 @@ export const {
   useDeleteAssignmentRuleMutation,
   useImportLeadsMutation,
   useExportLeadsMutation,
+  useGetArchivedLeadsQuery,
+  useRestoreLeadMutation,
+  useDeleteLeadPermanentlyMutation,
+  useBulkArchivedLeadsMutation,
 } = leadsApi

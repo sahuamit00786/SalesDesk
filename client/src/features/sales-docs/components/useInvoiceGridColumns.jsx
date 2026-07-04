@@ -1,45 +1,18 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { Briefcase, Pencil, Printer, Receipt, Trash2 } from 'lucide-react'
+import { Pencil, Printer, Receipt, Trash2 } from 'lucide-react'
 import {
   SalesDocActionIcon,
   SalesDocClientCell,
   SalesDocDealCell,
   SalesDocNumberLink,
+  SalesDocStatusBadge,
   formatDocListDate,
+  formatDocMoney as fmtMoney,
 } from '@/features/sales-docs/components/SalesDocListCells'
 import { cn } from '@/utils/cn'
 
-function fmtMoney(n, c = 'USD') {
-  const v = Number(n ?? 0)
-  try {
-    return new Intl.NumberFormat(undefined, { style: 'currency', currency: c }).format(v)
-  } catch {
-    return `${c} ${v.toFixed(2)}`
-  }
-}
-
-const STATUS_STYLES = {
-  paid: 'bg-emerald-50 text-emerald-800',
-  draft: 'bg-surface-subtle text-ink-muted',
-  issued: 'bg-blue-50 text-blue-800',
-  partially_paid: 'bg-amber-50 text-amber-800',
-  overdue: 'bg-red-50 text-red-700',
-  cancelled: 'bg-surface-subtle text-ink-faint line-through',
-  refunded: 'bg-purple-50 text-purple-800',
-}
-
-const STATUS_LABELS = {
-  paid: 'Paid',
-  draft: 'Draft',
-  issued: 'Issued',
-  partially_paid: 'Partial',
-  overdue: 'Overdue',
-  cancelled: 'Cancelled',
-  refunded: 'Refunded',
-}
-
-export function useInvoiceGridColumns({ setAssignInvoice, onPaymentClick, setDeleteTarget, deleting, onDealClick }) {
+export function useInvoiceGridColumns({ onPaymentClick, setDeleteTarget, deleting, onDealClick }) {
   return useMemo(
     () => [
       {
@@ -73,16 +46,7 @@ export function useInvoiceGridColumns({ setAssignInvoice, onPaymentClick, setDel
         field: 'status',
         headerName: 'Status',
         width: 110,
-        renderCell: ({ row }) => (
-          <span
-            className={cn(
-              'rounded-full px-2 py-0.5 text-xs font-medium',
-              STATUS_STYLES[row.status] || 'bg-surface-subtle text-ink-muted',
-            )}
-          >
-            {STATUS_LABELS[row.status] || row.status}
-          </span>
-        ),
+        renderCell: ({ row }) => <SalesDocStatusBadge status={row.status} variant="invoice" />,
       },
       {
         field: 'grandTotal',
@@ -145,13 +109,6 @@ export function useInvoiceGridColumns({ setAssignInvoice, onPaymentClick, setDel
             </SalesDocActionIcon>
             <SalesDocActionIcon
               type="button"
-              title={row.dealId ? 'Reassign deal' : 'Assign to deal'}
-              onClick={() => setAssignInvoice(row)}
-            >
-              <Briefcase className="h-4 w-4" />
-            </SalesDocActionIcon>
-            <SalesDocActionIcon
-              type="button"
               title="Payment history"
               onClick={() => onPaymentClick(row)}
             >
@@ -170,6 +127,6 @@ export function useInvoiceGridColumns({ setAssignInvoice, onPaymentClick, setDel
         ),
       },
     ],
-    [setAssignInvoice, onPaymentClick, setDeleteTarget, deleting, onDealClick],
+    [onPaymentClick, setDeleteTarget, deleting, onDealClick],
   )
 }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { Printer } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
@@ -9,13 +9,14 @@ import { useGetBillingProfileQuery } from '@/features/sales-docs/billingProfileA
 import {
   useCreateInvoiceMutation,
   useGetInvoiceQuery,
-  useGetInvoiceTemplateQuery,
   usePatchInvoiceMutation,
 } from '@/features/sales-docs/invoicesApi'
+import { useGetSalesDocTemplateQuery } from '@/features/sales-docs/salesDocTemplatesApi'
 import { useGetLeadsQuery, useGetLeadQuery } from '@/features/leads/leadsApi'
 import { useGetDealQuery, useGetDealsQuery } from '@/features/deals/dealsApi'
 
 import { buildCustomerSnapshotFromLead, formatAddressLines } from '@/features/sales-docs/customerSnapshot'
+import { DealBalanceCard } from '@/features/sales-docs/components/DealBalanceCard'
 import { aggregateInvoiceTotals } from '@/features/sales-docs/previewTotals'
 import { suggestedInvoiceNumber } from '@/features/sales-docs/suggestedDocNumber'
 import { cn } from '@/utils/cn'
@@ -109,7 +110,6 @@ export function NewInvoicePage() {
 }
 
 function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', initialDealId = '' }) {
-  const navigate = useNavigate()
   const effectiveCurrency = useEffectiveCurrency()
   const hydratedInvoiceIdRef = useRef('')
   const isEditingExisting = Boolean(invoiceId)
@@ -131,11 +131,12 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
   const [lines, setLines] = useState([emptyLine()])
   const [documentTheme, setDocumentTheme] = useState({ accentColor: '#059669', headerTone: 'light' })
   const [savedId, setSavedId] = useState(null)
+  const [status, setStatus] = useState('issued')
   const [previewNumber, setPreviewNumber] = useState('Preview')
   const [showPreviewMobile, setShowPreviewMobile] = useState(true)
 
   const { data: billRes } = useGetBillingProfileQuery()
-  const { data: tplRes, isFetching: tplLoading } = useGetInvoiceTemplateQuery(templateId, { skip: !templateId })
+  const { data: tplRes, isFetching: tplLoading } = useGetSalesDocTemplateQuery(templateId, { skip: !templateId })
   const { data: invoiceRes, isFetching: invoiceLoading } = useGetInvoiceQuery(invoiceId, { skip: !invoiceId })
   const tplPayload = tplRes?.data
   const tpl = tplPayload?.data ?? tplPayload
@@ -188,7 +189,10 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
     const lead = leads.find((l) => l.id === oppLeadId) ||
       (deal ? { contactName: deal.fullName, company: deal.companyName, email: deal.email } : null)
     if (lead) setAddressLine(formatAddressLines(buildCustomerSnapshotFromLead(lead)))
+    if (deal.dealCurrency) setCurrency(normalizeCurrencyCode(deal.dealCurrency))
   }
+
+  const selectedDealCard = activeDealId ? dealCard : allDeals.find((d) => d.id === dealLeadId)
 
   const [createInvoice, { isLoading: creating }] = useCreateInvoiceMutation()
   const [patchInvoice, { isLoading: patching }] = usePatchInvoiceMutation()
@@ -221,6 +225,12 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
   }, [effectiveCurrency, isEditingExisting, savedId, templateId])
 
   useEffect(() => {
+    if (isEditingExisting || savedId || templateId) return
+    if (!activeDealId || !dealCard?.dealCurrency) return
+    setCurrency(normalizeCurrencyCode(dealCard.dealCurrency))
+  }, [activeDealId, dealCard, isEditingExisting, savedId, templateId])
+
+  useEffect(() => {
     if (!invoiceId || !existingInvoice) return
     if (hydratedInvoiceIdRef.current === invoiceId) return
     hydratedInvoiceIdRef.current = invoiceId
@@ -240,6 +250,7 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
     setTermsSnapshot(existingInvoice.termsSnapshot || '')
     setShipping(String(existingInvoice.shipping ?? 0))
     setAdjustment(String(existingInvoice.adjustment ?? 0))
+    setStatus(existingInvoice.status || 'issued')
     setPreviewNumber(existingInvoice.invoiceNumber || 'Invoice')
 
     const fetchedItems = Array.isArray(existingInvoice.items) ? existingInvoice.items : []
@@ -296,10 +307,7 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
     if (addressLine.trim()) {
       return {
         ...withDeal,
-        billingAddress: {
-          ...withDeal.billingAddress,
-          street: addressLine.trim(),
-        },
+        billingAddress: { street: addressLine.trim(), city: null, state: null, postalCode: null, country: null },
       }
     }
     return withDeal
@@ -335,7 +343,10 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
       .filter((l) => l.name)
   }
 
-  async function saveDraft() {
+  // Paid states are derived from recorded payments on the server; refunded is terminal.
+  const statusLockedByPayments = ['partially_paid', 'paid', 'overdue', 'refunded'].includes(status)
+
+  async function saveInvoice() {
     const items = buildItemsPayload()
     if (!activeDealId && !clientLeadId) {
       toast.error('Select a client')
@@ -354,38 +365,19 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
           }
         : null
 
-    const normalizedCurrency = normalizeCurrencyCode(currency)
-    const createBody = {
-      ...(activeDealId ? { dealId: activeDealId } : dealLeadId ? { dealId: dealLeadId, leadId: clientLeadId } : { leadId: clientLeadId }),
+    const body = {
       invoiceTemplateId: invoiceTemplateId || null,
       issueDate: toIsoDate(issueDate),
       dueDate: dueDate ? toIsoDate(dueDate) : null,
       reference: reference.trim() || null,
       purchaseOrderRef: purchaseOrderRef.trim() || null,
       customerSnapshot,
-      currency: normalizedCurrency,
+      currency: normalizeCurrencyCode(currency),
       layoutPreset,
       notes: notes.trim() || null,
       termsSnapshot: termsSnapshot.trim() || null,
-      status: 'draft',
-      items,
-      shipping: Number(shipping) || 0,
-      adjustment: Number(adjustment) || 0,
-      documentTheme: themePayload,
-    }
-
-    const patchBody = {
-      invoiceTemplateId: invoiceTemplateId || null,
-      issueDate: toIsoDate(issueDate),
-      dueDate: dueDate ? toIsoDate(dueDate) : null,
-      reference: reference.trim() || null,
-      purchaseOrderRef: purchaseOrderRef.trim() || null,
-      customerSnapshot,
-      currency: normalizedCurrency,
-      layoutPreset,
-      notes: notes.trim() || null,
-      termsSnapshot: termsSnapshot.trim() || null,
-      status: 'draft',
+      // Derived statuses are managed by payments — never send them back
+      ...(statusLockedByPayments ? {} : { status }),
       items,
       shipping: Number(shipping) || 0,
       adjustment: Number(adjustment) || 0,
@@ -394,87 +386,23 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
 
     try {
       if (savedId) {
-        const res = await patchInvoice({ id: savedId, ...patchBody }).unwrap()
+        const res = await patchInvoice({ id: savedId, ...body }).unwrap()
         const inv = res?.data ?? res
-        toast.success(isEditingExisting ? 'Invoice updated' : 'Draft saved')
         setPreviewNumber(inv.invoiceNumber || previewNumber)
-      } else {
-        const res = await createInvoice(createBody).unwrap()
-        const inv = res?.data ?? res
-        setSavedId(inv.id)
-        setPreviewNumber(inv.invoiceNumber || 'Invoice')
-        toast.success('Draft saved')
-      }
-    } catch (e) {
-      toast.error(e?.data?.error?.message || 'Save failed')
-    }
-  }
-
-  async function sendInvoice() {
-    const items = buildItemsPayload()
-    if (!activeDealId && !clientLeadId) {
-      toast.error('Select a client')
-      return
-    }
-    if (!items.length) {
-      toast.error('Add at least one line item')
-      return
-    }
-
-    const themePayload =
-      documentTheme.accentColor || documentTheme.headerTone
-        ? {
-            accentColor: documentTheme.accentColor || undefined,
-            headerTone: documentTheme.headerTone || undefined,
-          }
-        : null
-
-    try {
-      if (savedId) {
-        await patchInvoice({
-          id: savedId,
-          status: 'issued',
-          issueDate: toIsoDate(issueDate),
-          dueDate: dueDate ? toIsoDate(dueDate) : null,
-          reference: reference.trim() || null,
-          purchaseOrderRef: purchaseOrderRef.trim() || null,
-          customerSnapshot,
-          currency: normalizeCurrencyCode(currency),
-          layoutPreset,
-          notes: notes.trim() || null,
-          termsSnapshot: termsSnapshot.trim() || null,
-          items,
-          shipping: Number(shipping) || 0,
-          adjustment: Number(adjustment) || 0,
-          documentTheme: themePayload,
-        }).unwrap()
-        toast.success('Invoice issued')
-        navigate(`/invoices/${savedId}/print`)
+        setStatus(inv.status || status)
+        toast.success('Invoice updated')
       } else {
         const res = await createInvoice({
           ...(activeDealId ? { dealId: activeDealId } : dealLeadId ? { dealId: dealLeadId, leadId: clientLeadId } : { leadId: clientLeadId }),
-          invoiceTemplateId: invoiceTemplateId || null,
-          issueDate: toIsoDate(issueDate),
-          dueDate: dueDate ? toIsoDate(dueDate) : null,
-          reference: reference.trim() || null,
-          purchaseOrderRef: purchaseOrderRef.trim() || null,
-          customerSnapshot,
-          currency: normalizeCurrencyCode(currency),
-          layoutPreset,
-          notes: notes.trim() || null,
-          termsSnapshot: termsSnapshot.trim() || null,
-          status: 'issued',
-          items,
-          shipping: Number(shipping) || 0,
-          adjustment: Number(adjustment) || 0,
-          documentTheme: themePayload,
+          ...body,
         }).unwrap()
         const inv = res?.data ?? res
-        toast.success('Invoice issued')
-        navigate(`/invoices/${inv.id}/print`)
+        setSavedId(inv.id)
+        setPreviewNumber(inv.invoiceNumber || 'Invoice')
+        toast.success('Invoice saved')
       }
     } catch (e) {
-      toast.error(e?.data?.error?.message || 'Could not issue invoice')
+      toast.error(e?.data?.error?.message || 'Save failed')
     }
   }
 
@@ -511,18 +439,10 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
             <button
               type="button"
               disabled={busy}
-              onClick={saveDraft}
-              className="rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-sm font-semibold text-neutral-800 shadow-sm hover:bg-neutral-50 disabled:opacity-50"
-            >
-              {creating || patching ? 'Saving…' : isEditingExisting ? 'Update draft' : 'Save as draft'}
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={sendInvoice}
+              onClick={saveInvoice}
               className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
             >
-              {isEditingExisting ? 'Update & issue' : 'Send invoice'}
+              {creating || patching ? 'Saving…' : savedId ? 'Update invoice' : 'Save invoice'}
             </button>
           </div>
         </div>
@@ -557,6 +477,15 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
                     })}
                   </select>
                 </label>
+
+                {selectedDealCard ? (
+                  <DealBalanceCard
+                    dealId={selectedDealCard.id}
+                    dealValue={selectedDealCard.dealValue}
+                    dealCurrency={selectedDealCard.dealCurrency}
+                    excludeInvoiceId={savedId}
+                  />
+                ) : null}
 
                 <label className="block text-xs font-medium text-neutral-600">
                   Bill to
@@ -620,6 +549,30 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
                     </select>
                   </label>
                 </div>
+
+                <label className="block text-xs font-medium text-neutral-600">
+                  Status
+                  <select
+                    className="mt-1 w-full rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-xs disabled:bg-neutral-50 disabled:text-neutral-500"
+                    value={status}
+                    disabled={statusLockedByPayments}
+                    onChange={(e) => setStatus(e.target.value)}
+                  >
+                    <option value="draft">Draft</option>
+                    <option value="issued">Issued</option>
+                    <option value="cancelled">Cancelled</option>
+                    {statusLockedByPayments ? (
+                      <option value={status}>
+                        {status === 'partially_paid' ? 'Partially paid' : status.charAt(0).toUpperCase() + status.slice(1)}
+                      </option>
+                    ) : null}
+                  </select>
+                  <span className="mt-1 block text-[11px] font-normal text-neutral-400">
+                    {statusLockedByPayments
+                      ? 'Status is managed by recorded payments.'
+                      : 'Only issued invoices can accept payments.'}
+                  </span>
+                </label>
 
                 <label className="block text-xs font-medium text-neutral-600">
                   Billing address
@@ -859,6 +812,7 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
                   watermark={savedId ? null : 'Draft'}
                   currency={currency}
                   theme={documentTheme.accentColor ? documentTheme : null}
+                  payments={existingInvoice?.payments || []}
                 />
               </ScaledA4PreviewViewport>
             </div>

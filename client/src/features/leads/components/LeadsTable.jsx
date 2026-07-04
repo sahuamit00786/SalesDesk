@@ -3,9 +3,9 @@ import { Pencil, Trash2, Info } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { LeadScorePill } from '@/features/leads/components/LeadScorePill'
 import { LeadSourceTag } from '@/features/leads/components/LeadSourceTag'
-import { LeadStatusBadge } from '@/features/leads/components/LeadStatusBadge'
 import { LeadEngagementPopover } from '@/features/leads/components/LeadEngagementPopover'
 import { formatStageLabel } from '@/features/opportunities/components/OpportunitiesKanban'
+import { STATUS_OPTIONS, STATUS_STYLES } from '@/features/leads/constants'
 import { cn } from '@/utils/cn'
 
 function formatINR(value) {
@@ -66,6 +66,44 @@ const ENGAGEMENT_COLUMNS = [
   { key: 'contacted', label: 'Contacted', sortable: false },
 ]
 
+function LeadStatusSelect({ lead, onStatusChange }) {
+  const status = lead.status || 'new'
+  return (
+    <select
+      value={status}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => onStatusChange?.(lead, e.target.value)}
+      aria-label={`Status for ${lead.contactName || lead.title || 'lead'}`}
+      className={cn(
+        'w-full cursor-pointer rounded-md border px-1.5 py-1 text-[10px] font-semibold capitalize outline-none',
+        STATUS_STYLES[status] || STATUS_STYLES.new,
+      )}
+    >
+      {STATUS_OPTIONS.map((s) => (
+        <option key={s} value={s}>{s}</option>
+      ))}
+    </select>
+  )
+}
+
+function OpportunityStageSelect({ lead, opportunityStatuses, onStageChange }) {
+  const currentId = lead.oppStatus?.id || lead.opportunityStatus || ''
+  return (
+    <select
+      value={currentId}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => onStageChange?.(lead, e.target.value)}
+      aria-label={`Pipeline status for ${lead.contactName || lead.title || 'opportunity'}`}
+      className="w-full cursor-pointer rounded-md border border-surface-border bg-surface-subtle px-1.5 py-1 text-[10px] font-semibold text-ink outline-none"
+    >
+      {!currentId ? <option value="">Select status</option> : null}
+      {opportunityStatuses.map((s) => (
+        <option key={s.id} value={s.id}>{formatStageLabel(s.name)}</option>
+      ))}
+    </select>
+  )
+}
+
 /** @param {{ variant?: 'leads' | 'opportunities' }} props */
 export function LeadsTable({
   rows = [],
@@ -77,6 +115,9 @@ export function LeadsTable({
   sort,
   onSort,
   variant = 'leads',
+  opportunityStatuses = [],
+  onStatusChange,
+  onStageChange,
 }) {
   const isOpp = variant === 'opportunities'
   const [hoverLead, setHoverLead] = useState(null)
@@ -127,7 +168,7 @@ export function LeadsTable({
                 <th className="w-12 align-middle">
                   <input
                     type="checkbox"
-                    checked={rows.length > 0 && selected.length === rows.length}
+                    checked={rows.length > 0 && rows.every((r) => selected.includes(r.id))}
                     onChange={(e) => onToggleAll(e.target.checked)}
                   />
                 </th>
@@ -189,9 +230,11 @@ export function LeadsTable({
                             <p className="mt-0.5 text-xs text-ink-muted">{lead.company || '-'}</p>
                           </td>
                           <td>
-                            <span className="inline-flex rounded-md border border-surface-border bg-surface-subtle px-1.5 py-0.5 text-[10px] font-semibold text-ink">
-                              {formatStageLabel(lead.opportunityStage) || '—'}
-                            </span>
+                            <OpportunityStageSelect
+                              lead={lead}
+                              opportunityStatuses={opportunityStatuses}
+                              onStageChange={onStageChange}
+                            />
                           </td>
                           <td>
                             <LeadScorePill score={lead.score || 0} />
@@ -212,7 +255,7 @@ export function LeadsTable({
                             <p className="mt-0.5 text-xs text-ink-muted">{lead.company || '-'}</p>
                           </td>
                           <td>
-                            <LeadStatusBadge status={lead.status} />
+                            <LeadStatusSelect lead={lead} onStatusChange={onStatusChange} />
                           </td>
                           <td>
                             <LeadScorePill score={lead.score || 0} />

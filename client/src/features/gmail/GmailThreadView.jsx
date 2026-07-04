@@ -1,5 +1,4 @@
-import { useState } from 'react'
-import { EllipsisVertical, Reply, UserRound } from 'lucide-react'
+import { Reply, UserRound } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import GmailMessageCard from '@/features/gmail/GmailMessageCard'
 
@@ -19,7 +18,6 @@ export default function GmailThreadView({
   onSaveAttachmentToLead,
   viewLeadId = null,
 }) {
-  const [menuOpen, setMenuOpen] = useState(false)
   if (!thread) return <EmptyThreadState />
   const participants = (thread.participants || []).map((p) => p.name || p.email).filter(Boolean)
   return (
@@ -55,41 +53,6 @@ export default function GmailThreadView({
           <button type="button" onClick={onCreateEmail} className="h-8 rounded-lg bg-[var(--brand-primary)] px-2.5 text-xs font-medium text-white hover:bg-[var(--brand-primary-dark)]">
             + Create email
           </button>
-          <div className="relative">
-            <button
-              type="button"
-              aria-label="More actions"
-              aria-expanded={menuOpen}
-              onClick={() => setMenuOpen((open) => !open)}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-surface-border bg-white text-ink-muted hover:bg-surface-muted"
-            >
-              <EllipsisVertical size={14} />
-            </button>
-            {menuOpen ? (
-              <div className="absolute right-0 top-9 z-20 w-36 overflow-hidden rounded-lg border border-surface-border bg-white py-1 shadow-lg">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMenuOpen(false)
-                    onBack?.()
-                  }}
-                  className="block w-full px-3 py-1.5 text-left text-xs text-ink hover:bg-surface-muted"
-                >
-                  Back
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMenuOpen(false)
-                    onSync?.()
-                  }}
-                  className="block w-full px-3 py-1.5 text-left text-xs text-ink hover:bg-surface-muted"
-                >
-                  Sync replies
-                </button>
-              </div>
-            ) : null}
-          </div>
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-surface-muted/20 px-2 py-2 pb-4 sm:px-3 sm:py-3 sm:pb-5">

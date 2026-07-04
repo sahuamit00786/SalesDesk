@@ -57,6 +57,7 @@ class SimCardModule(reactContext: ReactApplicationContext) :
         try {
             val result = Arguments.createArray()
             val projection = arrayOf(
+                android.provider.CallLog.Calls._ID,
                 android.provider.CallLog.Calls.NUMBER,
                 android.provider.CallLog.Calls.CACHED_NAME,
                 android.provider.CallLog.Calls.TYPE,
@@ -75,6 +76,7 @@ class SimCardModule(reactContext: ReactApplicationContext) :
 
             var count = 0
             cursor?.use { c ->
+                val colId       = c.getColumnIndex(android.provider.CallLog.Calls._ID)
                 val colNumber   = c.getColumnIndex(android.provider.CallLog.Calls.NUMBER)
                 val colName     = c.getColumnIndex(android.provider.CallLog.Calls.CACHED_NAME)
                 val colType     = c.getColumnIndex(android.provider.CallLog.Calls.TYPE)
@@ -91,6 +93,7 @@ class SimCardModule(reactContext: ReactApplicationContext) :
                     }
 
                     val map = Arguments.createMap()
+                    map.putString("id",              if (colId       >= 0) c.getString(colId)     ?: "" else "")
                     map.putString("phoneNumber",    if (colNumber   >= 0) c.getString(colNumber) ?: "" else "")
                     map.putString("name",           if (colName     >= 0) c.getString(colName)   ?: "" else "")
                     map.putInt("callType",          if (colType     >= 0) c.getInt(colType)       else 0)

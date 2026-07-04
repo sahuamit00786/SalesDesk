@@ -23,7 +23,7 @@ import { PageShell } from '@/components/layout/PageShell'
 import { CreateOpportunityModal } from '@/features/opportunities/components/CreateOpportunityModal'
 import { OpportunitiesKanban, formatStageLabel } from '@/features/opportunities/components/OpportunitiesKanban'
 import { useCreateOpportunityMutation, usePatchOpportunityStatusMutation } from '@/features/opportunities/opportunitiesApi'
-import { useCreateDealMutation } from '@/features/deals/dealsApi'
+import { AddDealDrawer } from '@/features/deals/components/AddDealDrawer'
 import { useGetLeadFormMetaQuery, useGetLeadsQuery } from '@/features/leads/leadsApi'
 import { selectWorkspaceList } from '@/features/workspace/workspaceSlice'
 import { cn } from '@/utils/cn'
@@ -151,7 +151,7 @@ export function PipelinePage() {
   const { data: formMetaData } = useGetLeadFormMetaQuery()
   const [createOpportunity, { isLoading: saving }] = useCreateOpportunityMutation()
   const [patchOpportunityStatus, { isLoading: updatingStage }] = usePatchOpportunityStatusMutation()
-  const [createDealFromOpp] = useCreateDealMutation()
+  const [addDealRow, setAddDealRow] = useState(null)
 
   const rows = useMemo(() => (data?.data || []).map(pipelineRowFromLead), [data?.data])
   const total = data?.meta?.total || 0
@@ -269,30 +269,13 @@ export function PipelinePage() {
     reset()
   }
 
-  async function addOpportunityToDealsPipeline(row) {
-    const opportunityLeadId = row.leadId || row.id
-    try {
-      await createDealFromOpp({
-        opportunityLeadId,
-        name: (row.dealName || row.fullName || row.companyName || 'Deal').trim(),
-        description: null,
-        value: Number(row.dealValue || 0),
-        valueCurrency: String(row.dealCurrency || 'USD')
-          .trim()
-          .toUpperCase()
-          .slice(0, 3) || 'USD',
-        ownerUserId: row.ownerUserId || row.owner?.id || null,
-      }).unwrap()
-      toast.success('Deal created — opening Deals')
-      navigate('/deals')
-    } catch (err) {
-      toast.error(err?.data?.error?.message || err?.error || 'Could not create deal')
-    }
+  function addOpportunityToDealsPipeline(row) {
+    setAddDealRow(row)
   }
 
-  async function handleCreateDeal(row, event) {
+  function handleCreateDeal(row, event) {
     event.stopPropagation()
-    await addOpportunityToDealsPipeline(row)
+    addOpportunityToDealsPipeline(row)
   }
 
   async function handleStageChange(row, nextStageName) {
@@ -322,18 +305,6 @@ export function PipelinePage() {
             <p className="text-[11px] text-ink-muted">
               {(row.dealName || '').trim() ? row.companyName || '—' : row.location || '—'}
             </p>
-          </div>
-        ),
-      },
-      {
-        field: 'companyRole',
-        headerName: 'Company & role',
-        flex: 1,
-        minWidth: 130,
-        renderCell: ({ row }) => (
-          <div>
-            <p className="text-xs font-semibold text-ink">{row.jobTitle || '—'}</p>
-            <p className="text-[11px] text-ink-muted">{row.companyName || '—'}</p>
           </div>
         ),
       },
@@ -387,16 +358,6 @@ export function PipelinePage() {
         ),
       },
       {
-        field: 'leadScore',
-        headerName: 'Score',
-        width: 80,
-        renderCell: ({ row }) => (
-          <span className="inline-flex h-8 min-w-[2rem] items-center justify-center rounded-lg border border-brand-200 bg-brand-50 text-xs font-bold text-brand-900">
-            {row.leadScore ?? 0}
-          </span>
-        ),
-      },
-      {
         field: 'owner',
         headerName: 'Owner',
         flex: 1,
@@ -407,20 +368,6 @@ export function PipelinePage() {
               {initials(row.owner?.name || row.owner?.email)}
             </span>
             <span className="text-xs font-medium text-ink">{row.owner?.name || row.owner?.email || 'Unassigned'}</span>
-          </div>
-        ),
-      },
-      {
-        field: 'lastActivity',
-        headerName: 'Last activity',
-        flex: 1,
-        minWidth: 130,
-        renderCell: ({ row }) => (
-          <div>
-            <p className="text-xs font-medium text-ink">{row.lastActivityType || '—'}</p>
-            <p className="text-[11px] text-ink-muted">
-              {row.lastActivityAt ? new Date(row.lastActivityAt).toLocaleString() : '—'}
-            </p>
           </div>
         ),
       },
@@ -824,6 +771,14 @@ export function PipelinePage() {
         users={users}
         opportunityStatuses={opportunityStatuses}
         saving={saving}
+      />
+
+      <AddDealDrawer
+        open={Boolean(addDealRow)}
+        onClose={() => setAddDealRow(null)}
+        users={users}
+        fixedOpportunityLeadId={addDealRow?.leadId || addDealRow?.id || null}
+        onCreated={() => navigate('/deals')}
       />
 
     </PageShell>

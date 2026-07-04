@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
-  AlertTriangle, Building2, ChevronRight, File, Folder, FolderOpen, FolderPlus,
-  Grid3X3, List, Plus, Search, Trash2, Upload, Users, X,
+  AlertTriangle, ArrowDown, ArrowUp, Building2, ChevronRight, File, FileArchive,
+  FileImage, FileSpreadsheet, FileText, Folder, FolderOpen, FolderPlus,
+  Grid3X3, List, Music, Pencil, Plus, Presentation, Search, Trash2, Upload, Users, Video, X,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { PageShell } from '@/components/layout/PageShell'
@@ -22,6 +24,7 @@ import {
   DOCUMENT_TYPES,
 } from '@/features/documents/documentsApi'
 import { DocumentCard, DOC_CARD_GRID } from '@/features/documents/components/DocumentCard'
+import { fileExtLower } from '@/features/documents/documentUtils'
 import { DocumentPreviewDialog } from '@/features/documents/components/DocumentPreviewDialog'
 import { RightDrawer } from '@/components/ui/RightDrawer'
 import { Input } from '@/components/ui/Input'
@@ -57,6 +60,93 @@ function nestFolders(flat, parentId = null) {
   return flat
     .filter((f) => (f.parentFolderId ?? null) === parentId)
     .map((f) => ({ ...f, children: nestFolders(flat, f.id) }))
+}
+
+// ─── File-type grouping ──────────────────────────────────────────────────────
+const TYPE_GROUPS = [
+  { key: 'image',   label: 'Images',        icon: FileImage,       iconClass: 'text-violet-500' },
+  { key: 'pdf',     label: 'PDFs',          icon: FileText,        iconClass: 'text-rose-500' },
+  { key: 'doc',     label: 'Documents',     icon: FileText,        iconClass: 'text-sky-500' },
+  { key: 'sheet',   label: 'Spreadsheets',  icon: FileSpreadsheet, iconClass: 'text-emerald-500' },
+  { key: 'slides',  label: 'Presentations', icon: Presentation,    iconClass: 'text-orange-500' },
+  { key: 'audio',   label: 'Audio',         icon: Music,           iconClass: 'text-teal-500' },
+  { key: 'video',   label: 'Video',         icon: Video,           iconClass: 'text-fuchsia-500' },
+  { key: 'archive', label: 'Archives',      icon: FileArchive,     iconClass: 'text-amber-600' },
+  { key: 'other',   label: 'Other files',   icon: File,            iconClass: 'text-zinc-400' },
+]
+const TYPE_GROUP_MAP = Object.fromEntries(TYPE_GROUPS.map((g) => [g.key, g]))
+
+function getTypeGroupKey(name) {
+  const ext = fileExtLower(name)
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'heic', 'avif'].includes(ext)) return 'image'
+  if (ext === 'pdf') return 'pdf'
+  if (['doc', 'docx', 'txt', 'rtf', 'odt', 'md'].includes(ext)) return 'doc'
+  if (['xls', 'xlsx', 'csv', 'ods'].includes(ext)) return 'sheet'
+  if (['ppt', 'pptx', 'odp', 'key'].includes(ext)) return 'slides'
+  if (['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac'].includes(ext)) return 'audio'
+  if (['mp4', 'mov', 'avi', 'mkv', 'webm'].includes(ext)) return 'video'
+  if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return 'archive'
+  return 'other'
+}
+
+const DATE_GROUP_ORDER = ['Today', 'Yesterday', 'Earlier this week', 'Earlier this month', 'Older']
+function getDateGroupLabel(dateStr) {
+  const d = new Date(dateStr)
+  if (Number.isNaN(d.getTime())) return 'Older'
+  const now = new Date()
+  const dayStart = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate())
+  const diffDays = Math.round((dayStart(now) - dayStart(d)) / 86400000)
+  if (diffDays <= 0) return 'Today'
+  if (diffDays === 1) return 'Yesterday'
+  if (diffDays < 7) return 'Earlier this week'
+  if (diffDays < 30) return 'Earlier this month'
+  return 'Older'
+}
+
+function formatShortDate(dateStr) {
+  const d = new Date(dateStr)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+function initialsOf(name) {
+  const parts = String(name || '').trim().split(/\s+/).slice(0, 2)
+  return parts.map((p) => p[0]?.toUpperCase() || '').join('') || '?'
+}
+
+function FileTypeIcon({ name, size = 15 }) {
+  const g = TYPE_GROUP_MAP[getTypeGroupKey(name)]
+  const Icon = g.icon
+  return <Icon size={size} className={cn('shrink-0', g.iconClass)} strokeWidth={1.75} />
+}
+
+function FragmentGroup({ group, showLabel, children }) {
+  return (
+    <>
+      {showLabel && (
+        <tr className="bg-surface-subtle/50">
+          <td colSpan={7} className="px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-ink-faint">
+            {group.label}
+            <span className="ml-1.5 font-semibold normal-case tracking-normal text-ink-muted">({group.items.length})</span>
+          </td>
+        </tr>
+      )}
+      {children}
+    </>
+  )
+}
+
+function GroupHeader({ groupKey, label, count, showIcon }) {
+  const g = TYPE_GROUP_MAP[groupKey]
+  const Icon = showIcon && g ? g.icon : null
+  return (
+    <div className="mb-2 flex items-center gap-2">
+      {Icon && <Icon size={14} className={cn('shrink-0', g.iconClass)} strokeWidth={1.75} />}
+      <p className="text-xs font-semibold uppercase tracking-wider text-ink-faint">{label}</p>
+      <span className="rounded-full bg-surface-subtle px-1.5 py-0.5 text-[10px] font-semibold text-ink-muted">{count}</span>
+      <div className="ml-1 flex-1 border-t border-surface-border" />
+    </div>
+  )
 }
 
 // ─── Sidebar folder item (recursive) ─────────────────────────────────────────
@@ -202,7 +292,11 @@ function ConfirmModal({ open, onConfirm, onCancel, loading, title, body, confirm
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export function DocumentsPage() {
-  const [context, setContext] = useState({ type: 'all', name: 'All documents' })
+  const [searchParams] = useSearchParams()
+  const [context, setContext] = useState(() => {
+    const leadId = searchParams.get('leadId')
+    return leadId ? { type: 'lead', id: leadId, name: 'Lead' } : { type: 'all', name: 'All documents' }
+  })
   const [dragDocId, setDragDocId] = useState(null)
   const [dragOverFolderId, setDragOverFolderId] = useState(null)
   const [newFolderName, setNewFolderName] = useState('')
@@ -224,6 +318,9 @@ export function DocumentsPage() {
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
   const [viewMode, setViewMode] = useState('grid')
+  const [groupBy, setGroupBy] = useState('type')   // 'type' | 'date' | 'none'
+  const [sortBy, setSortBy] = useState('name')     // 'name' | 'date' | 'size'
+  const [sortDir, setSortDir] = useState('asc')    // 'asc' | 'desc'
   // Delete confirm modals
   const [deleteFileConfirm, setDeleteFileConfirm] = useState(null) // { id, name }
   const [deleteFolderConfirm, setDeleteFolderConfirm] = useState(null) // { folder, fileCount, subfolderCount, loading }
@@ -238,23 +335,36 @@ export function DocumentsPage() {
   const leadNodes = treeData?.data?.roots?.find((r) => r.id === 'auto-leads-root')?.children || []
   const companyNodes = treeData?.data?.roots?.find((r) => r.id === 'auto-companies-root')?.children || []
 
-  // Subfolders of the currently open folder
-  const currentSubfolders = useMemo(
-    () => context.type === 'folder' ? flatFolders.filter((f) => (f.parentFolderId ?? null) === context.id) : [],
-    [context, flatFolders],
-  )
+  // Deep-link from a lead's "Open in Documents" — resolve real name once tree loads
+  useEffect(() => {
+    if (context.type !== 'lead') return
+    const found = leadNodes.find((n) => n.entityId === context.id)
+    if (found && found.name !== context.name) {
+      setContext((c) => (c.type === 'lead' && c.id === found.entityId ? { ...c, name: found.name } : c))
+    }
+  }, [leadNodes, context.type, context.id, context.name])
+
+  // Folder tiles in the main area: root folders on "All documents", children inside a folder
+  const currentSubfolders = useMemo(() => {
+    if (context.type === 'folder') return flatFolders.filter((f) => (f.parentFolderId ?? null) === context.id)
+    if (context.type === 'all') return flatFolders.filter((f) => (f.parentFolderId ?? null) === null)
+    return []
+  }, [context, flatFolders])
+
+  const [leadLimit, setLeadLimit] = useState(15)
+  const [companyLimit, setCompanyLimit] = useState(15)
 
   const filteredLeads = useMemo(() => {
     const q = leadSearch.trim().toLowerCase()
     const list = q ? leadNodes.filter((n) => n.name.toLowerCase().includes(q)) : leadNodes
-    return list.slice(0, 20)
-  }, [leadNodes, leadSearch])
+    return { list: list.slice(0, leadLimit), total: list.length }
+  }, [leadNodes, leadSearch, leadLimit])
 
   const filteredCompanies = useMemo(() => {
     const q = companySearch.trim().toLowerCase()
     const list = q ? companyNodes.filter((n) => n.name.toLowerCase().includes(q)) : companyNodes
-    return list.slice(0, 20)
-  }, [companyNodes, companySearch])
+    return { list: list.slice(0, companyLimit), total: list.length }
+  }, [companyNodes, companySearch, companyLimit])
 
   const docParams = useMemo(() => {
     if (context.type === 'folder') return { folderId: context.id }
@@ -270,8 +380,43 @@ export function DocumentsPage() {
     const q = search.trim().toLowerCase()
     if (q) list = list.filter((r) => String(r.name || '').toLowerCase().includes(q) || String(r.description || '').toLowerCase().includes(q))
     if (typeFilter) list = list.filter((r) => r.fileType === typeFilter)
+    const dir = sortDir === 'asc' ? 1 : -1
+    list.sort((a, b) => {
+      if (sortBy === 'size') return dir * ((a.fileSize || 0) - (b.fileSize || 0))
+      if (sortBy === 'date') return dir * (new Date(a.createdAt || 0) - new Date(b.createdAt || 0))
+      return dir * String(a.name || '').localeCompare(String(b.name || ''), undefined, { numeric: true, sensitivity: 'base' })
+    })
     return list
-  }, [allRows, search, typeFilter])
+  }, [allRows, search, typeFilter, sortBy, sortDir])
+
+  // Grouped sections for rendering
+  const grouped = useMemo(() => {
+    if (groupBy === 'none' || filtered.length === 0) return [{ key: 'all', label: null, items: filtered }]
+    const map = new Map()
+    for (const r of filtered) {
+      const k = groupBy === 'date' ? getDateGroupLabel(r.createdAt) : getTypeGroupKey(r.name)
+      if (!map.has(k)) map.set(k, [])
+      map.get(k).push(r)
+    }
+    if (groupBy === 'date') {
+      return DATE_GROUP_ORDER.filter((l) => map.has(l)).map((l) => ({ key: l, label: l, items: map.get(l) }))
+    }
+    return TYPE_GROUPS.filter((g) => map.has(g.key)).map((g) => ({ key: g.key, label: g.label, items: map.get(g.key) }))
+  }, [filtered, groupBy])
+
+  // Breadcrumb chain for nested folders
+  const folderPath = useMemo(() => {
+    if (context.type !== 'folder') return []
+    const byId = new Map(flatFolders.map((f) => [f.id, f]))
+    const path = []
+    let cur = byId.get(context.id)
+    let guard = 0
+    while (cur && guard++ < 20) {
+      path.unshift({ id: cur.id, name: cur.name })
+      cur = cur.parentFolderId ? byId.get(cur.parentFolderId) : null
+    }
+    return path
+  }, [context, flatFolders])
 
   const [createFolder, { isLoading: creatingFolder }] = useCreateDocumentFolderMutation()
   const [addToFolder] = useAddDocumentToFolderMutation()
@@ -507,15 +652,10 @@ export function DocumentsPage() {
   const allSelected = filtered.length > 0 && selectedIds.length === filtered.length
   const toggleAll = () => setSelectedIds(allSelected ? [] : filtered.map((r) => r.id))
 
-  const contextBreadcrumb = context.type === 'all' ? 'All documents'
-    : context.type === 'folder' ? context.name
-    : context.type === 'company' ? `${context.name}`
-    : context.name
-
-  const contextIcon = context.type === 'folder' ? <Folder size={16} className="text-amber-500" />
-    : context.type === 'lead' ? <Users size={16} className="text-brand-500" />
-    : context.type === 'company' ? <Building2 size={16} className="text-violet-500" />
-    : <Grid3X3 size={16} className="text-ink-faint" />
+  const contextIcon = context.type === 'folder' ? <FolderOpen size={15} className="text-amber-500" />
+    : context.type === 'lead' ? <Users size={15} className="text-brand-500" />
+    : context.type === 'company' ? <Building2 size={15} className="text-violet-500" />
+    : <Grid3X3 size={15} className="text-ink-faint" />
 
   const hasCut = cutIds.length > 0
 
@@ -525,205 +665,348 @@ export function DocumentsPage() {
         <div className="flex h-[calc(100dvh-84px)] min-h-[560px] overflow-hidden rounded-2xl border border-surface-border bg-white shadow-sm">
 
           {/* ── Sidebar ───────────────────────────────────────────────────── */}
-          <aside className="scrollbar-subtle flex w-[230px] shrink-0 flex-col overflow-y-auto border-r border-surface-border bg-surface-subtle/30">
+          <aside className="flex w-[240px] shrink-0 flex-col overflow-hidden border-r border-surface-border bg-surface-subtle/40">
 
-            {/* All documents */}
-            <div className="p-3 pb-2">
+            {/* All documents — pinned */}
+            <div className="shrink-0 p-3 pb-2">
               <button
                 type="button"
                 onClick={() => { setContext({ type: 'all', name: 'All documents' }); setSearch(''); setTypeFilter('') }}
                 className={cn(
-                  'flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-sm font-semibold transition',
-                  context.type === 'all' ? 'bg-brand-50 text-brand-800' : 'text-ink-muted hover:bg-white hover:text-ink',
+                  'flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm font-semibold transition',
+                  context.type === 'all'
+                    ? 'bg-brand-50 text-brand-800 ring-1 ring-brand-100'
+                    : 'text-ink-muted hover:bg-white hover:text-ink',
                 )}
               >
-                <Grid3X3 size={14} className="shrink-0" />
+                <span className={cn(
+                  'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg',
+                  context.type === 'all' ? 'bg-brand-100 text-brand-700' : 'bg-white text-ink-muted ring-1 ring-surface-border',
+                )}>
+                  <Grid3X3 size={14} />
+                </span>
                 All documents
               </button>
             </div>
 
-            <div className="mx-3 border-t border-surface-border" />
+            {/* Scrollable sections */}
+            <div className="scrollbar-subtle flex-1 overflow-y-auto px-3 pb-4">
 
-            {/* Custom Folders */}
-            <div className="p-3 pb-1">
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-ink-faint">Custom Folders</span>
-                <button
-                  type="button"
-                  title="New folder"
-                  onClick={() => { setShowNewFolder((v) => !v); setTimeout(() => newFolderInputRef.current?.focus(), 50) }}
-                  className="rounded-lg p-1 text-ink-muted hover:bg-white hover:text-ink"
-                >
-                  <FolderPlus size={13} />
-                </button>
-              </div>
-
-              {showNewFolder && (
-                <div className="mb-2 flex items-center gap-1">
-                  <input
-                    ref={newFolderInputRef}
-                    value={newFolderName}
-                    onChange={(e) => setNewFolderName(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') handleCreateFolder(); if (e.key === 'Escape') setShowNewFolder(false) }}
-                    placeholder="Folder name"
-                    className="h-7 min-w-0 flex-1 rounded-lg border border-brand-300 px-2 text-xs outline-none focus:border-brand-500"
-                  />
-                  <button type="button" onClick={handleCreateFolder} disabled={creatingFolder} className="h-7 shrink-0 rounded-lg bg-brand-700 px-2 text-xs text-white disabled:opacity-60">
-                    {creatingFolder ? '…' : <Plus size={12} />}
+              {/* Custom Folders */}
+              <div className="pt-1">
+                <div className="mb-1.5 flex items-center justify-between px-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-ink-faint">Folders</span>
+                  <button
+                    type="button"
+                    title="New folder"
+                    onClick={() => { setShowNewFolder((v) => !v); setTimeout(() => newFolderInputRef.current?.focus(), 50) }}
+                    className="rounded-lg p-1 text-ink-muted hover:bg-white hover:text-ink"
+                  >
+                    <FolderPlus size={13} />
                   </button>
                 </div>
-              )}
 
-              {nestedFolders.length === 0 && !showNewFolder && (
-                <p className="px-1 py-1 text-xs text-ink-faint">No folders yet.</p>
-              )}
-
-              {nestedFolders.map((folder) => (
-                <FolderSideItem
-                  key={folder.id}
-                  folder={folder}
-                  activeId={context.id}
-                  onSelect={handleSelectFolder}
-                  onDelete={promptDeleteFolder}
-                  dragOverId={dragOverFolderId}
-                  onDragOver={setDragOverFolderId}
-                  onDragLeave={() => setDragOverFolderId(null)}
-                  onDrop={handleDropOnFolder}
-                />
-              ))}
-            </div>
-
-            <div className="mx-3 border-t border-surface-border" />
-
-            {/* Lead Folders */}
-            <div className="p-3 pb-1">
-              <button
-                type="button"
-                onClick={() => setLeadsExpanded((v) => !v)}
-                className="mb-2 flex w-full items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-ink-faint hover:text-ink-muted"
-              >
-                <ChevronRight size={11} className={cn('transition-transform', leadsExpanded && 'rotate-90')} />
-                Lead Folders
-                <span className="ml-auto font-normal normal-case">{leadNodes.length}</span>
-              </button>
-
-              {leadsExpanded && (
-                <>
-                  {/* Search input */}
-                  <div className="relative mb-2">
-                    <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-ink-faint" />
+                {showNewFolder && (
+                  <div className="mb-2 flex items-center gap-1">
                     <input
-                      value={leadSearch}
-                      onChange={(e) => setLeadSearch(e.target.value)}
-                      placeholder="Search leads…"
-                      className="h-7 w-full rounded-lg border border-surface-border bg-white pl-7 pr-2 text-xs outline-none focus:border-brand-400"
+                      ref={newFolderInputRef}
+                      value={newFolderName}
+                      onChange={(e) => setNewFolderName(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleCreateFolder(); if (e.key === 'Escape') setShowNewFolder(false) }}
+                      placeholder="Folder name"
+                      className="h-7 min-w-0 flex-1 rounded-lg border border-brand-300 px-2 text-xs outline-none focus:border-brand-500"
                     />
-                  </div>
-                  {filteredLeads.map((lead) => (
-                    <button
-                      key={lead.id}
-                      type="button"
-                      onClick={() => {
-                        if (hasCut) {
-                          toast.error("Cannot paste to lead folder. Use drag-drop inside a custom folder.")
-                          return
-                        }
-                        setContext({ type: 'lead', id: lead.entityId, name: lead.name })
-                        setSearch('')
-                        setTypeFilter('')
-                      }}
-                      className={cn(
-                        'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition',
-                        context.id === lead.entityId ? 'bg-brand-50 font-semibold text-brand-800' : 'text-ink-muted hover:bg-white hover:text-ink',
-                      )}
-                    >
-                      <Users size={12} className="shrink-0 text-brand-400" />
-                      <span className="truncate text-xs">{lead.name}</span>
+                    <button type="button" onClick={handleCreateFolder} disabled={creatingFolder} className="h-7 shrink-0 rounded-lg bg-brand-700 px-2 text-xs text-white disabled:opacity-60">
+                      {creatingFolder ? '…' : <Plus size={12} />}
                     </button>
-                  ))}
-                  {leadNodes.length > 20 && !leadSearch && (
-                    <p className="mt-1 px-2 text-[10px] text-ink-faint">Showing 20 of {leadNodes.length}. Search to filter.</p>
-                  )}
-                  {leadSearch && filteredLeads.length === 0 && (
-                    <p className="px-2 py-1 text-xs text-ink-faint">No leads match.</p>
-                  )}
-                </>
-              )}
-            </div>
-
-            <div className="mx-3 border-t border-surface-border" />
-
-            {/* Company Folders */}
-            <div className="p-3">
-              <button
-                type="button"
-                onClick={() => setCompaniesExpanded((v) => !v)}
-                className="mb-2 flex w-full items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-ink-faint hover:text-ink-muted"
-              >
-                <ChevronRight size={11} className={cn('transition-transform', companiesExpanded && 'rotate-90')} />
-                Company Folders
-                <span className="ml-auto font-normal normal-case">{companyNodes.length}</span>
-              </button>
-
-              {companiesExpanded && (
-                <>
-                  <div className="relative mb-2">
-                    <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-ink-faint" />
-                    <input
-                      value={companySearch}
-                      onChange={(e) => setCompanySearch(e.target.value)}
-                      placeholder="Search companies…"
-                      className="h-7 w-full rounded-lg border border-surface-border bg-white pl-7 pr-2 text-xs outline-none focus:border-brand-400"
-                    />
                   </div>
-                  {filteredCompanies.map((company) => (
-                    <button
-                      key={company.id}
-                      type="button"
-                      onClick={() => {
-                        setContext({ type: 'company', id: company.entityId, name: company.name })
-                        setSearch('')
-                        setTypeFilter('')
-                      }}
-                      className={cn(
-                        'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition',
-                        context.id === company.entityId ? 'bg-brand-50 font-semibold text-brand-800' : 'text-ink-muted hover:bg-white hover:text-ink',
-                      )}
-                    >
-                      <Building2 size={12} className="shrink-0 text-violet-400" />
-                      <span className="truncate text-xs">{company.name}</span>
-                    </button>
-                  ))}
-                  {companyNodes.length > 20 && !companySearch && (
-                    <p className="mt-1 px-2 text-[10px] text-ink-faint">Showing 20 of {companyNodes.length}. Search to filter.</p>
-                  )}
-                  {companySearch && filteredCompanies.length === 0 && (
-                    <p className="px-2 py-1 text-xs text-ink-faint">No companies match.</p>
-                  )}
-                </>
-              )}
+                )}
+
+                {nestedFolders.length === 0 && !showNewFolder && (
+                  <p className="px-1 py-1 text-xs text-ink-faint">No folders yet.</p>
+                )}
+
+                {nestedFolders.map((folder) => (
+                  <FolderSideItem
+                    key={folder.id}
+                    folder={folder}
+                    activeId={context.id}
+                    onSelect={handleSelectFolder}
+                    onDelete={promptDeleteFolder}
+                    dragOverId={dragOverFolderId}
+                    onDragOver={setDragOverFolderId}
+                    onDragLeave={() => setDragOverFolderId(null)}
+                    onDrop={handleDropOnFolder}
+                  />
+                ))}
+              </div>
+
+              <div className="my-3 border-t border-surface-border" />
+
+              {/* Lead Folders */}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setLeadsExpanded((v) => !v)}
+                  className="mb-1.5 flex w-full items-center gap-1.5 rounded-lg px-1 py-1 text-[10px] font-bold uppercase tracking-wider text-ink-faint hover:text-ink-muted"
+                >
+                  <ChevronRight size={11} className={cn('transition-transform', leadsExpanded && 'rotate-90')} />
+                  Leads
+                  <span className="ml-auto rounded-full bg-white px-1.5 py-0.5 text-[10px] font-semibold normal-case tracking-normal text-ink-muted ring-1 ring-surface-border">{leadNodes.length}</span>
+                </button>
+
+                {leadsExpanded && (
+                  <>
+                    <div className="relative mb-1.5">
+                      <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-ink-faint" />
+                      <input
+                        value={leadSearch}
+                        onChange={(e) => { setLeadSearch(e.target.value); setLeadLimit(15) }}
+                        placeholder="Search leads…"
+                        className="h-7 w-full rounded-lg border border-surface-border bg-white pl-7 pr-2 text-xs outline-none focus:border-brand-400"
+                      />
+                    </div>
+                    <div className="space-y-0.5">
+                      {filteredLeads.list.map((lead) => {
+                        const active = context.id === lead.entityId
+                        return (
+                          <button
+                            key={lead.id}
+                            type="button"
+                            onClick={() => {
+                              if (hasCut) {
+                                toast.error("Cannot paste to lead folder. Use drag-drop inside a custom folder.")
+                                return
+                              }
+                              setContext({ type: 'lead', id: lead.entityId, name: lead.name })
+                              setSearch('')
+                              setTypeFilter('')
+                            }}
+                            className={cn(
+                              'flex w-full items-center gap-2 rounded-lg px-1.5 py-1 text-left transition',
+                              active ? 'bg-white font-semibold text-ink shadow-sm ring-1 ring-surface-border' : 'text-ink-muted hover:bg-white/70 hover:text-ink',
+                            )}
+                          >
+                            <span className={cn(
+                              'flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[9px] font-bold',
+                              active ? 'bg-brand-600 text-white' : 'bg-brand-100 text-brand-700',
+                            )}>
+                              {initialsOf(lead.name)}
+                            </span>
+                            <span className="truncate text-xs">{lead.name}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                    {filteredLeads.total > filteredLeads.list.length && (
+                      <button
+                        type="button"
+                        onClick={() => setLeadLimit((n) => n + 25)}
+                        className="mt-1 w-full rounded-lg py-1.5 text-center text-[11px] font-medium text-brand-600 hover:bg-white"
+                      >
+                        Show more ({filteredLeads.total - filteredLeads.list.length} left)
+                      </button>
+                    )}
+                    {leadSearch && filteredLeads.total === 0 && (
+                      <p className="px-2 py-1 text-xs text-ink-faint">No leads match.</p>
+                    )}
+                  </>
+                )}
+              </div>
+
+              <div className="my-3 border-t border-surface-border" />
+
+              {/* Company Folders */}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setCompaniesExpanded((v) => !v)}
+                  className="mb-1.5 flex w-full items-center gap-1.5 rounded-lg px-1 py-1 text-[10px] font-bold uppercase tracking-wider text-ink-faint hover:text-ink-muted"
+                >
+                  <ChevronRight size={11} className={cn('transition-transform', companiesExpanded && 'rotate-90')} />
+                  Companies
+                  <span className="ml-auto rounded-full bg-white px-1.5 py-0.5 text-[10px] font-semibold normal-case tracking-normal text-ink-muted ring-1 ring-surface-border">{companyNodes.length}</span>
+                </button>
+
+                {companiesExpanded && (
+                  <>
+                    <div className="relative mb-1.5">
+                      <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-ink-faint" />
+                      <input
+                        value={companySearch}
+                        onChange={(e) => { setCompanySearch(e.target.value); setCompanyLimit(15) }}
+                        placeholder="Search companies…"
+                        className="h-7 w-full rounded-lg border border-surface-border bg-white pl-7 pr-2 text-xs outline-none focus:border-brand-400"
+                      />
+                    </div>
+                    <div className="space-y-0.5">
+                      {filteredCompanies.list.map((company) => {
+                        const active = context.id === company.entityId
+                        return (
+                          <button
+                            key={company.id}
+                            type="button"
+                            onClick={() => {
+                              setContext({ type: 'company', id: company.entityId, name: company.name })
+                              setSearch('')
+                              setTypeFilter('')
+                            }}
+                            className={cn(
+                              'flex w-full items-center gap-2 rounded-lg px-1.5 py-1 text-left transition',
+                              active ? 'bg-white font-semibold text-ink shadow-sm ring-1 ring-surface-border' : 'text-ink-muted hover:bg-white/70 hover:text-ink',
+                            )}
+                          >
+                            <span className={cn(
+                              'flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[9px] font-bold',
+                              active ? 'bg-violet-600 text-white' : 'bg-violet-100 text-violet-700',
+                            )}>
+                              {initialsOf(company.name)}
+                            </span>
+                            <span className="truncate text-xs">{company.name}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                    {filteredCompanies.total > filteredCompanies.list.length && (
+                      <button
+                        type="button"
+                        onClick={() => setCompanyLimit((n) => n + 25)}
+                        className="mt-1 w-full rounded-lg py-1.5 text-center text-[11px] font-medium text-brand-600 hover:bg-white"
+                      >
+                        Show more ({filteredCompanies.total - filteredCompanies.list.length} left)
+                      </button>
+                    )}
+                    {companySearch && filteredCompanies.total === 0 && (
+                      <p className="px-2 py-1 text-xs text-ink-faint">No companies match.</p>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
           </aside>
 
           {/* ── Main content area ────────────────────────────────────────── */}
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-            {/* Toolbar */}
-            <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-surface-border px-4 py-2.5">
-              <div className="flex min-w-0 flex-1 items-center gap-2">
-                {contextIcon}
-                <h2 className="text-sm font-semibold text-ink truncate">{contextBreadcrumb}</h2>
-                {context.type === 'folder' && (
+            {/* Toolbar row 1 — breadcrumb + primary actions */}
+            <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-surface-border px-4 py-2">
+              <nav className="flex min-w-0 flex-1 items-center gap-0.5 text-sm">
+                <button
+                  type="button"
+                  onClick={() => { setContext({ type: 'all', name: 'All documents' }); setSearch(''); setTypeFilter('') }}
+                  className={cn(
+                    'flex shrink-0 items-center gap-1.5 rounded-lg px-1.5 py-1 transition hover:bg-surface-subtle',
+                    context.type === 'all' ? 'font-semibold text-ink' : 'text-ink-muted hover:text-ink',
+                  )}
+                >
+                  <Grid3X3 size={13} className="text-ink-faint" />
+                  All documents
+                </button>
+                {context.type === 'folder' && folderPath.map((seg, i) => {
+                  const isLast = i === folderPath.length - 1
+                  return (
+                    <span key={seg.id} className="flex min-w-0 items-center gap-0.5">
+                      <ChevronRight size={13} className="shrink-0 text-ink-faint" />
+                      <button
+                        type="button"
+                        onClick={() => !isLast && handleSelectFolder({ type: 'folder', id: seg.id, name: seg.name })}
+                        className={cn(
+                          'flex min-w-0 items-center gap-1.5 truncate rounded-lg px-1.5 py-1 transition',
+                          isLast ? 'font-semibold text-ink' : 'text-ink-muted hover:bg-surface-subtle hover:text-ink',
+                        )}
+                      >
+                        {isLast && <FolderOpen size={13} className="shrink-0 text-amber-500" />}
+                        <span className="truncate">{seg.name}</span>
+                      </button>
+                    </span>
+                  )
+                })}
+                {(context.type === 'lead' || context.type === 'company') && (
+                  <span className="flex min-w-0 items-center gap-0.5">
+                    <ChevronRight size={13} className="shrink-0 text-ink-faint" />
+                    <span className="flex min-w-0 items-center gap-1.5 rounded-lg px-1.5 py-1 font-semibold text-ink">
+                      {contextIcon}
+                      <span className="truncate">{context.name}</span>
+                    </span>
+                  </span>
+                )}
+              </nav>
+              <div className="flex shrink-0 items-center gap-2">
+                {(context.type === 'folder' || context.type === 'all') && (
                   <button
                     type="button"
                     onClick={() => { setShowNewFolder(true); setTimeout(() => newFolderInputRef.current?.focus(), 50) }}
-                    className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-surface-border bg-white px-2 py-1 text-xs text-ink-muted hover:bg-surface-subtle"
+                    className="inline-flex h-8 items-center gap-1.5 rounded-xl border border-surface-border bg-white px-2.5 text-xs font-medium text-ink-muted hover:bg-surface-subtle hover:text-ink"
                   >
-                    <FolderPlus size={12} />
-                    Sub-folder
+                    <FolderPlus size={13} />
+                    New folder
                   </button>
                 )}
+                <button
+                  type="button"
+                  onClick={() => setUploadOpen(true)}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-xl bg-brand-700 px-3 text-xs font-semibold text-white hover:bg-brand-800"
+                >
+                  <Upload size={13} />
+                  Upload
+                </button>
               </div>
-              <div className="flex items-center gap-2">
+            </div>
+
+            {/* Toolbar row 2 — search, filters, group, sort, view */}
+            <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-surface-border bg-surface-subtle/30 px-4 py-2">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-faint" />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search files…"
+                  className="h-8 w-44 rounded-xl border border-surface-border bg-white pl-8 pr-3 text-xs outline-none focus:border-brand-400"
+                />
+              </div>
+              <select
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value)}
+                className="h-8 rounded-xl border border-surface-border bg-white px-2 text-xs text-ink"
+              >
+                <option value="">All types</option>
+                {DOCUMENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-medium text-ink-faint">Group:</span>
+                <select
+                  value={groupBy}
+                  onChange={(e) => setGroupBy(e.target.value)}
+                  className="h-8 rounded-xl border border-surface-border bg-white px-2 text-xs text-ink"
+                >
+                  <option value="type">Type</option>
+                  <option value="date">Date added</option>
+                  <option value="none">None</option>
+                </select>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-medium text-ink-faint">Sort:</span>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="h-8 rounded-xl border border-surface-border bg-white px-2 text-xs text-ink"
+                >
+                  <option value="name">Name</option>
+                  <option value="date">Date added</option>
+                  <option value="size">Size</option>
+                </select>
+                <button
+                  type="button"
+                  title={sortDir === 'asc' ? 'Ascending — click for descending' : 'Descending — click for ascending'}
+                  onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+                  className="flex h-8 w-8 items-center justify-center rounded-xl border border-surface-border bg-white text-ink-muted hover:bg-surface-subtle hover:text-ink"
+                >
+                  {sortDir === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />}
+                </button>
+              </div>
+
+              <div className="ml-auto flex items-center gap-2">
                 {hasCut && (
                   <div className="flex items-center gap-1.5 rounded-xl border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700">
                     ✂️ {cutIds.length} cut — click a folder to paste
@@ -750,35 +1033,10 @@ export function DocumentsPage() {
                     </button>
                   </>
                 )}
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-faint" />
-                  <input
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search…"
-                    className="h-8 w-36 rounded-xl border border-surface-border bg-white pl-8 pr-3 text-xs outline-none focus:border-brand-400"
-                  />
-                </div>
-                <select
-                  value={typeFilter}
-                  onChange={(e) => setTypeFilter(e.target.value)}
-                  className="h-8 rounded-xl border border-surface-border bg-white px-2 text-xs text-ink"
-                >
-                  <option value="">All types</option>
-                  {DOCUMENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                </select>
                 <div className="flex overflow-hidden rounded-xl border border-surface-border">
-                  <button type="button" onClick={() => setViewMode('grid')} className={cn('px-2 py-1.5', viewMode === 'grid' ? 'bg-brand-50 text-brand-700' : 'bg-white text-ink-muted hover:bg-surface-subtle')}><Grid3X3 size={14} /></button>
-                  <button type="button" onClick={() => setViewMode('list')} className={cn('border-l border-surface-border px-2 py-1.5', viewMode === 'list' ? 'bg-brand-50 text-brand-700' : 'bg-white text-ink-muted hover:bg-surface-subtle')}><List size={14} /></button>
+                  <button type="button" title="Grid view" onClick={() => setViewMode('grid')} className={cn('px-2 py-1.5', viewMode === 'grid' ? 'bg-brand-50 text-brand-700' : 'bg-white text-ink-muted hover:bg-surface-subtle')}><Grid3X3 size={14} /></button>
+                  <button type="button" title="List view" onClick={() => setViewMode('list')} className={cn('border-l border-surface-border px-2 py-1.5', viewMode === 'list' ? 'bg-brand-50 text-brand-700' : 'bg-white text-ink-muted hover:bg-surface-subtle')}><List size={14} /></button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setUploadOpen(true)}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-xl bg-brand-700 px-3 text-xs font-semibold text-white hover:bg-brand-800"
-                >
-                  <Upload size={13} />
-                  Upload
-                </button>
               </div>
             </div>
 
@@ -799,7 +1057,12 @@ export function DocumentsPage() {
               {/* Subfolder tiles — shown when inside a custom folder */}
               {currentSubfolders.length > 0 && (
                 <div className="mb-5">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-faint">Subfolders</p>
+                  <div className="mb-2 flex items-center gap-2">
+                    <Folder size={14} className="shrink-0 text-amber-500" strokeWidth={1.75} />
+                    <p className="text-xs font-semibold uppercase tracking-wider text-ink-faint">Folders</p>
+                    <span className="rounded-full bg-surface-subtle px-1.5 py-0.5 text-[10px] font-semibold text-ink-muted">{currentSubfolders.length}</span>
+                    <div className="ml-1 flex-1 border-t border-surface-border" />
+                  </div>
                   <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
                     {currentSubfolders.map((sub) => (
                       <SubfolderTile
@@ -847,36 +1110,43 @@ export function DocumentsPage() {
               )}
 
               {!docsLoading && filtered.length === 0 && currentSubfolders.length > 0 && (
-                <p className="text-sm text-ink-faint text-center py-6">No files in this folder. Drag files here or upload above.</p>
+                <p className="text-sm text-ink-faint text-center py-6">No loose files here. Open a folder or upload above.</p>
               )}
 
               {!docsLoading && filtered.length > 0 && viewMode === 'grid' && (
-                <div className={DOC_CARD_GRID}>
-                  {filtered.map((row) => {
-                    const isCut = cutIds.includes(row.id)
-                    return (
-                      <div
-                        key={row.id}
-                        draggable
-                        onDragStart={(e) => handleDragStart(e, row.id)}
-                        onDragEnd={handleDragEnd}
-                        className={cn(
-                          'cursor-grab active:cursor-grabbing transition',
-                          (dragDocId === row.id || isCut) && 'opacity-40',
-                          isCut && 'ring-2 ring-dashed ring-brand-400 rounded-2xl',
-                        )}
-                      >
-                        <DocumentCard
-                          row={row}
-                          selected={selectedIds.includes(row.id)}
-                          onToggleSelect={toggleSelect}
-                          onOpen={setViewDoc}
-                          onEdit={openEdit}
-                          onDelete={promptDeleteFile}
-                        />
+                <div className="space-y-6">
+                  {grouped.map((group) => (
+                    <section key={group.key}>
+                      {group.label && <GroupHeader groupKey={group.key} label={group.label} count={group.items.length} showIcon={groupBy === 'type'} />}
+                      <div className={DOC_CARD_GRID}>
+                        {group.items.map((row) => {
+                          const isCut = cutIds.includes(row.id)
+                          return (
+                            <div
+                              key={row.id}
+                              draggable
+                              onDragStart={(e) => handleDragStart(e, row.id)}
+                              onDragEnd={handleDragEnd}
+                              className={cn(
+                                'cursor-grab active:cursor-grabbing transition',
+                                (dragDocId === row.id || isCut) && 'opacity-40',
+                                isCut && 'ring-2 ring-dashed ring-brand-400 rounded-2xl',
+                              )}
+                            >
+                              <DocumentCard
+                                row={row}
+                                selected={selectedIds.includes(row.id)}
+                                onToggleSelect={toggleSelect}
+                                onOpen={setViewDoc}
+                                onEdit={openEdit}
+                                onDelete={promptDeleteFile}
+                              />
+                            </div>
+                          )
+                        })}
                       </div>
-                    )
-                  })}
+                    </section>
+                  ))}
                 </div>
               )}
 
@@ -889,47 +1159,58 @@ export function DocumentsPage() {
                         <th className="px-3 py-2.5 text-left text-xs font-semibold text-ink-muted">Name</th>
                         <th className="px-3 py-2.5 text-left text-xs font-semibold text-ink-muted">Type</th>
                         <th className="px-3 py-2.5 text-left text-xs font-semibold text-ink-muted">Size</th>
+                        <th className="px-3 py-2.5 text-left text-xs font-semibold text-ink-muted">Added</th>
                         <th className="px-3 py-2.5 text-left text-xs font-semibold text-ink-muted">Uploader</th>
                         <th className="px-3 py-2.5" />
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-surface-border">
-                      {filtered.map((row) => {
-                        const isCut = cutIds.includes(row.id)
-                        return (
-                          <tr
-                            key={row.id}
-                            draggable
-                            onDragStart={(e) => handleDragStart(e, row.id)}
-                            onDragEnd={handleDragEnd}
-                            className={cn(
-                              'hover:bg-surface-subtle/40 cursor-grab transition',
-                              (dragDocId === row.id || isCut) && 'opacity-40',
-                              selectedIds.includes(row.id) && 'bg-brand-50',
-                              isCut && 'bg-brand-50/60',
-                            )}
-                          >
-                            <td className="px-3 py-2.5">
-                              <input type="checkbox" checked={selectedIds.includes(row.id)} onChange={() => toggleSelect(row.id)} className="rounded border-slate-300" />
-                            </td>
-                            <td className="px-3 py-2.5">
-                              <button type="button" onClick={() => setViewDoc(row)} className="block max-w-[240px] truncate text-sm font-medium text-ink hover:text-brand-700 hover:underline">
-                                {row.name}
-                              </button>
-                              {row.description ? <p className="max-w-[240px] truncate text-xs text-ink-muted">{row.description}</p> : null}
-                            </td>
-                            <td className="px-3 py-2.5 text-xs text-ink-muted">{row.fileType}</td>
-                            <td className="px-3 py-2.5 text-xs tabular-nums text-ink-muted">{formatBytes(row.fileSize)}</td>
-                            <td className="px-3 py-2.5 text-xs text-ink-muted">{row.uploader?.name || '—'}</td>
-                            <td className="px-3 py-2.5">
-                              <div className="flex items-center gap-1">
-                                <button type="button" onClick={() => openEdit(row)} className="rounded p-1 text-ink-muted hover:bg-surface-subtle hover:text-ink"><List size={13} /></button>
-                                <button type="button" onClick={() => promptDeleteFile(row)} className="rounded p-1 text-ink-muted hover:bg-red-50 hover:text-red-600"><Trash2 size={13} /></button>
-                              </div>
-                            </td>
-                          </tr>
-                        )
-                      })}
+                      {grouped.map((group) => (
+                        <FragmentGroup key={group.key} group={group} showLabel={!!group.label}>
+                          {group.items.map((row) => {
+                            const isCut = cutIds.includes(row.id)
+                            return (
+                              <tr
+                                key={row.id}
+                                draggable
+                                onDragStart={(e) => handleDragStart(e, row.id)}
+                                onDragEnd={handleDragEnd}
+                                className={cn(
+                                  'hover:bg-surface-subtle/40 cursor-grab transition',
+                                  (dragDocId === row.id || isCut) && 'opacity-40',
+                                  selectedIds.includes(row.id) && 'bg-brand-50',
+                                  isCut && 'bg-brand-50/60',
+                                )}
+                              >
+                                <td className="px-3 py-2.5">
+                                  <input type="checkbox" checked={selectedIds.includes(row.id)} onChange={() => toggleSelect(row.id)} className="rounded border-slate-300" />
+                                </td>
+                                <td className="px-3 py-2.5">
+                                  <div className="flex items-center gap-2">
+                                    <FileTypeIcon name={row.name} />
+                                    <div className="min-w-0">
+                                      <button type="button" onClick={() => setViewDoc(row)} className="block max-w-[280px] truncate text-sm font-medium text-ink hover:text-brand-700 hover:underline">
+                                        {row.name}
+                                      </button>
+                                      {row.description ? <p className="max-w-[280px] truncate text-xs text-ink-muted">{row.description}</p> : null}
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2.5 text-xs text-ink-muted">{row.fileType}</td>
+                                <td className="px-3 py-2.5 text-xs tabular-nums text-ink-muted">{formatBytes(row.fileSize)}</td>
+                                <td className="px-3 py-2.5 text-xs tabular-nums text-ink-muted">{formatShortDate(row.createdAt)}</td>
+                                <td className="px-3 py-2.5 text-xs text-ink-muted">{row.uploader?.name || '—'}</td>
+                                <td className="px-3 py-2.5">
+                                  <div className="flex items-center justify-end gap-1">
+                                    <button type="button" title="Edit" onClick={() => openEdit(row)} className="rounded p-1 text-ink-muted hover:bg-surface-subtle hover:text-ink"><Pencil size={13} /></button>
+                                    <button type="button" title="Delete" onClick={() => promptDeleteFile(row)} className="rounded p-1 text-ink-muted hover:bg-red-50 hover:text-red-600"><Trash2 size={13} /></button>
+                                  </div>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </FragmentGroup>
+                      ))}
                     </tbody>
                   </table>
                 </div>

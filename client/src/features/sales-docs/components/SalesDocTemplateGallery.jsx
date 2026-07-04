@@ -1,6 +1,6 @@
-import React, { useCallback, useMemo, useState } from 'react'
-import { createSearchParams, Link, useNavigate } from 'react-router-dom'
-import { Pencil, Plus, Trash2 } from 'lucide-react'
+import { useCallback, useMemo, useState } from 'react'
+import { createSearchParams, useNavigate } from 'react-router-dom'
+import { Pencil, Trash2 } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { normalizeTemplateId } from '@/utils/docTemplateQuery'
 import { PageFilterBar } from '@/components/layout/PageFilterBar'
@@ -24,6 +24,16 @@ function statusBadgeClass(status) {
   return 'bg-surface-subtle text-ink-muted ring-1 ring-surface-border'
 }
 
+function docTypeBadgeClass(docType) {
+  return docType === 'invoice'
+    ? 'bg-amber-50 text-amber-800 ring-1 ring-amber-200'
+    : 'bg-indigo-50 text-indigo-800 ring-1 ring-indigo-200'
+}
+
+function rowDocType(row) {
+  return row?.docType === 'invoice' ? 'invoice' : 'quotation'
+}
+
 function formatCreatedAt(iso) {
   if (!iso) return '—'
   try {
@@ -43,46 +53,38 @@ function resolveTemplateRowId(row) {
 }
 
 export function SalesDocTemplateGallery({
-  variant,
   items = [],
-  presetLabels,
-  isLibraryCode: _isLibraryCode,
-  createHref,
-  listHref,
-  listLabel,
-  title: _title,
-  subtitle,
+  docTypeConfig,
   onEdit,
   onDelete,
-  toolbarExtra = null,
 }) {
   const navigate = useNavigate()
   const [tab, setTab] = useState('all')
 
-  const pathname = useMemo(
-    () => (createHref.startsWith('/') ? createHref : `/${createHref}`),
-    [createHref],
+  const pathnameFor = useCallback(
+    (docType) => {
+      const href = docTypeConfig[docType]?.createHref || '/'
+      return href.startsWith('/') ? href : `/${href}`
+    },
+    [docTypeConfig],
   )
 
   const goToNewWithTemplate = useCallback(
-    (templateQsKey, rawId) => {
+    (pathname, templateQsKey, rawId) => {
       const id = normalizeTemplateId(rawId)
       if (!id) return
       const search = createSearchParams({ [templateQsKey]: id }).toString()
       navigate({ pathname, search })
     },
-    [navigate, pathname],
+    [navigate],
   )
 
-  const buildTemplateHref = useCallback(
-    (templateQsKey, rawId) => {
-      const id = normalizeTemplateId(rawId)
-      if (!id) return pathname
-      const search = createSearchParams({ [templateQsKey]: id }).toString()
-      return `${pathname}?${search}`
-    },
-    [pathname],
-  )
+  const buildTemplateHref = useCallback((pathname, templateQsKey, rawId) => {
+    const id = normalizeTemplateId(rawId)
+    if (!id) return pathname
+    const search = createSearchParams({ [templateQsKey]: id }).toString()
+    return `${pathname}?${search}`
+  }, [])
 
   const filtered = useMemo(() => {
     if (tab === 'all') return items
@@ -100,15 +102,9 @@ export function SalesDocTemplateGallery({
     return c
   }, [items])
 
-  const newCardLabel = variant === 'invoice' ? 'New invoice' : 'New quotation'
-
   return (
     <>
       <PageFilterBar>
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5 sm:max-w-xl">
-          <p className="text-sm font-medium text-ink">{subtitle.lead}</p>
-          <p className="text-xs text-ink-muted">{subtitle.hint}</p>
-        </div>
         <div className="flex flex-wrap items-center gap-2">
           {TABS.map((t) => {
             const active = tab === t.id
@@ -128,34 +124,17 @@ export function SalesDocTemplateGallery({
             )
           })}
         </div>
-        <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2">
-          <Link
-            to={listHref}
-            className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl border border-surface-border bg-white px-4 text-sm font-medium text-ink hover:border-brand-200 hover:bg-brand-50"
-          >
-            {listLabel}
-          </Link>
-          {toolbarExtra}
-        </div>
       </PageFilterBar>
 
       <PageContentPanel>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          <Link
-            to={pathname}
-            className="flex min-h-[280px] flex-col items-center justify-center rounded-2xl border-2 border-dashed border-surface-border bg-white p-6 shadow-sm transition hover:border-brand-400 hover:bg-brand-50/40"
-          >
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-50 text-brand-700">
-              <Plus className="h-7 w-7" strokeWidth={2} />
-            </div>
-            <p className="mt-4 text-center text-sm font-semibold text-ink">{newCardLabel}</p>
-            <p className="mt-1 text-center text-xs text-ink-muted">Start from scratch</p>
-          </Link>
-
           {filtered.map((row) => {
+            const docType = rowDocType(row)
+            const cfg = docTypeConfig[docType]
             const presetIdx = (Number(row.layoutPreset) || 1) - 1
-            const presetName = presetLabels[presetIdx] || `Preset ${row.layoutPreset}`
-            const templateQsKey = variant === 'invoice' ? 'invoiceTemplateId' : 'quotationTemplateId'
+            const presetName = cfg.presetLabels[presetIdx] || `Preset ${row.layoutPreset}`
+            const templateQsKey = docType === 'invoice' ? 'invoiceTemplateId' : 'quotationTemplateId'
+            const pathname = pathnameFor(docType)
             const rawId = resolveTemplateRowId(row)
 
             return (
@@ -168,34 +147,44 @@ export function SalesDocTemplateGallery({
                 onClick={(e) => {
                   if (!rawId) return
                   if (e.target.closest('[data-gallery-card-action]')) return
-                  const h = buildTemplateHref(templateQsKey, rawId)
+                  const h = buildTemplateHref(pathname, templateQsKey, rawId)
                   if (e.metaKey || e.ctrlKey) {
                     e.preventDefault()
                     window.open(h, '_blank', 'noopener,noreferrer')
                     return
                   }
-                  goToNewWithTemplate(templateQsKey, rawId)
+                  goToNewWithTemplate(pathname, templateQsKey, rawId)
                 }}
                 onAuxClick={(e) => {
                   if (!rawId) return
                   if (e.button !== 1) return
                   e.preventDefault()
-                  window.open(buildTemplateHref(templateQsKey, rawId), '_blank', 'noopener,noreferrer')
+                  window.open(buildTemplateHref(pathname, templateQsKey, rawId), '_blank', 'noopener,noreferrer')
                 }}
               >
                 <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col rounded-xl">
                   <div className="relative z-0 w-full min-w-0 shrink-0">
                     <TemplateMiniPreview
-                      variant={variant}
+                      variant={docType}
                       layoutPreset={row.layoutPreset}
-                      theme={resolveGalleryPreviewTheme(variant, row)}
-                      bodyFont={variant === 'quotation' && row.fontFamily ? String(row.fontFamily) : undefined}
-                      {...(variant === 'invoice'
+                      theme={resolveGalleryPreviewTheme(docType, row)}
+                      bodyFont={docType === 'quotation' && row.fontFamily ? String(row.fontFamily) : undefined}
+                      {...(docType === 'invoice'
                         ? { showBankDetails: row.sectionSettings?.showBankDetails !== false }
                         : {})}
                     />
                   </div>
-                  <p className="mt-3 line-clamp-2 text-sm font-semibold text-ink">{row.name}</p>
+                  <div className="mt-3 flex items-center gap-1.5">
+                    <span
+                      className={cn(
+                        'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize',
+                        docTypeBadgeClass(docType),
+                      )}
+                    >
+                      {docType}
+                    </span>
+                    <p className="line-clamp-1 text-sm font-semibold text-ink">{row.name}</p>
+                  </div>
                   <p className="mt-0.5 text-xs text-ink-muted">{presetName}</p>
                   <p className="mt-2 text-xs text-ink-faint">Created {formatCreatedAt(row.createdAt)}</p>
                 </div>

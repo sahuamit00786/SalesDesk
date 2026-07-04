@@ -51,7 +51,7 @@ export default {
           muted: '#F9F7FC',
           subtle: '#EDE9FE',
           border: 'var(--surface-border, #E5DFF0)',
-          field: '#5B21B6',
+          field: 'var(--surface-border, #E5DFF0)',
         },
         ink: {
           DEFAULT: '#0f1117',

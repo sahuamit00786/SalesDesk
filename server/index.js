@@ -17,6 +17,7 @@ import { startWorkflowTriggerWorker } from './src/queues/workflowTriggerQueue.js
 import { processWorkflowWakeups } from './src/services/workflowRunner.js'
 import { startReminderJob } from './src/jobs/reminderJob.js'
 import { startAttendanceJob } from './src/jobs/attendanceJob.js'
+import { startCampaignExpiryJob } from './src/jobs/campaignExpiryJob.js'
 import { startTaskDigestNotificationJob } from './src/jobs/taskDigestNotificationJob.js'
 import { startMeetingBotWorker } from './src/queues/meetingBotQueue.js'
 import { startNotificationEmailWorker } from './src/queues/notificationEmailQueue.js'
@@ -117,7 +118,10 @@ async function start() {
     console.log('BullMQ workers: email templates, workflows, meeting bot (when enabled)')
   }
   setInterval(() => {
-    processWorkflowWakeups().catch(() => {})
+    processWorkflowWakeups().catch((err) => {
+      // eslint-disable-next-line no-console
+      console.error('[workflow] wakeup pass failed:', err?.message || err)
+    })
   }, 30000)
   // Reminders, live/completed flags, optional Meet bot → transcription → summary (see reminderJob.js)
   if (process.env.MEETING_CRON_ENABLED !== 'false') {
@@ -126,6 +130,7 @@ async function start() {
   // BullMQ worker for meeting bot (gracefully no-ops when REDIS_URL is not set)
   startMeetingBotWorker()
   startAttendanceJob()
+  startCampaignExpiryJob()
   startTaskDigestNotificationJob()
   const server = http.createServer(app)
   server.listen(port, () => {

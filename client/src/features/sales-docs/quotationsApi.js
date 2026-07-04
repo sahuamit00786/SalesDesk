@@ -30,28 +30,6 @@ export const quotationsApi = baseApi.injectEndpoints({
         { type: 'Quotation', id: arg.id },
       ],
     }),
-    getQuotationTemplates: build.query({
-      query: () => '/quotations/templates',
-      providesTags: [{ type: 'QuotationTemplate', id: 'LIST' }],
-    }),
-    getQuotationTemplate: build.query({
-      query: (id) => `/quotations/templates/${encodeURIComponent(id)}`,
-      serializeQueryArgs: ({ queryArgs }) => String(queryArgs || '').toLowerCase(),
-      providesTags: (_r, _e, id) => [{ type: 'QuotationTemplate', id: String(id || '').toLowerCase() }],
-      refetchOnMountOrArgChange: true,
-    }),
-    createQuotationTemplate: build.mutation({
-      query: (body) => ({ url: '/quotations/templates', method: 'POST', body }),
-      invalidatesTags: [{ type: 'QuotationTemplate', id: 'LIST' }],
-    }),
-    patchQuotationTemplate: build.mutation({
-      query: ({ id, ...body }) => ({ url: `/quotations/templates/${id}`, method: 'PATCH', body }),
-      invalidatesTags: (_r, _e, arg) => [{ type: 'QuotationTemplate', id: arg.id }, { type: 'QuotationTemplate', id: 'LIST' }],
-    }),
-    deleteQuotationTemplate: build.mutation({
-      query: (id) => ({ url: `/quotations/templates/${id}`, method: 'DELETE' }),
-      invalidatesTags: [{ type: 'QuotationTemplate', id: 'LIST' }],
-    }),
   }),
 })
 
@@ -62,9 +40,4 @@ export const {
   usePatchQuotationMutation,
   useDeleteQuotationMutation,
   useConvertQuotationToInvoiceMutation,
-  useGetQuotationTemplatesQuery,
-  useGetQuotationTemplateQuery,
-  useCreateQuotationTemplateMutation,
-  usePatchQuotationTemplateMutation,
-  useDeleteQuotationTemplateMutation,
 } = quotationsApi

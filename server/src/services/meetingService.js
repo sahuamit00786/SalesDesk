@@ -53,6 +53,17 @@ function pickMeetingCreatePayload(body) {
   return out;
 }
 
+/** Resolve selected attendee user IDs to emails for the Google Calendar invite. */
+async function resolveAttendeeEmails(participants) {
+  const userIds = (participants || []).map((p) => p.userId).filter(Boolean);
+  if (!userIds.length) return [];
+  const users = await User.findAll({
+    where: { id: userIds },
+    attributes: ["id", "email"],
+  });
+  return users.map((u) => u.email).filter(Boolean);
+}
+
 export async function setMeetingBotConsent(id, consent, user, workspaceId) {
   const meeting = await Meeting.findOne({
     where: { id, workspaceId },
@@ -108,8 +119,12 @@ export async function createMeeting(user, payload, workspaceId) {
       throw new Error("Lead ID is required");
     }
 
+    const attendeeEmails = await resolveAttendeeEmails(payload.participants);
     const credentials = await resolveCalendarCredentials(user.companyId);
-    const googleResult = await createGoogleMeet(payload, credentials);
+    const googleResult = await createGoogleMeet(
+      { ...payload, attendees: attendeeEmails },
+      credentials
+    );
 
     const picked = pickMeetingCreatePayload(payload);
     const wantsBot = Boolean(picked.recordingBotConsent);
@@ -299,12 +314,23 @@ export async function updateMeeting(id, payload, workspaceId, companyId) {
   let googleEventId = meeting.googleEventId;
   let googleMeetLink = meeting.googleMeetLink;
 
-  const merged = { ...meeting.toJSON(), ...payload };
+  const participantsChanged = payload.participants !== undefined;
+  const attendeeEmails = participantsChanged
+    ? await resolveAttendeeEmails(payload.participants)
+    : undefined;
+
+  const merged = {
+    ...meeting.toJSON(),
+    ...payload,
+    ...(attendeeEmails !== undefined && { attendees: attendeeEmails }),
+  };
   const timeChanged = Boolean(
     payload.scheduledStart || payload.scheduledEnd
   );
   const detailsChanged =
-    payload.title !== undefined || payload.agenda !== undefined;
+    payload.title !== undefined ||
+    payload.agenda !== undefined ||
+    participantsChanged;
 
   try {
     const credentials = await resolveCalendarCredentials(companyId);
@@ -342,6 +368,19 @@ export async function updateMeeting(id, payload, workspaceId, companyId) {
     googleEventId,
     googleMeetLink,
   });
+
+  if (participantsChanged) {
+    await MeetingParticipant.destroy({ where: { meetingId: meeting.id } });
+    if (payload.participants.length) {
+      await MeetingParticipant.bulkCreate(
+        payload.participants.map((p) => ({
+          meetingId: meeting.id,
+          userId: p.userId,
+          role: "attendee",
+        }))
+      );
+    }
+  }
 
   // ✅ SEND UPDATED INVITE
   await notifyMeetingParticipants(meeting);

@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useSelector } from 'react-redux'
 import { selectActiveWorkspace } from '@/features/workspace/workspaceSlice'
 
-function darkenHex(hex, amount = 18) {
+export function darkenHex(hex, amount = 18) {
   const clean = String(hex || '').replace('#', '')
   if (!/^[0-9a-fA-F]{6}$/.test(clean)) return '#4c1d95'
   const n = parseInt(clean, 16)

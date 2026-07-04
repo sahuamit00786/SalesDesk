@@ -80,10 +80,12 @@ export async function createCalendarEvent(payload, credentials = null) {
   const timeZone = payload.timezone || 'Asia/Kolkata'
   const start = toRfc3339DateTime(payload.scheduledStart)
   const end = toRfc3339DateTime(payload.scheduledEnd)
+  const attendees = (payload.attendees || []).filter(Boolean).map((email) => ({ email }))
 
   const insertRes = await calendar.events.insert({
     calendarId: 'primary',
     conferenceDataVersion: 1,
+    sendUpdates: attendees.length ? 'all' : undefined,
     requestBody: {
       summary: payload.title,
       description: payload.agenda,
@@ -95,6 +97,7 @@ export async function createCalendarEvent(payload, credentials = null) {
         dateTime: end,
         timeZone,
       },
+      ...(attendees.length && { attendees }),
       conferenceData: {
         createRequest: {
           requestId: `meet-${Date.now()}-${randomUUID()}`,
@@ -168,6 +171,9 @@ export async function patchCalendarEvent(googleEventId, payload, credentials = n
       timeZone,
     }
   }
+  if (payload.attendees !== undefined) {
+    body.attendees = payload.attendees.filter(Boolean).map((email) => ({ email }))
+  }
 
   if (Object.keys(body).length === 0) {
     return getCalendarEvent(googleEventId, credentials)
@@ -177,6 +183,7 @@ export async function patchCalendarEvent(googleEventId, payload, credentials = n
     calendarId: 'primary',
     eventId: googleEventId,
     conferenceDataVersion: 1,
+    sendUpdates: body.attendees ? 'all' : undefined,
     requestBody: body,
   })
 

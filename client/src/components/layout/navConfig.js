@@ -17,6 +17,7 @@ import {
   MailOpen,
   Megaphone,
   Phone,
+  PhoneCall,
   Puzzle,
   Receipt,
   ScrollText,
@@ -58,17 +59,17 @@ export const ROUTE_META = {
     title: 'Quotations',
     sub: 'Structured quotes with templates, totals, and PDF-ready layouts.',
   },
-  '/quotations/templates': {
-    title: 'Quotation templates',
-    sub: 'Reusable quotation defaults and visual presets for your workspace.',
-  },
   '/invoices': {
     title: 'Invoices',
     sub: 'Tax-ready invoices, payments, and print layouts.',
   },
-  '/invoices/templates': {
-    title: 'Invoice templates',
-    sub: 'Numbering, tax profile, and invoice layout presets.',
+  '/sales-docs/templates': {
+    title: 'Document templates',
+    sub: 'Quotation and invoice layout presets, numbering, and defaults — one place for both.',
+  },
+  '/document-settings': {
+    title: 'Document settings',
+    sub: 'Quotation and invoice numbering — prefixes, sequences, and formats',
   },
   '/opportunities': {
     title: 'Opportunities',
@@ -85,6 +86,10 @@ export const ROUTE_META = {
   '/meetings': {
     title: 'Calls & meetings',
     sub: 'Log, record, and analyse every phone call and meeting — full call intelligence',
+  },
+  '/calls': {
+    title: 'Calls',
+    sub: 'Every call logged on a lead or synced from the mobile app call log — filterable and convertible',
   },
   '/calendar': {
     title: 'Calendar & Reminders',
@@ -209,17 +214,18 @@ export const NAV_SECTIONS = [
       { to: '/deal-payments', label: 'Deal Payments', icon: Banknote },
     ],
   },
-  {
-    label: 'HR',
-    items: [
-      { to: '/hr', label: 'HR Overview', icon: Building2, end: true },
-      { to: '/attendance', label: 'Attendance', icon: CalendarCheck },
-      { to: '/leave', label: 'Leave', icon: Umbrella, end: true },
-      { to: '/leave/requests', label: 'My requests', icon: ScrollText },
-      { to: '/leave/approval', label: 'Approval queue', icon: ClipboardList },
-      { to: '/leave/config', label: 'Leave settings', icon: SlidersHorizontal },
-    ],
-  },
+  // HR modules disabled
+  // {
+  //   label: 'HR',
+  //   items: [
+  //     { to: '/hr', label: 'HR Overview', icon: Building2, end: true },
+  //     { to: '/attendance', label: 'Attendance', icon: CalendarCheck },
+  //     { to: '/leave', label: 'Leave', icon: Umbrella, end: true },
+  //     { to: '/leave/requests', label: 'My requests', icon: ScrollText },
+  //     { to: '/leave/approval', label: 'Approval queue', icon: ClipboardList },
+  //     { to: '/leave/config', label: 'Leave settings', icon: SlidersHorizontal },
+  //   ],
+  // },
   {
     label: 'Engage',
     items: [
@@ -227,6 +233,7 @@ export const NAV_SECTIONS = [
       { to: '/tasks', label: 'Tasks', icon: ListTodo },
       { to: '/calendar', label: 'Calendar & Reminders', icon: CalendarDays },
       { to: '/meetings', label: 'Calls & meetings', icon: Phone },
+      { to: '/calls', label: 'Calls', icon: PhoneCall },
       { to: '/email', label: 'Email', icon: Mail },
       { to: '/templates', label: 'Templates', icon: FileStack },
     ],
@@ -236,9 +243,8 @@ export const NAV_SECTIONS = [
     items: [
       { to: '/documents', label: 'Documents', icon: FileStack },
       { to: '/quotations', label: 'Quotations', icon: FileText, end: true },
-      { to: '/quotations/templates', label: 'Quotation templates', icon: ClipboardList },
       { to: '/invoices', label: 'Invoices', icon: Receipt, end: true },
-      { to: '/invoices/templates', label: 'Invoice templates', icon: Banknote },
+      { to: '/sales-docs/templates', label: 'Doc templates', icon: ClipboardList },
     ],
   },
   {
@@ -260,6 +266,7 @@ export const NAV_SECTIONS = [
     items: [
       { to: '/workspace', label: 'Workspace settings', icon: Settings2 },
       { to: '/lead-configuration', label: 'Lead configuration', icon: SlidersHorizontal },
+      { to: '/document-settings', label: 'Document settings', icon: FileText },
       { to: '/team', label: 'Team & roles', icon: Users },
       { to: '/integrations', label: 'Integrations & API', icon: Puzzle },
     ],

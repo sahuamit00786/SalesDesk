@@ -90,7 +90,7 @@ export const Lead = sequelize.define(
       defaultValue: 'new',
     },
     source: {
-      type: DataTypes.ENUM('web_form', 'manual', 'csv_import', 'api', 'referral', 'campaign', 'linkedin', 'cold_email', 'other'),
+      type: DataTypes.ENUM('web_form', 'manual', 'csv_import', 'api', 'referral', 'campaign', 'linkedin', 'cold_email', 'other', 'call_log'),
       allowNull: false,
     },
     sourceId: {

@@ -18,7 +18,12 @@ import { createLeadSystemActivity } from './leadSystemActivity.js'
 const TRIGGER_TYPES = {
   triggerLeadCreated: 'lead_created',
   triggerLeadUpdated: 'lead_updated',
+  triggerCampaignStageChanged: 'campaign_lead_stage_changed',
+  triggerCampaignPaymentReceived: 'campaign_payment_received',
 }
+
+/** Hard ceiling on steps per run, counted across delay resumes (guards cycles through delayWait). */
+const MAX_STEPS_PER_RUN = 200
 
 function taskSubtasksFromWorkflowNode(node) {
   const raw = Array.isArray(node?.data?.subtasks) ? node.data.subtasks : []
@@ -52,28 +57,57 @@ function getDefinition(wf) {
   return d && typeof d === 'object' ? d : { nodes: [], edges: [] }
 }
 
-function findTriggerNode(def, eventType) {
-  const want =
-    eventType === 'lead_created'
-      ? 'triggerLeadCreated'
-      : eventType === 'lead_updated'
-        ? 'triggerLeadUpdated'
-        : null
-  if (!want) return null
-  return (def.nodes || []).find((n) => n.type === want) || null
+function triggerNodeTypeForEvent(eventType) {
+  switch (eventType) {
+    case 'lead_created':
+      return 'triggerLeadCreated'
+    case 'lead_updated':
+      return 'triggerLeadUpdated'
+    case 'campaign_lead_stage_changed':
+      return 'triggerCampaignStageChanged'
+    case 'campaign_payment_received':
+      return 'triggerCampaignPaymentReceived'
+    default:
+      return null
+  }
 }
 
-/** How many active workflows listen for this event (for skipping empty queue jobs). */
-export async function countActiveWorkflowTriggersForEvent({ eventType, companyId, workspaceId }) {
+/** All trigger nodes matching this event (a workflow may have more than one, e.g. different watchFields). */
+function findTriggerNodes(def, eventType) {
+  const want = triggerNodeTypeForEvent(eventType)
+  if (!want) return []
+  return (def.nodes || []).filter((n) => n.type === want)
+}
+
+/** watchFields on lead_updated triggers: fire only if one of the listed fields actually changed. */
+function triggerWatchFieldsMatch(trigger, eventType, leadPlain, beforePlain) {
+  if (eventType !== 'lead_updated') return true
+  const watch = Array.isArray(trigger.data?.watchFields) ? trigger.data.watchFields : []
+  if (!watch.length) return true
+  if (!leadPlain) return true
+  return watch.some((f) => {
+    const cur = getLeadField(leadPlain, f)
+    const prev = beforePlain ? getLeadField(beforePlain, f) : ''
+    return cur !== prev
+  })
+}
+
+/**
+ * How many active workflow triggers listen for this event (for skipping empty queue jobs).
+ * Pass `lead`/`before` (plain objects) to also respect watchFields on lead_updated triggers.
+ */
+export async function countActiveWorkflowTriggersForEvent({ eventType, companyId, workspaceId, lead, before }) {
   const rows = await Workflow.findAll({
     where: { companyId, workspaceId, status: 'active' },
-    limit: 100,
     order: [['updatedAt', 'DESC']],
   })
   let n = 0
   for (const wf of rows) {
     const def = getDefinition(wf)
-    if (findTriggerNode(def, eventType)) n += 1
+    for (const trigger of findTriggerNodes(def, eventType)) {
+      if (!triggerWatchFieldsMatch(trigger, eventType, lead || null, before || null)) continue
+      n += 1
+    }
   }
   return n
 }
@@ -82,20 +116,34 @@ function outgoingEdges(def, sourceId) {
   return (def.edges || []).filter((e) => e.source === sourceId)
 }
 
-function pickNextNodeId(def, sourceNode, branch) {
+/**
+ * All next node ids from a node. Condition nodes follow only edges whose
+ * sourceHandle matches the evaluated branch — no fallback to the wrong branch.
+ * Other nodes follow every outgoing edge (fan-out branches all execute).
+ */
+function pickNextNodeIds(def, sourceNode, branch) {
   const outs = outgoingEdges(def, sourceNode.id)
-  if (!outs.length) return null
+  if (!outs.length) return []
   if (sourceNode.type === 'conditionField') {
     const handle = branch ? 'true' : 'false'
-    const hit = outs.find((e) => (e.sourceHandle || 'true') === handle) || outs[0]
-    return hit?.target || null
+    return outs
+      .filter((e) => (e.sourceHandle || 'true') === handle)
+      .map((e) => e.target)
+      .filter(Boolean)
   }
-  return outs[0]?.target || null
+  return outs.map((e) => e.target).filter(Boolean)
 }
 
 function getLeadField(lead, field) {
   const v = lead[field]
   return v === undefined || v === null ? '' : String(v)
+}
+
+function compareNumeric(cur, rhs, cmp) {
+  const a = Number(cur)
+  const b = Number(rhs)
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return false
+  return cmp(a, b)
 }
 
 function evalCondition(lead, before, data) {
@@ -113,6 +161,10 @@ function evalCondition(lead, before, data) {
   if (op === 'not_contains') return !cur.toLowerCase().includes(rhs.toLowerCase())
   if (op === 'not_equals') return String(cur) !== String(rhs)
   if (op === 'changed') return String(cur) !== String(prev)
+  if (op === 'greater_than') return compareNumeric(cur, rhs, (a, b) => a > b)
+  if (op === 'greater_or_equal') return compareNumeric(cur, rhs, (a, b) => a >= b)
+  if (op === 'less_than') return compareNumeric(cur, rhs, (a, b) => a < b)
+  if (op === 'less_or_equal') return compareNumeric(cur, rhs, (a, b) => a <= b)
   return String(cur) === String(rhs)
 }
 
@@ -183,38 +235,32 @@ async function executeNode(run, workflow, node, context) {
   try {
     if (node.type === 'triggerLeadCreated' || node.type === 'triggerLeadUpdated') {
       await finishStep(step, 'completed', { ok: true }, null)
-      return { nextNodeId: pickNextNodeId(def, node, true) }
+      return { nextNodeIds: pickNextNodeIds(def, node, true) }
     }
 
     if (node.type === 'conditionField') {
       const ok = evalCondition(lead, before, node.data || {})
       await finishStep(step, 'completed', { branch: ok }, null)
-      return { nextNodeId: pickNextNodeId(def, node, ok) }
+      return { nextNodeIds: pickNextNodeIds(def, node, ok) }
     }
 
     if (node.type === 'delayWait') {
       const minutes = Math.max(0, Math.min(10080, Number(node.data?.minutes) || 0))
-      const nextId = pickNextNodeId(def, node, true)
-      if (!minutes || !nextId) {
+      const nextIds = pickNextNodeIds(def, node, true)
+      if (!minutes || !nextIds.length) {
         await finishStep(step, 'completed', { skipped: !minutes }, null)
-        return { nextNodeId: nextId }
+        return { nextNodeIds: nextIds }
       }
       const waitUntil = new Date(Date.now() + minutes * 60 * 1000)
-      await finishStep(step, 'waiting', { waitUntil: waitUntil.toISOString(), resumeTo: nextId }, null)
-      await run.update({
-        status: 'waiting',
-        waitUntil,
-        resumeNodeId: nextId,
-        contextJson: { ...context, definition: def, leadId: lead.id, before: context.before ?? null },
-      })
-      return { waiting: true }
+      await finishStep(step, 'waiting', { waitUntil: waitUntil.toISOString(), resumeTo: nextIds[0] }, null)
+      return { waiting: true, waitUntil, resumeNodeIds: nextIds }
     }
 
     if (node.type === 'actionAssignOwner') {
-      // Skip if lead already has an assignee — manual assignment takes priority
+      // Fast path: snapshot already has an assignee — manual assignment takes priority
       if (lead.assignedTo && String(lead.assignedTo).trim()) {
         await finishStep(step, 'completed', { skipped: true, reason: 'already_assigned', existingAssignee: lead.assignedTo }, null)
-        return { nextNodeId: pickNextNodeId(def, node, true) }
+        return { nextNodeIds: pickNextNodeIds(def, node, true) }
       }
 
       const rawPool = normalizeAssignOwnerUserIds(node.data)
@@ -228,9 +274,19 @@ async function executeNode(run, workflow, node, context) {
       const pool = rawPool.filter((id) => activeIds.has(id))
       if (!pool.length) throw new Error('Assign owner: all configured users are inactive or removed')
 
-      let assignedTo = pool[0]
-      if (pool.length > 1) {
-        await sequelize.transaction(async (transaction) => {
+      let assignedTo = null
+      let skippedExisting = null
+      await sequelize.transaction(async (transaction) => {
+        // Lock the lead first and re-check: the snapshot may be stale (queued job,
+        // retry) and a manual assignment made meanwhile must not be overwritten.
+        const row = await Lead.findByPk(lead.id, { transaction, lock: transaction.LOCK.UPDATE })
+        if (!row) throw new Error('Lead not found')
+        if (row.assignedTo && String(row.assignedTo).trim()) {
+          skippedExisting = row.assignedTo
+          Object.assign(lead, row.get({ plain: true }))
+          return
+        }
+        if (pool.length > 1) {
           const wfRow = await Workflow.findByPk(workflow.id, {
             transaction,
             lock: transaction.LOCK.UPDATE,
@@ -252,19 +308,17 @@ async function executeNode(run, workflow, node, context) {
           rr[key] = (pickIdx + 1) % pool.length
           state.assignOwnerRoundRobin = rr
           await wfRow.update({ runtimeStateJson: state }, { transaction })
-
-          const row = await Lead.findByPk(lead.id, { transaction, lock: transaction.LOCK.UPDATE })
-          if (!row) throw new Error('Lead not found')
-          await row.update({ assignedTo }, { transaction })
-          await row.reload({ transaction })
-          Object.assign(lead, row.get({ plain: true }))
-        })
-      } else {
-        const row = await Lead.findByPk(lead.id)
-        if (!row) throw new Error('Lead not found')
-        await row.update({ assignedTo })
-        await row.reload()
+        } else {
+          assignedTo = pool[0]
+        }
+        await row.update({ assignedTo }, { transaction })
+        await row.reload({ transaction })
         Object.assign(lead, row.get({ plain: true }))
+      })
+
+      if (skippedExisting) {
+        await finishStep(step, 'completed', { skipped: true, reason: 'already_assigned', existingAssignee: skippedExisting }, null)
+        return { nextNodeIds: pickNextNodeIds(def, node, true) }
       }
 
       await finishStep(step, 'completed', { assignedTo, roundRobin: pool.length > 1 }, null)
@@ -285,7 +339,7 @@ async function executeNode(run, workflow, node, context) {
           leadCount: 1,
         }).catch(() => {})
       }
-      return { nextNodeId: pickNextNodeId(def, node, true) }
+      return { nextNodeIds: pickNextNodeIds(def, node, true) }
     }
 
     if (node.type === 'actionCreateTask') {
@@ -340,7 +394,7 @@ async function executeNode(run, workflow, node, context) {
         body: `"${workflow.name || 'Automation'}" created a task: "${title}"`,
         metadata: { action: 'workflow_create_task', taskId: t.id, workflowId: workflow.id },
       })
-      return { nextNodeId: pickNextNodeId(def, node, true) }
+      return { nextNodeIds: pickNextNodeIds(def, node, true) }
     }
 
     if (node.type === 'actionCreateFollowup') {
@@ -353,7 +407,7 @@ async function executeNode(run, workflow, node, context) {
       const ownerForFollowup = lead.assignedTo || lead.ownerUserId || actorUserId || workflow.createdBy
       if (!ownerForFollowup) {
         await finishStep(step, 'skipped', { reason: 'no_assignee_for_followup' }, null)
-        return { nextNodeId: pickNextNodeId(def, node, true) }
+        return { nextNodeIds: pickNextNodeIds(def, node, true) }
       }
       const row = await LeadFollowup.create({
         leadId: lead.id,
@@ -372,7 +426,7 @@ async function executeNode(run, workflow, node, context) {
         body: `"${workflow.name || 'Automation'}" scheduled a follow-up for ${scheduledAt.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`,
         metadata: { action: 'workflow_create_followup', followupId: row.id, scheduledAt: scheduledAt.toISOString(), workflowId: workflow.id },
       })
-      return { nextNodeId: pickNextNodeId(def, node, true) }
+      return { nextNodeIds: pickNextNodeIds(def, node, true) }
     }
 
     if (node.type === 'actionSendEmailTemplate') {
@@ -380,7 +434,7 @@ async function executeNode(run, workflow, node, context) {
       if (!templateId) throw new Error('Send email: missing templateId')
       if (!lead.email) {
         await finishStep(step, 'skipped', { reason: 'lead_has_no_email' }, null)
-        return { nextNodeId: pickNextNodeId(def, node, true) }
+        return { nextNodeIds: pickNextNodeIds(def, node, true) }
       }
       const template = await EmailTemplate.findOne({
         where: { id: templateId, companyId: workflow.companyId, isArchived: false },
@@ -401,11 +455,11 @@ async function executeNode(run, workflow, node, context) {
         body: `"${workflow.name || 'Automation'}" sent an email: "${template.name || 'Email template'}"`,
         metadata: { action: 'workflow_send_email', templateId: template.id, workflowId: workflow.id },
       })
-      return { nextNodeId: pickNextNodeId(def, node, true) }
+      return { nextNodeIds: pickNextNodeIds(def, node, true) }
     }
 
     await finishStep(step, 'skipped', { reason: 'unknown_node_type', type: node.type }, null)
-    return { nextNodeId: pickNextNodeId(def, node, true) }
+    return { nextNodeIds: pickNextNodeIds(def, node, true) }
   } catch (e) {
     const msg = e?.message || String(e)
     await finishStep(step, 'failed', null, msg)
@@ -414,30 +468,61 @@ async function executeNode(run, workflow, node, context) {
   }
 }
 
-export async function runWorkflowGraph({ run, workflow, startNodeId, context }) {
+/** Persisted wait state: only what the resume path needs (no full lead snapshot). */
+function buildWaitContextJson(ctx, def, pendingNodeIds) {
+  return {
+    leadId: ctx.lead.id,
+    actorUserId: ctx.actorUserId || null,
+    before: ctx.before ?? null,
+    definition: def,
+    pendingNodeIds,
+  }
+}
+
+export async function runWorkflowGraph({ run, workflow, startNodeIds, context }) {
   const def = context.definition || getDefinition(workflow)
   const ctx = { ...context, definition: def }
-  if (!startNodeId) {
+  const queue = (Array.isArray(startNodeIds) ? startNodeIds : [startNodeIds]).filter(Boolean)
+  if (!queue.length) {
     await run.update({ status: 'completed', finishedAt: new Date(), waitUntil: null, resumeNodeId: null })
     return
   }
-  let currentId = startNodeId
+  // Count across resumes so cycles routed through delayWait cannot run forever.
+  let steps = await WorkflowRunStep.count({ where: { runId: run.id } })
   const visited = new Set()
-  while (currentId) {
-    if (visited.has(currentId)) {
-      await run.update({ status: 'failed', errorMessage: 'Cycle detected', finishedAt: new Date() })
+  while (queue.length) {
+    const currentId = queue.shift()
+    // Converging branches execute a node once; repeat visits (cycles) just stop.
+    if (visited.has(currentId)) continue
+    visited.add(currentId)
+    if (steps >= MAX_STEPS_PER_RUN) {
+      await run.update({
+        status: 'failed',
+        errorMessage: `Step limit of ${MAX_STEPS_PER_RUN} exceeded (possible loop)`,
+        finishedAt: new Date(),
+      })
       return
     }
-    visited.add(currentId)
     const node = (def.nodes || []).find((n) => n.id === currentId)
     if (!node) {
       await run.update({ status: 'failed', errorMessage: `Missing node ${currentId}`, finishedAt: new Date() })
       return
     }
     const out = await executeNode(run, workflow, node, ctx)
-    if (out.waiting) return
+    steps += 1
     if (out.halt) return
-    currentId = out.nextNodeId || null
+    if (out.waiting) {
+      const resumeIds = out.resumeNodeIds || []
+      const pending = [...resumeIds.slice(1), ...queue]
+      await run.update({
+        status: 'waiting',
+        waitUntil: out.waitUntil,
+        resumeNodeId: resumeIds[0] || null,
+        contextJson: buildWaitContextJson(ctx, def, pending),
+      })
+      return
+    }
+    for (const id of out.nextNodeIds || []) queue.push(id)
   }
   await run.update({ status: 'completed', finishedAt: new Date(), waitUntil: null, resumeNodeId: null })
 }
@@ -472,12 +557,11 @@ export async function startWorkflowRun({
     definition: def,
   }
   const next = await executeNode(run, workflow, triggerNode, context)
-  if (next.waiting) return
-  if (next.halt) return
+  if (next.waiting || next.halt) return
   await runWorkflowGraph({
     run,
     workflow,
-    startNodeId: next.nextNodeId,
+    startNodeIds: next.nextNodeIds || [],
     context: { ...context, lead: { ...context.lead } },
   })
 }
@@ -487,47 +571,67 @@ function toPlainLead(lead) {
   return typeof lead.get === 'function' ? lead.get({ plain: true }) : { ...lead }
 }
 
-/** Run all active workflows for one lead event (used inline and from BullMQ worker). */
-export async function runLeadWorkflowTriggersForLead({ eventType, lead, before, companyId, workspaceId, actorUserId }) {
+/**
+ * Run all active workflows for one lead event (used inline and from BullMQ worker).
+ * `skipWorkflowIds` + `onWorkflowProcessed` let the queue worker resume a partially
+ * processed job after a crash without re-running workflows (idempotent retries).
+ */
+export async function runLeadWorkflowTriggersForLead({
+  eventType,
+  lead,
+  before,
+  companyId,
+  workspaceId,
+  actorUserId,
+  skipWorkflowIds = null,
+  onWorkflowProcessed = null,
+}) {
   const leadPlain = toPlainLead(lead)
   const beforePlain = before ? toPlainLead(before) : null
+  const skip = skipWorkflowIds ? new Set([...skipWorkflowIds].map(String)) : null
   const rows = await Workflow.findAll({
     where: { companyId, workspaceId, status: 'active' },
-    limit: 100,
     order: [['updatedAt', 'DESC']],
   })
   const summary = { matched: 0, started: 0, failed: 0, errors: [] }
   for (const wf of rows) {
     const def = getDefinition(wf)
-    const trigger = findTriggerNode(def, eventType)
-    if (!trigger) continue
-    // watchFields: only fire if one of the specified fields actually changed
-    if (eventType === 'lead_updated' && Array.isArray(trigger.data?.watchFields) && trigger.data.watchFields.length > 0) {
-      const anyChanged = trigger.data.watchFields.some((f) => {
-        const cur = getLeadField(leadPlain, f)
-        const prev = beforePlain ? getLeadField(beforePlain, f) : ''
-        return cur !== prev
-      })
-      if (!anyChanged) continue
+    const triggers = findTriggerNodes(def, eventType).filter((t) =>
+      triggerWatchFieldsMatch(t, eventType, leadPlain, beforePlain),
+    )
+    if (!triggers.length) continue
+    summary.matched += triggers.length
+    if (skip && skip.has(String(wf.id))) {
+      // Already processed in a previous attempt of this job
+      summary.started += triggers.length
+      continue
     }
-    summary.matched += 1
-    try {
-      await startWorkflowRun({
-        workflow: wf,
-        triggerNode: trigger,
-        eventType,
-        lead: { ...leadPlain },
-        before: beforePlain ? { ...beforePlain } : null,
-        actorUserId,
-      })
-      summary.started += 1
-    } catch (e) {
-      summary.failed += 1
-      if (summary.errors.length < 10) {
-        summary.errors.push({ workflowId: wf.id, message: e?.message || String(e) })
+    for (const trigger of triggers) {
+      try {
+        await startWorkflowRun({
+          workflow: wf,
+          triggerNode: trigger,
+          eventType,
+          lead: { ...leadPlain },
+          before: beforePlain ? { ...beforePlain } : null,
+          actorUserId,
+        })
+        summary.started += 1
+      } catch (e) {
+        summary.failed += 1
+        if (summary.errors.length < 10) {
+          summary.errors.push({ workflowId: wf.id, message: e?.message || String(e) })
+        }
+        // eslint-disable-next-line no-console
+        console.error('[workflow]', wf.id, e?.message || e)
       }
-      // eslint-disable-next-line no-console
-      console.error('[workflow]', wf.id, e?.message || e)
+    }
+    if (onWorkflowProcessed) {
+      try {
+        await onWorkflowProcessed(String(wf.id))
+      } catch {
+        // progress bookkeeping is best-effort
+      }
     }
   }
   return summary
@@ -601,40 +705,65 @@ export async function emitLeadWorkflowTriggersBulkImport({ leadIds, companyId, w
   }
 }
 
+let wakeupsInFlight = false
+
 export async function processWorkflowWakeups() {
-  const now = new Date()
-  const waiting = await WorkflowRun.findAll({
-    where: { status: 'waiting', waitUntil: { [Op.lte]: now } },
-    limit: 50,
-    include: [{ model: Workflow, as: 'workflow' }],
-  })
-  for (const run of waiting) {
-    const wf = run.workflow
-    if (!wf) continue
-    const ctxJson = run.contextJson || {}
-    const def = ctxJson.definition || getDefinition(wf)
-    const lead = await Lead.findByPk(ctxJson.leadId || run.triggerPayloadJson?.leadId)
-    if (!lead) {
-      await run.update({ status: 'failed', errorMessage: 'Lead missing on resume', finishedAt: new Date() })
-      continue
+  // Re-entrancy guard: a slow batch must not overlap the next interval tick.
+  if (wakeupsInFlight) return
+  wakeupsInFlight = true
+  try {
+    const now = new Date()
+    const waiting = await WorkflowRun.findAll({
+      where: { status: 'waiting', waitUntil: { [Op.lte]: now } },
+      limit: 50,
+      include: [{ model: Workflow, as: 'workflow' }],
+    })
+    for (const run of waiting) {
+      // Atomic claim: only the process that flips waiting → running executes the
+      // resume. Protects against overlapping ticks and multiple server instances.
+      const [claimed] = await WorkflowRun.update(
+        { status: 'running', waitUntil: null },
+        { where: { id: run.id, status: 'waiting' } },
+      )
+      if (!claimed) continue
+      run.set({ status: 'running', waitUntil: null })
+
+      const wf = run.workflow
+      if (!wf) {
+        await run.update({ status: 'failed', errorMessage: 'Workflow deleted before resume', finishedAt: new Date() })
+        continue
+      }
+      const ctxJson = run.contextJson || {}
+      const def = ctxJson.definition || getDefinition(wf)
+      const lead = await Lead.findByPk(ctxJson.leadId || run.triggerPayloadJson?.leadId)
+      if (!lead) {
+        await run.update({ status: 'failed', errorMessage: 'Lead missing on resume', finishedAt: new Date() })
+        continue
+      }
+      const leadPlain = lead.get({ plain: true })
+      // Close out the delay step(s) that were parked as "waiting"
+      await WorkflowRunStep.update(
+        { status: 'completed', finishedAt: new Date() },
+        { where: { runId: run.id, status: 'waiting' } },
+      )
+      const startNodeIds = [run.resumeNodeId, ...(Array.isArray(ctxJson.pendingNodeIds) ? ctxJson.pendingNodeIds : [])].filter(Boolean)
+      if (!startNodeIds.length) {
+        await run.update({ status: 'completed', finishedAt: new Date() })
+        continue
+      }
+      const context = {
+        lead: leadPlain,
+        before: ctxJson.before ?? null,
+        actorUserId: ctxJson.actorUserId || null,
+        definition: def,
+      }
+      try {
+        await runWorkflowGraph({ run, workflow: wf, startNodeIds, context })
+      } catch (e) {
+        await run.update({ status: 'failed', errorMessage: e?.message || String(e), finishedAt: new Date() })
+      }
     }
-    const leadPlain = lead.get({ plain: true })
-    await run.update({ status: 'running', waitUntil: null })
-    const resumeId = run.resumeNodeId
-    if (!resumeId) {
-      await run.update({ status: 'completed', finishedAt: new Date() })
-      continue
-    }
-    const context = {
-      lead: leadPlain,
-      before: ctxJson.before ?? null,
-      actorUserId: ctxJson.actorUserId || null,
-      definition: def,
-    }
-    try {
-      await runWorkflowGraph({ run, workflow: wf, startNodeId: resumeId, context })
-    } catch (e) {
-      await run.update({ status: 'failed', errorMessage: e?.message || String(e), finishedAt: new Date() })
-    }
+  } finally {
+    wakeupsInFlight = false
   }
 }

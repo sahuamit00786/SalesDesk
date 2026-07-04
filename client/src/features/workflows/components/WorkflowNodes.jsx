@@ -162,6 +162,40 @@ function TriggerLeadUpdatedNode({ id, data, selected, updateNodeData }) {
   )
 }
 
+function TriggerCampaignStageChangedNode({ id, selected }) {
+  return (
+    <NodeShell
+      id={id}
+      title={WORKFLOW_NODE_TYPES.triggerCampaignStageChanged}
+      subtitle="Trigger"
+      selected={selected}
+      tone="ring-1 ring-brand-200/80"
+    >
+      <p className="text-[11px] leading-snug text-ink-muted">
+        Runs when a lead moves to a different stage in any campaign it belongs to.
+      </p>
+      <Handle type="source" position={Position.Bottom} className="!h-2.5 !w-2.5 !border-2 !border-white !bg-slate-500" />
+    </NodeShell>
+  )
+}
+
+function TriggerCampaignPaymentReceivedNode({ id, selected }) {
+  return (
+    <NodeShell
+      id={id}
+      title={WORKFLOW_NODE_TYPES.triggerCampaignPaymentReceived}
+      subtitle="Trigger"
+      selected={selected}
+      tone="ring-1 ring-brand-200/80"
+    >
+      <p className="text-[11px] leading-snug text-ink-muted">
+        Runs when a campaign payment is recorded with status &ldquo;received&rdquo;.
+      </p>
+      <Handle type="source" position={Position.Bottom} className="!h-2.5 !w-2.5 !border-2 !border-white !bg-slate-500" />
+    </NodeShell>
+  )
+}
+
 const CONDITION_FIELD_GROUPS = [
   {
     label: 'Lifecycle',
@@ -382,6 +416,10 @@ function ConditionFieldNode({ id, data, selected, updateNodeData, leadSetup }) {
           <option value="not_contains">Does not contain</option>
           <option value="starts_with">Starts with</option>
           <option value="ends_with">Ends with</option>
+          <option value="greater_than">Greater than (number)</option>
+          <option value="greater_or_equal">Greater or equal (number)</option>
+          <option value="less_than">Less than (number)</option>
+          <option value="less_or_equal">Less or equal (number)</option>
           <option value="is_empty">Is empty</option>
           <option value="is_not_empty">Is not empty</option>
           <option value="changed">Changed (Lead Updated trigger only)</option>
@@ -787,6 +825,8 @@ export function createWorkflowNodeTypes({ updateNodeData, teamUsers, templates, 
   return {
     triggerLeadCreated: (p) => <TriggerLeadCreatedNode {...p} />,
     triggerLeadUpdated: (p) => <TriggerLeadUpdatedNode {...p} updateNodeData={updateNodeData} />,
+    triggerCampaignStageChanged: (p) => <TriggerCampaignStageChangedNode {...p} />,
+    triggerCampaignPaymentReceived: (p) => <TriggerCampaignPaymentReceivedNode {...p} />,
     conditionField: (p) => <ConditionFieldNode {...p} updateNodeData={updateNodeData} leadSetup={leadSetup} />,
     delayWait: (p) => <DelayWaitNode {...p} updateNodeData={updateNodeData} />,
     actionAssignOwner: (p) => <ActionAssignOwnerNode {...p} updateNodeData={updateNodeData} teamUsers={teamUsers} />,

@@ -3,7 +3,8 @@ import toast from 'react-hot-toast'
 import { Plus, Trash2 } from 'lucide-react'
 import { RightDrawer } from '@/components/ui/RightDrawer'
 import { cn } from '@/utils/cn'
-import { useCreateQuotationMutation, useGetQuotationTemplatesQuery } from '@/features/sales-docs/quotationsApi'
+import { useCreateQuotationMutation } from '@/features/sales-docs/quotationsApi'
+import { useGetSalesDocTemplatesQuery } from '@/features/sales-docs/salesDocTemplatesApi'
 import { useGetDealsQuery } from '@/features/deals/dealsApi'
 import { QUOTATION_PRESET_LABELS } from '@/features/sales-docs/presetLabels'
 import { useEffectiveCurrency } from '@/hooks/useEffectiveCurrency'
@@ -44,7 +45,7 @@ export function CreateQuotationDrawer({ open, onClose, initialLeadId = null }) {
     },
     { skip: !open },
   )
-  const { data: tplRes } = useGetQuotationTemplatesQuery()
+  const { data: tplRes } = useGetSalesDocTemplatesQuery({ docType: 'quotation' })
 
   const deals = dealsRes?.data || []
   const templates = tplRes?.data?.items ?? tplRes?.items ?? []

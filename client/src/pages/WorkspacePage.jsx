@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAppSelector } from '@/app/hooks'
 import { CurrencyPicker } from '@/components/shared/CurrencyPicker'
-import { usePatchMyCompanyMutation } from '@/features/company/companyApi'
 import { selectEffectiveCurrency } from '@/features/workspace/workspaceSlice'
 import { DataGrid } from '@/components/shared/DataGrid'
 import toast from 'react-hot-toast'
@@ -18,10 +17,20 @@ import {
   useWorkspacesQuery,
 } from '@/features/workspace/workspaceApi'
 import { cn } from '@/utils/cn'
+import { darkenHex } from '@/hooks/useWorkspaceTheme'
 import { WorkspaceCompanyTab } from '@/pages/workspace/WorkspaceCompanyTab'
 import { NotificationEmailSettingsTab } from '@/pages/workspace/NotificationEmailSettingsTab'
 
 const DESCRIPTION_MAX = 199
+
+function applyThemePreview(hex) {
+  document.documentElement.style.setProperty('--brand-primary', hex)
+  document.documentElement.style.setProperty('--brand-primary-dark', darkenHex(hex))
+}
+
+function applySidebarTextPreview(hex) {
+  document.documentElement.style.setProperty('--sidebar-text', hex)
+}
 
 function resolveHex(val, cssVar, fallback) {
   if (val && /^#[0-9A-Fa-f]{6}$/.test(val)) return val
@@ -37,6 +46,54 @@ const SETTINGS_TABS = [
 
 function apiErrorMessage(err) {
   return err?.data?.error?.message ?? err?.error ?? 'Something went wrong'
+}
+
+/**
+ * Isolated color input: dragging in the native picker fires `input` per tick,
+ * so keep that local (own state + rAF-throttled CSS var preview) and only
+ * commit to the parent form on native `change` (picker dismissed). This keeps
+ * the whole page from re-rendering and restyling on every tick.
+ */
+function ThemeColorField({ id, value, onCommit, applyPreview }) {
+  const [local, setLocal] = useState(value)
+  const [prevValue, setPrevValue] = useState(value)
+  const inputRef = useRef(null)
+  const rafRef = useRef(0)
+
+  if (value !== prevValue) {
+    setPrevValue(value)
+    setLocal(value)
+  }
+
+  useEffect(() => {
+    const el = inputRef.current
+    if (!el) return undefined
+    const commit = (e) => onCommit(e.target.value)
+    el.addEventListener('change', commit)
+    return () => {
+      el.removeEventListener('change', commit)
+      cancelAnimationFrame(rafRef.current)
+    }
+  }, [onCommit])
+
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        ref={inputRef}
+        id={id}
+        type="color"
+        value={local}
+        onChange={(e) => {
+          const next = e.target.value
+          setLocal(next)
+          cancelAnimationFrame(rafRef.current)
+          rafRef.current = requestAnimationFrame(() => applyPreview(next))
+        }}
+        className="h-10 w-10 cursor-pointer rounded-lg border border-surface-border p-0.5"
+      />
+      <span className="font-mono text-xs text-ink-muted">{local}</span>
+    </div>
+  )
 }
 
 export function WorkspacePage() {
@@ -66,17 +123,8 @@ export function WorkspacePage() {
   const [formSidebarText, setFormSidebarText] = useState('#ffffff')
   const [formDefaultCurrency, setFormDefaultCurrency] = useState('USD')
   const [statusFilter, setStatusFilter] = useState('active')
-  const user = useAppSelector((s) => s.auth.user)
   const companyBaseCurrency = useAppSelector(selectEffectiveCurrency)
-  const [patchMyCompany, { isLoading: savingCompanyCurrency }] = usePatchMyCompanyMutation()
-  const [companyCurrencyDraft, setCompanyCurrencyDraft] = useState('USD')
   const [deleteDialog, setDeleteDialog] = useState({ open: false, row: null })
-
-  useEffect(() => {
-    if (user?.company?.baseCurrency) {
-      setCompanyCurrencyDraft(String(user.company.baseCurrency).toUpperCase())
-    }
-  }, [user?.company?.baseCurrency])
 
   const items = data?.data?.items
 
@@ -321,7 +369,7 @@ export function WorkspacePage() {
   return (
     <PageShell fullWidth>
       <div className="space-y-4 px-2 py-3 sm:px-4">
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-surface-border bg-white/90 px-3 py-2">
+        <div className="flex min-h-[52px] flex-wrap items-center justify-between gap-2 rounded-xl border border-surface-border bg-white px-3 py-2.5 shadow-sm">
           <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Workspace settings">
             {SETTINGS_TABS.map((t) => {
               const Icon = t.icon
@@ -334,10 +382,10 @@ export function WorkspacePage() {
                   aria-selected={active}
                   onClick={() => setSettingsTab(t.id)}
                   className={cn(
-                    'inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition',
+                    'inline-flex h-9 items-center gap-1.5 rounded-xl border px-3 text-xs font-medium transition-colors',
                     active
-                      ? 'border-brand-200 bg-white text-brand-700'
-                      : 'border-surface-border bg-surface-subtle text-ink-muted hover:bg-surface-muted',
+                      ? 'border-brand-600 bg-[var(--brand-primary)] text-white shadow-sm'
+                      : 'border-surface-border bg-white text-ink-muted hover:border-brand-200 hover:bg-brand-50',
                   )}
                 >
                   <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -397,36 +445,7 @@ export function WorkspacePage() {
           )}
         </div>
 
-        {settingsTab === 'company' ? (
-          <div className="space-y-4">
-            <div className="rounded-2xl border border-surface-border bg-white p-4 shadow-sm">
-              <CurrencyPicker
-                value={companyCurrencyDraft}
-                onChange={setCompanyCurrencyDraft}
-                label="Company base currency"
-              />
-              <p className="mt-2 text-xs text-ink-muted">
-                Existing deals and invoices keep their stored currency. New records default to the active workspace currency.
-              </p>
-              <button
-                type="button"
-                disabled={savingCompanyCurrency}
-                onClick={async () => {
-                  try {
-                    await patchMyCompany({ baseCurrency: companyCurrencyDraft }).unwrap()
-                    toast.success('Company currency updated')
-                  } catch (err) {
-                    toast.error(apiErrorMessage(err))
-                  }
-                }}
-                className="mt-3 h-9 rounded-xl bg-slate-800 px-4 text-sm font-medium text-white hover:bg-slate-900 disabled:opacity-60"
-              >
-                {savingCompanyCurrency ? 'Saving…' : 'Save company currency'}
-              </button>
-            </div>
-            <WorkspaceCompanyTab />
-          </div>
-        ) : null}
+        {settingsTab === 'company' ? <WorkspaceCompanyTab /> : null}
 
         {settingsTab === 'notifications' ? <NotificationEmailSettingsTab /> : null}
 
@@ -547,43 +566,24 @@ export function WorkspacePage() {
                   Theme color
                 </label>
                 <p className="text-[11px] leading-snug text-ink-faint">Sidebar background, buttons, table header</p>
-                <div className="flex items-center gap-2">
-                  <input
-                    id="ws-theme-color"
-                    type="color"
-                    value={formThemeColor}
-                    onChange={(e) => {
-                      setFormThemeColor(e.target.value)
-                      document.documentElement.style.setProperty('--brand-primary', e.target.value)
-                      const n = parseInt(e.target.value.slice(1), 16)
-                      const r = Math.max(0, (n >> 16) - 18).toString(16).padStart(2, '0')
-                      const g = Math.max(0, ((n >> 8) & 0xff) - 18).toString(16).padStart(2, '0')
-                      const b = Math.max(0, (n & 0xff) - 18).toString(16).padStart(2, '0')
-                      document.documentElement.style.setProperty('--brand-primary-dark', `#${r}${g}${b}`)
-                    }}
-                    className="h-10 w-10 cursor-pointer rounded-lg border border-surface-border p-0.5"
-                  />
-                  <span className="font-mono text-xs text-ink-muted">{formThemeColor}</span>
-                </div>
+                <ThemeColorField
+                  id="ws-theme-color"
+                  value={formThemeColor}
+                  onCommit={setFormThemeColor}
+                  applyPreview={applyThemePreview}
+                />
               </div>
               <div className="flex flex-1 flex-col gap-1.5">
                 <label htmlFor="ws-sidebar-text" className="text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
                   Text color
                 </label>
                 <p className="text-[11px] leading-snug text-ink-faint">Sidebar nav text and button text</p>
-                <div className="flex items-center gap-2">
-                  <input
-                    id="ws-sidebar-text"
-                    type="color"
-                    value={formSidebarText}
-                    onChange={(e) => {
-                      setFormSidebarText(e.target.value)
-                      document.documentElement.style.setProperty('--sidebar-text', e.target.value)
-                    }}
-                    className="h-10 w-10 cursor-pointer rounded-lg border border-surface-border p-0.5"
-                  />
-                  <span className="font-mono text-xs text-ink-muted">{formSidebarText}</span>
-                </div>
+                <ThemeColorField
+                  id="ws-sidebar-text"
+                  value={formSidebarText}
+                  onCommit={setFormSidebarText}
+                  applyPreview={applySidebarTextPreview}
+                />
               </div>
             </div>
           </div>

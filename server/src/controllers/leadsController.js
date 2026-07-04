@@ -83,6 +83,9 @@ const LEAD_TASK_TYPES = [
 
 const LEAD_TASK_PRIORITIES = ['low', 'medium', 'high', 'urgent']
 const LEAD_TASK_STATUSES = ['pending', 'in_progress', 'completed', 'cancelled']
+// Completed tasks older than this are hidden from the default task list
+// (still reachable via an explicit status=completed filter).
+const COMPLETED_TASKS_VISIBLE_DAYS = 7
 
 function normalizeLeadTaskType(value) {
   const t = String(value || '').trim()
@@ -1068,14 +1071,15 @@ export async function create(req, res, next) {
     await recalculateScore(lead.id)
     recalculateLeadScore(lead, req.user.companyId).catch(console.error)
     await clearLeadListCache(workspaceId)
-    await emitLeadWorkflowTriggers({
+    // Fire-and-forget: workflow execution must not block the create response
+    emitLeadWorkflowTriggers({
       eventType: 'lead_created',
-      lead,
+      lead: lead.get({ plain: true }),
       before: null,
       companyId: req.user.companyId,
       workspaceId: String(workspaceId),
       actorUserId: req.user.id,
-    }).catch(() => {})
+    }).catch((e) => console.error('[workflow] lead_created trigger emit failed:', e?.message || e))
     await lead.reload({
       include: [
         {
@@ -1236,14 +1240,15 @@ export async function update(req, res, next) {
     await recalculateScore(lead.id)
     recalculateLeadScore(lead, req.user.companyId).catch(console.error)
     await clearLeadListCache(lead.workspaceId)
-    await emitLeadWorkflowTriggers({
+    // Fire-and-forget: workflow execution must not block the update response
+    emitLeadWorkflowTriggers({
       eventType: 'lead_updated',
-      lead,
+      lead: lead.get({ plain: true }),
       before,
       companyId: req.user.companyId,
       workspaceId: String(lead.workspaceId),
       actorUserId: req.user.id,
-    }).catch(() => {})
+    }).catch((e) => console.error('[workflow] lead_updated trigger emit failed:', e?.message || e))
     await lead.reload({
       include: [
         {
@@ -1399,6 +1404,119 @@ export async function remove(req, res, next) {
   }
 }
 
+async function findArchivedCompanyLead(req, id) {
+  const accessWhere = await buildLeadListAccessWhere(req)
+  return Lead.findOne({ where: { ...accessWhere, id, isDeleted: true }, paranoid: false })
+}
+
+/** List soft-deleted (archived) leads for the current company/workspace scope. */
+export async function listArchived(req, res, next) {
+  try {
+    const page = Math.max(1, Number(req.query.page) || 1)
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20))
+    const offset = (page - 1) * limit
+
+    let accessWhere
+    try {
+      accessWhere = await buildLeadListAccessWhere(req)
+    } catch (e) {
+      if (e.status === 403) {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'FORBIDDEN', message: e.publicMessage || e.message },
+        })
+      }
+      throw e
+    }
+
+    const where = { ...accessWhere, isDeleted: true }
+    if (req.query.isOpportunity === 'true') where.isOpportunity = true
+    else if (req.query.isOpportunity === 'false') where.isOpportunity = false
+
+    const { count, rows } = await Lead.findAndCountAll({
+      where,
+      paranoid: false,
+      limit,
+      offset,
+      order: [['deletedAt', 'DESC']],
+      include: [{ model: User, as: 'assignee', attributes: ['id', 'name', 'email'], required: false }],
+    })
+
+    return res.json({
+      success: true,
+      data: rows,
+      meta: { page, limit, total: count },
+    })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+/** Bulk restore or permanently delete archived (soft-deleted) leads. */
+export async function bulkArchived(req, res, next) {
+  try {
+    const { ids, action } = req.body || {}
+    if (!Array.isArray(ids) || !ids.length) {
+      return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'ids required' } })
+    }
+    if (action !== 'restore' && action !== 'permanentDelete') {
+      return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Invalid action' } })
+    }
+
+    const accessWhere = await buildLeadListAccessWhere(req)
+    const rows = await Lead.findAll({
+      where: { ...accessWhere, id: { [Op.in]: ids }, isDeleted: true },
+      paranoid: false,
+    })
+    if (!rows.length) {
+      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'No archived leads found' } })
+    }
+    const foundIds = rows.map((r) => r.id)
+    const workspaceIds = [...new Set(rows.map((r) => r.workspaceId))]
+
+    if (action === 'restore') {
+      await Lead.restore({ where: { id: { [Op.in]: foundIds } } })
+      await Lead.update({ isDeleted: false }, { where: { id: { [Op.in]: foundIds } } })
+    } else {
+      await Lead.destroy({ where: { id: { [Op.in]: foundIds } }, force: true })
+    }
+
+    await Promise.all(workspaceIds.map((wsId) => clearLeadListCache(wsId)))
+
+    return res.json({ success: true, data: { ids: foundIds }, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+/** Restore an archived (soft-deleted) lead back to the active list. */
+export async function restoreLead(req, res, next) {
+  try {
+    const lead = await findArchivedCompanyLead(req, req.params.id)
+    if (!lead) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Archived lead not found' } })
+    await lead.restore()
+    await lead.update({ isDeleted: false })
+    await clearLeadListCache(lead.workspaceId)
+    return res.json({ success: true, data: { ok: true }, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+/** Permanently delete an archived (soft-deleted) lead. Irreversible. */
+export async function destroyLeadPermanently(req, res, next) {
+  try {
+    const lead = await findArchivedCompanyLead(req, req.params.id)
+    if (!lead) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Archived lead not found' } })
+    const workspaceId = lead.workspaceId
+    await lead.destroy({ force: true })
+    await clearLeadListCache(workspaceId)
+    return res.json({ success: true, data: { ok: true }, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
 /** Fetch leads by id for bulk actions (same access rules as list). */
 export async function resolveByIds(req, res, next) {
   try {
@@ -1468,7 +1586,10 @@ export async function bulk(req, res, next) {
       }
     }
     if (action === 'status') await Lead.update({ status: payload.status || 'new' }, { where: { id: { [Op.in]: ids } } })
-    if (action === 'delete') await Lead.update({ isDeleted: true }, { where: { id: { [Op.in]: ids } } })
+    if (action === 'delete') {
+      await Lead.update({ isDeleted: true }, { where: { id: { [Op.in]: ids } } })
+      await Lead.destroy({ where: { id: { [Op.in]: ids } } })
+    }
     if (action === 'update') {
       const ALLOWED = ['status', 'opportunityStatus', 'sourceId', 'value', 'country', 'city', 'state']
       const patch = {}
@@ -1479,6 +1600,18 @@ export async function bulk(req, res, next) {
       }
       if (payload.isOpportunity === true) {
         await Lead.update({ isOpportunity: true }, { where: { id: { [Op.in]: ids }, isOpportunity: false } })
+        if (!Object.prototype.hasOwnProperty.call(patch, 'opportunityStatus')) {
+          const workspaceId = req.headers['x-workspace-id'] || req.body.workspaceId
+          const initialStatus = await OpportunityStatus.findOne({
+            where: { workspaceId, companyId: req.user.companyId, isInitial: true },
+          })
+          if (initialStatus) {
+            await Lead.update(
+              { opportunityStatus: initialStatus.id },
+              { where: { id: { [Op.in]: ids }, isOpportunity: true, opportunityStatus: null } },
+            )
+          }
+        }
       }
       if (Object.prototype.hasOwnProperty.call(patch, 'opportunityStatus')) {
         await Lead.update(
@@ -2578,12 +2711,33 @@ export async function listAllTasks(req, res, next) {
     const taskRoleKind = req.user.userRoleKind
     const isSalesOnlyTask = !req.user.isCompanyAdmin && taskRoleKind !== 'workspace_admin' && taskRoleKind !== 'manager'
     if (isSalesOnlyTask) {
-      taskWhere.assignedTo = req.user.id
+      // Include unassigned tasks the user created — otherwise they vanish from this
+      // list (still visible on the lead's Tasks tab) the moment nobody claims them.
+      const ownVisibilityClause = {
+        [Op.or]: [{ assignedTo: req.user.id }, { assignedTo: null, createdBy: req.user.id }],
+      }
+      taskWhere[Op.and] = taskWhere[Op.and]
+        ? [...(Array.isArray(taskWhere[Op.and]) ? taskWhere[Op.and] : [taskWhere[Op.and]]), ownVisibilityClause]
+        : [ownVisibilityClause]
     }
     if (realStatuses.length) {
       taskWhere.status = realStatuses.length === 1 ? realStatuses[0] : { [Op.in]: realStatuses }
     } else if (wantsOverdue) {
       taskWhere.status = { [Op.in]: ['pending', 'in_progress'] }
+    } else {
+      const completedCutoff = new Date(now)
+      completedCutoff.setDate(completedCutoff.getDate() - COMPLETED_TASKS_VISIBLE_DAYS)
+      const recentCompletedClause = {
+        [Op.or]: [
+          { status: { [Op.ne]: 'completed' } },
+          { completedAt: { [Op.gte]: completedCutoff } },
+          // legacy completed rows without completedAt: fall back to updatedAt
+          { [Op.and]: [{ completedAt: null }, { updatedAt: { [Op.gte]: completedCutoff } }] },
+        ],
+      }
+      taskWhere[Op.and] = taskWhere[Op.and]
+        ? [...(Array.isArray(taskWhere[Op.and]) ? taskWhere[Op.and] : [taskWhere[Op.and]]), recentCompletedClause]
+        : [recentCompletedClause]
     }
     const validPriorities = priorityFilters.filter((v) => LEAD_TASK_PRIORITIES.includes(v))
     if (validPriorities.length) {
@@ -2645,7 +2799,17 @@ export async function listAllTasks(req, res, next) {
           order: [['position', 'ASC'], ['createdAt', 'ASC']],
         },
       ],
-      order: [[sortField, sortDir], ['createdAt', 'DESC']],
+      // Active tasks (pending/in_progress) always outrank completed/cancelled ones
+      // in the shared page window. Without this, a due-date-ascending sort lets old
+      // completed rows (small dueAt) fill the whole `limit` and starve active tasks
+      // out of the response entirely — the Board/List views bucket this one page by
+      // status client-side, so a starved page renders empty Pending/In-progress
+      // columns even though matching rows exist.
+      order: [
+        [sequelize.literal(`CASE WHEN \`LeadTask\`.\`status\` IN ('completed','cancelled') THEN 1 ELSE 0 END`), 'ASC'],
+        [sortField, sortDir],
+        ['createdAt', 'DESC'],
+      ],
       limit,
       offset,
       distinct: true,

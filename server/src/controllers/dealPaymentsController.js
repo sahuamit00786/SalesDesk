@@ -1,6 +1,6 @@
 import Joi from 'joi'
 import { Op } from 'sequelize'
-import { Deal, DealActivity, DealPayment, Activity, User } from '../models/index.js'
+import { Deal, DealActivity, DealPayment, Activity, User, InvoicePayment, Invoice } from '../models/index.js'
 import { leadAccessWhere } from '../services/leadVisibility.js'
 
 const MODES = ['bank_transfer', 'cash', 'cheque', 'upi', 'card', 'crypto', 'other']
@@ -38,6 +38,9 @@ function serializePayment(p) {
     reference: plain.reference || null,
     notes: plain.notes || null,
     status: plain.status,
+    invoicePaymentId: plain.invoicePaymentId || null,
+    invoiceId: plain.invoicePayment?.invoice?.id || null,
+    invoiceNumber: plain.invoicePayment?.invoice?.invoiceNumber || null,
     createdByUserId: plain.createdByUserId,
     createdBy: plain.createdBy
       ? { id: plain.createdBy.id, name: plain.createdBy.name, email: plain.createdBy.email }
@@ -57,6 +60,13 @@ async function getDeal(id, workspaceId, user) {
 
 const paymentIncludes = [
   { model: User, as: 'createdBy', attributes: ['id', 'name', 'email'], required: false },
+  {
+    model: InvoicePayment,
+    as: 'invoicePayment',
+    attributes: ['id'],
+    required: false,
+    include: [{ model: Invoice, as: 'invoice', attributes: ['id', 'invoiceNumber'], required: false }],
+  },
 ]
 
 // GET /deals/:id/payments

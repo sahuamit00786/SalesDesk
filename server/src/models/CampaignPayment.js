@@ -26,6 +26,8 @@ export const CampaignPayment = sequelize.define(
       defaultValue: 'received',
     },
     createdByUserId: { type: DataTypes.UUID, allowNull: true, field: 'created_by_user_id' },
+    /** Client-supplied dedup key (e.g. double-click / retry guard). Unique per campaign. */
+    idempotencyKey: { type: DataTypes.STRING(120), allowNull: true, field: 'idempotency_key' },
   },
   {
     tableName: 'campaign_payments',

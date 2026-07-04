@@ -95,7 +95,7 @@ export async function listLeadDocumentSummariesHandler(req, res, next) {
 export async function deleteDocument(req, res, next) {
   try {
     const workspaceId = resolveWorkspaceId(req)
-    const row = await Document.findOne({ where: { id: req.params.id, workspaceId, companyId: req.user.companyId } })
+    const row = await Document.findOne({ where: { id: req.params.id, workspaceId } })
     if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Document not found' } })
     await row.destroy()
     return res.json({ success: true, meta: {} })
@@ -165,7 +165,7 @@ export async function createFolder(req, res, next) {
 export async function linkDocument(req, res, next) {
   try {
     const workspaceId = resolveWorkspaceId(req)
-    const row = await Document.findOne({ where: { id: req.params.id, workspaceId, companyId: req.user.companyId } })
+    const row = await Document.findOne({ where: { id: req.params.id, workspaceId } })
     if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Document not found' } })
     const links = parseLinks(req.body?.links)
     if (!links.length || !isValidLinks(links)) {
@@ -196,7 +196,7 @@ export async function moveDocumentFolder(req, res, next) {
     const { fromFolderId, toFolderId } = req.body || {}
     if (!toFolderId) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'toFolderId is required' } })
 
-    const doc = await Document.findOne({ where: { id, workspaceId, companyId: req.user.companyId } })
+    const doc = await Document.findOne({ where: { id, workspaceId } })
     if (!doc) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Document not found' } })
 
     // Link to new folder
@@ -219,7 +219,7 @@ export async function moveDocumentFolder(req, res, next) {
 export async function linkDocumentFolders(req, res, next) {
   try {
     const workspaceId = resolveWorkspaceId(req)
-    const row = await Document.findOne({ where: { id: req.params.id, workspaceId, companyId: req.user.companyId } })
+    const row = await Document.findOne({ where: { id: req.params.id, workspaceId } })
     if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Document not found' } })
     const folderIds = Array.isArray(req.body?.folderIds) ? req.body.folderIds : []
     if (!folderIds.length) {
@@ -244,7 +244,7 @@ export async function saveEmailAttachmentToDocuments(req, res) {
 
 export async function getDocumentViewerMeta(req, res) {
   const workspaceId = resolveWorkspaceId(req)
-  const doc = await Document.findOne({ where: { id: req.params.id, workspaceId, companyId: req.user.companyId } })
+  const doc = await Document.findOne({ where: { id: req.params.id, workspaceId } })
   if (!doc) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Document not found' } })
 
   const fileType = (doc.fileType || '').toLowerCase()

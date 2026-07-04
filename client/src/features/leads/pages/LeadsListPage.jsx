@@ -20,6 +20,7 @@ import { coerceToLeadArray, leadListLabel } from "@/features/leads/utils/leadAss
 import { FilterBuilder } from "@/features/leads/components/FilterBuilder";
 import { LeadsTable } from "@/features/leads/components/LeadsTable";
 import { DuplicateLeadsTab } from "@/features/leads/components/DuplicateLeadsTab";
+import { ArchivedLeadsTab } from "@/features/leads/components/ArchivedLeadsTab";
 import {
   useBulkLeadsMutation,
   useResolveLeadsByIdsMutation,
@@ -28,7 +29,9 @@ import {
   useExportLeadsMutation,
   useGetLeadFormMetaQuery,
   useGetLeadsQuery,
+  useLazyGetLeadsQuery,
   useImportLeadsMutation,
+  usePatchLeadStatusMutation,
   useUpdateLeadMutation,
 } from "@/features/leads/leadsApi";
 import {
@@ -51,7 +54,7 @@ import {
 } from "@/features/leads/leadsSelectors";
 import { STATUS_OPTIONS } from "@/features/leads/constants";
 import { CreateOpportunityModal } from "@/features/opportunities/components/CreateOpportunityModal";
-import { useCreateOpportunityMutation } from "@/features/opportunities/opportunitiesApi";
+import { useCreateOpportunityMutation, usePatchOpportunityStatusMutation } from "@/features/opportunities/opportunitiesApi";
 import {
   ListSearchToolbar,
   buildLeadsListQueryParams,
@@ -96,6 +99,7 @@ function filtersToParams(filters) {
   const params = {}
   if (filters.search) params.search = filters.search
   if (filters.status?.length) params.status = filters.status.join(',')
+  if (filters.stage?.length) params.stage = filters.stage.join(',')
   if (filters.assignedTo?.length) params.assignedTo = filters.assignedTo.join(',')
   if (filters.source?.length) params.source = filters.source.join(',')
   if (filters.workspaceId) params.workspaceId = filters.workspaceId
@@ -107,11 +111,13 @@ function paramsToFilters(searchParams) {
   const filters = {}
   const search = searchParams.get('search')
   const status = searchParams.get('status')
+  const stage = searchParams.get('stage')
   const assignedTo = searchParams.get('assignedTo')
   const source = searchParams.get('source')
   const workspaceId = searchParams.get('workspaceId')
   if (search) filters.search = search
   if (status) filters.status = status.split(',').filter(Boolean)
+  if (stage) filters.stage = stage.split(',').filter(Boolean)
   if (assignedTo) filters.assignedTo = assignedTo.split(',').filter(Boolean)
   if (source) filters.source = source.split(',').filter(Boolean)
   if (workspaceId) filters.workspaceId = workspaceId
@@ -154,6 +160,7 @@ export function LeadsListPage({ variant = "leads" }) {
   const [deleting, setDeleting] = useState(false);
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [bulkEditing, setBulkEditing] = useState(false);
+  const [selectingAll, setSelectingAll] = useState(false);
 
   const query = buildLeadsListQueryParams({
     filters,
@@ -163,12 +170,15 @@ export function LeadsListPage({ variant = "leads" }) {
   });
   if (!isOpportunities && !filters.assignedTo?.length) query.assignedOnly = true;
   const { data, isLoading, refetch } = useGetLeadsQuery(query);
+  const [fetchLeadsPage] = useLazyGetLeadsQuery();
   const { data: formMetaData } = useGetLeadFormMetaQuery();
   const [createLead] = useCreateLeadMutation();
   const [updateLead] = useUpdateLeadMutation();
   const [deleteLead] = useDeleteLeadMutation();
   const [bulkLeads] = useBulkLeadsMutation();
   const [resolveLeadsByIds] = useResolveLeadsByIdsMutation();
+  const [patchLeadStatus] = usePatchLeadStatusMutation();
+  const [patchOpportunityStatus] = usePatchOpportunityStatusMutation();
   const [importLeads] = useImportLeadsMutation();
   const [exportLeads] = useExportLeadsMutation();
   const [createOpportunity, { isLoading: creatingOpp }] = useCreateOpportunityMutation();
@@ -244,6 +254,26 @@ export function LeadsListPage({ variant = "leads" }) {
     return selected.map((id) => byId.get(id)).filter(Boolean);
   }
 
+  async function selectAllMatching() {
+    if (!total) return;
+    setSelectingAll(true);
+    try {
+      const perPage = 100;
+      const totalPages = Math.ceil(total / perPage);
+      const allIds = [];
+      for (let p = 1; p <= totalPages; p++) {
+        const result = await fetchLeadsPage({ ...query, page: p, limit: perPage }).unwrap();
+        allIds.push(...coerceToLeadArray(result?.data ?? result).map((r) => r.id));
+      }
+      dispatch(setSelected(allIds));
+      toast.success(`Selected all ${allIds.length} ${isOpportunities ? 'opportunities' : 'leads'}`);
+    } catch {
+      toast.error("Could not select all records");
+    } finally {
+      setSelectingAll(false);
+    }
+  }
+
   async function handleBulk(action, payload = {}) {
     if (!selected.length) return;
     await bulkLeads({ ids: selected, action, payload }).unwrap();
@@ -315,6 +345,25 @@ export function LeadsListPage({ variant = "leads" }) {
       toast.error("Export failed");
     } finally {
       setExporting(false);
+    }
+  }
+
+  async function handleStatusChange(lead, status) {
+    try {
+      await patchLeadStatus({ id: lead.id, status }).unwrap();
+      toast.success("Status updated");
+    } catch (err) {
+      toast.error(err?.data?.error?.message || "Could not update status");
+    }
+  }
+
+  async function handleStageChange(lead, opportunityStatusId) {
+    if (!opportunityStatusId) return;
+    try {
+      await patchOpportunityStatus({ id: lead.id, opportunityStatusId }).unwrap();
+      toast.success("Status updated");
+    } catch (err) {
+      toast.error(err?.data?.error?.message || "Could not update status");
     }
   }
 
@@ -437,6 +486,13 @@ export function LeadsListPage({ variant = "leads" }) {
                 >
                   Duplicate Leads
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('archived')}
+                  className={`h-8 rounded-lg px-3 text-xs font-medium transition-colors ${viewMode === 'archived' ? 'bg-ink text-white shadow-sm' : 'text-ink-muted hover:text-ink'}`}
+                >
+                  Archived Leads
+                </button>
               </div>
 
               {selected.length > 0 && viewMode === 'unique' ? (
@@ -471,25 +527,47 @@ export function LeadsListPage({ variant = "leads" }) {
             <>
               {/* Status quick filter */}
               <div className="relative shrink-0">
-                <select
-                  value={filters.status?.length === 1 ? filters.status[0] : ""}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    const delta = {
-                      status: val ? [val] : [],
-                      filterTree: upsertTreeRule(filters.filterTree, 'status', 'is_any_of', val),
-                    }
-                    dispatch(setFilters(delta));
-                    setSearchParams(filtersToParams({ ...filters, ...delta }))
-                    dispatch(setPagination({ page: 1 }));
-                  }}
-                  className="h-9 appearance-none rounded-xl border border-surface-border bg-white pl-3 pr-8 text-xs font-medium text-ink outline-none focus:border-brand-400"
-                >
-                  <option value="">All statuses</option>
-                  {STATUS_OPTIONS.map((s) => (
-                    <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
-                  ))}
-                </select>
+                {isOpportunities ? (
+                  <select
+                    value={filters.stage?.length === 1 ? filters.stage[0] : ""}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const delta = {
+                        stage: val ? [val] : [],
+                        filterTree: upsertTreeRule(filters.filterTree, 'opportunityStatus', 'is_any_of', val),
+                      }
+                      dispatch(setFilters(delta));
+                      setSearchParams(filtersToParams({ ...filters, ...delta }))
+                      dispatch(setPagination({ page: 1 }));
+                    }}
+                    className="h-9 appearance-none rounded-xl border border-surface-border bg-white pl-3 pr-8 text-xs font-medium text-ink outline-none focus:border-brand-400"
+                  >
+                    <option value="">All statuses</option>
+                    {opportunityStatuses.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <select
+                    value={filters.status?.length === 1 ? filters.status[0] : ""}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const delta = {
+                        status: val ? [val] : [],
+                        filterTree: upsertTreeRule(filters.filterTree, 'status', 'is_any_of', val),
+                      }
+                      dispatch(setFilters(delta));
+                      setSearchParams(filtersToParams({ ...filters, ...delta }))
+                      dispatch(setPagination({ page: 1 }));
+                    }}
+                    className="h-9 appearance-none rounded-xl border border-surface-border bg-white pl-3 pr-8 text-xs font-medium text-ink outline-none focus:border-brand-400"
+                  >
+                    <option value="">All statuses</option>
+                    {STATUS_OPTIONS.map((s) => (
+                      <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+                    ))}
+                  </select>
+                )}
                 <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-muted" />
               </div>
 
@@ -564,6 +642,10 @@ export function LeadsListPage({ variant = "leads" }) {
           <div className="p-4">
             <DuplicateLeadsTab />
           </div>
+        ) : viewMode === 'archived' ? (
+          <div className="p-4">
+            <ArchivedLeadsTab isOpportunity={isOpportunities} />
+          </div>
         ) : isLoading ? (
           <div className="p-3">
             <SkeletonTable cols={6} rows={8} />
@@ -574,6 +656,9 @@ export function LeadsListPage({ variant = "leads" }) {
               variant={variant}
               rows={rows}
               selected={selected}
+              opportunityStatuses={opportunityStatuses}
+              onStatusChange={handleStatusChange}
+              onStageChange={handleStageChange}
               onToggleRow={(id) => dispatch(toggleSelected(id))}
               onToggleAll={(checked) =>
                 dispatch(setSelected(checked ? rows.map((x) => x.id) : []))
@@ -641,6 +726,11 @@ export function LeadsListPage({ variant = "leads" }) {
         onExport={openBulkExport}
         onDelete={() => setDeleteConfirm({ type: "bulk", count: selected.length })}
         onClear={() => dispatch(clearSelected())}
+        pageCount={rows.length}
+        total={total}
+        onSelectAll={selectAllMatching}
+        selectingAll={selectingAll}
+        entityLabel={isOpportunities ? "opportunities" : "leads"}
       />
 
       <BulkAssignModal

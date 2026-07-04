@@ -16,12 +16,45 @@ export function issueDateToDdMmYyyy(issueDateIso) {
   return `${String(d).padStart(2, '0')}${String(m).padStart(2, '0')}${y}`
 }
 
-/** Next quotation: QT/DDMMYYYY/{seq} */
-export function buildQuotationNumber(issueDateIso, nextSeq) {
-  return `QT/${issueDateToDdMmYyyy(issueDateIso)}/${nextSeq}`
+function issueDateToYyyy(issueDateIso) {
+  const s = String(issueDateIso || '').slice(0, 10)
+  const parts = s.split('-')
+  if (parts.length === 3 && /^\d{4}$/.test(parts[0])) return parts[0]
+  return String(new Date().getFullYear())
 }
 
-/** Next invoice (workspace default): INV/DDMMYYYY/{seq} */
-export function buildInvoiceNumber(issueDateIso, nextSeq) {
-  return `INV/${issueDateToDdMmYyyy(issueDateIso)}/${nextSeq}`
+export const DOC_NUMBER_FORMATS = ['PREFIX/DDMMYYYY/SEQ', 'PREFIX-SEQ', 'PREFIX/YYYY/SEQ']
+export const DEFAULT_DOC_NUMBER_FORMAT = 'PREFIX/DDMMYYYY/SEQ'
+
+/**
+ * Build a document number from workspace numbering settings.
+ * Unknown/missing format falls back to PREFIX/DDMMYYYY/SEQ.
+ */
+export function buildDocNumber({ prefix, format, seq, issueDate }) {
+  const p = String(prefix || '').trim() || 'DOC'
+  const fmt = DOC_NUMBER_FORMATS.includes(format) ? format : DEFAULT_DOC_NUMBER_FORMAT
+  if (fmt === 'PREFIX-SEQ') return `${p}-${seq}`
+  if (fmt === 'PREFIX/YYYY/SEQ') return `${p}/${issueDateToYyyy(issueDate)}/${seq}`
+  return `${p}/${issueDateToDdMmYyyy(issueDate)}/${seq}`
+}
+
+/**
+ * Allocate the next invoice number inside an open transaction.
+ * A template with autoNumbering takes precedence over workspace settings.
+ * Increments the corresponding counter as a side effect.
+ */
+export async function allocateInvoiceNumber({ billing, template, issueDate, transaction }) {
+  if (template?.autoNumbering) {
+    const number = `${template.numberPrefix || 'INV'}-${template.nextNumber}`
+    await template.increment('nextNumber', { by: 1, transaction })
+    return number
+  }
+  const number = buildDocNumber({
+    prefix: billing.invoicePrefix || 'INV',
+    format: billing.invoiceNumberFormat,
+    seq: billing.invoiceNextSeq,
+    issueDate,
+  })
+  await billing.increment('invoiceNextSeq', { by: 1, transaction })
+  return number
 }

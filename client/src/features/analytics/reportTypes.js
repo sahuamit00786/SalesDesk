@@ -26,8 +26,8 @@ export const REPORT_CATEGORIES = [
   {
     id: 'people',
     label: 'People & HR',
-    desc: 'Team performance, monthly digest & leave',
-    reports: ['employee-monthly', 'team', 'leave'],
+    desc: 'Team performance & monthly digest',
+    reports: ['employee-monthly', 'team'], // 'leave' disabled (HR module)
   },
   {
     id: 'communications',
@@ -119,13 +119,14 @@ export const REPORT_META = {
     icon: Users,
     category: 'people',
   },
-  leave: {
-    label: 'Leave & Attendance',
-    desc: 'Leave taken by employee and leave type',
-    icon: Umbrella,
-    category: 'people',
-    filters: ['userId', 'status'],
-  },
+  // HR modules disabled
+  // leave: {
+  //   label: 'Leave & Attendance',
+  //   desc: 'Leave taken by employee and leave type',
+  //   icon: Umbrella,
+  //   category: 'people',
+  //   filters: ['userId', 'status'],
+  // },
   email: {
     label: 'Email Performance',
     desc: 'Sent, opens, clicks & reply rates',

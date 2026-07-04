@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { BadgeDollarSign, CheckCircle2, Clock, Pencil, Plus, Trash2, XCircle } from 'lucide-react'
+import { BadgeDollarSign, CheckCircle2, Clock, FileText, Pencil, Plus, Trash2, XCircle } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import {
   useListDealPaymentsQuery,
@@ -326,6 +327,17 @@ export function DealPaymentsTab({ dealId, dealValue, dealCurrency }) {
                       <span>{fmtDate(p.paymentDate)}</span>
                       <span className="capitalize">{(p.mode || '').replace(/_/g, ' ')}</span>
                       {p.reference && <span>Ref: <span className="font-medium text-ink">{p.reference}</span></span>}
+                      {p.invoiceId && (
+                        <Link
+                          to={`/invoices/${p.invoiceId}/print`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 font-medium text-brand-700 hover:underline"
+                        >
+                          <FileText className="h-3 w-3" />
+                          {p.invoiceNumber || 'View invoice'}
+                        </Link>
+                      )}
                     </div>
                     {p.notes && (
                       <p className="mt-1 text-[11px] text-ink-muted">{p.notes}</p>

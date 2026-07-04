@@ -57,10 +57,9 @@ import { EmailTemplate } from './EmailTemplate.js'
 import { LeadEmailLog } from './LeadEmailLog.js'
 import { EmailSuppression } from './EmailSuppression.js'
 import { WorkspaceBillingProfile } from './WorkspaceBillingProfile.js'
-import { QuotationTemplate } from './QuotationTemplate.js'
+import { SalesDocTemplate } from './SalesDocTemplate.js'
 import { Quotation } from './Quotation.js'
 import { QuotationItem } from './QuotationItem.js'
-import { InvoiceTemplate } from './InvoiceTemplate.js'
 import { Invoice } from './Invoice.js'
 import { InvoiceItem } from './InvoiceItem.js'
 import { InvoicePayment } from './InvoicePayment.js'
@@ -83,6 +82,7 @@ import { NotificationDeliveryLog } from './NotificationDeliveryLog.js'
 import { FilterPreset } from './FilterPreset.js'
 import { DealPayment } from './DealPayment.js'
 import { CampaignPayment } from './CampaignPayment.js'
+import { CampaignLeadStageHistory } from './CampaignLeadStageHistory.js'
 import { AuditLog } from './AuditLog.js'
 import { EmailSequence } from './EmailSequence.js'
 import { EmailSequenceStep } from './EmailSequenceStep.js'
@@ -207,6 +207,7 @@ Deal.hasMany(DealPayment, { foreignKey: 'dealId', as: 'payments' })
 DealPayment.belongsTo(Deal, { foreignKey: 'dealId', as: 'deal' })
 DealPayment.belongsTo(User, { foreignKey: 'createdByUserId', as: 'createdBy' })
 User.hasMany(DealPayment, { foreignKey: 'createdByUserId', as: 'dealPayments' })
+DealPayment.belongsTo(InvoicePayment, { foreignKey: 'invoicePaymentId', as: 'invoicePayment' })
 DealActivity.belongsTo(User, { foreignKey: 'userId', as: 'user' })
 User.belongsToMany(Lead, { through: LeadAssignment, foreignKey: 'userId', otherKey: 'leadId', as: 'assignedLeads' })
 Document.belongsTo(User, { foreignKey: 'uploadedBy', as: 'uploader' })
@@ -264,6 +265,11 @@ Meeting.hasOne(MeetingRecording, { foreignKey: 'meeting_id', onDelete: 'CASCADE'
 Meeting.hasOne(AiMeetingSummary, { foreignKey: 'meeting_id', onDelete: 'CASCADE' })
 
 Meeting.hasMany(ActionItem, { foreignKey: 'meeting_id', onDelete: 'CASCADE' })
+
+CallLog.belongsTo(Lead, { foreignKey: 'leadId', as: 'lead' })
+Lead.hasMany(CallLog, { foreignKey: 'leadId', as: 'callLogs' })
+CallLog.belongsTo(User, { foreignKey: 'ownerUserId', as: 'owner' })
+User.hasMany(CallLog, { foreignKey: 'ownerUserId', as: 'syncedCalls' })
 
 Meeting.hasMany(MeetingParticipant, {
   foreignKey: 'meetingId',
@@ -323,9 +329,9 @@ WorkspaceBillingProfile.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'w
 Workspace.hasOne(WorkspaceBillingProfile, { foreignKey: 'workspaceId', as: 'billingProfile' })
 WorkspaceBillingProfile.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
 
-QuotationTemplate.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
-Workspace.hasMany(QuotationTemplate, { foreignKey: 'workspaceId', as: 'quotationTemplates' })
-QuotationTemplate.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
+SalesDocTemplate.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
+Workspace.hasMany(SalesDocTemplate, { foreignKey: 'workspaceId', as: 'salesDocTemplates' })
+SalesDocTemplate.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
 
 Quotation.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
 Workspace.hasMany(Quotation, { foreignKey: 'workspaceId', as: 'quotations' })
@@ -334,15 +340,11 @@ Quotation.belongsTo(Lead, { foreignKey: 'leadId', as: 'lead' })
 Quotation.belongsTo(Deal, { foreignKey: 'dealId', as: 'deal' })
 Lead.hasMany(Quotation, { foreignKey: 'leadId', as: 'quotations' })
 Deal.hasMany(Quotation, { foreignKey: 'dealId', as: 'quotations' })
-Quotation.belongsTo(QuotationTemplate, { foreignKey: 'quotationTemplateId', as: 'template' })
+Quotation.belongsTo(SalesDocTemplate, { foreignKey: 'quotationTemplateId', as: 'template' })
 Quotation.belongsTo(User, { foreignKey: 'ownerUserId', as: 'owner' })
 Quotation.belongsTo(Invoice, { foreignKey: 'convertedInvoiceId', as: 'convertedInvoice' })
 QuotationItem.belongsTo(Quotation, { foreignKey: 'quotationId', as: 'quotation' })
 Quotation.hasMany(QuotationItem, { foreignKey: 'quotationId', as: 'items' })
-
-InvoiceTemplate.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
-Workspace.hasMany(InvoiceTemplate, { foreignKey: 'workspaceId', as: 'invoiceTemplates' })
-InvoiceTemplate.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
 
 Invoice.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
 Workspace.hasMany(Invoice, { foreignKey: 'workspaceId', as: 'invoices' })
@@ -351,7 +353,7 @@ Invoice.belongsTo(Lead, { foreignKey: 'leadId', as: 'lead' })
 Invoice.belongsTo(Deal, { foreignKey: 'dealId', as: 'deal' })
 Lead.hasMany(Invoice, { foreignKey: 'leadId', as: 'invoices' })
 Deal.hasMany(Invoice, { foreignKey: 'dealId', as: 'invoices' })
-Invoice.belongsTo(InvoiceTemplate, { foreignKey: 'invoiceTemplateId', as: 'template' })
+Invoice.belongsTo(SalesDocTemplate, { foreignKey: 'invoiceTemplateId', as: 'template' })
 Invoice.belongsTo(Quotation, { foreignKey: 'quotationId', as: 'quotation' })
 Quotation.hasMany(Invoice, { foreignKey: 'quotationId', as: 'invoicesFromQuote' })
 Invoice.belongsTo(User, { foreignKey: 'ownerUserId', as: 'owner' })
@@ -385,6 +387,12 @@ CampaignPayment.belongsTo(User, { foreignKey: 'createdByUserId', as: 'createdBy'
 Campaign.hasMany(CampaignPayment, { foreignKey: 'campaignId', as: 'payments' })
 CampaignLead.hasMany(CampaignPayment, { foreignKey: 'campaignLeadId', as: 'payments' })
 Lead.hasMany(CampaignPayment, { foreignKey: 'leadId', as: 'campaignPayments' })
+
+CampaignLeadStageHistory.belongsTo(Campaign, { foreignKey: 'campaignId', as: 'campaign' })
+CampaignLeadStageHistory.belongsTo(CampaignLead, { foreignKey: 'campaignLeadId', as: 'campaignLead' })
+CampaignLeadStageHistory.belongsTo(Lead, { foreignKey: 'leadId', as: 'lead' })
+CampaignLeadStageHistory.belongsTo(User, { foreignKey: 'changedByUserId', as: 'changedBy' })
+CampaignLead.hasMany(CampaignLeadStageHistory, { foreignKey: 'campaignLeadId', as: 'stageHistory' })
 
 Workflow.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
 Workflow.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
@@ -537,10 +545,9 @@ export {
   LeadEmailLog,
   EmailSuppression,
   WorkspaceBillingProfile,
-  QuotationTemplate,
+  SalesDocTemplate,
   Quotation,
   QuotationItem,
-  InvoiceTemplate,
   Invoice,
   InvoiceItem,
   InvoicePayment,
@@ -548,6 +555,7 @@ export {
   CampaignTeamMember,
   CampaignLead,
   CampaignPayment,
+  CampaignLeadStageHistory,
   Workflow,
   WorkflowVersion,
   WorkflowRun,

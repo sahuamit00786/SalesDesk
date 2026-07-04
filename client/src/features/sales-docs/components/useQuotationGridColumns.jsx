@@ -1,27 +1,17 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { Briefcase, FileInput, Pencil, Printer, Trash2 } from 'lucide-react'
+import { FileInput, Pencil, Printer, Trash2 } from 'lucide-react'
 import {
   SalesDocActionIcon,
   SalesDocClientCell,
   SalesDocDealCell,
   SalesDocNumberLink,
+  SalesDocStatusBadge,
   formatDocListDate,
+  formatDocMoney as fmtMoney,
 } from '@/features/sales-docs/components/SalesDocListCells'
 
-import { cn } from '@/utils/cn'
-
-function fmtMoney(n, c = 'USD') {
-  const v = Number(n ?? 0)
-  try {
-    return new Intl.NumberFormat(undefined, { style: 'currency', currency: c }).format(v)
-  } catch {
-    return `${c} ${v.toFixed(2)}`
-  }
-}
-
 export function useQuotationGridColumns({
-  setAssignQuotation,
   setDeleteTarget,
   deleting,
   converting,
@@ -61,20 +51,7 @@ export function useQuotationGridColumns({
         field: 'status',
         headerName: 'Status',
         width: 100,
-        renderCell: ({ row }) => (
-          <span
-            className={cn(
-              'rounded-full px-2 py-0.5 text-xs font-medium',
-              row.status === 'converted'
-                ? 'bg-emerald-50 text-emerald-800'
-                : row.status === 'draft'
-                  ? 'bg-neutral-100 text-neutral-700'
-                  : 'bg-sky-50 text-sky-800',
-            )}
-          >
-            {row.status}
-          </span>
-        ),
+        renderCell: ({ row }) => <SalesDocStatusBadge status={row.status} variant="quotation" />,
       },
       {
         field: 'grandTotal',
@@ -116,15 +93,7 @@ export function useQuotationGridColumns({
             >
               <Printer className="h-4 w-4" />
             </SalesDocActionIcon>
-            <SalesDocActionIcon
-              type="button"
-              title={row.dealId ? 'Reassign deal' : 'Assign to deal'}
-              className="border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50"
-              onClick={() => setAssignQuotation(row)}
-            >
-              <Briefcase className="h-4 w-4" />
-            </SalesDocActionIcon>
-            {row.status !== 'converted' ? (
+            {row.status !== 'converted' && row.status !== 'rejected' ? (
               <SalesDocActionIcon
                 type="button"
                 disabled={converting}
@@ -148,6 +117,6 @@ export function useQuotationGridColumns({
         ),
       },
     ],
-    [setAssignQuotation, setDeleteTarget, deleting, converting, onConvert, onDealClick],
+    [setDeleteTarget, deleting, converting, onConvert, onDealClick],
   )
 }

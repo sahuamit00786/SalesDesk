@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   Bell,
   Calendar,
+  ChevronDown,
   ClipboardList,
   Clock,
   ExternalLink,
@@ -30,6 +31,7 @@ import {
   useGetLeadTaskTimelineQuery,
   usePatchLeadTaskMutation,
 } from '@/features/leads/leadsApi'
+import { PRIORITY_META, STATUS_META } from '@/features/tasks/taskConstants'
 
 export const LEAD_TASK_TYPE_OPTIONS = [
   { value: 'call', label: 'Call' },
@@ -124,18 +126,85 @@ function StatusPill({ value }) {
   )
 }
 
+function PriorityPicker({ value, onChange }) {
+  return (
+    <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+      {LEAD_TASK_PRIORITY_OPTIONS.map((o) => {
+        const meta = PRIORITY_META[o.value] || {}
+        const active = value === o.value
+        return (
+          <button
+            key={o.value}
+            type="button"
+            aria-pressed={active}
+            onClick={() => onChange(o.value)}
+            className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-xl text-xs font-semibold transition ${
+              active
+                ? `${meta.pill} ring-1`
+                : 'border border-surface-border bg-white text-ink-muted hover:border-brand-300 hover:text-ink'
+            }`}
+          >
+            <Flag className={`h-3.5 w-3.5 fill-current ${meta.flagClass}`} strokeWidth={1.5} />
+            {o.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function StatusPicker({ value, onChange }) {
+  return (
+    <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+      {LEAD_TASK_STATUS_OPTIONS.map((o) => {
+        const meta = STATUS_META[o.value] || {}
+        const active = value === o.value
+        return (
+          <button
+            key={o.value}
+            type="button"
+            aria-pressed={active}
+            onClick={() => onChange(o.value)}
+            className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-xl text-xs font-semibold transition ${
+              active
+                ? `${meta.pill} ring-1`
+                : 'border border-surface-border bg-white text-ink-muted hover:border-brand-300 hover:text-ink'
+            }`}
+          >
+            <span className={`h-2 w-2 shrink-0 rounded-full ${meta.dot}`} aria-hidden />
+            {o.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function leadInitials(label) {
+  return (
+    String(label || '')
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w[0].toUpperCase())
+      .join('') || '?'
+  )
+}
+
 export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTitle, onSaved }) {
   const isEdit = Boolean(task?.id)
   const isLeadPreset = Boolean(leadIdProp)
   const [chosenLeadId, setChosenLeadId] = useState('')
+  const [chosenLeadLabel, setChosenLeadLabel] = useState('')
+  const [leadSearch, setLeadSearch] = useState('')
   const effectiveLeadId = leadIdProp || chosenLeadId || task?.leadId || ''
 
   const { data: metaRes } = useGetLeadFormMetaQuery(undefined, { skip: !open })
   const assignUsers = metaRes?.data?.users || []
 
   const { data: leadsRes, isFetching: leadsFetching } = useGetLeadsQuery(
-    { page: 1, limit: 200, search: '' },
-    { skip: !open || isLeadPreset || isEdit },
+    { page: 1, limit: 20, search: leadSearch.trim() },
+    { skip: !open || isLeadPreset || isEdit || leadSearch.trim().length < 1 },
   )
   const leadsList = useMemo(() => {
     const arr = Array.isArray(leadsRes?.data) ? leadsRes.data : Array.isArray(leadsRes?.data?.items) ? leadsRes.data.items : []
@@ -220,6 +289,8 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
       setRecurrence({ freq: '', interval: 1, byweekday: [], until: '' })
       setAttachments([])
       setChosenLeadId('')
+      setChosenLeadLabel('')
+      setLeadSearch('')
     }
     setActivityTab('comments')
     setCommentDraft('')
@@ -298,6 +369,14 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
     }
   }
 
+  function applyDuePreset(days) {
+    const d = new Date()
+    d.setDate(d.getDate() + days)
+    const pad = (n) => String(n).padStart(2, '0')
+    const time = dueLocal && dueLocal.includes('T') ? dueLocal.slice(11, 16) : ''
+    setDueLocal(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${time || '17:00'}`)
+  }
+
   async function handleAddComment(isInternal) {
     const text = (isInternal ? internalDraft : commentDraft).trim()
     if (!text || !task?.id || !effectiveLeadId) return
@@ -346,46 +425,99 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
         </div>
       }
     >
-      <div className={isEdit ? 'space-y-5' : 'space-y-3'}>
+      <div className="space-y-4">
         {!isLeadPreset && !isEdit ? (
-          <div>
+          <div className="rounded-2xl border border-surface-border bg-white p-4 shadow-sm">
             <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-muted">Lead</label>
-            <select
-              className="h-11 w-full rounded-xl border border-surface-border bg-white px-3 text-sm outline-none ring-brand-500/20 focus:border-brand-400 focus:ring-2"
-              value={chosenLeadId}
-              onChange={(e) => setChosenLeadId(e.target.value)}
-              disabled={leadsFetching}
-            >
-              <option value="">{leadsFetching ? 'Loading…' : 'Select a lead'}</option>
-              {leadsList.map((lead) => (
-                <option key={lead.id} value={lead.id}>
-                  {lead.title || lead.contactName || lead.email || 'Untitled lead'}
-                </option>
-              ))}
-            </select>
+            {chosenLeadId ? (
+              <div className="flex h-11 items-center gap-2.5 rounded-xl border border-brand-200 bg-brand-50/60 px-3">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--brand-primary)] text-[10px] font-bold text-white">
+                  {leadInitials(chosenLeadLabel)}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{chosenLeadLabel}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setChosenLeadId('')
+                    setChosenLeadLabel('')
+                    setLeadSearch('')
+                  }}
+                  className="shrink-0 rounded-lg p-1 text-ink-muted hover:bg-white hover:text-ink"
+                  aria-label="Change lead"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ) : (
+              <>
+                <input
+                  autoFocus
+                  className="h-11 w-full rounded-xl border border-surface-border bg-white px-3 text-sm outline-none ring-brand-500/20 focus:border-brand-400 focus:ring-2"
+                  placeholder="Search lead by name or email…"
+                  value={leadSearch}
+                  onChange={(e) => setLeadSearch(e.target.value)}
+                />
+                {leadSearch.trim().length >= 1 && leadsList.length > 0 ? (
+                  <ul className="mt-1 max-h-44 overflow-y-auto rounded-xl border border-surface-border bg-white shadow-md">
+                    {leadsList.map((lead) => {
+                      const label = lead.title || lead.contactName || lead.email || 'Untitled lead'
+                      return (
+                        <li key={lead.id}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setChosenLeadId(lead.id)
+                              setChosenLeadLabel(label)
+                              setLeadSearch('')
+                            }}
+                            className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm text-ink hover:bg-brand-50"
+                          >
+                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[10px] font-bold text-ink-muted">
+                              {leadInitials(label)}
+                            </span>
+                            <span className="min-w-0 flex-1 truncate">{label}</span>
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                ) : leadSearch.trim().length >= 1 && !leadsFetching ? (
+                  <p className="mt-1.5 text-xs text-ink-faint">No leads found.</p>
+                ) : null}
+              </>
+            )}
           </div>
         ) : null}
 
-        <SectionCard icon={ClipboardList} title="Basics" flat={!isEdit}>
+        <SectionCard icon={ClipboardList} title="Basics">
           <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-muted">Title</label>
             <input
-              className="h-11 w-full rounded-xl border border-surface-border px-3 text-sm outline-none ring-brand-500/20 focus:border-brand-400 focus:ring-2"
-              placeholder="e.g. Send proposal follow-up"
+              autoFocus={!isEdit && isLeadPreset}
+              aria-label="Task title"
+              className="h-12 w-full rounded-xl border border-surface-border px-3 text-base font-semibold outline-none ring-brand-500/20 placeholder:font-normal placeholder:text-ink-faint focus:border-brand-400 focus:ring-2"
+              placeholder="Task title — e.g. Send proposal follow-up"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-muted">Description / Notes</label>
             <textarea
-              className="min-h-[80px] w-full rounded-xl border border-surface-border px-3 py-2.5 text-sm outline-none ring-brand-500/20 focus:border-brand-400 focus:ring-2"
-              placeholder="Context, links, or instructions…"
+              aria-label="Description"
+              className="min-h-[72px] w-full rounded-xl border border-surface-border px-3 py-2.5 text-sm outline-none ring-brand-500/20 focus:border-brand-400 focus:ring-2"
+              placeholder="Add description, context, or links…"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
           </div>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-muted">Priority</label>
+            <PriorityPicker value={priority} onChange={setPriority} />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-muted">Status</label>
+            <StatusPicker value={status} onChange={setStatus} />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-muted">Type</label>
               <select
@@ -401,52 +533,24 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
               </select>
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-muted">Priority</label>
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-muted">Assign to</label>
               <select
                 className="h-11 w-full rounded-xl border border-surface-border bg-white px-3 text-sm outline-none ring-brand-500/20 focus:border-brand-400 focus:ring-2"
-                value={priority}
-                onChange={(e) => setPriority(e.target.value)}
+                value={assignedTo}
+                onChange={(e) => setAssignedTo(e.target.value)}
               >
-                {LEAD_TASK_PRIORITY_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
+                <option value="">Unassigned</option>
+                {assignUsers.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name || u.email}
                   </option>
                 ))}
               </select>
             </div>
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-muted">Status</label>
-              <select
-                className="h-11 w-full rounded-xl border border-surface-border bg-white px-3 text-sm outline-none ring-brand-500/20 focus:border-brand-400 focus:ring-2"
-                value={status}
-                onChange={(e) => setStatus(e.target.value)}
-              >
-                {LEAD_TASK_STATUS_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-muted">Assign to</label>
-            <select
-              className="h-11 w-full rounded-xl border border-surface-border bg-white px-3 text-sm outline-none ring-brand-500/20 focus:border-brand-400 focus:ring-2"
-              value={assignedTo}
-              onChange={(e) => setAssignedTo(e.target.value)}
-            >
-              <option value="">Unassigned</option>
-              {assignUsers.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name || u.email}
-                </option>
-              ))}
-            </select>
           </div>
         </SectionCard>
 
-        <SectionCard icon={Calendar} title="Schedule" flat={!isEdit}>
+        <SectionCard icon={Calendar} title="Schedule">
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-muted">Start date</label>
@@ -467,9 +571,42 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
               />
             </div>
           </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] font-medium text-ink-muted">Due:</span>
+            {[
+              { label: 'Today', days: 0 },
+              { label: 'Tomorrow', days: 1 },
+              { label: 'Next week', days: 7 },
+            ].map((p) => (
+              <button
+                key={p.label}
+                type="button"
+                onClick={() => applyDuePreset(p.days)}
+                className="rounded-full border border-surface-border bg-white px-2.5 py-1 text-[11px] font-semibold text-ink-muted transition hover:border-brand-300 hover:text-brand-700"
+              >
+                {p.label}
+              </button>
+            ))}
+            {dueLocal ? (
+              <button
+                type="button"
+                onClick={() => setDueLocal('')}
+                className="rounded-full border border-surface-border bg-white px-2.5 py-1 text-[11px] font-semibold text-ink-faint transition hover:border-red-200 hover:text-red-600"
+              >
+                Clear
+              </button>
+            ) : null}
+          </div>
         </SectionCard>
 
-        <SectionCard icon={Bell} title="Reminders" hint="Push and email only" flat={!isEdit}>
+        <SectionCard
+          icon={Bell}
+          title="Reminders"
+          hint="Push and email only"
+          collapsible
+          defaultOpen={Boolean(task?.reminders?.length)}
+          badge={reminders.length ? String(reminders.length) : null}
+        >
           <div className="space-y-2">
             {reminders.length === 0 ? (
               <p className="rounded-xl border border-dashed border-surface-border bg-slate-50/40 px-3 py-3 text-xs text-ink-muted">
@@ -535,7 +672,13 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
           </button>
         </SectionCard>
 
-        <SectionCard icon={Repeat} title="Recurrence" flat={!isEdit}>
+        <SectionCard
+          icon={Repeat}
+          title="Recurrence"
+          collapsible
+          defaultOpen={Boolean(task?.recurrenceRule?.freq || task?.recurrenceRule)}
+          badge={recurrence.freq ? RECURRENCE_FREQ_OPTIONS.find((o) => o.value === recurrence.freq)?.label : null}
+        >
           <div className="grid gap-3 sm:grid-cols-3">
             <div>
               <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-muted">Repeat</label>
@@ -613,7 +756,14 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
           ) : null}
         </SectionCard>
 
-        <SectionCard icon={Paperclip} title="Attachments" hint="PDFs, quotations, screenshots, recordings" flat={!isEdit}>
+        <SectionCard
+          icon={Paperclip}
+          title="Attachments"
+          hint="PDFs, quotations, screenshots, recordings"
+          collapsible
+          defaultOpen={Boolean(task?.attachments?.length)}
+          badge={attachments.length ? String(attachments.length) : null}
+        >
           <div className="space-y-2">
             {attachments.length === 0 ? (
               <p className="rounded-xl border border-dashed border-surface-border bg-slate-50/40 px-3 py-3 text-xs text-ink-muted">
@@ -674,8 +824,19 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
           </button>
         </SectionCard>
 
-        <SectionCard icon={ListChecks} title="Subtasks" flat={!isEdit}>
+        <SectionCard
+          icon={ListChecks}
+          title="Subtasks"
+          collapsible
+          defaultOpen={Boolean(task?.subtasks?.length)}
+          badge={subtasks.length ? `${subtasks.filter((s) => s.done).length}/${subtasks.length}` : null}
+        >
           <div className="space-y-2">
+            {subtasks.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-surface-border bg-slate-50/40 px-3 py-3 text-xs text-ink-muted">
+                Break this task into steps. Press Enter to add the next one quickly.
+              </p>
+            ) : null}
             {subtasks.map((row, idx) => (
               <div key={row.key} className="flex items-start gap-2 rounded-xl border border-surface-border bg-white p-2">
                 <input
@@ -687,12 +848,21 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
                   }
                 />
                 <input
+                  autoFocus={!row.title && idx === subtasks.length - 1}
                   className="min-w-0 flex-1 rounded-lg border border-transparent bg-transparent px-2 py-1.5 text-sm outline-none focus:border-brand-200"
                   placeholder="Subtask title"
                   value={row.title}
                   onChange={(e) =>
                     setSubtasks((prev) => prev.map((s, i) => (i === idx ? { ...s, title: e.target.value } : s)))
                   }
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      if (idx === subtasks.length - 1 && String(row.title).trim()) {
+                        setSubtasks((prev) => [...prev, { key: crypto.randomUUID(), title: '', done: false }])
+                      }
+                    }
+                  }}
                 />
                 <button
                   type="button"
@@ -741,6 +911,7 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
         onClose={() => setPickerOpen(false)}
         existing={attachments}
         maxAttachments={10}
+        leadId={effectiveLeadId || null}
         onConfirm={(items) => setAttachments((prev) => [...prev, ...items])}
       />
     </RightDrawer>
@@ -754,18 +925,39 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
   )
 }
 
-function SectionCard({ icon: Icon, title, hint, children, flat = false }) {
-  if (flat) {
-    return <div className="space-y-3">{children}</div>
-  }
+function SectionCard({ icon: Icon, title, hint, badge, collapsible = false, defaultOpen = true, children }) {
+  const [expanded, setExpanded] = useState(collapsible ? defaultOpen : true)
+  const headerInner = (
+    <>
+      {Icon ? <Icon className="h-4 w-4 shrink-0 text-brand-600" aria-hidden /> : null}
+      <span>{title}</span>
+      {badge ? (
+        <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-semibold text-brand-700 ring-1 ring-brand-200">
+          {badge}
+        </span>
+      ) : null}
+      {hint ? <span className="hidden truncate text-[11px] font-normal text-ink-muted sm:inline">· {hint}</span> : null}
+    </>
+  )
   return (
-    <div className="rounded-2xl border border-surface-border bg-white p-4 shadow-sm">
-      <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-ink">
-        {Icon ? <Icon className="h-4 w-4 text-brand-600" aria-hidden /> : null}
-        <span>{title}</span>
-        {hint ? <span className="text-[11px] font-normal text-ink-muted">· {hint}</span> : null}
-      </div>
-      <div className="space-y-3">{children}</div>
+    <div className="rounded-2xl border border-surface-border bg-white shadow-sm">
+      {collapsible ? (
+        <button
+          type="button"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((v) => !v)}
+          className="flex w-full items-center gap-2 rounded-2xl px-4 py-3 text-left text-sm font-semibold text-ink transition hover:bg-slate-50/70"
+        >
+          {headerInner}
+          <ChevronDown
+            className={`ml-auto h-4 w-4 shrink-0 text-ink-muted transition-transform ${expanded ? 'rotate-180' : ''}`}
+            aria-hidden
+          />
+        </button>
+      ) : (
+        <div className="flex items-center gap-2 px-4 pt-4 text-sm font-semibold text-ink">{headerInner}</div>
+      )}
+      <div className={`${expanded ? '' : 'hidden'} space-y-3 px-4 pb-4 ${collapsible ? '' : 'pt-3'}`}>{children}</div>
     </div>
   )
 }

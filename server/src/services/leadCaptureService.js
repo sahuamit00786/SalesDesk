@@ -133,13 +133,14 @@ export async function createLeadFromSubmission(submission, form, workspaceId, co
 
   if (form.autoAssign) await autoAssignLead(lead)
   await recalculateScore(lead.id)
-  await emitLeadWorkflowTriggers({
+  // Fire-and-forget: workflow execution must not block the capture response
+  emitLeadWorkflowTriggers({
     eventType: 'lead_created',
-    lead,
+    lead: typeof lead.get === 'function' ? lead.get({ plain: true }) : lead,
     before: null,
     companyId,
     workspaceId,
     actorUserId: meta.actorUserId || lead.ownerUserId || null,
-  }).catch(() => {})
+  }).catch((e) => console.error('[workflow] capture trigger emit failed:', e?.message || e))
   return lead
 }

@@ -157,9 +157,20 @@ export function DealPaymentsPage() {
       {
         field: 'mode',
         headerName: 'Mode',
-        width: 128,
-        valueGetter: (_v, row) =>
-          (row.mode || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+        width: 148,
+        renderCell: ({ row }) => (
+          <span className="inline-flex items-center gap-1.5 text-sm text-ink">
+            {(row.mode || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
+            {row.invoicePaymentId ? (
+              <span
+                title="Synced from an invoice payment"
+                className="rounded-full bg-violet-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-violet-700 ring-1 ring-violet-100"
+              >
+                Invoice
+              </span>
+            ) : null}
+          </span>
+        ),
       },
       {
         field: 'reference',

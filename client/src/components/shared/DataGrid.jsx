@@ -396,15 +396,45 @@ export function DataGrid({
   }
 
   if (!hasRows && loading) {
+    // Table-shaped skeleton: header band + shimmering rows, so the layout doesn't jump on load.
+    const widths = [
+      ['w-1/4', 'w-1/6', 'w-1/5', 'w-16'],
+      ['w-1/5', 'w-1/4', 'w-1/6', 'w-20'],
+      ['w-1/3', 'w-1/6', 'w-1/6', 'w-14'],
+      ['w-1/4', 'w-1/5', 'w-1/4', 'w-16'],
+      ['w-1/5', 'w-1/6', 'w-1/5', 'w-20'],
+      ['w-1/4', 'w-1/4', 'w-1/6', 'w-14'],
+    ]
     return (
       <div
         className={cn(
-          'flex flex-col items-center justify-center rounded-2xl border border-surface-border bg-white p-8',
-          !autoHeight && 'min-h-[280px]',
+          'overflow-hidden rounded-2xl border border-surface-border bg-white shadow-sm',
           className,
         )}
+        role="status"
+        aria-label="Loading data"
       >
-        <Loader label="Loading data…" />
+        <div
+          className="h-11 animate-pulse"
+          style={{ backgroundColor: 'color-mix(in srgb, var(--brand-primary) 80%, white)' }}
+        />
+        {widths.map((row, i) => (
+          <div
+            key={i}
+            className="flex items-center gap-6 border-b border-surface-border/60 px-4 py-4 last:border-b-0"
+          >
+            {row.map((w, j) => (
+              <div
+                key={j}
+                className={cn(
+                  'h-3.5 animate-pulse rounded-full bg-slate-200/80',
+                  w,
+                  j === row.length - 1 && 'ml-auto',
+                )}
+              />
+            ))}
+          </div>
+        ))}
       </div>
     )
   }
@@ -418,7 +448,7 @@ export function DataGrid({
       )}
     >
       {showToolbar ? (
-        <div className="flex flex-wrap items-center gap-2 border-b border-brand-100 bg-brand-50/30 px-4 py-3">
+        <div className="cx-data-grid-toolbar flex flex-wrap items-center gap-2 px-4 py-3">
           {toolbarLeft ? (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1">{toolbarLeft}</div>
           ) : null}
@@ -549,7 +579,11 @@ export function DataGrid({
           </div>
         ) : (
           <table
-            className={cn('cx-table cx-data-grid min-w-[720px]', isCompact && 'cx-table--dense')}
+            className={cn(
+              'cx-table cx-data-grid min-w-[720px]',
+              isCompact && 'cx-table--dense',
+              !showToolbar && 'cx-data-grid--flush',
+            )}
             role="grid"
           >
             <thead className={cn(!autoHeight && 'cx-table-sticky-head')}>
@@ -573,7 +607,7 @@ export function DataGrid({
                           <button
                             type="button"
                             className={cn(
-                              'inline-flex items-center gap-1.5 rounded-lg text-left text-white outline-none transition-colors',
+                              'group inline-flex items-center gap-1.5 rounded-lg text-left text-white outline-none transition-colors',
                               'hover:text-brand-100 focus-visible:ring-2 focus-visible:ring-white/30',
                             )}
                             onClick={header.column.getToggleSortingHandler()}
@@ -584,7 +618,10 @@ export function DataGrid({
                             ) : sorted === 'desc' ? (
                               <ArrowDown className="h-3.5 w-3.5 shrink-0 text-white" aria-hidden />
                             ) : (
-                              <ArrowUpDown className="h-3.5 w-3.5 shrink-0 text-white/70" aria-hidden />
+                              <ArrowUpDown
+                                className="h-3.5 w-3.5 shrink-0 text-white/40 group-hover:text-white/90"
+                                aria-hidden
+                              />
                             )}
                           </button>
                         ) : (
@@ -604,7 +641,7 @@ export function DataGrid({
                   aria-rowindex={pageIndex * pageSize + idx + 2}
                   className={cn(
                     striped && idx % 2 === 1 && 'bg-slate-50/60',
-                    row.getIsSelected() && 'bg-brand-50 hover:bg-brand-100',
+                    row.getIsSelected() && 'cx-row-selected',
                     getRowClassName?.({ row: row.original, id: row.id }),
                     onRowClick && 'cursor-pointer',
                   )}

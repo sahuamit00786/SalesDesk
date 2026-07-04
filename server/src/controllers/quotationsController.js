@@ -1,11 +1,10 @@
 import Joi from 'joi'
-import { Transaction } from 'sequelize'
+import { Op, Transaction } from 'sequelize'
 import {
   sequelize,
   Quotation,
   QuotationItem,
-  QuotationTemplate,
-  InvoiceTemplate,
+  SalesDocTemplate,
   WorkspaceBillingProfile,
   Invoice,
   InvoiceItem,
@@ -14,7 +13,7 @@ import {
 } from '../models/index.js'
 import { requireWorkspaceFromRequest } from '../services/workspaceScope.js'
 import { aggregateQuotationTotals } from '../services/salesTotals.js'
-import { buildInvoiceNumber, buildQuotationNumber } from '../services/docNumberFormat.js'
+import { buildDocNumber, allocateInvoiceNumber } from '../services/docNumberFormat.js'
 import { buildCustomerSnapshotFromLead, mergeBillingIntoPaymentSnapshot } from '../services/salesCustomerSnapshot.js'
 import { recordQuotationCreatedOnLead, recordInvoiceCreatedOnLead } from '../services/leadSalesDocActivity.js'
 import { resolveLeadAndDealForSalesDoc } from '../services/salesDocLeadDealResolve.js'
@@ -111,9 +110,30 @@ export async function listQuotations(req, res, next) {
     const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 25))
     const offset = (page - 1) * limit
 
+    const QUOTATION_STATUSES = ['draft', 'sent', 'viewed', 'accepted', 'rejected', 'expired', 'converted']
+    const status = QUOTATION_STATUSES.includes(req.query.status) ? req.query.status : null
+    const dateFrom = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.dateFrom || '')) ? req.query.dateFrom : null
+    const dateTo = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.dateTo || '')) ? req.query.dateTo : null
+    const createdBy = req.query.createdBy || null
+    const minAmount = req.query.minAmount !== undefined && req.query.minAmount !== '' ? Number(req.query.minAmount) : null
+    const maxAmount = req.query.maxAmount !== undefined && req.query.maxAmount !== '' ? Number(req.query.maxAmount) : null
+
     const where = { workspaceId, companyId: req.user.companyId }
     if (leadId) where.leadId = leadId
     if (dealId) where.dealId = dealId
+    if (status) where.status = status
+    if (createdBy) where.ownerUserId = createdBy
+    if (dateFrom || dateTo) {
+      where.issueDate = {}
+      if (dateFrom) where.issueDate[Op.gte] = dateFrom
+      if (dateTo) where.issueDate[Op.lte] = dateTo
+    }
+    if (minAmount != null && !Number.isNaN(minAmount)) {
+      where.grandTotal = { ...(where.grandTotal || {}), [Op.gte]: minAmount }
+    }
+    if (maxAmount != null && !Number.isNaN(maxAmount)) {
+      where.grandTotal = { ...(where.grandTotal || {}), [Op.lte]: maxAmount }
+    }
 
     const { rows, count } = await Quotation.findAndCountAll({
       where,
@@ -123,6 +143,25 @@ export async function listQuotations(req, res, next) {
       include: listIncludes,
     })
 
+    const summaryRows = await Quotation.findAll({
+      where,
+      attributes: [
+        'status',
+        [sequelize.fn('COUNT', sequelize.col('Quotation.id')), 'cnt'],
+        [sequelize.fn('SUM', sequelize.col('grand_total')), 'total'],
+      ],
+      group: ['status'],
+      raw: true,
+    })
+    const byStatus = {}
+    let totalValue = 0
+    for (const r of summaryRows) {
+      const cnt = Number(r.cnt) || 0
+      const total = Number(r.total) || 0
+      byStatus[r.status] = { count: cnt, total }
+      totalValue += total
+    }
+
     return res.json({
       success: true,
       data: {
@@ -131,7 +170,7 @@ export async function listQuotations(req, res, next) {
         page,
         limit,
       },
-      meta: {},
+      meta: { summary: { byStatus, totalValue, totalCount: count } },
     })
   } catch (e) {
     return next(e)
@@ -174,11 +213,12 @@ export async function createQuotation(req, res, next) {
 
     let template = null
     if (value.quotationTemplateId) {
-      template = await QuotationTemplate.findOne({
+      template = await SalesDocTemplate.findOne({
         where: {
           id: value.quotationTemplateId,
           workspaceId,
           companyId: req.user.companyId,
+          docType: 'quotation',
         },
       })
       if (!template) {
@@ -234,7 +274,12 @@ export async function createQuotation(req, res, next) {
         )
       }
 
-      const qNum = buildQuotationNumber(issueDate, billing.quotationNextSeq)
+      const qNum = buildDocNumber({
+        prefix: billing.quotationPrefix || 'QT',
+        format: billing.quotationNumberFormat,
+        seq: billing.quotationNextSeq,
+        issueDate,
+      })
       await billing.increment('quotationNextSeq', { by: 1, transaction })
 
       const q = await Quotation.create(
@@ -437,25 +482,14 @@ export async function convertQuotationToInvoice(req, res, next) {
       return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: error.message } })
     }
 
-    const quotation = await Quotation.findOne({
-      where: { id: req.params.id, workspaceId, companyId: req.user.companyId },
-      include: [{ model: QuotationItem, as: 'items' }],
-    })
-    if (!quotation) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Not found' } })
-    if (quotation.convertedInvoiceId) {
-      return res.status(400).json({
-        success: false,
-        error: { code: 'ALREADY_CONVERTED', message: 'Quotation already converted' },
-      })
-    }
-
     let invTemplate = null
     if (value.invoiceTemplateId) {
-      invTemplate = await InvoiceTemplate.findOne({
+      invTemplate = await SalesDocTemplate.findOne({
         where: {
           id: value.invoiceTemplateId,
           workspaceId,
           companyId: req.user.companyId,
+          docType: 'invoice',
         },
       })
       if (!invTemplate) {
@@ -463,18 +497,49 @@ export async function convertQuotationToInvoice(req, res, next) {
       }
     }
 
-    const issueDate = value.issueDate ? value.issueDate.slice(0, 10) : quotation.issueDate
-    const layoutPreset =
-      value.layoutPreset != null
-        ? value.layoutPreset
-        : invTemplate?.layoutPreset != null
-          ? invTemplate.layoutPreset
-          : quotation.layoutPreset
-
     const billingForPay = await WorkspaceBillingProfile.findOne({ where: { workspaceId } })
     const paymentSnapshot = mergeBillingIntoPaymentSnapshot(billingForPay)
 
+    let quotation = null
+    let failure = null
     const invoice = await sequelize.transaction(async (transaction) => {
+      // Lock the quotation row so two concurrent converts cannot both create an invoice
+      quotation = await Quotation.findOne({
+        where: { id: req.params.id, workspaceId, companyId: req.user.companyId },
+        transaction,
+        lock: Transaction.LOCK.UPDATE,
+      })
+      if (!quotation) {
+        failure = { status: 404, code: 'NOT_FOUND', message: 'Not found' }
+        return null
+      }
+      if (quotation.convertedInvoiceId || quotation.status === 'converted') {
+        failure = { status: 400, code: 'ALREADY_CONVERTED', message: 'Quotation already converted' }
+        return null
+      }
+      if (quotation.status === 'rejected') {
+        failure = {
+          status: 400,
+          code: 'INVALID_STATE',
+          message: 'A rejected quotation cannot be converted to an invoice',
+        }
+        return null
+      }
+
+      const quotationItems = await QuotationItem.findAll({
+        where: { quotationId: quotation.id },
+        order: [['sortOrder', 'ASC']],
+        transaction,
+      })
+
+      const issueDate = value.issueDate ? value.issueDate.slice(0, 10) : quotation.issueDate
+      const layoutPreset =
+        value.layoutPreset != null
+          ? value.layoutPreset
+          : invTemplate?.layoutPreset != null
+            ? invTemplate.layoutPreset
+            : quotation.layoutPreset
+
       let billing = await WorkspaceBillingProfile.findOne({
         where: { workspaceId },
         transaction,
@@ -494,16 +559,15 @@ export async function convertQuotationToInvoice(req, res, next) {
         )
       }
 
-      let invoiceNumber = buildInvoiceNumber(issueDate, billing.invoiceNextSeq)
-      if (invTemplate?.autoNumbering) {
-        invoiceNumber = `${invTemplate.numberPrefix}-${invTemplate.nextNumber}`
-        await invTemplate.increment('nextNumber', { by: 1, transaction })
-      } else {
-        await billing.increment('invoiceNextSeq', { by: 1, transaction })
-      }
+      const invoiceNumber = await allocateInvoiceNumber({
+        billing,
+        template: invTemplate,
+        issueDate,
+        transaction,
+      })
 
       const totals = aggregateQuotationTotals(
-        quotation.items.map((it) => ({
+        quotationItems.map((it) => ({
           name: it.name,
           sku: it.sku,
           description: it.description,
@@ -584,6 +648,12 @@ export async function convertQuotationToInvoice(req, res, next) {
         include: [{ model: InvoiceItem, as: 'items' }],
       })
     })
+
+    if (failure) {
+      return res
+        .status(failure.status)
+        .json({ success: false, error: { code: failure.code, message: failure.message } })
+    }
 
     await recordInvoiceCreatedOnLead({
       leadId: quotation.leadId,

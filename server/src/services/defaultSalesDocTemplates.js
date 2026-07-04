@@ -1,4 +1,4 @@
-import { QuotationTemplate, InvoiceTemplate } from '../models/index.js'
+import { SalesDocTemplate } from '../models/index.js'
 
 /** Stable library codes — migration + workspace bootstrap must stay in sync. */
 export const LIB_QUOTATION_CODES = [
@@ -315,11 +315,12 @@ export async function ensureLibrarySalesDocTemplates(scope, opts = {}) {
   const { transaction } = opts
 
   for (const spec of quotationLibraryDefaults()) {
-    await QuotationTemplate.findOrCreate({
-      where: { workspaceId, companyId, code: spec.code },
+    await SalesDocTemplate.findOrCreate({
+      where: { workspaceId, companyId, docType: 'quotation', code: spec.code },
       defaults: {
         workspaceId,
         companyId,
+        docType: 'quotation',
         ...QT_STATIC,
         ...spec,
       },
@@ -328,11 +329,12 @@ export async function ensureLibrarySalesDocTemplates(scope, opts = {}) {
   }
 
   for (const spec of invoiceLibraryDefaults()) {
-    await InvoiceTemplate.findOrCreate({
-      where: { workspaceId, companyId, code: spec.code },
+    await SalesDocTemplate.findOrCreate({
+      where: { workspaceId, companyId, docType: 'invoice', code: spec.code },
       defaults: {
         workspaceId,
         companyId,
+        docType: 'invoice',
         ...INV_STATIC,
         ...spec,
       },

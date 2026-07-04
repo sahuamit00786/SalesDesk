@@ -1,5 +1,6 @@
 import { WorkspaceBillingProfile } from '../models/index.js'
 import { requireWorkspaceFromRequest } from '../services/workspaceScope.js'
+import { DOC_NUMBER_FORMATS } from '../services/docNumberFormat.js'
 import Joi from 'joi'
 
 const patchSchema = Joi.object({
@@ -29,11 +30,16 @@ const patchSchema = Joi.object({
   paymentInstructions: Joi.string().trim().allow('', null),
   signatureImageUrl: Joi.string().trim().max(512).allow('', null),
   stampImageUrl: Joi.string().trim().max(512).allow('', null),
-  quotationPrefix: Joi.string().trim().max(32).allow('', null),
+  quotationPrefix: Joi.string().trim().min(1).max(32),
   quotationNextSeq: Joi.number().integer().min(1).allow(null),
-  invoicePrefix: Joi.string().trim().max(32).allow('', null),
+  quotationNumberFormat: Joi.string().valid(...DOC_NUMBER_FORMATS),
+  invoicePrefix: Joi.string().trim().min(1).max(32),
   invoiceNextSeq: Joi.number().integer().min(1).allow(null),
+  invoiceNumberFormat: Joi.string().valid(...DOC_NUMBER_FORMATS),
 }).unknown(false)
+
+// Columns that are NOT NULL — never coerce '' to null for these
+const NON_NULLABLE_KEYS = new Set(['quotationPrefix', 'invoicePrefix', 'quotationNumberFormat', 'invoiceNumberFormat'])
 
 function serialize(p) {
   if (!p) return null
@@ -68,8 +74,10 @@ function serialize(p) {
     stampImageUrl: p.stampImageUrl,
     quotationPrefix: p.quotationPrefix,
     quotationNextSeq: p.quotationNextSeq,
+    quotationNumberFormat: p.quotationNumberFormat,
     invoicePrefix: p.invoicePrefix,
     invoiceNextSeq: p.invoiceNextSeq,
+    invoiceNumberFormat: p.invoiceNumberFormat,
     createdAt: p.createdAt,
     updatedAt: p.updatedAt,
   }
@@ -118,7 +126,10 @@ export async function patchBillingProfile(req, res, next) {
 
     const updates = { ...value }
     Object.keys(updates).forEach((k) => {
-      if (updates[k] === '') updates[k] = null
+      if (updates[k] === '') {
+        if (NON_NULLABLE_KEYS.has(k)) delete updates[k]
+        else updates[k] = null
+      }
     })
 
     await profile.update(updates)

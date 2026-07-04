@@ -9,10 +9,11 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts'
-import { Mail, MailOpen, MousePointerClick, Reply, RefreshCw } from 'lucide-react'
+import { Mail, MailOpen, MousePointerClick, Reply, RefreshCw, Printer } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
 import { Button } from '@/components/ui/Button'
 import { Select } from '@/components/ui/Select'
+import { DataGrid } from '@/components/shared/DataGrid'
 import { CHART_COLORS } from '@/features/dashboard/dummyDashboardData'
 import { useGetEmailTrackingReportQuery } from '@/features/email/emailApi'
 import { cn } from '@/utils/cn'
@@ -48,12 +49,12 @@ function pct(n, total) {
 
 function StatCard({ icon: Icon, label, value, sub }) {
   return (
-    <div className="rounded-2xl border border-surface-border bg-white p-4">
-      <div className="mb-2 flex items-center gap-2 text-ink-muted">
+    <div className="rounded-xl border border-[#F7F5FB] bg-white p-3">
+      <div className="mb-1.5 flex items-center gap-2 text-ink-muted">
         <Icon className="h-4 w-4" />
         <span className="text-xs font-semibold uppercase tracking-wide">{label}</span>
       </div>
-      <p className="text-2xl font-bold text-ink">{value}</p>
+      <p className="text-xl font-bold text-ink">{value}</p>
       {sub ? <p className="mt-0.5 text-xs text-ink-muted">{sub}</p> : null}
     </div>
   )
@@ -65,6 +66,32 @@ const SOURCE_COLOR = {
   workflow: CHART_COLORS.ink,
   'bulk/workflow': CHART_COLORS.secondary,
 }
+
+const EMAIL_COLS = [
+  { field: 'period', headerName: 'Period', renderCell: ({ value }) => <span className="font-mono text-xs">{value}</span> },
+  {
+    field: 'source',
+    headerName: 'Source',
+    renderCell: ({ value }) => (
+      <span
+        className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold"
+        style={{
+          background: `${SOURCE_COLOR[value] || '#6b7280'}18`,
+          color: SOURCE_COLOR[value] || '#6b7280',
+        }}
+      >
+        {value}
+      </span>
+    ),
+  },
+  { field: 'sent', headerName: 'Sent', renderCell: ({ value }) => value.toLocaleString() },
+  { field: 'opened', headerName: 'Opened', renderCell: ({ value }) => value.toLocaleString() },
+  { field: 'openRate', headerName: 'Open rate', renderCell: ({ row }) => <span className="text-ink-muted">{pct(row.opened, row.sent)}</span> },
+  { field: 'clicked', headerName: 'Clicked', renderCell: ({ value }) => value.toLocaleString() },
+  { field: 'clickRate', headerName: 'Click rate', renderCell: ({ row }) => <span className="text-ink-muted">{pct(row.clicked, row.sent)}</span> },
+  { field: 'replied', headerName: 'Replied', renderCell: ({ value }) => value.toLocaleString() },
+  { field: 'replyRate', headerName: 'Reply rate', renderCell: ({ row }) => <span className="text-ink-muted">{pct(row.replied, row.sent)}</span> },
+]
 
 export function EmailTrackingReportsPage({ embedded = false }) {
   const [dateFrom, setDateFrom] = useState(defaultDateFrom)
@@ -98,9 +125,9 @@ export function EmailTrackingReportsPage({ embedded = false }) {
   }, [rows])
 
   const content = (
-    <>
+    <div id="report-export-root">
       {/* Header controls */}
-      <div className="mb-5 flex flex-wrap items-end gap-3">
+      <div className="no-print mb-3 flex flex-wrap items-end gap-2.5">
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-ink-muted">From</label>
           <input
@@ -108,7 +135,7 @@ export function EmailTrackingReportsPage({ embedded = false }) {
             value={dateFrom}
             max={dateTo}
             onChange={(e) => setDateFrom(e.target.value)}
-            className="h-9 rounded-xl border border-surface-border bg-white px-3 text-sm outline-none focus:border-brand-400"
+            className="h-9 rounded-xl border border-[#F7F5FB] bg-white px-3 text-sm outline-none focus:border-brand-400"
           />
         </div>
         <div className="flex flex-col gap-1">
@@ -118,7 +145,7 @@ export function EmailTrackingReportsPage({ embedded = false }) {
             value={dateTo}
             min={dateFrom}
             onChange={(e) => setDateTo(e.target.value)}
-            className="h-9 rounded-xl border border-surface-border bg-white px-3 text-sm outline-none focus:border-brand-400"
+            className="h-9 rounded-xl border border-[#F7F5FB] bg-white px-3 text-sm outline-none focus:border-brand-400"
           />
         </div>
         <div className="flex flex-col gap-1">
@@ -126,7 +153,7 @@ export function EmailTrackingReportsPage({ embedded = false }) {
           <Select
             value={source}
             onChange={(e) => setSource(e.target.value)}
-            className="h-9 min-w-[180px]"
+            className="h-9 w-44"
           >
             {SOURCE_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
@@ -138,7 +165,7 @@ export function EmailTrackingReportsPage({ embedded = false }) {
           <Select
             value={groupBy}
             onChange={(e) => setGroupBy(e.target.value)}
-            className="h-9 min-w-[140px]"
+            className="h-9 w-36"
           >
             {GROUP_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
@@ -149,10 +176,13 @@ export function EmailTrackingReportsPage({ embedded = false }) {
           <RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
           Refresh
         </Button>
+        <Button variant="icon" className="mt-auto border border-[#F7F5FB]" onClick={() => window.print()} aria-label="Print report">
+          <Printer className="h-4 w-4" />
+        </Button>
       </div>
 
       {/* Stats strip */}
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mb-3 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
         <StatCard icon={Mail} label="Sent" value={summary.sent?.toLocaleString() ?? '—'} />
         <StatCard
           icon={MailOpen}
@@ -176,9 +206,9 @@ export function EmailTrackingReportsPage({ embedded = false }) {
 
       {/* Chart */}
       {chartData.length > 0 && groupBy !== 'none' && groupBy !== 'source' ? (
-        <div className="mb-6 rounded-2xl border border-surface-border bg-white p-4">
-          <h3 className="mb-4 text-sm font-semibold text-ink">Email activity over time</h3>
-          <ResponsiveContainer width="100%" height={260}>
+        <div className="mb-3 rounded-xl border border-[#F7F5FB] bg-white p-3">
+          <h3 className="mb-2 text-sm font-semibold text-ink">Email activity over time</h3>
+          <ResponsiveContainer width="100%" height={200}>
             <BarChart data={chartData} barGap={2}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
               <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#6b7280' }} />
@@ -197,58 +227,19 @@ export function EmailTrackingReportsPage({ embedded = false }) {
       ) : null}
 
       {/* Data table */}
-      <div className="overflow-hidden rounded-2xl border border-surface-border bg-white">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="border-b border-surface-border bg-surface-subtle/60">
-              <tr>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold text-ink-muted">Period</th>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold text-ink-muted">Source</th>
-                <th className="px-4 py-2.5 text-right text-xs font-semibold text-ink-muted">Sent</th>
-                <th className="px-4 py-2.5 text-right text-xs font-semibold text-ink-muted">Opened</th>
-                <th className="px-4 py-2.5 text-right text-xs font-semibold text-ink-muted">Open rate</th>
-                <th className="px-4 py-2.5 text-right text-xs font-semibold text-ink-muted">Clicked</th>
-                <th className="px-4 py-2.5 text-right text-xs font-semibold text-ink-muted">Click rate</th>
-                <th className="px-4 py-2.5 text-right text-xs font-semibold text-ink-muted">Replied</th>
-                <th className="px-4 py-2.5 text-right text-xs font-semibold text-ink-muted">Reply rate</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-surface-border">
-              {rows.length === 0 && !isFetching ? (
-                <tr>
-                  <td colSpan={9} className="px-4 py-10 text-center text-sm text-ink-muted">
-                    No email data for the selected range and source.
-                  </td>
-                </tr>
-              ) : null}
-              {rows.map((r, i) => (
-                <tr key={i} className="hover:bg-surface-subtle/40">
-                  <td className="px-4 py-2.5 font-mono text-xs text-ink">{r.period}</td>
-                  <td className="px-4 py-2.5">
-                    <span
-                      className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold"
-                      style={{
-                        background: `${SOURCE_COLOR[r.source] || '#6b7280'}18`,
-                        color: SOURCE_COLOR[r.source] || '#6b7280',
-                      }}
-                    >
-                      {r.source}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5 text-right text-ink">{r.sent.toLocaleString()}</td>
-                  <td className="px-4 py-2.5 text-right text-ink">{r.opened.toLocaleString()}</td>
-                  <td className="px-4 py-2.5 text-right text-ink-muted">{pct(r.opened, r.sent)}</td>
-                  <td className="px-4 py-2.5 text-right text-ink">{r.clicked.toLocaleString()}</td>
-                  <td className="px-4 py-2.5 text-right text-ink-muted">{pct(r.clicked, r.sent)}</td>
-                  <td className="px-4 py-2.5 text-right text-ink">{r.replied.toLocaleString()}</td>
-                  <td className="px-4 py-2.5 text-right text-ink-muted">{pct(r.replied, r.sent)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </>
+      <DataGrid
+        columns={EMAIL_COLS}
+        data={rows}
+        loading={isFetching}
+        showColumnToggle={false}
+        showExportCsv={false}
+        autoHeight={false}
+        maxHeightClass="max-h-[420px]"
+        className="border-[#F7F5FB]"
+        emptyTitle="No email data"
+        emptyDescription="No email data for the selected range and source."
+      />
+    </div>
   )
 
   if (embedded) return content

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { Printer } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
@@ -9,13 +9,14 @@ import { useGetBillingProfileQuery } from '@/features/sales-docs/billingProfileA
 import {
   useCreateQuotationMutation,
   useGetQuotationQuery,
-  useGetQuotationTemplateQuery,
   usePatchQuotationMutation,
 } from '@/features/sales-docs/quotationsApi'
+import { useGetSalesDocTemplateQuery } from '@/features/sales-docs/salesDocTemplatesApi'
 import { useGetLeadsQuery, useGetLeadQuery } from '@/features/leads/leadsApi'
 import { useGetDealQuery, useGetDealsQuery } from '@/features/deals/dealsApi'
 import { QUOTATION_PRESET_LABELS } from '@/features/sales-docs/presetLabels'
 import { buildCustomerSnapshotFromLead, formatAddressLines } from '@/features/sales-docs/customerSnapshot'
+import { DealBalanceCard } from '@/features/sales-docs/components/DealBalanceCard'
 import { aggregateQuotationTotals } from '@/features/sales-docs/previewTotals'
 import { suggestedQuotationNumber } from '@/features/sales-docs/suggestedDocNumber'
 import { cn } from '@/utils/cn'
@@ -31,6 +32,13 @@ function getCurrencyOptions() {
   return CURRENCY_FALLBACK
 }
 const CURRENCY_OPTIONS = getCurrencyOptions()
+
+function normalizeCurrencyCode(value) {
+  const code = String(value || '')
+    .trim()
+    .toUpperCase()
+  return /^[A-Z]{3}$/.test(code) ? code : 'USD'
+}
 
 function resolveCssColor(value, fallback = '#5B21B6') {
   if (!value || typeof value !== 'string') return fallback
@@ -96,7 +104,6 @@ function addressFromSnapshot(snap) {
 }
 
 function NewQuotationEditor({ templateId, quotationId = '', initialLeadId = '', initialDealId = '' }) {
-  const navigate = useNavigate()
   const effectiveCurrency = useEffectiveCurrency()
   const hydratedQuotationIdRef = useRef('')
   const isEditingExisting = Boolean(quotationId)
@@ -118,11 +125,12 @@ function NewQuotationEditor({ templateId, quotationId = '', initialLeadId = '', 
   const [lines, setLines] = useState([emptyLine()])
   const [documentTheme, setDocumentTheme] = useState(() => ({ accentColor: resolveCssColor('var(--brand-primary)'), headerTone: 'light' }))
   const [savedId, setSavedId] = useState(null)
+  const [status, setStatus] = useState('draft')
   const [previewNumber, setPreviewNumber] = useState('Preview')
   const [showPreviewMobile, setShowPreviewMobile] = useState(true)
 
   const { data: billRes } = useGetBillingProfileQuery()
-  const { data: tplRes, isFetching: tplLoading } = useGetQuotationTemplateQuery(templateId, { skip: !templateId })
+  const { data: tplRes, isFetching: tplLoading } = useGetSalesDocTemplateQuery(templateId, { skip: !templateId })
   const { data: quotationRes, isFetching: quotationLoading } = useGetQuotationQuery(quotationId, { skip: !quotationId })
   const tplPayload = tplRes?.data
   const tpl = tplPayload?.data ?? tplPayload
@@ -175,7 +183,10 @@ function NewQuotationEditor({ templateId, quotationId = '', initialLeadId = '', 
     const lead = leads.find((l) => l.id === oppLeadId) ||
       (deal ? { contactName: deal.fullName, company: deal.companyName, email: deal.email } : null)
     if (lead) setAddressLine(formatAddressLines(buildCustomerSnapshotFromLead(lead)))
+    if (deal.dealCurrency) setCurrency(normalizeCurrencyCode(deal.dealCurrency))
   }
+
+  const selectedDealCard = activeDealId ? dealCard : allDeals.find((d) => d.id === dealLeadId)
 
   const [createQuotation, { isLoading: creating }] = useCreateQuotationMutation()
   const [patchQuotation, { isLoading: patching }] = usePatchQuotationMutation()
@@ -212,6 +223,12 @@ function NewQuotationEditor({ templateId, quotationId = '', initialLeadId = '', 
   }, [effectiveCurrency, isEditingExisting, savedId, templateId])
 
   useEffect(() => {
+    if (isEditingExisting || savedId || templateId) return
+    if (!activeDealId || !dealCard?.dealCurrency) return
+    setCurrency(normalizeCurrencyCode(dealCard.dealCurrency))
+  }, [activeDealId, dealCard, isEditingExisting, savedId, templateId])
+
+  useEffect(() => {
     if (!quotationId || !existingQuotation) return
     if (hydratedQuotationIdRef.current === quotationId) return
     hydratedQuotationIdRef.current = quotationId
@@ -231,6 +248,7 @@ function NewQuotationEditor({ templateId, quotationId = '', initialLeadId = '', 
     setTermsSnapshot(existingQuotation.termsSnapshot || '')
     setShipping(String(existingQuotation.shipping ?? 0))
     setAdjustment(String(existingQuotation.adjustment ?? 0))
+    setStatus(existingQuotation.status || 'draft')
     setPreviewNumber(existingQuotation.quotationNumber || 'Quotation')
 
     const fetchedItems = Array.isArray(existingQuotation.items) ? existingQuotation.items : []
@@ -287,10 +305,7 @@ function NewQuotationEditor({ templateId, quotationId = '', initialLeadId = '', 
     if (addressLine.trim()) {
       return {
         ...withDeal,
-        billingAddress: {
-          ...withDeal.billingAddress,
-          street: addressLine.trim(),
-        },
+        billingAddress: { street: addressLine.trim(), city: null, state: null, postalCode: null, country: null },
       }
     }
     return withDeal
@@ -333,7 +348,9 @@ function NewQuotationEditor({ templateId, quotationId = '', initialLeadId = '', 
       : null
   }
 
-  async function saveDraft() {
+  const isConverted = status === 'converted'
+
+  async function saveQuotation() {
     const items = buildItemsPayload()
     if (!activeDealId && !clientLeadId) {
       toast.error('Select a client')
@@ -344,8 +361,7 @@ function NewQuotationEditor({ templateId, quotationId = '', initialLeadId = '', 
       return
     }
 
-    const createBody = {
-      ...(activeDealId ? { dealId: activeDealId } : dealLeadId ? { dealId: dealLeadId, leadId: clientLeadId } : { leadId: clientLeadId }),
+    const body = {
       quotationTemplateId: quotationTemplateId || null,
       issueDate: toIsoDate(issueDate),
       expiryDate: expiryDate ? toIsoDate(expiryDate) : null,
@@ -356,25 +372,7 @@ function NewQuotationEditor({ templateId, quotationId = '', initialLeadId = '', 
       layoutPreset,
       notes: notes.trim() || null,
       termsSnapshot: termsSnapshot.trim() || null,
-      status: 'draft',
-      items,
-      shipping: Number(shipping) || 0,
-      adjustment: Number(adjustment) || 0,
-      documentTheme: themePayload(),
-    }
-
-    const patchBody = {
-      quotationTemplateId: quotationTemplateId || null,
-      issueDate: toIsoDate(issueDate),
-      expiryDate: expiryDate ? toIsoDate(expiryDate) : null,
-      reference: reference.trim() || null,
-      purchaseOrderRef: purchaseOrderRef.trim() || null,
-      customerSnapshot,
-      currency,
-      layoutPreset,
-      notes: notes.trim() || null,
-      termsSnapshot: termsSnapshot.trim() || null,
-      status: 'draft',
+      status,
       items,
       shipping: Number(shipping) || 0,
       adjustment: Number(adjustment) || 0,
@@ -383,83 +381,22 @@ function NewQuotationEditor({ templateId, quotationId = '', initialLeadId = '', 
 
     try {
       if (savedId) {
-        const res = await patchQuotation({ id: savedId, ...patchBody }).unwrap()
+        const res = await patchQuotation({ id: savedId, ...body }).unwrap()
         const q = res?.data ?? res
-        toast.success(isEditingExisting ? 'Quotation updated' : 'Draft saved')
         setPreviewNumber(q.quotationNumber || previewNumber)
-      } else {
-        const res = await createQuotation(createBody).unwrap()
-        const q = res?.data ?? res
-        setSavedId(q.id)
-        setPreviewNumber(q.quotationNumber || 'Quotation')
-        toast.success('Draft saved')
-      }
-    } catch (e) {
-      toast.error(e?.data?.error?.message || 'Save failed')
-    }
-  }
-
-  async function sendQuotation() {
-    const items = buildItemsPayload()
-    if (!activeDealId && !clientLeadId) {
-      toast.error('Select a client')
-      return
-    }
-    if (!items.length) {
-      toast.error('Add at least one line item')
-      return
-    }
-
-    const tp = themePayload()
-    const ship = Number(shipping) || 0
-    const adj = Number(adjustment) || 0
-
-    try {
-      if (savedId) {
-        await patchQuotation({
-          id: savedId,
-          status: 'sent',
-          issueDate: toIsoDate(issueDate),
-          expiryDate: expiryDate ? toIsoDate(expiryDate) : null,
-          reference: reference.trim() || null,
-          purchaseOrderRef: purchaseOrderRef.trim() || null,
-          customerSnapshot,
-          currency,
-          layoutPreset,
-          notes: notes.trim() || null,
-          termsSnapshot: termsSnapshot.trim() || null,
-          items,
-          shipping: ship,
-          adjustment: adj,
-          documentTheme: tp,
-        }).unwrap()
-        toast.success('Quotation sent')
-        navigate(`/quotations/${savedId}/print`)
+        toast.success('Quotation updated')
       } else {
         const res = await createQuotation({
           ...(activeDealId ? { dealId: activeDealId } : dealLeadId ? { dealId: dealLeadId, leadId: clientLeadId } : { leadId: clientLeadId }),
-          quotationTemplateId: quotationTemplateId || null,
-          issueDate: toIsoDate(issueDate),
-          expiryDate: expiryDate ? toIsoDate(expiryDate) : null,
-          reference: reference.trim() || null,
-          purchaseOrderRef: purchaseOrderRef.trim() || null,
-          customerSnapshot,
-          currency,
-          layoutPreset,
-          notes: notes.trim() || null,
-          termsSnapshot: termsSnapshot.trim() || null,
-          status: 'sent',
-          items,
-          shipping: ship,
-          adjustment: adj,
-          documentTheme: tp,
+          ...body,
         }).unwrap()
         const q = res?.data ?? res
-        toast.success('Quotation sent')
-        navigate(`/quotations/${q.id}/print`)
+        setSavedId(q.id)
+        setPreviewNumber(q.quotationNumber || 'Quotation')
+        toast.success('Quotation saved')
       }
     } catch (e) {
-      toast.error(e?.data?.error?.message || 'Could not send quotation')
+      toast.error(e?.data?.error?.message || 'Save failed')
     }
   }
 
@@ -493,22 +430,20 @@ function NewQuotationEditor({ templateId, quotationId = '', initialLeadId = '', 
                 Print / PDF
               </Link>
             ) : null}
-            <button
-              type="button"
-              disabled={busy}
-              onClick={saveDraft}
-              className="rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-sm font-semibold text-neutral-800 shadow-sm hover:bg-neutral-50 disabled:opacity-50"
-            >
-              {creating || patching ? 'Saving…' : isEditingExisting ? 'Update draft' : 'Save as draft'}
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={sendQuotation}
-              className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
-            >
-              {isEditingExisting ? 'Update & send' : 'Send quotation'}
-            </button>
+            {isConverted ? (
+              <span className="rounded-lg bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-800">
+                Converted to invoice — locked
+              </span>
+            ) : (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={saveQuotation}
+                className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {creating || patching ? 'Saving…' : savedId ? 'Update quotation' : 'Save quotation'}
+              </button>
+            )}
           </div>
         </div>
 
@@ -544,6 +479,14 @@ function NewQuotationEditor({ templateId, quotationId = '', initialLeadId = '', 
                     })}
                   </select>
                 </label>
+
+                {selectedDealCard ? (
+                  <DealBalanceCard
+                    dealId={selectedDealCard.id}
+                    dealValue={selectedDealCard.dealValue}
+                    dealCurrency={selectedDealCard.dealCurrency}
+                  />
+                ) : null}
 
                 <label className="block text-xs font-medium text-neutral-600">
                   Bill to
@@ -605,6 +548,27 @@ function NewQuotationEditor({ templateId, quotationId = '', initialLeadId = '', 
                     </select>
                   </label>
                 </div>
+
+                <label className="block text-xs font-medium text-neutral-600">
+                  Status
+                  <select
+                    className="mt-1 w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm disabled:bg-neutral-50 disabled:text-neutral-500"
+                    value={status}
+                    disabled={isConverted}
+                    onChange={(e) => setStatus(e.target.value)}
+                  >
+                    <option value="draft">Draft</option>
+                    <option value="sent">Sent</option>
+                    <option value="viewed">Viewed</option>
+                    <option value="accepted">Accepted</option>
+                    <option value="rejected">Rejected</option>
+                    <option value="expired">Expired</option>
+                    {isConverted ? <option value="converted">Converted</option> : null}
+                  </select>
+                  <span className="mt-1 block text-[11px] font-normal text-neutral-400">
+                    Quotations are never payable — convert to an invoice to collect payment.
+                  </span>
+                </label>
 
                 <label className="block text-xs font-medium text-neutral-600">
                   Billing address

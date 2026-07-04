@@ -313,6 +313,8 @@ export function DealQuotationsPanel({
   proposalDocs = [],
   uploadingProposal = false,
   onUploadProposal,
+  hideActions = false,
+  sectioned = false,
 }) {
   const [detail, setDetail] = useState(null)
   const listArg = dealId ? { dealId, limit: 50 } : { leadId, limit: 50 }
@@ -322,59 +324,79 @@ export function DealQuotationsPanel({
   const rows = data?.data?.items ?? data?.items ?? []
   const inputId = `deal-proposal-upload-${dealId || leadId || 'x'}`
   const showFileUpload = typeof onUploadProposal === 'function'
+  const showAttachedFiles = showFileUpload || proposalDocs.length > 0
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col overflow-hidden border-b border-neutral-200">
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-neutral-200 bg-white px-5 py-3">
-        <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500">
-          Quotations {rows.length > 0 ? `(${rows.length})` : ''}
-        </p>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link
-            to={
-              dealId
-                ? `/quotations/new?dealId=${encodeURIComponent(dealId)}`
-                : `/quotations/new?leadId=${encodeURIComponent(leadId)}`
-            }
-            className="inline-flex items-center gap-1.5 rounded-md border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-900 shadow-sm hover:bg-brand-100"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            New quotation
-          </Link>
-          {showFileUpload ? (
-            <label
-              htmlFor={inputId}
-              className={cn(
-                'inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-brand-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-brand-900 shadow-sm transition hover:bg-slate-100',
-                uploadingProposal ? 'pointer-events-none opacity-50' : '',
-              )}
+    <section className={cn('flex flex-col', sectioned ? '' : 'min-h-0 flex-1 overflow-hidden border-b border-neutral-200')}>
+      <div className={cn(
+        'flex shrink-0 flex-wrap items-center gap-2',
+        sectioned ? 'mb-2' : 'justify-between border-b border-neutral-200 bg-white px-5 py-3',
+      )}>
+        {sectioned ? (
+          <>
+            <FileText size={14} className="shrink-0 text-brand-500" strokeWidth={1.75} />
+            <p className="text-xs font-semibold uppercase tracking-wider text-ink-faint">Quotations</p>
+            <span className="rounded-full bg-surface-subtle px-1.5 py-0.5 text-[10px] font-semibold text-ink-muted">{rows.length}</span>
+            <div className="ml-1 flex-1 border-t border-surface-border" />
+          </>
+        ) : (
+          <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500">
+            Quotations {rows.length > 0 ? `(${rows.length})` : ''}
+          </p>
+        )}
+        {hideActions ? null : (
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              to={
+                dealId
+                  ? `/quotations/new?dealId=${encodeURIComponent(dealId)}`
+                  : `/quotations/new?leadId=${encodeURIComponent(leadId)}`
+              }
+              className="inline-flex items-center gap-1.5 rounded-md border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-900 shadow-sm hover:bg-brand-100"
             >
-              <Upload className="h-3.5 w-3.5 shrink-0" />
-              {uploadingProposal ? 'Uploading…' : 'Upload quotation file'}
-              <input
-                id={inputId}
-                type="file"
-                className="hidden"
-                disabled={uploadingProposal}
-                onChange={(e) => {
-                  const file = e.target.files?.[0]
-                  if (file) onUploadProposal(file)
-                  e.target.value = ''
-                }}
-              />
-            </label>
-          ) : null}
-          <Link
-            to="/quotations/templates"
-            className="text-xs font-medium text-neutral-600 underline-offset-2 hover:text-neutral-900 hover:underline"
-          >
-            Templates
-          </Link>
-        </div>
+              <Plus className="h-3.5 w-3.5" />
+              New quotation
+            </Link>
+            {showFileUpload ? (
+              <label
+                htmlFor={inputId}
+                className={cn(
+                  'inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-brand-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-brand-900 shadow-sm transition hover:bg-slate-100',
+                  uploadingProposal ? 'pointer-events-none opacity-50' : '',
+                )}
+              >
+                <Upload className="h-3.5 w-3.5 shrink-0" />
+                {uploadingProposal ? 'Uploading…' : 'Upload quotation file'}
+                <input
+                  id={inputId}
+                  type="file"
+                  className="hidden"
+                  disabled={uploadingProposal}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) onUploadProposal(file)
+                    e.target.value = ''
+                  }}
+                />
+              </label>
+            ) : null}
+            <Link
+              to="/sales-docs/templates?tab=quotation"
+              className="text-xs font-medium text-neutral-600 underline-offset-2 hover:text-neutral-900 hover:underline"
+            >
+              Templates
+            </Link>
+          </div>
+        )}
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
-        <div className="flex min-h-0 flex-1 flex-col border-b border-neutral-200 bg-neutral-50 md:min-h-[160px] md:border-b-0 md:border-r">
+        <div
+          className={cn(
+            'flex min-h-0 flex-1 flex-col bg-neutral-50 md:min-h-[160px]',
+            showAttachedFiles && 'border-b border-neutral-200 md:border-b-0 md:border-r',
+          )}
+        >
           <p className="shrink-0 px-4 pt-3 text-[10px] font-semibold uppercase tracking-wider text-neutral-400 md:px-5">
             Structured quotations
           </p>
@@ -415,62 +437,62 @@ export function DealQuotationsPanel({
           </div>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col bg-neutral-50 md:min-h-[160px]">
-          <p className="shrink-0 px-4 pt-3 text-[10px] font-semibold uppercase tracking-wider text-neutral-400 md:px-5">
-            Attached files
-          </p>
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 scrollbar-subtle md:px-5">
-            {proposalDocs.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-neutral-300 bg-white p-5 text-center shadow-sm">
-                <FileText className="mx-auto h-7 w-7 text-brand-200" />
-                <p className="mt-2 text-xs font-medium text-neutral-700">No files yet</p>
-                <p className="mt-0.5 text-[11px] text-neutral-400">
-                  {showFileUpload ? 'Use Upload quotation file in the header.' : 'Attachments appear here.'}
-                </p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:items-stretch">
-                {proposalDocs.map((doc) => {
-                  const fileUrl = doc.filePath || doc.fileUrl || null
-                  return (
-                    <button
-                      key={doc.id}
-                      type="button"
-                      onClick={() => setDetail({ kind: 'file', doc })}
-                      className="group flex h-full min-h-[240px] flex-col gap-2.5 rounded-xl border border-neutral-200 bg-white p-3 text-left shadow-sm ring-brand-300/0 transition hover:border-brand-200 hover:ring-2 hover:ring-brand-200/60"
-                    >
-                      {fileUrl && isPdfDoc(doc) ? (
-                        <PdfAttachmentMini fileUrl={fileUrl} />
-                      ) : (
-                        <div
-                          className={cn(
-                            'flex items-center justify-center rounded-md border border-dashed border-neutral-200 bg-neutral-50',
-                            DEAL_CARD_PREVIEW_H_CLASS,
-                          )}
-                        >
-                          <FileText className="h-8 w-8 text-neutral-300" />
+        {showAttachedFiles ? (
+          <div className="flex min-h-0 flex-1 flex-col bg-neutral-50 md:min-h-[160px]">
+            <p className="shrink-0 px-4 pt-3 text-[10px] font-semibold uppercase tracking-wider text-neutral-400 md:px-5">
+              Attached files
+            </p>
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 scrollbar-subtle md:px-5">
+              {proposalDocs.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-neutral-300 bg-white p-5 text-center shadow-sm">
+                  <FileText className="mx-auto h-7 w-7 text-brand-200" />
+                  <p className="mt-2 text-xs font-medium text-neutral-700">No files yet</p>
+                  <p className="mt-0.5 text-[11px] text-neutral-400">Use Upload quotation file in the header.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:items-stretch">
+                  {proposalDocs.map((doc) => {
+                    const fileUrl = doc.filePath || doc.fileUrl || null
+                    return (
+                      <button
+                        key={doc.id}
+                        type="button"
+                        onClick={() => setDetail({ kind: 'file', doc })}
+                        className="group flex h-full min-h-[240px] flex-col gap-2.5 rounded-xl border border-neutral-200 bg-white p-3 text-left shadow-sm ring-brand-300/0 transition hover:border-brand-200 hover:ring-2 hover:ring-brand-200/60"
+                      >
+                        {fileUrl && isPdfDoc(doc) ? (
+                          <PdfAttachmentMini fileUrl={fileUrl} />
+                        ) : (
+                          <div
+                            className={cn(
+                              'flex items-center justify-center rounded-md border border-dashed border-neutral-200 bg-neutral-50',
+                              DEAL_CARD_PREVIEW_H_CLASS,
+                            )}
+                          >
+                            <FileText className="h-8 w-8 text-neutral-300" />
+                          </div>
+                        )}
+                        <div className="flex items-start justify-between gap-2 px-0.5">
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-brand-200 bg-slate-50 text-brand-600">
+                            <FileText className="h-3 w-3" />
+                          </span>
+                          {isPdfDoc(doc) ? (
+                            <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium text-neutral-600">PDF</span>
+                          ) : null}
                         </div>
-                      )}
-                      <div className="flex items-start justify-between gap-2 px-0.5">
-                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-brand-200 bg-slate-50 text-brand-600">
-                          <FileText className="h-3 w-3" />
-                        </span>
-                        {isPdfDoc(doc) ? (
-                          <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium text-neutral-600">PDF</span>
-                        ) : null}
-                      </div>
-                      <p className="line-clamp-2 px-0.5 text-xs font-semibold text-neutral-900">{doc.name || 'Untitled'}</p>
-                      <p className="px-0.5 text-[11px] text-neutral-500">
-                        {bytesLabel(doc.fileSize) || '—'} · {formatDocDate(doc.createdAt)}
-                      </p>
-                      <p className="mt-auto px-0.5 pb-0.5 text-[10px] text-neutral-400">Click to enlarge</p>
-                    </button>
-                  )
-                })}
-              </div>
-            )}
+                        <p className="line-clamp-2 px-0.5 text-xs font-semibold text-neutral-900">{doc.name || 'Untitled'}</p>
+                        <p className="px-0.5 text-[11px] text-neutral-500">
+                          {bytesLabel(doc.fileSize) || '—'} · {formatDocDate(doc.createdAt)}
+                        </p>
+                        <p className="mt-auto px-0.5 pb-0.5 text-[10px] text-neutral-400">Click to enlarge</p>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        ) : null}
       </div>
 
       {detail ? <DealSalesDocPreviewModal detail={detail} onClose={() => setDetail(null)} /> : null}
@@ -485,6 +507,8 @@ export function DealInvoicesPanel({
   invoiceFileDocs = [],
   uploadingInvoiceFile = false,
   onUploadInvoiceFile,
+  hideActions = false,
+  sectioned = false,
 }) {
   const [detail, setDetail] = useState(null)
   const listArg = dealId ? { dealId, limit: 50 } : { leadId, limit: 50 }
@@ -494,59 +518,79 @@ export function DealInvoicesPanel({
   const rows = data?.data?.items ?? data?.items ?? []
   const inputId = `deal-invoice-file-upload-${dealId || leadId || 'x'}`
   const showFileUpload = typeof onUploadInvoiceFile === 'function'
+  const showAttachedFiles = showFileUpload || invoiceFileDocs.length > 0
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col overflow-hidden border-b border-neutral-200">
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-neutral-200 bg-white px-5 py-3">
-        <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500">
-          Invoices {rows.length > 0 ? `(${rows.length})` : ''}
-        </p>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link
-            to={
-              dealId
-                ? `/invoices/new?dealId=${encodeURIComponent(dealId)}`
-                : `/invoices/new?leadId=${encodeURIComponent(leadId)}`
-            }
-            className="inline-flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-900 shadow-sm hover:bg-emerald-100"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            New invoice
-          </Link>
-          {showFileUpload ? (
-            <label
-              htmlFor={inputId}
-              className={cn(
-                'inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-brand-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-brand-900 shadow-sm transition hover:bg-slate-100',
-                uploadingInvoiceFile ? 'pointer-events-none opacity-50' : '',
-              )}
+    <section className={cn('flex flex-col', sectioned ? '' : 'min-h-0 flex-1 overflow-hidden border-b border-neutral-200')}>
+      <div className={cn(
+        'flex shrink-0 flex-wrap items-center gap-2',
+        sectioned ? 'mb-2' : 'justify-between border-b border-neutral-200 bg-white px-5 py-3',
+      )}>
+        {sectioned ? (
+          <>
+            <Receipt size={14} className="shrink-0 text-emerald-500" strokeWidth={1.75} />
+            <p className="text-xs font-semibold uppercase tracking-wider text-ink-faint">Invoices</p>
+            <span className="rounded-full bg-surface-subtle px-1.5 py-0.5 text-[10px] font-semibold text-ink-muted">{rows.length}</span>
+            <div className="ml-1 flex-1 border-t border-surface-border" />
+          </>
+        ) : (
+          <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500">
+            Invoices {rows.length > 0 ? `(${rows.length})` : ''}
+          </p>
+        )}
+        {hideActions ? null : (
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              to={
+                dealId
+                  ? `/invoices/new?dealId=${encodeURIComponent(dealId)}`
+                  : `/invoices/new?leadId=${encodeURIComponent(leadId)}`
+              }
+              className="inline-flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-900 shadow-sm hover:bg-emerald-100"
             >
-              <Upload className="h-3.5 w-3.5 shrink-0" />
-              {uploadingInvoiceFile ? 'Uploading…' : 'Upload invoice file'}
-              <input
-                id={inputId}
-                type="file"
-                className="hidden"
-                disabled={uploadingInvoiceFile}
-                onChange={(e) => {
-                  const file = e.target.files?.[0]
-                  if (file) onUploadInvoiceFile(file)
-                  e.target.value = ''
-                }}
-              />
-            </label>
-          ) : null}
-          <Link
-            to="/invoices/templates"
-            className="text-xs font-medium text-neutral-600 underline-offset-2 hover:text-neutral-900 hover:underline"
-          >
-            Templates
-          </Link>
-        </div>
+              <Plus className="h-3.5 w-3.5" />
+              New invoice
+            </Link>
+            {showFileUpload ? (
+              <label
+                htmlFor={inputId}
+                className={cn(
+                  'inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-brand-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-brand-900 shadow-sm transition hover:bg-slate-100',
+                  uploadingInvoiceFile ? 'pointer-events-none opacity-50' : '',
+                )}
+              >
+                <Upload className="h-3.5 w-3.5 shrink-0" />
+                {uploadingInvoiceFile ? 'Uploading…' : 'Upload invoice file'}
+                <input
+                  id={inputId}
+                  type="file"
+                  className="hidden"
+                  disabled={uploadingInvoiceFile}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) onUploadInvoiceFile(file)
+                    e.target.value = ''
+                  }}
+                />
+              </label>
+            ) : null}
+            <Link
+              to="/sales-docs/templates?tab=invoice"
+              className="text-xs font-medium text-neutral-600 underline-offset-2 hover:text-neutral-900 hover:underline"
+            >
+              Templates
+            </Link>
+          </div>
+        )}
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
-        <div className="flex min-h-0 flex-1 flex-col border-b border-neutral-200 bg-neutral-50 md:min-h-[160px] md:border-b-0 md:border-r">
+        <div
+          className={cn(
+            'flex min-h-0 flex-1 flex-col bg-neutral-50 md:min-h-[160px]',
+            showAttachedFiles && 'border-b border-neutral-200 md:border-b-0 md:border-r',
+          )}
+        >
           <p className="shrink-0 px-4 pt-3 text-[10px] font-semibold uppercase tracking-wider text-neutral-400 md:px-5">
             Structured invoices
           </p>
@@ -590,62 +634,62 @@ export function DealInvoicesPanel({
           </div>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col bg-neutral-50 md:min-h-[160px]">
-          <p className="shrink-0 px-4 pt-3 text-[10px] font-semibold uppercase tracking-wider text-neutral-400 md:px-5">
-            Attached files
-          </p>
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 scrollbar-subtle md:px-5">
-            {invoiceFileDocs.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-neutral-300 bg-white p-5 text-center shadow-sm">
-                <FileText className="mx-auto h-7 w-7 text-brand-200" />
-                <p className="mt-2 text-xs font-medium text-neutral-700">No files yet</p>
-                <p className="mt-0.5 text-[11px] text-neutral-400">
-                  {showFileUpload ? 'Use Upload invoice file in the header.' : 'Attachments appear here.'}
-                </p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:items-stretch">
-                {invoiceFileDocs.map((doc) => {
-                  const fileUrl = doc.filePath || doc.fileUrl || null
-                  return (
-                    <button
-                      key={doc.id}
-                      type="button"
-                      onClick={() => setDetail({ kind: 'file', doc })}
-                      className="group flex h-full min-h-[240px] flex-col gap-2.5 rounded-xl border border-neutral-200 bg-white p-3 text-left shadow-sm ring-brand-300/0 transition hover:border-brand-200 hover:ring-2 hover:ring-brand-200/60"
-                    >
-                      {fileUrl && isPdfDoc(doc) ? (
-                        <PdfAttachmentMini fileUrl={fileUrl} />
-                      ) : (
-                        <div
-                          className={cn(
-                            'flex items-center justify-center rounded-md border border-dashed border-neutral-200 bg-neutral-50',
-                            DEAL_CARD_PREVIEW_H_CLASS,
-                          )}
-                        >
-                          <FileText className="h-8 w-8 text-neutral-300" />
+        {showAttachedFiles ? (
+          <div className="flex min-h-0 flex-1 flex-col bg-neutral-50 md:min-h-[160px]">
+            <p className="shrink-0 px-4 pt-3 text-[10px] font-semibold uppercase tracking-wider text-neutral-400 md:px-5">
+              Attached files
+            </p>
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 scrollbar-subtle md:px-5">
+              {invoiceFileDocs.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-neutral-300 bg-white p-5 text-center shadow-sm">
+                  <FileText className="mx-auto h-7 w-7 text-brand-200" />
+                  <p className="mt-2 text-xs font-medium text-neutral-700">No files yet</p>
+                  <p className="mt-0.5 text-[11px] text-neutral-400">Use Upload invoice file in the header.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:items-stretch">
+                  {invoiceFileDocs.map((doc) => {
+                    const fileUrl = doc.filePath || doc.fileUrl || null
+                    return (
+                      <button
+                        key={doc.id}
+                        type="button"
+                        onClick={() => setDetail({ kind: 'file', doc })}
+                        className="group flex h-full min-h-[240px] flex-col gap-2.5 rounded-xl border border-neutral-200 bg-white p-3 text-left shadow-sm ring-brand-300/0 transition hover:border-brand-200 hover:ring-2 hover:ring-brand-200/60"
+                      >
+                        {fileUrl && isPdfDoc(doc) ? (
+                          <PdfAttachmentMini fileUrl={fileUrl} />
+                        ) : (
+                          <div
+                            className={cn(
+                              'flex items-center justify-center rounded-md border border-dashed border-neutral-200 bg-neutral-50',
+                              DEAL_CARD_PREVIEW_H_CLASS,
+                            )}
+                          >
+                            <FileText className="h-8 w-8 text-neutral-300" />
+                          </div>
+                        )}
+                        <div className="flex items-start justify-between gap-2 px-0.5">
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-brand-200 bg-slate-50 text-brand-600">
+                            <FileText className="h-3 w-3" />
+                          </span>
+                          {isPdfDoc(doc) ? (
+                            <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium text-neutral-600">PDF</span>
+                          ) : null}
                         </div>
-                      )}
-                      <div className="flex items-start justify-between gap-2 px-0.5">
-                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-brand-200 bg-slate-50 text-brand-600">
-                          <FileText className="h-3 w-3" />
-                        </span>
-                        {isPdfDoc(doc) ? (
-                          <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium text-neutral-600">PDF</span>
-                        ) : null}
-                      </div>
-                      <p className="line-clamp-2 px-0.5 text-xs font-semibold text-neutral-900">{doc.name || 'Untitled'}</p>
-                      <p className="px-0.5 text-[11px] text-neutral-500">
-                        {bytesLabel(doc.fileSize) || '—'} · {formatDocDate(doc.createdAt)}
-                      </p>
-                      <p className="mt-auto px-0.5 pb-0.5 text-[10px] text-neutral-400">Click to enlarge</p>
-                    </button>
-                  )
-                })}
-              </div>
-            )}
+                        <p className="line-clamp-2 px-0.5 text-xs font-semibold text-neutral-900">{doc.name || 'Untitled'}</p>
+                        <p className="px-0.5 text-[11px] text-neutral-500">
+                          {bytesLabel(doc.fileSize) || '—'} · {formatDocDate(doc.createdAt)}
+                        </p>
+                        <p className="mt-auto px-0.5 pb-0.5 text-[10px] text-neutral-400">Click to enlarge</p>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        ) : null}
       </div>
 
       {detail ? <DealSalesDocPreviewModal detail={detail} onClose={() => setDetail(null)} /> : null}

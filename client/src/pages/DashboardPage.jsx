@@ -4,8 +4,6 @@ import { useSelector } from 'react-redux'
 import { Phone, FileText, Mail, Video, CheckSquare2, CalendarDays, TrendingUp, ArrowRight } from 'lucide-react'
 import { useGetCalendarEventsQuery } from '@/features/calendar/calendarApi'
 import {
-  Area,
-  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
@@ -488,42 +486,6 @@ export function DashboardPage() {
                     <Bar dataKey="value" name="Value ($)" fill={CHART_COLORS.primaryDark} radius={[6, 6, 0, 0]} />
                     <Bar dataKey="count" name="Count" fill={CHART_COLORS.secondary} radius={[6, 6, 0, 0]} />
                   </BarChart>
-                </ResponsiveContainer>
-              )}
-            </DashboardChartCard>
-
-            {/* Row 3: Pipeline created vs closed won */}
-            <DashboardChartCard title="Pipeline created vs closed won" subtitle="Monthly count of new opportunities vs won deals">
-              {chartsLoading ? <ChartSkeleton height={280} /> : (
-                <ResponsiveContainer width="100%" height={280}>
-                  <AreaChart
-                    data={charts.pipelineTrend || []}
-                    margin={{ top: 8, right: 16, left: 4, bottom: 8 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke={axisStroke} />
-                    <XAxis dataKey="month" tick={tickStyle} />
-                    <YAxis tick={tickStyle} allowDecimals={false} />
-                    <Tooltip contentStyle={tooltipStyle} />
-                    <Legend wrapperStyle={{ fontSize: '12px' }} />
-                    <Area
-                      type="monotone"
-                      dataKey="created"
-                      name="Pipeline created"
-                      stroke={CHART_COLORS.primary}
-                      fill={CHART_COLORS.primary}
-                      fillOpacity={0.18}
-                      strokeWidth={2}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="won"
-                      name="Closed won"
-                      stroke={CHART_COLORS.success}
-                      fill={CHART_COLORS.success}
-                      fillOpacity={0.15}
-                      strokeWidth={2}
-                    />
-                  </AreaChart>
                 </ResponsiveContainer>
               )}
             </DashboardChartCard>

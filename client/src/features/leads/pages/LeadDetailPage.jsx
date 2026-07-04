@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useDispatch } from 'react-redux'
-import { useLocation, useNavigate, useParams, Link } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import DOMPurify from 'dompurify'
 import toast from 'react-hot-toast'
 import {
@@ -28,6 +28,7 @@ import {
   Search,
   Sparkles,
   Tag,
+  Trash2,
   User,
   UserCircle2,
   X,
@@ -55,7 +56,6 @@ import { LeadSourceTag } from '@/features/leads/components/LeadSourceTag'
 import { LeadTagsInput } from '@/features/leads/components/LeadTagsInput'
 import { CustomFieldsDisplay } from '@/features/leads/components/CustomFieldsDisplay'
 import { mapCustomFieldValuesFromLead } from '@/features/leads/customFieldTypes'
-import { LeadDocumentsWorkspace } from '@/features/documents/components/LeadDocumentsWorkspace'
 import { getFileUrl } from '@/features/documents/documentUtils'
 import { useUploadDocumentMutation } from '@/features/documents/documentsApi'
 import {
@@ -87,8 +87,11 @@ import { formatStageLabel as formatPipelineStageLabel } from '@/features/opportu
 import { useCreateOpportunityMutation, usePatchOpportunityStatusMutation } from '@/features/opportunities/opportunitiesApi'
 import { AddDealDrawer } from '@/features/deals/components/AddDealDrawer'
 import { DealDetailPanel } from '@/features/deals/components/DealDetailPanel'
+import { DealQuotationsPanel, DealInvoicesPanel } from '@/features/deals/components/DealSalesDocsTabs'
+import { LeadPaymentsTab } from '@/features/leads/components/LeadPaymentsTab'
 import { formatDealMoney } from '@/features/deals/dealCurrencies'
-import { useGetDealsQuery } from '@/features/deals/dealsApi'
+import { useGetDealsQuery, useDeleteDealMutation } from '@/features/deals/dealsApi'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { parsePhoneNumber } from 'libphonenumber-js/min'
 import { digitsOnlyE164, inferE164FromStored, mergePartsToE164 } from '@/utils/phoneNumbers'
 
@@ -379,18 +382,20 @@ function parseFollowUpTime(activity, headline, detailRaw) {
 
 function LeadInfoItem({ Icon, label, value, href }) {
   return (
-    <div className="space-y-1">
-      <p className="flex items-center gap-1.5 text-[11px] font-medium text-ink-muted">
+    <div className="flex items-start gap-2.5 py-2.5">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-surface-subtle text-ink-muted">
         <Icon className="h-3.5 w-3.5" aria-hidden />
-        {label}
-      </p>
-      {href && value !== '-' ? (
-        <a href={href} className="block break-all text-sm font-medium text-ink hover:text-brand-700">
-          {value}
-        </a>
-      ) : (
-        <p className="break-words text-sm font-medium text-ink">{value}</p>
-      )}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-muted">{label}</p>
+        {href && value !== '-' ? (
+          <a href={href} className="mt-0.5 block break-all text-sm font-medium text-ink hover:text-brand-700">
+            {value}
+          </a>
+        ) : (
+          <p className="mt-0.5 break-words text-sm font-medium text-ink">{value}</p>
+        )}
+      </div>
     </div>
   )
 }
@@ -498,34 +503,6 @@ function dealCardCreatedLabel(value) {
   return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-/** Small ring for “health” / score (uses opportunity leadScore on deal card). */
-function DealHealthRing({ score }) {
-  const pct = Math.min(100, Math.max(0, Number(score) || 0))
-  const size = 20
-  const stroke = 2.5
-  const r = (size - stroke) / 2
-  const cx = size / 2
-  const cy = size / 2
-  const c = 2 * Math.PI * r
-  const offset = c - (pct / 100) * c
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0 -rotate-90" aria-hidden>
-      <circle cx={cx} cy={cy} r={r} fill="none" className="stroke-slate-200" strokeWidth={stroke} />
-      <circle
-        cx={cx}
-        cy={cy}
-        r={r}
-        fill="none"
-        className="stroke-emerald-500"
-        strokeWidth={stroke}
-        strokeDasharray={c}
-        strokeDashoffset={offset}
-        strokeLinecap="round"
-      />
-    </svg>
-  )
-}
-
 export function LeadDetailPage() {
   const { id } = useParams()
   const dispatch = useDispatch()
@@ -549,6 +526,10 @@ export function LeadDetailPage() {
   const [pipelineSaving, setPipelineSaving] = useState(false)
   const [addDealDrawerOpen, setAddDealDrawerOpen] = useState(false)
   const [dealPanelOpp, setDealPanelOpp] = useState(null)
+  const [editingDeal, setEditingDeal] = useState(null)
+  const [dealMenuOpenId, setDealMenuOpenId] = useState(null)
+  const [deleteDealConfirm, setDeleteDealConfirm] = useState(null)
+  const [deleteDeal, { isLoading: deletingDeal }] = useDeleteDealMutation()
   const [createMeetingModalOpen, setCreateMeetingModalOpen] = useState(false)
   const [editingMeeting, setEditingMeeting] = useState(null)
   const [callLogModalOpen, setCallLogModalOpen] = useState(false)
@@ -640,6 +621,7 @@ export function LeadDetailPage() {
       { id: 'notes', label: 'Notes' },
       { id: 'meetings', label: 'Meetings' },
       { id: 'documents', label: 'Documents' },
+      { id: 'payments', label: 'Payments' },
     ]
     if (lead?.isOpportunity) {
       return [...base, { id: 'deal', label: 'Deal' }]
@@ -968,13 +950,17 @@ export function LeadDetailPage() {
         <aside className="space-y-3">
           <section className="overflow-hidden rounded-2xl border border-surface-border bg-white">
             <div className="p-3.5">
-           
-              <div className="mt-3.5 flex flex-col items-center text-center">
+              <div className="flex flex-col items-center text-center">
                 <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-100 text-2xl font-semibold text-brand-700">
                   {avatarLetter}
                 </div>
-                <div className="mt-2 flex items-center justify-center gap-2">
-                  <p className="text-2xl font-semibold text-ink">{fullName}</p>
+                <div className="mt-2 flex w-full min-w-0 items-center justify-center gap-2">
+                  <p
+                    className="min-w-0 max-w-full truncate text-xl font-semibold text-ink"
+                    title={fullName}
+                  >
+                    {fullName}
+                  </p>
                   <button
                     type="button"
                     onClick={() => setEditLeadOpen(true)}
@@ -1003,15 +989,15 @@ export function LeadDetailPage() {
                 </div>
               ) : null}
 
-              <div className="mt-3 space-y-1.5">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-left text-xs font-medium text-ink-muted">Lead status (pipeline)</p>
-                  <span className="rounded-full border border-surface-border bg-surface-subtle px-2 py-0.5 text-[11px] font-medium text-ink">
+              <div className="mt-3 rounded-xl border border-surface-border bg-surface-subtle/60 p-2.5">
+                <div className="flex items-center justify-between gap-2 px-0.5">
+                  <p className="text-left text-[11px] font-semibold uppercase tracking-wide text-ink-muted">Lead status (pipeline)</p>
+                  <span className="rounded-full border border-surface-border bg-white px-2 py-0.5 text-[11px] font-medium text-ink">
                     {lead.oppStatus?.name || 'Not set'}
                   </span>
                 </div>
                 <Select
-                  className="h-10 rounded-xl text-sm"
+                  className="mt-2 h-10 rounded-xl bg-white text-sm"
                   value={lead.opportunityStatus || ''}
                   disabled={pipelineSaving}
                   onChange={async (e) => {
@@ -1046,19 +1032,19 @@ export function LeadDetailPage() {
                 <button
                   type="button"
                   onClick={() => setProfileInfoTab('lead')}
-                  className={`px-4 py-3 ${profileInfoTab === 'lead' ? 'border-b-2 border-ink text-ink' : 'text-ink-muted'}`}
+                  className={`px-4 py-2.5 transition-colors ${profileInfoTab === 'lead' ? 'border-b-2 border-ink text-ink' : 'text-ink-muted hover:text-ink'}`}
                 >
                   Leads info
                 </button>
                 <button
                   type="button"
                   onClick={() => setProfileInfoTab('address')}
-                  className={`px-4 py-3 ${profileInfoTab === 'address' ? 'border-b-2 border-ink text-ink' : 'text-ink-muted'}`}
+                  className={`px-4 py-2.5 transition-colors ${profileInfoTab === 'address' ? 'border-b-2 border-ink text-ink' : 'text-ink-muted hover:text-ink'}`}
                 >
                   Address info
                 </button>
               </div>
-              <div className="space-y-3 p-4 text-xs">
+              <div className="divide-y divide-surface-border px-4 text-xs">
                 {profileInfoTab === 'lead' ? (
                   <>
                     <LeadInfoItem Icon={Mail} label="Email" value={lead.email || '-'} href={lead.email ? `mailto:${lead.email}` : undefined} />
@@ -1072,16 +1058,23 @@ export function LeadDetailPage() {
                     <LeadInfoItem Icon={User} label="Lead owner" value={leadOwnerName} />
                     <LeadInfoItem Icon={UserCircle2} label="Job title" value={lead.designation || '-'} />
                     <LeadInfoItem Icon={BadgeIndianRupee} label="Annual revenue" value={formattedValue} />
-                    <div className="space-y-1">
-                      <p className="text-[11px] font-medium text-ink-muted">Lead source</p>
-                      <div><LeadSourceTag source={lead.source} /></div>
+                    <div className="flex items-start gap-2.5 py-2.5">
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-surface-subtle text-ink-muted">
+                        <Tag className="h-3.5 w-3.5" aria-hidden />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Lead source</p>
+                        <div className="mt-1"><LeadSourceTag source={lead.source} /></div>
+                      </div>
                     </div>
                     <LeadInfoItem Icon={CheckSquare} label="Open tasks" value={String(summary.openTasks ?? 0)} />
                     <LeadInfoItem Icon={CheckSquare} label="Completed tasks" value={String(summary.completedTasks ?? 0)} />
-                    <div className="pt-1">
+                    <div className="py-2.5">
                       <LeadScorePill score={lead.score || 0} showBar />
                     </div>
-                    <CustomFieldsDisplay fields={customFieldDefs} values={customFieldValues} />
+                    <div className="py-2.5">
+                      <CustomFieldsDisplay fields={customFieldDefs} values={customFieldValues} />
+                    </div>
                   </>
                 ) : (
                   <>
@@ -1190,7 +1183,7 @@ export function LeadDetailPage() {
                     />
                   </div>
                 </section>
-                <section className="overflow-hidden rounded-xl border border-surface-border bg-white">
+                <section className="overflow-hidden rounded-xl border border-surface-border bg-white lg:h-[660px]">
                   <GmailThreadView
                     thread={activeThread}
                     onBack={() => setSelectedThreadId(null)}
@@ -1336,6 +1329,17 @@ export function LeadDetailPage() {
                             Mark complete
                           </button>
                         ) : null}
+                        <button
+                          type="button"
+                          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                          onClick={() => {
+                            setTaskDrawerTaskId(task.id)
+                            setTaskDrawerOpen(true)
+                          }}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                          Edit
+                        </button>
                         <button
                           type="button"
                           className="h-8 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
@@ -1781,18 +1785,13 @@ export function LeadDetailPage() {
             <div className="mt-4 space-y-3">
               <LeadTabSectionHeader
                 title="Documents"
-                description="Upload, preview, and edit workspace files linked to this record."
-                action={
-                  <Link
-                    to={`/documents?leadId=${encodeURIComponent(id)}`}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-surface-border bg-white px-3 text-sm font-semibold text-brand-700 shadow-sm hover:bg-slate-50"
-                  >
-                    Open in Documents
-                  </Link>
-                }
+                description="Quotations and invoices linked to this record."
               />
-              <LeadDocumentsWorkspace leadId={id} showUpload />
+              <DealQuotationsPanel leadId={id} hideActions sectioned />
+              <DealInvoicesPanel leadId={id} hideActions sectioned />
             </div>
+          ) : activeTab === 'payments' ? (
+            <LeadPaymentsTab leadId={id} />
           ) : activeTab === 'deal' ? (
             <div className="mt-4 space-y-4">
               <LeadTabSectionHeader
@@ -1810,8 +1809,7 @@ export function LeadDetailPage() {
                 }
               />
               {childDealsForOpp.length ? (
-                <div className="w-full max-w-full md:max-w-[32.5%]">
-                  <ul className="space-y-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   {childDealsForOpp.map((row) => {
                     const title = (row.dealName || row.fullName || 'Deal').trim()
                     const stageLabel = formatPipelineStageLabel(row.currentStage) || '—'
@@ -1821,81 +1819,160 @@ export function LeadDetailPage() {
                     const healthPct = Math.min(100, Math.max(0, Number(row.leadScore) || 0))
                     const ownerName = row.owner?.name?.trim() || row.owner?.email?.trim() || 'Unassigned'
                     const ownerInitials = dealCardInitials(ownerName)
+                    const healthTone =
+                      healthPct >= 70
+                        ? 'from-emerald-400 to-emerald-600'
+                        : healthPct >= 40
+                          ? 'from-amber-400 to-amber-600'
+                          : 'from-red-400 to-red-600'
+                    const stageKey = String(row.currentStage || '').toLowerCase()
+                    const stageTone = stageKey.includes('won')
+                      ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
+                      : stageKey.includes('lost')
+                        ? 'bg-red-50 text-red-700 ring-red-200'
+                        : 'bg-amber-50 text-amber-700 ring-amber-200'
+                    const stageDotTone = stageKey.includes('won')
+                      ? 'fill-emerald-500 text-emerald-500'
+                      : stageKey.includes('lost')
+                        ? 'fill-red-500 text-red-500'
+                        : 'fill-amber-500 text-amber-500'
+                    const ValueIcon = String(row.dealCurrency || '').toUpperCase() === 'INR' ? BadgeIndianRupee : BadgeDollarSign
                     return (
-                      <li key={row.id}>
-                        <div
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => setDealPanelOpp(row)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault()
-                              setDealPanelOpp(row)
-                            }
-                          }}
-                          className="group block w-full cursor-pointer overflow-hidden rounded-2xl border border-surface-border bg-white text-left shadow-sm ring-1 ring-black/[0.03] transition hover:border-slate-300 hover:shadow-md"
-                          aria-label={`Open deal: ${title}`}
-                        >
-                          <div className="border-b border-surface-border px-5 pb-3 pt-4">
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="flex min-w-0 flex-1 items-center gap-3">
-                                <div
-                                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-600 to-brand-700 text-[13px] font-bold text-white shadow-md ring-2 ring-white"
-                                  aria-hidden
-                                >
-                                  {dealCardInitials(title)}
-                                </div>
-                                <p className="truncate text-lg font-bold leading-tight tracking-tight text-ink">{title}</p>
-                              </div>
-                              <MoreHorizontal className="h-5 w-5 shrink-0 text-ink-muted opacity-70 transition group-hover:opacity-100" aria-hidden />
+                      <div
+                        key={row.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setDealPanelOpp(row)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            setDealPanelOpp(row)
+                          }
+                        }}
+                        className="group flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-surface-border bg-white text-left shadow-sm ring-1 ring-black/[0.03] transition hover:border-brand-300 hover:shadow-md"
+                        aria-label={`Open deal: ${title}`}
+                      >
+                        <div className="flex items-start justify-between gap-2 px-4 pb-2.5 pt-3.5">
+                          <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                            <div
+                              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-600 to-brand-700 text-[11px] font-bold text-white ring-2 ring-white"
+                              aria-hidden
+                            >
+                              {dealCardInitials(title)}
                             </div>
-                          </div>
-
-                          <div className="space-y-3 px-5 py-4">
-                            <div className="flex items-center justify-between gap-4 text-sm">
-                              <span className="text-ink-muted">Stage</span>
-                              <span className="flex max-w-[58%] items-center gap-2 font-semibold text-amber-600">
-                                <Flag className="h-4 w-4 shrink-0 fill-amber-500 text-amber-500" strokeWidth={1.75} aria-hidden />
-                                <span className="truncate text-right">{stageLabel}</span>
-                              </span>
-                            </div>
-                            <div className="flex items-center justify-between gap-4 text-sm">
-                              <span className="text-ink-muted">Created</span>
-                              <span className="font-medium text-ink">{createdLine}</span>
-                            </div>
-                            <div className="flex items-center justify-between gap-4 text-sm">
-                              <span className="text-ink-muted">Value</span>
-                              <span className="text-base font-bold tabular-nums text-ink">{valueLine}</span>
-                            </div>
-                            <div className="flex items-center justify-between gap-4 text-sm">
-                              <span className="text-ink-muted">Status</span>
-                              <span className="flex items-center gap-2 font-semibold text-ink">
-                                <DealHealthRing score={healthPct} />
-                                <span className="tabular-nums">{healthPct}%</span>
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center justify-between border-t border-surface-border bg-slate-50/70 px-5 py-3.5">
-                            <div className="flex min-w-0 items-center gap-2.5">
-                              <div
-                                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[11px] font-bold text-slate-700 ring-2 ring-white"
-                                aria-hidden
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-bold leading-tight tracking-tight text-ink">{title}</p>
+                              <span
+                                className={`mt-1 inline-flex max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ${stageTone}`}
                               >
-                                {ownerInitials}
-                              </div>
-                              <span className="truncate text-sm font-bold text-ink">{ownerName}</span>
+                                <Flag className={`h-2.5 w-2.5 shrink-0 ${stageDotTone}`} strokeWidth={1.75} aria-hidden />
+                                <span className="truncate">{stageLabel}</span>
+                              </span>
                             </div>
-                            <span className="flex shrink-0 items-center gap-1 text-sm font-medium text-ink-muted transition group-hover:text-brand-600">
-                              See details
-                              <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" aria-hidden />
-                            </span>
+                          </div>
+                          <div className="relative shrink-0">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setDealMenuOpenId((cur) => (cur === row.id ? null : row.id))
+                              }}
+                              className="rounded-lg p-1 text-ink-muted opacity-60 transition hover:bg-slate-100 hover:opacity-100 group-hover:opacity-100"
+                              aria-label="Deal options"
+                            >
+                              <MoreHorizontal className="h-4 w-4" aria-hidden />
+                            </button>
+                            {dealMenuOpenId === row.id ? (
+                              <>
+                                <button
+                                  type="button"
+                                  className="fixed inset-0 z-10 cursor-default"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setDealMenuOpenId(null)
+                                  }}
+                                  aria-label="Close menu"
+                                  tabIndex={-1}
+                                />
+                                <div
+                                  className="absolute right-0 top-full z-20 mt-1 w-40 overflow-hidden rounded-xl border border-surface-border bg-white shadow-lg"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setDealMenuOpenId(null)
+                                      setEditingDeal(row)
+                                      setAddDealDrawerOpen(true)
+                                    }}
+                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-ink hover:bg-slate-50"
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                    Edit
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setDealMenuOpenId(null)
+                                      setDeleteDealConfirm(row)
+                                    }}
+                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-red-600 hover:bg-red-50"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                    Delete
+                                  </button>
+                                </div>
+                              </>
+                            ) : null}
                           </div>
                         </div>
-                      </li>
+
+                        <div className="space-y-2 border-t border-surface-border px-4 py-3">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="flex items-center gap-1 font-medium text-ink-muted">
+                              <ValueIcon className="h-3.5 w-3.5 shrink-0 text-brand-600" aria-hidden />
+                              Value
+                            </span>
+                            <span className="text-sm font-bold tabular-nums text-ink">{valueLine}</span>
+                          </div>
+
+                          <div>
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="font-medium text-ink-muted">Health</span>
+                              <span className="font-semibold tabular-nums text-ink">{healthPct}%</span>
+                            </div>
+                            <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                              <div
+                                className={`h-full rounded-full bg-gradient-to-r ${healthTone}`}
+                                style={{ width: `${healthPct}%` }}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-medium text-ink-muted">Created</span>
+                            <span className="font-semibold text-ink">{createdLine}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between border-t border-surface-border bg-slate-50/70 px-4 py-2">
+                          <div className="flex min-w-0 items-center gap-1.5">
+                            <div
+                              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[9px] font-bold text-slate-700 ring-2 ring-white"
+                              aria-hidden
+                            >
+                              {ownerInitials}
+                            </div>
+                            <span className="truncate text-xs font-medium text-ink">{ownerName}</span>
+                          </div>
+                          <span className="flex shrink-0 items-center gap-0.5 text-xs font-medium text-ink-muted transition group-hover:text-brand-600">
+                            View
+                            <ChevronRight className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" aria-hidden />
+                          </span>
+                        </div>
+                      </div>
                     )
                   })}
-                  </ul>
                 </div>
               ) : (
                 <LeadTabEmptyState
@@ -2207,12 +2284,36 @@ export function LeadDetailPage() {
           ) : null}
           <AddDealDrawer
             open={addDealDrawerOpen}
-            onClose={() => setAddDealDrawerOpen(false)}
+            onClose={() => {
+              setAddDealDrawerOpen(false)
+              setEditingDeal(null)
+            }}
             users={formMetaData?.data?.users || []}
             fixedOpportunityLeadId={id}
+            editingDeal={editingDeal}
             onCreated={() => {
               refetchChildDeals()
             }}
+          />
+          <ConfirmDialog
+            open={Boolean(deleteDealConfirm)}
+            onClose={() => setDeleteDealConfirm(null)}
+            onConfirm={async () => {
+              try {
+                await deleteDeal(deleteDealConfirm.id).unwrap()
+                toast.success('Deal deleted')
+                refetchChildDeals()
+              } catch (e) {
+                toast.error(e?.data?.error?.message || 'Could not delete deal')
+              } finally {
+                setDeleteDealConfirm(null)
+              }
+            }}
+            loading={deletingDeal}
+            variant="danger"
+            title="Delete this deal?"
+            description="This cannot be undone."
+            confirmLabel="Delete"
           />
           <AddLeadModal
             open={editLeadOpen}
