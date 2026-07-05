@@ -32,6 +32,7 @@ import {
 } from '../models/index.js'
 import { getRedis } from '../config/redis.js'
 import { autoAssignLead } from '../services/assignmentRulesService.js'
+import { linkOrphanCallsToLead } from '../services/callService.js'
 import { findDuplicates, saveDuplicateRecord } from '../services/duplicateDetectionService.js'
 import { exportLeads, importLeads } from '../services/importExportService.js'
 import { recalculateScore, recalculateLeadScore } from '../services/leadScoringService.js'
@@ -1038,6 +1039,8 @@ export async function create(req, res, next) {
     })
 
     await autoAssignLead(lead, { suppressNotification: true })
+    // Attach any previously synced orphan calls that match this lead's number.
+    await linkOrphanCallsToLead(lead).catch(() => {})
     await lead.reload()
     if (lead.assignedTo && String(lead.assignedTo) !== String(req.user.id)) {
       notifyLeadAssigned({
@@ -1153,6 +1156,9 @@ export async function update(req, res, next) {
     }
     await lead.update(payload)
     await lead.reload()
+    if (before.phone !== lead.phone || before.altPhone !== lead.altPhone) {
+      await linkOrphanCallsToLead(lead).catch(() => {})
+    }
     if (hasAssignedUserIdsField && (await hasLeadAssignmentsTable())) {
       await LeadAssignment.destroy({ where: { leadId: lead.id } })
       if (value.assignedUserIds.length) {

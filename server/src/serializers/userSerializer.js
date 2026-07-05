@@ -4,7 +4,13 @@ const DASHBOARD_ALLOWED_MENU = {
   route: '/',
   label: 'Dashboard',
   parentId: null,
+  canView: true,
+  canCreate: true,
+  canUpdate: true,
+  canDelete: true,
 }
+
+const ADMIN_MENU_PERMS = { canView: true, canCreate: true, canUpdate: true, canDelete: true }
 
 function withDashboardMenuAlways(allowedMenus) {
   const base = Array.isArray(allowedMenus) ? [...allowedMenus] : []
@@ -20,14 +26,26 @@ export function serializeUser(user) {
   const needsOnboarding = Boolean(
     user.isCompanyAdmin && user.companyId && (!c || !c.onboardingCompletedAt),
   )
-  let allowedMenus = Array.isArray(companyRole?.menuLinks)
-    ? companyRole.menuLinks
-        .map((l) => l.menu)
-        .filter(Boolean)
-        .map((m) => ({ key: m.key, route: m.route, label: m.label, parentId: m.parentId || null }))
+  // Permissions are per-user (UserMenuPermission), not role-scoped — companyRole is a label only.
+  let allowedMenus = Array.isArray(user.menuPermissions)
+    ? user.menuPermissions
+        .filter((l) => l.menu)
+        .map((l) => ({
+          key: l.menu.key,
+          route: l.menu.route,
+          label: l.menu.label,
+          parentId: l.menu.parentId || null,
+          // canEdit=Create, canUpdate=Update per the CRUD-flag semantics — see UserMenuPermission.
+          canView: Boolean(l.canView),
+          canCreate: Boolean(l.canEdit),
+          canUpdate: Boolean(l.canUpdate),
+          canDelete: Boolean(l.canDelete),
+        }))
     : []
   if (user.isCompanyAdmin) {
-    allowedMenus = allowedMenus.length ? allowedMenus : [DASHBOARD_ALLOWED_MENU]
+    allowedMenus = allowedMenus.length
+      ? allowedMenus.map((m) => ({ ...m, ...ADMIN_MENU_PERMS }))
+      : [DASHBOARD_ALLOWED_MENU]
   }
   const memberWorkspaces = memberships
     .map((m) => m.workspace)

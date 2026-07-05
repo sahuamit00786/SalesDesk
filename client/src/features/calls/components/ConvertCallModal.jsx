@@ -15,7 +15,11 @@ export function ConvertCallModal({ call, onClose, onConverted }) {
     try {
       setPending(type)
       const res = await convertCall({ id: call.id, type }).unwrap()
-      toast.success(type === 'opportunity' ? 'Opportunity created' : 'Lead created')
+      if (res?.data?.created === false) {
+        toast.success('Number already belongs to a lead — call linked to it')
+      } else {
+        toast.success(type === 'opportunity' ? 'Opportunity created' : 'Lead created')
+      }
       onConverted?.(res?.data)
       onClose()
     } catch (err) {

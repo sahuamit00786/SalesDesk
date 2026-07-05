@@ -53,6 +53,18 @@ export const teamApi = baseApi.injectEndpoints({
       query: () => '/team/menus',
       providesTags: [{ type: 'Team', id: 'MENUS' }],
     }),
+    getUserMenuPermissions: build.query({
+      query: (id) => `/team/users/${id}/menu-permissions`,
+      providesTags: (_res, _err, id) => [{ type: 'Team', id: `USER-PERMS-${id}` }],
+    }),
+    putUserMenuPermissions: build.mutation({
+      query: ({ id, menuPermissions }) => ({
+        url: `/team/users/${id}/menu-permissions`,
+        method: 'PUT',
+        body: { menuPermissions },
+      }),
+      invalidatesTags: (_res, _err, { id }) => [{ type: 'Team', id: `USER-PERMS-${id}` }],
+    }),
     createRole: build.mutation({
       query: (body) => ({ url: '/team/roles', method: 'POST', body }),
       invalidatesTags: [{ type: 'Team', id: 'ROLES' }],
@@ -137,6 +149,8 @@ export const {
   usePatchUserRoleMutation,
   usePatchUserProfileMutation,
   useTeamMenusQuery,
+  useGetUserMenuPermissionsQuery,
+  usePutUserMenuPermissionsMutation,
   useCreateRoleMutation,
   usePatchRoleMutation,
   useDeleteRoleMutation,

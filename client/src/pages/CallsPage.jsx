@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Filter, Phone, PhoneIncoming, PhoneOutgoing, UserPlus, X } from 'lucide-react'
+import { Filter, Phone, PhoneIncoming, PhoneMissed, PhoneOutgoing, UserPlus, X } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
 import { PageStack } from '@/components/layout/PageStack'
 import { DataGrid } from '@/components/shared/DataGrid'
@@ -30,7 +30,20 @@ function fmtDateTime(value) {
   if (!value) return '—'
   const d = new Date(value)
   if (Number.isNaN(d.getTime())) return '—'
-  return d.toLocaleString(undefined, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  return d.toLocaleString(undefined, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+/** incoming | outgoing | missed — missed is an unanswered inbound call. */
+function callKind(row) {
+  if (row.callType === 'outbound') return 'outgoing'
+  if (row.outcome === 'no_answer' || row.outcome === 'voicemail') return 'missed'
+  return 'incoming'
+}
+
+const KIND_META = {
+  incoming: { label: 'Incoming', Icon: PhoneIncoming, cls: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
+  outgoing: { label: 'Outgoing', Icon: PhoneOutgoing, cls: 'bg-sky-50 text-sky-700 ring-sky-200' },
+  missed: { label: 'Missed', Icon: PhoneMissed, cls: 'bg-rose-50 text-rose-700 ring-rose-200' },
 }
 
 /** Always-granular hh:mm:ss breakdown, not a rounded "5m" — exact call length. */
@@ -51,13 +64,20 @@ export function CallsPage() {
   const [outcome, setOutcome] = useState('')
   const [callType, setCallType] = useState('')
   const [filterOpen, setFilterOpen] = useState(false)
+  const [groupByLead, setGroupByLead] = useState(false)
   const [convertTarget, setConvertTarget] = useState(null)
 
   const query = useMemo(() => {
     const q = { page, limit }
     if (hasLead) q.hasLead = hasLead
-    if (outcome) q.outcome = outcome
-    if (callType) q.callType = callType
+    if (callType === 'missed') {
+      // Missed = unanswered inbound; server has no "missed" type, so filter by both fields.
+      q.callType = 'inbound'
+      q.outcome = 'no_answer'
+    } else {
+      if (outcome) q.outcome = outcome
+      if (callType) q.callType = callType
+    }
     return q
   }, [page, limit, hasLead, outcome, callType])
 
@@ -95,7 +115,7 @@ export function CallsPage() {
         minWidth: 200,
         sortable: false,
         renderCell: ({ row }) => {
-          const Icon = row.callType === 'inbound' ? PhoneIncoming : PhoneOutgoing
+          const { Icon } = KIND_META[callKind(row)]
           const name = row.lead?.contactName || row.lead?.title || row.callerName || row.phoneNumber || 'Unknown'
           return (
             <div className="flex min-w-0 items-center gap-2">
@@ -108,6 +128,21 @@ export function CallsPage() {
                 <span className="truncate text-sm font-medium text-ink">{name}</span>
               )}
             </div>
+          )
+        },
+      },
+      {
+        field: 'kind',
+        headerName: 'Type',
+        width: 120,
+        sortable: false,
+        renderCell: ({ row }) => {
+          const { label, Icon, cls } = KIND_META[callKind(row)]
+          return (
+            <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1', cls)}>
+              <Icon className="h-3 w-3" />
+              {label}
+            </span>
           )
         },
       },
@@ -173,24 +208,49 @@ export function CallsPage() {
           </span>
         ),
       },
-      {
-        field: 'notes',
-        headerName: 'Notes',
-        flex: 1,
-        minWidth: 160,
-        sortable: false,
-        renderCell: ({ row }) => (
-          <span className="line-clamp-2 text-xs text-ink-muted" title={row.notes || ''}>
-            {row.notes?.trim() || '—'}
-          </span>
-        ),
-      },
     ],
     [],
   )
 
+  const groupedRows = useMemo(() => {
+    if (!groupByLead) return null
+    const map = new Map()
+    for (const row of rows) {
+      const key = row.leadId || '__none'
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          label: row.leadId ? row.lead?.contactName || row.lead?.title || 'Lead' : 'No lead',
+          leadId: row.leadId || null,
+          items: [],
+        })
+      }
+      map.get(key).items.push(row)
+    }
+    const groups = Array.from(map.values())
+    // Named lead groups alphabetical, "No lead" bucket last.
+    groups.sort((a, b) => {
+      if (!a.leadId && b.leadId) return 1
+      if (a.leadId && !b.leadId) return -1
+      return a.label.localeCompare(b.label)
+    })
+    return groups
+  }, [groupByLead, rows])
+
   const callsFilterBar = (
-    <div className="relative" data-filter-dropdown>
+    <div className="relative flex items-center gap-2" data-filter-dropdown>
+      <button
+        type="button"
+        onClick={() => setGroupByLead((v) => !v)}
+        className={cn(
+          'inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-xs font-semibold shadow-sm',
+          groupByLead
+            ? 'border-brand-200 bg-brand-50 text-brand-700'
+            : 'border-surface-border bg-white text-ink hover:bg-surface-subtle',
+        )}
+      >
+        Group by lead
+      </button>
       <button
         type="button"
         onClick={() => setFilterOpen((v) => !v)}
@@ -232,7 +292,7 @@ export function CallsPage() {
             </label>
 
             <label className="block">
-              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">Direction</span>
+              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">Call type</span>
               <select
                 className="h-9 w-full rounded-lg border border-surface-border px-2 text-sm"
                 value={callType}
@@ -241,17 +301,19 @@ export function CallsPage() {
                   setPage(1)
                 }}
               >
-                <option value="">All directions</option>
+                <option value="">All types</option>
                 <option value="inbound">Incoming</option>
                 <option value="outbound">Outgoing</option>
+                <option value="missed">Missed</option>
               </select>
             </label>
 
             <label className="block">
               <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">Outcome</span>
               <select
-                className="h-9 w-full rounded-lg border border-surface-border px-2 text-sm"
-                value={outcome}
+                className="h-9 w-full rounded-lg border border-surface-border px-2 text-sm disabled:bg-neutral-50 disabled:text-ink-faint"
+                value={callType === 'missed' ? 'no_answer' : outcome}
+                disabled={callType === 'missed'}
                 onChange={(e) => {
                   setOutcome(e.target.value)
                   setPage(1)
@@ -281,6 +343,45 @@ export function CallsPage() {
           </div>
         </div>
       ) : null}
+    </div>
+  )
+
+  const paginationFooter = (
+    <div className="cx-data-grid-footer border-t border-surface-border px-3 py-1.5 sm:px-4">
+      <TablePaginationBar
+        compact
+        variant="brand"
+        page={page}
+        totalPages={totalPages}
+        onPageChange={setPage}
+        subLabel={
+          total > 0 ? (
+            <>
+              Showing {(page - 1) * limit + 1}–{Math.min(page * limit, total)} of {total.toLocaleString()}
+            </>
+          ) : null
+        }
+        beforeNav={
+          <label className="flex items-center gap-1.5 text-[11px] font-medium text-ink-muted">
+            <span className="hidden sm:inline">Rows per page</span>
+            <select
+              className={cn(inputFieldClassName, 'h-[1.6875rem] w-[4.25rem] rounded-md px-1.5 text-[11px]')}
+              value={String(limit)}
+              onChange={(e) => {
+                setLimit(Number(e.target.value))
+                setPage(1)
+              }}
+              aria-label="Rows per page"
+            >
+              {PAGE_SIZE_OPTIONS.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </label>
+        }
+      />
     </div>
   )
 
@@ -326,6 +427,43 @@ export function CallsPage() {
                 </p>
               </div>
             </>
+          ) : groupByLead ? (
+            <>
+              {callsToolbarRow}
+              <div className="space-y-4 p-4">
+                {groupedRows.map((group) => (
+                  <div key={group.key} className="overflow-hidden rounded-lg border border-surface-border">
+                    <div className="flex items-center gap-2 border-b border-surface-border bg-surface-subtle px-3 py-2">
+                      {group.leadId ? (
+                        <Link to={`/leads/${group.leadId}`} className="text-xs font-semibold text-ink hover:text-brand-600 hover:underline">
+                          {group.label}
+                        </Link>
+                      ) : (
+                        <span className="text-xs font-semibold text-ink-muted">{group.label}</span>
+                      )}
+                      <span className="rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] font-semibold text-neutral-600">
+                        {group.items.length}
+                      </span>
+                    </div>
+                    <DataGrid
+                      gridColumns
+                      columns={columns}
+                      data={group.items}
+                      searchable={false}
+                      showColumnToggle={false}
+                      showExportCsv={false}
+                      hideFooter
+                      getRowId={(row) => row.id}
+                      defaultPageSize={200}
+                      autoHeight
+                      minHeightClass=""
+                      className="rounded-none border-0 shadow-none"
+                    />
+                  </div>
+                ))}
+              </div>
+              {paginationFooter}
+            </>
           ) : (
             <>
               <DataGrid
@@ -334,6 +472,7 @@ export function CallsPage() {
                 data={rows}
                 loading={isFetching && !isLoading}
                 searchable
+                showColumnToggle={false}
                 toolbarLeft={
                   <span className="text-xs text-ink-muted">
                     Total calls: <span className="font-semibold text-ink">{total.toLocaleString()}</span>
@@ -347,42 +486,7 @@ export function CallsPage() {
                 emptyTitle="No calls"
                 className="rounded-none border-0 shadow-none"
               />
-              <div className="cx-data-grid-footer border-t border-surface-border px-3 py-1.5 sm:px-4">
-                <TablePaginationBar
-                  compact
-                  variant="brand"
-                  page={page}
-                  totalPages={totalPages}
-                  onPageChange={setPage}
-                  subLabel={
-                    total > 0 ? (
-                      <>
-                        Showing {(page - 1) * limit + 1}–{Math.min(page * limit, total)} of {total.toLocaleString()}
-                      </>
-                    ) : null
-                  }
-                  beforeNav={
-                    <label className="flex items-center gap-1.5 text-[11px] font-medium text-ink-muted">
-                      <span className="hidden sm:inline">Rows per page</span>
-                      <select
-                        className={cn(inputFieldClassName, 'h-[1.6875rem] w-[4.25rem] rounded-md px-1.5 text-[11px]')}
-                        value={String(limit)}
-                        onChange={(e) => {
-                          setLimit(Number(e.target.value))
-                          setPage(1)
-                        }}
-                        aria-label="Rows per page"
-                      >
-                        {PAGE_SIZE_OPTIONS.map((n) => (
-                          <option key={n} value={n}>
-                            {n}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  }
-                />
-              </div>
+              {paginationFooter}
             </>
           )}
         </section>

@@ -8,6 +8,7 @@ import {
   Flag,
   Hash,
   Home,
+  Lock,
   Mail,
   PencilLine,
   ShieldCheck,
@@ -19,10 +20,10 @@ import {
   UserPlus,
   Users,
   X,
+  Clock,
+  CheckCircle,
 } from 'lucide-react'
-import { NAV_SECTIONS } from '@/components/layout/navConfig'
 import { COMPANY_USER_ROLE_KIND_ALL_OPTIONS, COMPANY_USER_ROLE_KIND_CREATE_OPTIONS, labelCompanyUserRoleKind } from '@/constants/companyUserRoleKind'
-import { normalizeMenuRoute } from '@/utils/menuAccess'
 import { Modal } from '@/components/ui/Modal'
 import { RightDrawer } from '@/components/ui/RightDrawer'
 import { PhoneField } from '@/components/ui/PhoneField'
@@ -37,7 +38,6 @@ import {
   useDeactivateUserMutation,
   useReactivateUserMutation,
   usePatchRoleMutation,
-  useTeamMenusQuery,
   usePatchUserRoleMutation,
   usePatchUserProfileMutation,
   useReplaceUserWorkspacesMutation,
@@ -63,6 +63,27 @@ function isoCountryForPhone(countryField) {
 }
 
 const TEAM_TAB_STORAGE_KEY = 'leadflow.team.activeTab'
+
+function KpiCard({ icon: Icon, label, value, accent = 'brand' }) {
+  const palette = {
+    brand: 'bg-slate-100 text-brand-700',
+    amber: 'bg-amber-50 text-amber-700',
+    indigo: 'bg-brand-50 text-brand-700',
+    emerald: 'bg-emerald-50 text-emerald-700',
+    rose: 'bg-rose-50 text-rose-700',
+  }
+  return (
+    <div className="flex items-center gap-3 rounded-2xl border border-surface-border bg-white px-4 py-3 shadow-sm">
+      <div className={cn('flex h-9 w-9 items-center justify-center rounded-xl', palette[accent] || palette.brand)}>
+        <Icon className="h-4 w-4" strokeWidth={2} />
+      </div>
+      <div className="min-w-0">
+        <p className="text-[11px] font-medium uppercase tracking-wide text-ink-faint">{label}</p>
+        <p className="truncate text-lg font-semibold text-ink">{value}</p>
+      </div>
+    </div>
+  )
+}
 
 const EMPTY_INVITE_FORM = {
   name: '',
@@ -224,7 +245,6 @@ function invitationStatusPill(inv) {
 export function TeamPage() {
   const navigate = useNavigate()
   const { data: rolesData } = useTeamRolesQuery()
-  const { data: menusData } = useTeamMenusQuery()
   const { data: usersData, isLoading: usersLoading, refetch: refetchUsers } = useTeamUsersQuery()
   const { data: invitesData, isLoading: invitesLoading, refetch: refetchInvites } = useTeamInvitationsQuery()
   const { data: wsData } = useWorkspacesQuery()
@@ -246,7 +266,6 @@ export function TeamPage() {
     if (Array.isArray(payload?.items)) return payload.items
     return []
   }, [rolesData])
-  const menuItems = useMemo(() => menusData?.data?.items || [], [menusData])
   const users = useMemo(() => usersData?.data?.items || [], [usersData])
   const invitations = useMemo(() => invitesData?.data?.items || [], [invitesData])
   const workspaces = useMemo(() => wsData?.data?.items || [], [wsData])
@@ -271,7 +290,6 @@ export function TeamPage() {
     name: '',
     description: '',
     userRoleKind: '',
-    menuPermissions: [],
   })
   const [editingRoleId, setEditingRoleId] = useState(null)
   const [memberSearch, setMemberSearch] = useState('')
@@ -384,7 +402,7 @@ export function TeamPage() {
       {
         field: 'actions',
         headerName: 'Actions',
-        width: 100,
+        width: 140,
         sortable: false,
         align: 'right',
         headerAlign: 'right',
@@ -431,6 +449,15 @@ export function TeamPage() {
                 <UserCheck className="h-3.5 w-3.5" />
               </button>
             )}
+            <button
+              type="button"
+              onClick={() => navigate(`/team/${u.id}/permissions`)}
+              aria-label="Menu permissions"
+              title="Manage menu permissions"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-brand-200 bg-white text-brand-700 shadow-sm hover:bg-white"
+            >
+              <Lock className="h-3.5 w-3.5" />
+            </button>
           </div>
         ),
       },
@@ -584,17 +611,6 @@ export function TeamPage() {
         valueGetter: (_v, r) => r.description || 'No description',
       },
       {
-        field: 'menuCount',
-        headerName: 'Menus',
-        width: 80,
-        renderCell: ({ row: r }) => (
-          <span className="inline-flex items-center gap-1 rounded-full border border-surface-border bg-white px-2 py-0.5 text-[11px] text-ink-muted">
-            <ShieldCheck className="h-3.5 w-3.5" />
-            {r.menuCount || 0}
-          </span>
-        ),
-      },
-      {
         field: 'assignedUsers',
         headerName: 'Users',
         width: 80,
@@ -626,7 +642,6 @@ export function TeamPage() {
                   name: r.name,
                   description: r.description || '',
                   userRoleKind: r.userRoleKind || 'custom',
-                  menuPermissions: r.menuPermissions || [],
                 })
                 setRoleEditDrawerOpen(true)
               }}
@@ -659,179 +674,6 @@ export function TeamPage() {
     ],
     [deletingRole, roles],
   )
-
-  const sidebarMenus = useMemo(() => {
-    const menuByRoute = new Map()
-    for (const m of menuItems) {
-      const route = normalizeMenuRoute(m.route)
-      if (!route) continue
-      const navRoute = route === '/' ? '/dashboard' : route
-      menuByRoute.set(navRoute, m)
-    }
-
-    const items = []
-    for (const section of NAV_SECTIONS) {
-      for (const navItem of section.items) {
-        const apiMenu = menuByRoute.get(navItem.to)
-        if (!apiMenu) continue
-        items.push({ ...apiMenu, label: navItem.label, sectionLabel: section.label })
-      }
-    }
-    return items
-  }, [menuItems])
-
-  const menusBySection = useMemo(() => {
-    const groups = new Map()
-    for (const m of sidebarMenus) {
-      if (!groups.has(m.sectionLabel)) groups.set(m.sectionLabel, [])
-      groups.get(m.sectionLabel).push(m)
-    }
-    return NAV_SECTIONS.map((section) => [section.label, groups.get(section.label) || []]).filter(
-      ([, sectionMenus]) => sectionMenus.length > 0,
-    )
-  }, [sidebarMenus])
-
-  const routableMenus = sidebarMenus
-
-  function permissionFor(menuId) {
-    return roleForm.menuPermissions.find((m) => m.menuId === menuId) || {
-      menuId,
-      canView: false,
-      canEdit: false,
-      canUpdate: false,
-      canDelete: false,
-    }
-  }
-
-  function togglePermission(menuId, key) {
-    setRoleForm((f) => {
-      const current = f.menuPermissions.find((m) => m.menuId === menuId) || {
-        menuId,
-        canView: false,
-        canEdit: false,
-        canUpdate: false,
-        canDelete: false,
-      }
-      const next = { ...current, [key]: !current[key] }
-      if (!next.canView && !next.canEdit && !next.canUpdate && !next.canDelete) {
-        return { ...f, menuPermissions: f.menuPermissions.filter((m) => m.menuId !== menuId) }
-      }
-      const rest = f.menuPermissions.filter((m) => m.menuId !== menuId)
-      return { ...f, menuPermissions: [...rest, next] }
-    })
-  }
-
-  function setMenuPermissions(menuId, nextState) {
-    setRoleForm((f) => {
-      const rest = f.menuPermissions.filter((m) => m.menuId !== menuId)
-      if (!nextState.canView && !nextState.canEdit && !nextState.canUpdate && !nextState.canDelete) {
-        return { ...f, menuPermissions: rest }
-      }
-      return { ...f, menuPermissions: [...rest, nextState] }
-    })
-  }
-
-  function setMenuAll(menuId, enabled) {
-    setMenuPermissions(menuId, {
-      menuId,
-      canView: enabled,
-      canEdit: enabled,
-      canUpdate: enabled,
-      canDelete: enabled,
-    })
-  }
-
-  function selectAllMenuPermissions() {
-    setRoleForm((f) => ({
-      ...f,
-      menuPermissions: routableMenus.map((m) => ({
-        menuId: m.id,
-        canView: true,
-        canEdit: true,
-        canUpdate: true,
-        canDelete: true,
-      })),
-    }))
-  }
-
-  function clearAllMenuPermissions() {
-    setRoleForm((f) => ({ ...f, menuPermissions: [] }))
-  }
-
-  function renderMenuPermissionPicker() {
-    const allMenusFullAccess =
-      routableMenus.length > 0 &&
-      routableMenus.every((m) => {
-        const p = permissionFor(m.id)
-        return p.canView && p.canEdit && p.canUpdate && p.canDelete
-      })
-
-    return (
-      <div className="mt-2 flex min-h-[400px] flex-1 flex-col overflow-hidden rounded-xl border border-surface-border bg-white p-2">
-        <div className="mb-2 flex shrink-0 items-center justify-between gap-2 border-b border-surface-border px-1 pb-2">
-          <label className="flex cursor-pointer items-center gap-2">
-            <input
-              type="checkbox"
-              checked={allMenusFullAccess}
-              onChange={(e) => (e.target.checked ? selectAllMenuPermissions() : clearAllMenuPermissions())}
-              className="h-4 w-4 rounded border-surface-border text-brand-600 focus:ring-brand-500/30"
-            />
-            <span className="text-xs font-semibold text-ink">Select all</span>
-          </label>
-          <span className="text-[10px] text-ink-faint">View, Edit, Update & Delete on every menu</span>
-        </div>
-        <div className="scrollbar-subtle min-h-0 flex-1 overflow-y-auto">
-          {menusBySection.map(([sectionLabel, sectionMenus]) => (
-            <div key={sectionLabel} className="mb-3 last:mb-0">
-              <p className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">{sectionLabel}</p>
-              {sectionMenus.map((m) => {
-                const p = permissionFor(m.id)
-                const menuEnabled = p.canView || p.canEdit || p.canUpdate || p.canDelete
-                return (
-                  <div key={m.id} className="mb-2 w-full rounded-lg border border-surface-border p-2 last:mb-0">
-                    <label className="flex cursor-pointer items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={menuEnabled}
-                        onChange={(e) => setMenuAll(m.id, e.target.checked)}
-                        className="h-4 w-4 rounded border-surface-border text-brand-600 focus:ring-brand-500/30"
-                      />
-                      <span className="text-xs font-medium text-ink">{m.label}</span>
-                    </label>
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {[
-                        ['canView', 'View'],
-                        ['canEdit', 'Edit'],
-                        ['canUpdate', 'Update'],
-                        ['canDelete', 'Delete'],
-                      ].map(([key, label]) => (
-                        <button
-                          key={key}
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            togglePermission(m.id, key)
-                          }}
-                          className={cn(
-                            'rounded-full border px-2.5 py-1 text-[11px]',
-                            p[key]
-                              ? 'border-brand-300 bg-white text-brand-800 shadow-sm'
-                              : 'border-surface-border bg-white text-ink-muted',
-                          )}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          ))}
-        </div>
-      </div>
-    )
-  }
 
   function closeInviteDrawer() {
     setInviteDrawerOpen(false)
@@ -981,141 +823,211 @@ export function TeamPage() {
 
   const accessUser = users.find((u) => u.id === accessUserId) || null
 
+  const activeMembers = useMemo(() => users.filter(u => u.isActive).length, [users])
+  const inactiveMembers = useMemo(() => users.filter(u => !u.isActive).length, [users])
+
   return (
     <PageShell fullWidth>
-      <PageStack>
-        <PageFilterBar>
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
-            {[
-              { id: 'members', label: 'Members' },
-              { id: 'invitations', label: 'Invitations' },
-              { id: 'roles', label: 'Roles' },
-            ].map((tab) => (
-              <PageTabButton
-                key={tab.id}
-                type="button"
-                active={activeTab === tab.id}
-                onClick={() => setActiveTab(tab.id)}
-              >
-                {tab.label}
-              </PageTabButton>
-            ))}
-          </div>
-          <div className="ml-auto flex shrink-0 gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setRoleForm({ name: '', description: '', userRoleKind: '', menuPermissions: [] })
-                setRoleDrawerOpen(true)
-              }}
-              aria-label="Create role"
-              title="Create role"
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-brand-200 bg-white px-3 text-xs font-medium text-brand-700 shadow-sm hover:bg-white"
-            >
-              <ShieldCheck className="h-3.5 w-3.5" />
-              Create role
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                const wsId = inviteWorkspace?.id
-                setInviteForm({
-                  ...EMPTY_INVITE_FORM,
-                  workspaceIds: wsId ? [wsId] : [],
-                })
-                setInviteDrawerOpen(true)
-              }}
-              aria-label="Add user"
-              title="Add user"
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-brand-200 bg-white px-3 text-xs font-medium text-brand-700 shadow-sm hover:bg-white"
-            >
-              <UserPlus className="h-3.5 w-3.5" />
-              Add user
-            </button>
-          </div>
-        </PageFilterBar>
+      <div className="flex min-h-screen gap-4 p-4 sm:p-6 lg:gap-6">
+        {/* Left Sidebar */}
+        <aside className="w-full flex-shrink-0 space-y-3 lg:w-80">
+          {/* Team Header Card */}
+          <section className="rounded-2xl border border-surface-border bg-white p-5">
+            <div className="flex flex-col items-center gap-3 text-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-brand-200 bg-brand-50 text-2xl font-bold text-brand-700">
+                {(users[0]?.companyRole?.name || 'TEAM').slice(0, 2).toUpperCase()}
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-ink">Team Overview</h2>
+                <p className="mt-1 text-xs text-ink-muted">Manage your organization</p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const wsId = inviteWorkspace?.id
+                    setInviteForm({
+                      ...EMPTY_INVITE_FORM,
+                      workspaceIds: wsId ? [wsId] : [],
+                    })
+                    setInviteDrawerOpen(true)
+                  }}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-brand-200 bg-white px-3 text-xs font-medium text-brand-700 shadow-sm hover:bg-white"
+                >
+                  <UserPlus className="h-3.5 w-3.5" />
+                  Add user
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRoleForm({ name: '', description: '', userRoleKind: '' })
+                    setRoleDrawerOpen(true)
+                  }}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-brand-200 bg-white px-3 text-xs font-medium text-brand-700 shadow-sm hover:bg-white"
+                >
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  Create role
+                </button>
+              </div>
+            </div>
+          </section>
 
-        {activeTab === 'members' ? (
-          <PageFilterBar className="min-h-0 py-2">
-            <input
-              type="text"
-              value={memberSearch}
-              onChange={(e) => setMemberSearch(e.target.value)}
-              placeholder="Search by name or email"
-              className={cn(inputFieldClassName, 'min-w-[220px] flex-1')}
-            />
-            <select
-              value={memberRoleFilter}
-              onChange={(e) => setMemberRoleFilter(e.target.value)}
-              className={cn(inputFieldClassName, 'w-auto min-w-[140px] text-xs')}
-            >
-                <option value="all">All roles</option>
-                {roles.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name}
-                    {r.userRoleKind ? ` — ${labelCompanyUserRoleKind(r.userRoleKind)}` : ''}
-                  </option>
+          {/* Statistics Sections */}
+          <section className="rounded-2xl border border-surface-border bg-white p-5 space-y-4">
+            <h3 className="text-sm font-semibold text-ink">Members</h3>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                <span className="text-sm text-ink-muted">Total</span>
+                <span className="font-semibold text-ink">{users.length}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-lg bg-emerald-50 px-3 py-2">
+                <span className="text-sm text-emerald-700">Active</span>
+                <span className="font-semibold text-emerald-900">{activeMembers}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-lg bg-rose-50 px-3 py-2">
+                <span className="text-sm text-rose-700">Inactive</span>
+                <span className="font-semibold text-rose-900">{inactiveMembers}</span>
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-surface-border bg-white p-5 space-y-4">
+            <h3 className="text-sm font-semibold text-ink">Roles & Invites</h3>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between rounded-lg bg-indigo-50 px-3 py-2">
+                <span className="text-sm text-indigo-700">Total roles</span>
+                <span className="font-semibold text-indigo-900">{roles.length}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-lg bg-amber-50 px-3 py-2">
+                <span className="text-sm text-amber-700">Pending invites</span>
+                <span className="font-semibold text-amber-900">{invitations.length}</span>
+              </div>
+            </div>
+          </section>
+        </aside>
+
+        {/* Right Content */}
+        <main className="min-w-0 flex-1">
+          <PageStack>
+            {/* KPI Cards */}
+            <section className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <KpiCard icon={Users} label="Total members" value={String(users.length)} accent="brand" />
+              <KpiCard icon={CheckCircle} label="Active" value={String(activeMembers)} accent="emerald" />
+              <KpiCard icon={UserMinus} label="Inactive" value={String(inactiveMembers)} accent="rose" />
+              <KpiCard icon={ShieldCheck} label="Total roles" value={String(roles.length)} accent="indigo" />
+            </section>
+
+            {/* Tabs */}
+            <section className="border-b border-surface-border bg-white">
+              <div className="-mb-px flex gap-4 px-4 sm:px-6">
+                {[
+                  { id: 'members', label: 'Members' },
+                  { id: 'invitations', label: 'Invitations' },
+                  { id: 'roles', label: 'Roles' },
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`border-b-2 px-1 py-3 text-sm font-medium transition-colors ${
+                      activeTab === tab.id
+                        ? 'border-brand-600 text-ink'
+                        : 'border-transparent text-ink-muted hover:text-ink'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
                 ))}
-              </select>
-            <select
-              value={memberStatusFilter}
-              onChange={(e) => setMemberStatusFilter(e.target.value)}
-              className={cn(inputFieldClassName, 'w-auto min-w-[120px] text-xs')}
-            >
-                <option value="all">All status</option>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
-          </PageFilterBar>
-        ) : null}
+              </div>
+            </section>
 
-        <PageContentPanel flush>
-        {activeTab === 'members' ? (
-          <DataGrid
-            gridColumns
-            columns={memberColumns}
-            data={filteredUsers}
-            loading={usersLoading}
-            searchable={false}
-            showColumnToggle={false}
-            showExportCsv={false}
-            onRowClick={(params) => navigate(`/team/${params.row.id}`)}
-            emptyTitle="No members found"
-            maxHeightClass="max-h-[min(65vh,600px)]"
-            className="rounded-none border-0 shadow-none"
-          />
-        ) : null}
+            {/* Members Search & Filters */}
+            {activeTab === 'members' ? (
+              <section className="border-b border-surface-border bg-white px-4 py-3 sm:px-6">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                  <input
+                    type="text"
+                    value={memberSearch}
+                    onChange={(e) => setMemberSearch(e.target.value)}
+                    placeholder="Search by name or email"
+                    className={cn(inputFieldClassName, 'min-w-[220px] flex-1 text-sm')}
+                  />
+                  <select
+                    value={memberRoleFilter}
+                    onChange={(e) => setMemberRoleFilter(e.target.value)}
+                    className={cn(inputFieldClassName, 'w-auto min-w-[140px] text-xs')}
+                  >
+                    <option value="all">All roles</option>
+                    {roles.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name}
+                        {r.userRoleKind ? ` — ${labelCompanyUserRoleKind(r.userRoleKind)}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={memberStatusFilter}
+                    onChange={(e) => setMemberStatusFilter(e.target.value)}
+                    className={cn(inputFieldClassName, 'w-auto min-w-[120px] text-xs')}
+                  >
+                    <option value="all">All status</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </div>
+              </section>
+            ) : null}
 
-        {activeTab === 'invitations' ? (
-          <DataGrid
-            gridColumns
-            columns={inviteColumns}
-            data={invitations}
-            loading={invitesLoading}
-            searchable={false}
-            showColumnToggle={false}
-            showExportCsv={false}
-            emptyTitle="No pending invitations"
-            maxHeightClass="max-h-[min(65vh,600px)]"
-            className="rounded-none border-0 shadow-none"
-          />
-        ) : null}
+            {/* Data Grids */}
+            <section className="rounded-2xl border border-surface-border bg-white shadow-sm">
+              {activeTab === 'members' ? (
+                <DataGrid
+                  gridColumns
+                  columns={memberColumns}
+                  data={filteredUsers}
+                  loading={usersLoading}
+                  searchable={false}
+                  showColumnToggle={false}
+                  showExportCsv={false}
+                  onRowClick={(params) => navigate(`/team/${params.row.id}`)}
+                  emptyTitle="No members found"
+                  maxHeightClass="max-h-[min(65vh,600px)]"
+                  className="rounded-2xl border-0 shadow-none"
+                />
+              ) : null}
 
-        {activeTab === 'roles' ? (
-          <DataGrid
-            gridColumns
-            columns={roleColumns}
-            data={roles}
-            searchable={false}
-            showColumnToggle={false}
-            showExportCsv={false}
-            emptyTitle="No custom roles yet"
-            maxHeightClass="max-h-[min(65vh,600px)]"
-            className="rounded-none border-0 shadow-none"
-          />
-        ) : null}
-        </PageContentPanel>
-      </PageStack>
+              {activeTab === 'invitations' ? (
+                <DataGrid
+                  gridColumns
+                  columns={inviteColumns}
+                  data={invitations}
+                  loading={invitesLoading}
+                  searchable={false}
+                  showColumnToggle={false}
+                  showExportCsv={false}
+                  emptyTitle="No pending invitations"
+                  maxHeightClass="max-h-[min(65vh,600px)]"
+                  className="rounded-2xl border-0 shadow-none"
+                />
+              ) : null}
+
+              {activeTab === 'roles' ? (
+                <DataGrid
+                  gridColumns
+                  columns={roleColumns}
+                  data={roles}
+                  searchable={false}
+                  showColumnToggle={false}
+                  showExportCsv={false}
+                  emptyTitle="No custom roles yet"
+                  maxHeightClass="max-h-[min(65vh,600px)]"
+                  className="rounded-2xl border-0 shadow-none"
+                />
+              ) : null}
+            </section>
+          </PageStack>
+        </main>
+      </div>
 
       <RightDrawer
         open={accessDrawerOpen}
@@ -1497,7 +1409,7 @@ export function TeamPage() {
         open={roleEditDrawerOpen}
         onClose={() => setRoleEditDrawerOpen(false)}
         title="Edit role"
-        description="Update role name, role type, and menu access. People still get workspaces when you invite them or edit each member."
+        description="Role type is a label used for reporting — menu access is granted per person from their profile page, not here."
         footer={
           <div className="flex justify-end gap-2">
             <button type="button" onClick={() => setRoleEditDrawerOpen(false)} className="h-10 rounded-xl border border-surface-border px-4 text-sm">
@@ -1515,7 +1427,6 @@ export function TeamPage() {
                     name: roleForm.name.trim(),
                     description: roleForm.description.trim() || null,
                     userRoleKind: roleForm.userRoleKind,
-                    menuPermissions: roleForm.menuPermissions.length ? roleForm.menuPermissions : undefined,
                   }).unwrap()
                   toast.success('Role updated')
                   setRoleEditDrawerOpen(false)
@@ -1534,7 +1445,7 @@ export function TeamPage() {
           <div>
             <label className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Role type</label>
             <p className="mt-1 text-[11px] leading-snug text-ink-muted">
-              Workspace admin, Manager, or Sales — or Custom for legacy roles. Workspaces are assigned per user, not here.
+              Workspace admin, Manager, or Sales — or Custom for legacy roles. Workspaces and menu access are assigned per person, not here.
             </p>
             <select
               value={roleForm.userRoleKind}
@@ -1566,10 +1477,6 @@ export function TeamPage() {
               className="mt-2 w-full rounded-xl border border-surface-border bg-white px-3 py-2 text-sm"
             />
           </div>
-          <div className="flex min-h-0 flex-1 flex-col">
-            <label className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Allowed sidebar menus</label>
-            {renderMenuPermissionPicker()}
-          </div>
         </div>
       </RightDrawer>
 
@@ -1577,7 +1484,7 @@ export function TeamPage() {
         open={roleDrawerOpen}
         onClose={() => setRoleDrawerOpen(false)}
         title="Create custom role"
-        description="Pick a role type, name the role, and choose sidebar menus. Assign workspaces per person when inviting or editing a member."
+        description="Pick a role type and name the role. Menu access and workspaces are granted per person from their profile page after you invite or add them."
         footer={
           <div className="flex justify-end gap-2">
             <button type="button" onClick={() => setRoleDrawerOpen(false)} className="h-10 rounded-xl border border-surface-border px-4 text-sm">
@@ -1588,17 +1495,15 @@ export function TeamPage() {
               disabled={creatingRole}
               onClick={async () => {
                 if (!roleForm.name.trim()) return toast.error('Role name is required')
-                if (!roleForm.userRoleKind) return toast.error('Select a role type (Workspace admin, Manager, or Sales)')
-                if (!roleForm.menuPermissions.length) return toast.error('Select at least one menu permission')
+                if (!roleForm.userRoleKind) return toast.error('Select a role type')
                 try {
                   await createRole({
                     name: roleForm.name.trim(),
                     description: roleForm.description.trim() || null,
                     userRoleKind: roleForm.userRoleKind,
-                    menuPermissions: roleForm.menuPermissions,
                   }).unwrap()
                   toast.success('Role created')
-                  setRoleForm({ name: '', description: '', userRoleKind: '', menuPermissions: [] })
+                  setRoleForm({ name: '', description: '', userRoleKind: '' })
                   setRoleDrawerOpen(false)
                 } catch (err) {
                   toast.error(apiErrorMessage(err))
@@ -1615,7 +1520,7 @@ export function TeamPage() {
           <div>
             <label className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Role type</label>
             <p className="mt-1 text-[11px] leading-snug text-ink-muted">
-              Workspace admin, Manager, or Sales. You will assign which workspaces each person can access when you invite them or edit a member.
+              Workspace admin, Manager, or Sales. You will grant menu access and assign workspaces per person when you invite them or edit a member.
             </p>
             <select
               value={roleForm.userRoleKind}
@@ -1648,10 +1553,6 @@ export function TeamPage() {
               onChange={(e) => setRoleForm((f) => ({ ...f, description: e.target.value }))}
               className="mt-2 w-full rounded-xl border border-surface-border bg-white px-3 py-2 text-sm"
             />
-          </div>
-          <div className="flex min-h-0 flex-1 flex-col">
-            <label className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Allowed sidebar menus</label>
-            {renderMenuPermissionPicker()}
           </div>
         </div>
       </RightDrawer>

@@ -81,7 +81,15 @@ export function LoginPage() {
       return
     }
     try {
-      await login(parsed.data).unwrap()
+      const result = await login(parsed.data).unwrap()
+
+      // Check if user has menu permissions
+      const userMenus = result?.data?.user?.allowedMenus || []
+      if (!userMenus || userMenus.length === 0) {
+        toast.error('Your account has no menu permissions. Please contact your administrator for access.')
+        return
+      }
+
       toast.success('Welcome back')
     } catch (err) {
       const code = err?.data?.error?.code

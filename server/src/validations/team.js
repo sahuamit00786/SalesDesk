@@ -86,6 +86,8 @@ export const replaceUserWorkspacesSchema = Joi.object({
   workspaceIds: Joi.array().items(Joi.string().uuid()).min(1).required(),
 })
 
+// Role is a type/label only now — no menuPermissions here. See putUserMenuPermissionsSchema
+// for per-user menu-CRUD grants.
 export const createCompanyRoleSchema = Joi.object({
   name: Joi.string().min(2).max(120).required(),
   description: Joi.string().max(255).allow('', null).optional(),
@@ -93,26 +95,22 @@ export const createCompanyRoleSchema = Joi.object({
     .valid(...COMPANY_USER_ROLE_KIND_CREATE_VALUES)
     .required()
     .messages({
-      'any.required': 'Select a role type (Workspace admin, Manager, or Sales)',
+      'any.required': 'Select a role type',
     }),
-  menuPermissions: Joi.array()
-    .items(
-      Joi.object({
-        menuId: Joi.string().uuid().required(),
-        canView: Joi.boolean().required(),
-        canEdit: Joi.boolean().required(),
-        canUpdate: Joi.boolean().required(),
-        canDelete: Joi.boolean().required(),
-      }),
-    )
-    .min(1)
-    .required(),
 })
 
 export const patchCompanyRoleSchema = Joi.object({
   name: Joi.string().min(2).max(120).optional(),
   description: Joi.string().max(255).allow('', null).optional(),
   userRoleKind: Joi.string().valid(...ALL_COMPANY_USER_ROLE_KIND_VALUES).optional(),
+}).min(1)
+
+export const deleteCompanyRoleSchema = Joi.object({
+  fallbackCompanyRoleId: Joi.string().uuid().allow(null).optional(),
+})
+
+/** Per-user menu-CRUD grants — replace-all payload. Empty array means "revoke everything". */
+export const putUserMenuPermissionsSchema = Joi.object({
   menuPermissions: Joi.array()
     .items(
       Joi.object({
@@ -123,10 +121,5 @@ export const patchCompanyRoleSchema = Joi.object({
         canDelete: Joi.boolean().required(),
       }),
     )
-    .min(1)
-    .optional(),
-}).min(1)
-
-export const deleteCompanyRoleSchema = Joi.object({
-  fallbackCompanyRoleId: Joi.string().uuid().allow(null).optional(),
+    .required(),
 })

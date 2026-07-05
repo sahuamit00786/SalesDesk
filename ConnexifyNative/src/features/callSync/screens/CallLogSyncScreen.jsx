@@ -170,6 +170,12 @@ export default function CallLogSyncScreen() {
         }).then(() => item.id);
       }),
     );
+    results.forEach((r) => {
+      if (r.status === 'rejected') {
+        const reason = r.reason;
+        console.log('[callSync] sync failed. name=', reason?.name, 'code=', reason?.code, 'status=', reason?.status, 'message=', reason?.message, 'stack=', reason?.stack);
+      }
+    });
     const succeededIds = results.filter((r) => r.status === 'fulfilled').map((r) => r.value);
     if (succeededIds.length) await markSynced(succeededIds);
 
@@ -269,6 +275,7 @@ export default function CallLogSyncScreen() {
       ) : (
         <FlashList
           data={filtered}
+          extraData={selected}
           keyExtractor={(item) => item.id}
           estimatedItemSize={78}
           contentContainerStyle={[styles.listContent, { paddingBottom: selected.size ? 100 : 24 }]}

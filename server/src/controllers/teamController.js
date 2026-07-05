@@ -3,7 +3,6 @@ import { Op } from 'sequelize'
 import {
   Company,
   CompanyRole,
-  CompanyRoleMenu,
   Invitation,
   Lead,
   MenuMaster,
@@ -11,6 +10,7 @@ import {
   Team,
   TeamMember,
   User,
+  UserMenuPermission,
   Workspace,
 } from '../models/index.js'
 import { userAuthIncludes } from '../queries/userIncludes.js'
@@ -30,6 +30,7 @@ import {
   patchCompanyRoleSchema,
   patchUserProfileSchema,
   patchUserRoleSchema,
+  putUserMenuPermissionsSchema,
   replaceUserWorkspacesSchema,
   reassignLeadsSchema,
   teamMemberSchema,
@@ -106,7 +107,7 @@ function invitationPrefillForUser(pref) {
   return out
 }
 
-function normalizeRoleMenuPermissions(items) {
+function normalizeMenuPermissions(items) {
   const seen = new Set()
   const list = []
   for (const item of Array.isArray(items) ? items : []) {
@@ -162,38 +163,22 @@ async function assertRoleNameAvailable({ companyId, name, excludeRoleId = null, 
   }
 }
 
+/** Role is a type/label (userRoleKind) only — menu permissions are per-user, see getUserMenuPermissions. */
 export async function listRoles(req, res, next) {
   try {
     const rows = await CompanyRole.findAll({
       where: { companyId: req.user.companyId },
       order: [['name', 'ASC']],
       attributes: ['id', 'name', 'description', 'isDefault', 'userRoleKind', 'roleNo'],
-      include: [
-        {
-          model: CompanyRoleMenu,
-          as: 'menuLinks',
-          attributes: ['menuId', 'canView', 'canEdit', 'canUpdate', 'canDelete'],
-          required: false,
-        },
-      ],
     })
     const ids = rows.map((r) => r.id)
-    const [memberCounts, menuCounts] = await Promise.all([
-      User.findAll({
-        where: { companyId: req.user.companyId, companyRoleId: { [Op.in]: ids } },
-        attributes: ['companyRoleId', [sequelize.fn('COUNT', sequelize.col('id')), 'count']],
-        group: ['companyRoleId'],
-        raw: true,
-      }),
-      CompanyRoleMenu.findAll({
-        where: { companyRoleId: { [Op.in]: ids } },
-        attributes: ['companyRoleId', [sequelize.fn('COUNT', sequelize.col('id')), 'count']],
-        group: ['companyRoleId'],
-        raw: true,
-      }),
-    ])
+    const memberCounts = await User.findAll({
+      where: { companyId: req.user.companyId, companyRoleId: { [Op.in]: ids } },
+      attributes: ['companyRoleId', [sequelize.fn('COUNT', sequelize.col('id')), 'count']],
+      group: ['companyRoleId'],
+      raw: true,
+    })
     const memberMap = new Map(memberCounts.map((r) => [r.companyRoleId, Number(r.count)]))
-    const menuMap = new Map(menuCounts.map((r) => [r.companyRoleId, Number(r.count)]))
     return res.json({
       success: true,
       data: rows.map((r) => ({
@@ -204,14 +189,6 @@ export async function listRoles(req, res, next) {
         userRoleKind: r.userRoleKind || 'custom',
         roleNo: r.roleNo != null ? Number(r.roleNo) : null,
         assignedUsers: memberMap.get(r.id) || 0,
-        menuCount: menuMap.get(r.id) || 0,
-        menuPermissions: (r.menuLinks || []).map((m) => ({
-          menuId: m.menuId,
-          canView: Boolean(m.canView),
-          canEdit: Boolean(m.canEdit),
-          canUpdate: Boolean(m.canUpdate),
-          canDelete: Boolean(m.canDelete),
-        })),
       })),
       meta: {},
     })
@@ -248,23 +225,6 @@ export async function createCompanyRole(req, res, next) {
     const roleName = value.name.trim()
     const roleDescription = value.description?.trim() || null
     const userRoleKind = value.userRoleKind
-    const menuPermissions = normalizeRoleMenuPermissions(value.menuPermissions)
-    if (!menuPermissions.length) {
-      const err = new Error('Invalid menus')
-      err.status = 400
-      err.code = 'VALIDATION'
-      err.publicMessage = 'Select at least one menu action'
-      throw err
-    }
-    const menuIds = uniqueIds(menuPermissions.map((x) => x.menuId))
-    const validMenus = await MenuMaster.findAll({ where: { id: { [Op.in]: menuIds }, isActive: true }, attributes: ['id'] })
-    if (validMenus.length !== menuIds.length) {
-      const err = new Error('Invalid menus')
-      err.status = 400
-      err.code = 'VALIDATION'
-      err.publicMessage = 'Select valid menus'
-      throw err
-    }
 
     let role
     await sequelize.transaction(async (transaction) => {
@@ -277,17 +237,6 @@ export async function createCompanyRole(req, res, next) {
           userRoleKind,
           createdBy: req.user.id,
         },
-        { transaction },
-      )
-      await CompanyRoleMenu.bulkCreate(
-        menuPermissions.map((p) => ({
-          companyRoleId: role.id,
-          menuId: p.menuId,
-          canView: p.canView,
-          canEdit: p.canEdit,
-          canUpdate: p.canUpdate,
-          canDelete: p.canDelete,
-        })),
         { transaction },
       )
     })
@@ -333,42 +282,6 @@ export async function patchCompanyRole(req, res, next) {
     if (value.description !== undefined) role.description = value.description?.trim() || null
     if (value.userRoleKind !== undefined) role.userRoleKind = value.userRoleKind
     await role.save()
-    if (value.menuPermissions) {
-      const menuPermissions = normalizeRoleMenuPermissions(value.menuPermissions)
-      if (!menuPermissions.length) {
-        const err = new Error('Invalid menus')
-        err.status = 400
-        err.code = 'VALIDATION'
-        err.publicMessage = 'Select at least one menu action'
-        throw err
-      }
-      const menuIds = uniqueIds(menuPermissions.map((x) => x.menuId))
-      const validMenus = await MenuMaster.findAll({
-        where: { id: { [Op.in]: menuIds }, isActive: true },
-        attributes: ['id'],
-      })
-      if (validMenus.length !== menuIds.length) {
-        const err = new Error('Invalid menus')
-        err.status = 400
-        err.code = 'VALIDATION'
-        err.publicMessage = 'Select valid menus'
-        throw err
-      }
-      await sequelize.transaction(async (t) => {
-        await CompanyRoleMenu.destroy({ where: { companyRoleId: role.id }, transaction: t })
-        await CompanyRoleMenu.bulkCreate(
-          menuPermissions.map((p) => ({
-            companyRoleId: role.id,
-            menuId: p.menuId,
-            canView: p.canView,
-            canEdit: p.canEdit,
-            canUpdate: p.canUpdate,
-            canDelete: p.canDelete,
-          })),
-          { transaction: t },
-        )
-      })
-    }
     return res.json({
       success: true,
       data: { id: role.id, name: role.name, userRoleKind: role.userRoleKind, roleNo: role.roleNo != null ? Number(role.roleNo) : null },
@@ -434,7 +347,6 @@ export async function deleteCompanyRole(req, res, next) {
         { where: { companyId: req.user.companyId, companyRoleId: role.id, isCompanyAdmin: false } },
       )
     }
-    await CompanyRoleMenu.destroy({ where: { companyRoleId: role.id } })
     await role.destroy()
     return res.json({ success: true, data: { ok: true }, meta: {} })
   } catch (e) {
@@ -442,20 +354,124 @@ export async function deleteCompanyRole(req, res, next) {
   }
 }
 
-export async function getPermissionMatrix(_req, res, next) {
+/**
+ * GET /team/users/:id/menu-permissions
+ * Returns every active menu with this specific user's own CRUD flags (all false if unset).
+ */
+export async function getUserMenuPermissions(req, res, next) {
   try {
-    const rows = await CompanyRoleMenu.findAll({
-      attributes: ['companyRoleId'],
-      include: [{ model: MenuMaster, as: 'menu', attributes: ['key', 'label', 'route'] }],
-      order: [['companyRoleId', 'ASC']],
+    const user = await User.findOne({
+      where: { id: req.params.id, companyId: req.user.companyId },
+      attributes: ['id'],
     })
-    const byRole = {}
-    for (const r of rows) {
-      const k = r.companyRoleId
-      if (!byRole[k]) byRole[k] = []
-      byRole[k].push({ key: r.menu?.key, label: r.menu?.label, route: r.menu?.route ?? null })
+    if (!user) {
+      const err = new Error('User not found')
+      err.status = 404
+      err.code = 'NOT_FOUND'
+      err.publicMessage = 'User not found'
+      throw err
     }
-    return res.json({ success: true, data: { matrix: byRole }, meta: {} })
+
+    const [menus, links] = await Promise.all([
+      MenuMaster.findAll({
+        where: { isActive: true },
+        attributes: ['id', 'key', 'label', 'route', 'parentId', 'sortOrder'],
+        order: [['sortOrder', 'ASC']],
+      }),
+      UserMenuPermission.findAll({
+        where: { userId: user.id },
+        attributes: ['menuId', 'canView', 'canEdit', 'canUpdate', 'canDelete'],
+      }),
+    ])
+    const byMenuId = new Map(links.map((l) => [l.menuId, l]))
+
+    return res.json({
+      success: true,
+      data: {
+        items: menus.map((m) => {
+          const l = byMenuId.get(m.id)
+          return {
+            menuId: m.id,
+            key: m.key,
+            label: m.label,
+            route: m.route,
+            parentId: m.parentId,
+            sortOrder: m.sortOrder,
+            canView: Boolean(l?.canView),
+            canEdit: Boolean(l?.canEdit),
+            canUpdate: Boolean(l?.canUpdate),
+            canDelete: Boolean(l?.canDelete),
+          }
+        }),
+      },
+      meta: {},
+    })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+/**
+ * PUT /team/users/:id/menu-permissions
+ * Replace-all semantics for one user's menu-CRUD grants. Hard company-admin check (beyond
+ * the route's settings.team:admin gate) because granting permissions to other users is
+ * itself a privilege-escalation-sensitive action — a custom role that merely has
+ * settings.team:admin should not be able to grant itself/others unlimited access.
+ */
+export async function putUserMenuPermissions(req, res, next) {
+  try {
+    requireCompanyAdmin(req)
+    const { error, value } = putUserMenuPermissionsSchema.validate(req.body, { abortEarly: false, stripUnknown: true })
+    if (error) {
+      const err = new Error('Validation failed')
+      err.status = 400
+      err.code = 'VALIDATION'
+      err.publicMessage = joiPublicMessages(error)
+      throw err
+    }
+    const user = await User.findOne({
+      where: { id: req.params.id, companyId: req.user.companyId },
+      attributes: ['id'],
+    })
+    if (!user) {
+      const err = new Error('User not found')
+      err.status = 404
+      err.code = 'NOT_FOUND'
+      err.publicMessage = 'User not found'
+      throw err
+    }
+
+    const menuPermissions = normalizeMenuPermissions(value.menuPermissions)
+    const menuIds = uniqueIds(menuPermissions.map((x) => x.menuId))
+    if (menuIds.length) {
+      const validMenus = await MenuMaster.findAll({ where: { id: { [Op.in]: menuIds }, isActive: true }, attributes: ['id'] })
+      if (validMenus.length !== menuIds.length) {
+        const err = new Error('Invalid menus')
+        err.status = 400
+        err.code = 'VALIDATION'
+        err.publicMessage = 'Select valid menus'
+        throw err
+      }
+    }
+
+    await sequelize.transaction(async (t) => {
+      await UserMenuPermission.destroy({ where: { userId: user.id }, transaction: t })
+      if (menuPermissions.length) {
+        await UserMenuPermission.bulkCreate(
+          menuPermissions.map((p) => ({
+            userId: user.id,
+            menuId: p.menuId,
+            canView: p.canView,
+            canEdit: p.canEdit,
+            canUpdate: p.canUpdate,
+            canDelete: p.canDelete,
+          })),
+          { transaction: t },
+        )
+      }
+    })
+
+    return res.json({ success: true, data: { ok: true }, meta: {} })
   } catch (e) {
     return next(e)
   }

@@ -9,6 +9,7 @@ import { RegisterPage } from '@/pages/RegisterPage'
 import { ForgotPasswordPage } from '@/pages/ForgotPasswordPage'
 import { TeamPage } from '@/pages/TeamPage'
 import { TeamMemberProfilePage } from '@/features/team/pages/TeamMemberProfilePage'
+import { TeamMemberPermissionsPage } from '@/features/team/pages/TeamMemberPermissionsPage'
 import { IntegrationsPage } from '@/pages/IntegrationsPage'
 import { AcceptInvitePage } from '@/pages/AcceptInvitePage'
 import { LeadsPage } from '@/pages/LeadsPage'
@@ -114,6 +115,7 @@ export default function App() {
             {/* <Route path="/leave/config" element={<LeaveConfigPage />} /> */}
             <Route path="/team" element={<TeamPage />} />
             <Route path="/team/:userId" element={<TeamMemberProfilePage />} />
+            <Route path="/team/:userId/permissions" element={<TeamMemberPermissionsPage />} />
             <Route path="/integrations" element={<IntegrationsPage />} />
             <Route path="/documents" element={<DocumentsPage />} />
             <Route path="/forms" element={<WebFormsListPage />} />

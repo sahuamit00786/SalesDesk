@@ -32,6 +32,7 @@ import { UserWorkspace } from './UserWorkspace.js'
 import { MenuMaster } from './MenuMaster.js'
 import { CompanyRole } from './CompanyRole.js'
 import { CompanyRoleMenu } from './CompanyRoleMenu.js'
+import { UserMenuPermission } from './UserMenuPermission.js'
 import { Document } from './Document.js'
 import { DocumentLink } from './DocumentLink.js'
 import { Folder } from './Folder.js'
@@ -104,6 +105,13 @@ CompanyRoleMenu.belongsTo(CompanyRole, { foreignKey: 'companyRoleId', as: 'compa
 CompanyRole.hasMany(CompanyRoleMenu, { foreignKey: 'companyRoleId', as: 'menuLinks' })
 CompanyRoleMenu.belongsTo(MenuMaster, { foreignKey: 'menuId', as: 'menu' })
 MenuMaster.hasMany(CompanyRoleMenu, { foreignKey: 'menuId', as: 'roleLinks' })
+
+// Per-user menu-CRUD grants — the actual permission enforcement source of truth.
+// CompanyRoleMenu/menuLinks above is legacy (role no longer carries permissions).
+UserMenuPermission.belongsTo(User, { foreignKey: 'userId', as: 'user' })
+User.hasMany(UserMenuPermission, { foreignKey: 'userId', as: 'menuPermissions' })
+UserMenuPermission.belongsTo(MenuMaster, { foreignKey: 'menuId', as: 'menu' })
+MenuMaster.hasMany(UserMenuPermission, { foreignKey: 'menuId', as: 'userLinks' })
 
 Workspace.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
 Company.hasMany(Workspace, { foreignKey: 'companyId', as: 'workspaces' })
@@ -493,6 +501,7 @@ export {
   MenuMaster,
   CompanyRole,
   CompanyRoleMenu,
+  UserMenuPermission,
   Team,
   TeamMember,
   UserWorkspace,

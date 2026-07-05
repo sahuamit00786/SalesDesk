@@ -6,6 +6,51 @@ const CALL_INCLUDE = [
   { model: User, as: 'owner', attributes: ['id', 'name', 'email'] },
 ]
 
+/** Last-10-digit key so "+91 63940-15647" matches a lead stored as "6394015647". */
+function phoneDigitsKey(value) {
+  const digits = String(value || '').replace(/\D/g, '')
+  return digits ? digits.slice(-10) : ''
+}
+
+/**
+ * Finds a company lead whose primary phone OR altPhone matches the number,
+ * comparing on trailing digits since phones are stored as raw typed strings.
+ */
+async function findLeadByPhone(user, rawPhone) {
+  const key = phoneDigitsKey(rawPhone)
+  if (!key) return null
+  const candidates = await Lead.findAll({
+    where: { companyId: user.companyId, isDeleted: false },
+    attributes: ['id', 'phone', 'altPhone', 'workspaceId'],
+  })
+  const hit = candidates.find((l) => phoneDigitsKey(l.phone) === key || phoneDigitsKey(l.altPhone) === key)
+  return hit ? Lead.findByPk(hit.id) : null
+}
+
+/**
+ * Attaches every orphan call in the company whose number matches the lead's
+ * phone/altPhone. Called after lead create/convert so old synced calls show up
+ * on the lead page. Returns count linked.
+ */
+export async function linkOrphanCallsToLead(lead) {
+  const keys = [phoneDigitsKey(lead.phone), phoneDigitsKey(lead.altPhone)].filter(Boolean)
+  if (!keys.length) return 0
+
+  const orphans = await CallLog.findAll({
+    where: { companyId: lead.companyId, leadId: null, phoneNumber: { [Op.ne]: null } },
+    attributes: ['id', 'phoneNumber', 'workspaceId'],
+  })
+  const matched = orphans.filter((c) => keys.includes(phoneDigitsKey(c.phoneNumber)))
+  if (!matched.length) return 0
+
+  await CallLog.update({ leadId: lead.id }, { where: { id: { [Op.in]: matched.map((c) => c.id) } } })
+  const missingWs = matched.filter((c) => !c.workspaceId).map((c) => c.id)
+  if (missingWs.length && lead.workspaceId) {
+    await CallLog.update({ workspaceId: lead.workspaceId }, { where: { id: { [Op.in]: missingWs } } })
+  }
+  return matched.length
+}
+
 async function assertLeadAccess(user, leadId) {
   const lead = await Lead.findOne({
     where: { id: leadId, companyId: user.companyId, isDeleted: false },
@@ -38,7 +83,10 @@ export async function createCall(user, payload, workspaceId) {
 
   if (payload.leadId) {
     lead = await assertLeadAccess(user, payload.leadId)
-  } else if (!String(payload.phoneNumber || '').trim()) {
+  } else if (payload.phoneNumber) {
+    // Client may miss a match (its lead index is capped) — re-match here on primary/altPhone.
+    lead = await findLeadByPhone(user, payload.phoneNumber)
+  } else if (source !== 'device_sync' && !String(payload.phoneNumber || '').trim()) {
     const err = new Error('leadId or phoneNumber is required')
     err.status = 400
     err.code = 'VALIDATION'
@@ -69,6 +117,8 @@ export async function getCalls(user, filters = {}) {
   if (String(filters.hasLead ?? '').toLowerCase() === 'true') where.leadId = { [Op.ne]: null }
   else if (String(filters.hasLead ?? '').toLowerCase() === 'false') where.leadId = null
   if (filters.workspaceId) where.workspaceId = filters.workspaceId
+  if (filters.callType) where.callType = filters.callType
+  if (filters.outcome) where.outcome = filters.outcome
 
   return CallLog.findAll({ where, include: CALL_INCLUDE, order: [['createdAt', 'DESC']] })
 }
@@ -110,7 +160,8 @@ export async function convertCall(user, id, workspaceId, payload = {}) {
   const contactName = payload.contactName || call.callerName || null
   const isOpportunity = payload.type === 'opportunity'
 
-  let lead = await Lead.findOne({ where: { companyId: user.companyId, phone, isDeleted: false } })
+  let lead = await findLeadByPhone(user, phone)
+  const created = !lead
   if (!lead) {
     lead = await Lead.create({
       companyId: user.companyId,
@@ -130,5 +181,8 @@ export async function convertCall(user, id, workspaceId, payload = {}) {
   if (!call.workspaceId) call.workspaceId = lead.workspaceId
   await call.save()
 
-  return { call: await assertCallAccess(user, call.id), lead }
+  // Sweep any other orphan calls from the same number onto this lead too.
+  await linkOrphanCallsToLead(lead)
+
+  return { call: await assertCallAccess(user, call.id), lead, created }
 }
