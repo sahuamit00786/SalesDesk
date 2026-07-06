@@ -27,6 +27,12 @@ export const LeaveBalance = sequelize.define(
       field: 'company_id',
       references: { model: 'companies', key: 'id' },
     },
+    workspaceId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      field: 'workspace_id',
+      references: { model: 'workspaces', key: 'id' },
+    },
     year: {
       type: DataTypes.SMALLINT.UNSIGNED,
       allowNull: false,

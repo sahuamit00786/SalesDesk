@@ -106,7 +106,11 @@ export function CallsPage() {
         field: 'createdAt',
         headerName: 'Date & time',
         width: 200,
-        valueGetter: (_v, row) => fmtDateTime(row.createdAt),
+        renderCell: ({ row }) => (
+          <span className="inline-block origin-left scale-75 text-sm text-ink">
+            {fmtDateTime(row.createdAt)}
+          </span>
+        ),
       },
       {
         field: 'caller',
@@ -203,7 +207,6 @@ export function CallsPage() {
         sortable: false,
         renderCell: ({ row }) => (
           <span className="truncate text-xs text-ink-muted">
-            {row.source === 'device_sync' ? 'Synced by ' : 'Logged by '}
             {row.owner?.name || row.owner?.email || '—'}
           </span>
         ),

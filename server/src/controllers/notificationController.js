@@ -14,6 +14,7 @@ export async function getNotifications(req, res, next) {
     const where = {
       userId: req.user.id,
       companyId: req.user.companyId,
+      workspaceId: req.workspaceId,
     }
     if (unreadOnly) where.isRead = false
 
@@ -50,6 +51,7 @@ export async function markNotificationRead(req, res, next) {
         id: req.params.id,
         userId: req.user.id,
         companyId: req.user.companyId,
+        workspaceId: req.workspaceId,
       },
     })
 
@@ -76,6 +78,7 @@ export async function markAllRead(req, res, next) {
         where: {
           userId: req.user.id,
           companyId: req.user.companyId,
+          workspaceId: req.workspaceId,
           isRead: false,
         },
       },
@@ -97,6 +100,7 @@ export async function getUnreadCount(req, res, next) {
       where: {
         userId: req.user.id,
         companyId: req.user.companyId,
+        workspaceId: req.workspaceId,
         isRead: false,
       },
     })
@@ -121,11 +125,12 @@ export async function getUnreadCount(req, res, next) {
  * @param {string} [opts.resourceId]
  * @param {string} [opts.link]
  */
-export async function createNotification({ userId, companyId, type, title, body, resourceType, resourceId, link }) {
+export async function createNotification({ userId, companyId, workspaceId, type, title, body, resourceType, resourceId, link }) {
   try {
     await Notification.create({
       userId,
       companyId,
+      workspaceId,
       type: type || 'info',
       title,
       message: body || null,

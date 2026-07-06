@@ -21,6 +21,12 @@ export const AttendanceLog = sequelize.define(
       field: 'company_id',
       references: { model: 'companies', key: 'id' },
     },
+    workspaceId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      field: 'workspace_id',
+      references: { model: 'workspaces', key: 'id' },
+    },
     date: {
       type: DataTypes.DATEONLY,
       allowNull: false,

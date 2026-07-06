@@ -9,6 +9,7 @@ import {
   User,
 } from '../models/index.js'
 import { createNotification } from './notificationService.js'
+import { getPrimaryWorkspaceIdForUser } from './userWorkspaceService.js'
 
 function dateOnlyStr(d = new Date()) {
   return d.toISOString().slice(0, 10)
@@ -74,15 +75,20 @@ export async function markAbsentForDate(dateStr = dateOnlyStr()) {
     })
     if (onApprovedLeave) continue
 
+    const workspaceId = await getPrimaryWorkspaceIdForUser(user.id, user.companyId)
+    if (!workspaceId) continue
+
     await AttendanceLog.create({
       userId: user.id,
       companyId: user.companyId,
+      workspaceId,
       date: dateStr,
       status: 'absent',
     })
     createNotification({
       userId: user.id,
       companyId: user.companyId,
+      workspaceId,
       title: 'Marked absent',
       message: `You were marked absent on ${dateStr}.`,
       type: 'attendance',

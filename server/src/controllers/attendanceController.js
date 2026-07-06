@@ -47,11 +47,12 @@ function eachDateInRange(fromDate, toDate, cb) {
   }
 }
 
-async function approvedLeavesInRange(companyId, userIds, rangeStart, rangeEnd) {
+async function approvedLeavesInRange(companyId, workspaceId, userIds, rangeStart, rangeEnd) {
   if (!userIds.length) return []
   return LeaveRequest.findAll({
     where: {
       companyId,
+      workspaceId,
       userId: { [Op.in]: userIds },
       status: 'approved',
       fromDate: { [Op.lte]: rangeEnd },
@@ -99,10 +100,10 @@ export async function getTodayStatus(req, res, next) {
     const date = todayDateOnly()
     const [log, sessions] = await Promise.all([
       AttendanceLog.findOne({
-        where: { userId: req.user.id, companyId: req.user.companyId, date },
+        where: { userId: req.user.id, companyId: req.user.companyId, workspaceId: req.workspaceId, date },
       }),
       AttendanceSession.findAll({
-        where: { userId: req.user.id, companyId: req.user.companyId, date },
+        where: { userId: req.user.id, companyId: req.user.companyId, workspaceId: req.workspaceId, date },
         order: [['checkInTime', 'ASC']],
       }),
     ])
@@ -131,7 +132,7 @@ export async function checkIn(req, res, next) {
     const force = req.body?.force === true
 
     const openSession = await AttendanceSession.findOne({
-      where: { userId: req.user.id, companyId: req.user.companyId, date, checkOutTime: null },
+      where: { userId: req.user.id, companyId: req.user.companyId, workspaceId: req.workspaceId, date, checkOutTime: null },
     })
     if (openSession) {
       return res.status(400).json({
@@ -144,6 +145,7 @@ export async function checkIn(req, res, next) {
       const onLeave = await LeaveRequest.findOne({
         where: {
           userId: req.user.id,
+          workspaceId: req.workspaceId,
           status: 'approved',
           fromDate: { [Op.lte]: date },
           toDate: { [Op.gte]: date },
@@ -161,20 +163,21 @@ export async function checkIn(req, res, next) {
     const now = new Date()
     const status = await deriveStatus(now, req.user.companyId)
     const [log] = await AttendanceLog.findOrCreate({
-      where: { userId: req.user.id, companyId: req.user.companyId, date },
+      where: { userId: req.user.id, companyId: req.user.companyId, workspaceId: req.workspaceId, date },
       defaults: { checkInTime: now, status },
     })
 
     const session = await AttendanceSession.create({
       userId: req.user.id,
       companyId: req.user.companyId,
+      workspaceId: req.workspaceId,
       logId: log.id,
       date,
       checkInTime: now,
     })
 
     const allSessions = await AttendanceSession.findAll({
-      where: { userId: req.user.id, companyId: req.user.companyId, date },
+      where: { userId: req.user.id, companyId: req.user.companyId, workspaceId: req.workspaceId, date },
       order: [['checkInTime', 'ASC']],
     })
 
@@ -199,7 +202,7 @@ export async function checkOut(req, res, next) {
     const date = todayDateOnly()
 
     const openSession = await AttendanceSession.findOne({
-      where: { userId: req.user.id, companyId: req.user.companyId, date, checkOutTime: null },
+      where: { userId: req.user.id, companyId: req.user.companyId, workspaceId: req.workspaceId, date, checkOutTime: null },
     })
     if (!openSession) {
       return res.status(400).json({
@@ -213,12 +216,12 @@ export async function checkOut(req, res, next) {
     await openSession.update({ checkOutTime: now, durationHours })
 
     const allSessions = await AttendanceSession.findAll({
-      where: { userId: req.user.id, companyId: req.user.companyId, date },
+      where: { userId: req.user.id, companyId: req.user.companyId, workspaceId: req.workspaceId, date },
     })
     const totalHours = sumSessionHours(allSessions)
 
     const log = await AttendanceLog.findOne({
-      where: { userId: req.user.id, companyId: req.user.companyId, date },
+      where: { userId: req.user.id, companyId: req.user.companyId, workspaceId: req.workspaceId, date },
     })
     if (log) {
       await log.update({ checkOutTime: now, totalHours })
@@ -252,6 +255,7 @@ export async function getMyAttendance(req, res, next) {
       where: {
         userId: req.user.id,
         companyId: req.user.companyId,
+        workspaceId: req.workspaceId,
         date: { [Op.between]: [start, end] },
       },
       order: [['date', 'ASC']],
@@ -294,6 +298,7 @@ export async function getTeamAttendance(req, res, next) {
       ? await AttendanceLog.findAll({
           where: {
             companyId: req.user.companyId,
+            workspaceId: req.workspaceId,
             userId: { [Op.in]: userIds },
             date: { [Op.between]: [start, end] },
           },
@@ -310,7 +315,7 @@ export async function getTeamAttendance(req, res, next) {
       else if (log.status === 'half_day') calendar[d].half_day += 1
     }
 
-    const approvedLeaves = await approvedLeavesInRange(req.user.companyId, userIds, start, end)
+    const approvedLeaves = await approvedLeavesInRange(req.user.companyId, req.workspaceId, userIds, start, end)
     const { full: onLeaveFull, half: onLeaveHalf } = countOnLeaveByDate(approvedLeaves, start, end)
     for (const [d, count] of Object.entries(onLeaveFull)) {
       if (!calendar[d]) calendar[d] = { present: 0, absent: 0, late: 0, half_day: 0, on_leave: 0, on_leave_half: 0 }
@@ -369,6 +374,7 @@ export async function getDayDetail(req, res, next) {
     const logs = await AttendanceLog.findAll({
       where: {
         companyId: req.user.companyId,
+        workspaceId: req.workspaceId,
         date,
         userId: { [Op.in]: users.map((u) => u.id) },
       },
@@ -377,6 +383,7 @@ export async function getDayDetail(req, res, next) {
     const byUser = new Map(logs.map((l) => [String(l.userId), l]))
     const approvedLeaves = await approvedLeavesInRange(
       req.user.companyId,
+      req.workspaceId,
       users.map((u) => u.id),
       date,
       date,
@@ -418,7 +425,7 @@ export async function editAttendanceLog(req, res, next) {
       return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'HR only' } })
     }
     const log = await AttendanceLog.findOne({
-      where: { id: req.params.id, companyId: req.user.companyId },
+      where: { id: req.params.id, companyId: req.user.companyId, workspaceId: req.workspaceId },
     })
     if (!log) {
       return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Log not found' } })
@@ -460,7 +467,7 @@ export async function createAttendanceLog(req, res, next) {
     if (!targetUser) {
       return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } })
     }
-    const existing = await AttendanceLog.findOne({ where: { userId, date } })
+    const existing = await AttendanceLog.findOne({ where: { userId, workspaceId: req.workspaceId, date } })
     if (existing) {
       return res.status(409).json({
         success: false,
@@ -470,6 +477,7 @@ export async function createAttendanceLog(req, res, next) {
     const log = await AttendanceLog.create({
       userId,
       companyId: req.user.companyId,
+      workspaceId: req.workspaceId,
       date,
       status,
       checkInTime: checkInTime || null,
@@ -506,6 +514,7 @@ export async function exportAttendanceCsv(req, res, next) {
     const logs = await AttendanceLog.findAll({
       where: {
         companyId: req.user.companyId,
+        workspaceId: req.workspaceId,
         userId: { [Op.in]: users.map((u) => u.id) },
         date: { [Op.between]: [start, end] },
       },

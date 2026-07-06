@@ -27,6 +27,12 @@ export const LeaveRequest = sequelize.define(
       field: 'company_id',
       references: { model: 'companies', key: 'id' },
     },
+    workspaceId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      field: 'workspace_id',
+      references: { model: 'workspaces', key: 'id' },
+    },
     fromDate: {
       type: DataTypes.DATEONLY,
       allowNull: false,

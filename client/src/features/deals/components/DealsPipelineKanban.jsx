@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { DndContext, DragOverlay, PointerSensor, useDraggable, useDroppable, useSensor, useSensors } from '@dnd-kit/core'
-import { Building2, MoreHorizontal } from 'lucide-react'
+import { Building2, Inbox, MoreHorizontal } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { cn } from '@/utils/cn'
@@ -185,7 +185,7 @@ function DealCardBody({ opp, interactive = false, onOpen, onOpenClient, onEdit }
 
 function DealCardOverlay({ opp }) {
   return (
-    <div className="w-[268px] rotate-1 scale-[1.02] overflow-hidden rounded-lg border border-neutral-200/90 bg-white shadow-xl">
+    <div className="w-[268px] rotate-1 scale-[1.03] overflow-hidden rounded-xl border border-neutral-200/90 bg-white shadow-2xl ring-2 ring-brand-400/40">
       <DealCardBody opp={opp} />
     </div>
   )
@@ -205,8 +205,8 @@ function DealKanbanCard({ opp, onOpen, onOpenClient, onEdit }) {
       {...listeners}
       {...attributes}
       className={cn(
-        'cursor-grab touch-none overflow-hidden rounded-lg border border-neutral-200/90 bg-white shadow-sm transition-shadow active:cursor-grabbing',
-        isDragging && 'opacity-50 ring-2 ring-brand-500/40',
+        'cursor-grab touch-none overflow-hidden rounded-xl border border-neutral-200/90 bg-white shadow-sm transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg active:cursor-grabbing',
+        isDragging && 'opacity-40 shadow-none',
       )}
     >
       <DealCardBody opp={opp} interactive onOpen={onOpen} onOpenClient={onOpenClient} onEdit={onEdit} />
@@ -230,12 +230,12 @@ function DealColumn({ stageName, displayLabel, opportunities, isWonColumn, onOpe
     <div
       ref={setNodeRef}
       className={cn(
-        'flex h-full min-h-0 w-[280px] shrink-0 flex-col rounded-lg border border-neutral-200/60',
+        'flex h-full min-h-0 w-[280px] shrink-0 flex-col rounded-2xl border border-neutral-200/60 shadow-sm transition-colors duration-200',
         isWonColumn ? 'bg-emerald-50/80' : 'bg-brand-50/60',
-        isOver && 'ring-2 ring-brand-500/50 ring-offset-1',
+        isOver && 'ring-2 ring-brand-400/50 ring-offset-1',
       )}
     >
-      <div className="flex shrink-0 items-start justify-between gap-2 rounded-t-lg border-b border-neutral-200/70 bg-white px-3 py-2.5">
+      <div className="sticky top-0 z-10 flex shrink-0 items-start justify-between gap-2 rounded-t-2xl border-b border-neutral-200/70 bg-white/95 px-3 py-2.5 backdrop-blur">
         <div className="min-w-0">
           <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-900">{displayLabel}</p>
           <p className="mt-1 text-sm font-bold text-neutral-900">{sumLabel}</p>
@@ -249,7 +249,12 @@ function DealColumn({ stageName, displayLabel, opportunities, isWonColumn, onOpe
       </div>
       <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto p-2.5 scrollbar-subtle">
         {opportunities.length === 0 ? (
-          <p className="rounded-md border border-dashed border-neutral-300/80 bg-white/50 px-3 py-8 text-center text-[11px] text-neutral-400">No deals</p>
+          <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-neutral-300/80 bg-white/60 px-3 py-10 text-center">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-neutral-400 shadow-sm">
+              <Inbox className="h-4 w-4" />
+            </span>
+            <p className="text-[11px] font-medium text-neutral-400">No deals in this stage.</p>
+          </div>
         ) : (
           opportunities.map((opp) => <DealKanbanCard key={opp.id} opp={opp} onOpen={onOpen} onOpenClient={onOpenClient} onEdit={onEdit} />)
         )}
@@ -260,8 +265,8 @@ function DealColumn({ stageName, displayLabel, opportunities, isWonColumn, onOpe
 
 function DealOtherColumn({ displayLabel, opportunities, onOpen, onOpenClient, onEdit }) {
   return (
-    <div className="flex h-full min-h-0 w-[280px] shrink-0 flex-col rounded-lg border border-amber-200 bg-amber-50/90">
-      <div className="shrink-0 border-b border-amber-200 px-3 py-2.5">
+    <div className="flex h-full min-h-0 w-[280px] shrink-0 flex-col rounded-2xl border border-amber-200 bg-amber-50/90 shadow-sm">
+      <div className="sticky top-0 z-10 shrink-0 rounded-t-2xl border-b border-amber-200 bg-amber-50/95 px-3 py-2.5 backdrop-blur">
         <p className="text-[11px] font-bold uppercase tracking-wide text-amber-900">{displayLabel}</p>
         <p className="text-[11px] text-amber-800/90">{opportunities.length} deal{opportunities.length === 1 ? '' : 's'}</p>
       </div>
@@ -400,7 +405,9 @@ export function DealsPipelineKanban({
           />
         ) : null}
       </div>
-      <DragOverlay>{activeOpp ? <DealCardOverlay opp={activeOpp} /> : null}</DragOverlay>
+      <DragOverlay dropAnimation={{ duration: 220, easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)' }}>
+        {activeOpp ? <DealCardOverlay opp={activeOpp} /> : null}
+      </DragOverlay>
     </DndContext>
   )
 }

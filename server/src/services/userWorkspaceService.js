@@ -91,6 +91,24 @@ export async function setWorkspaceMembershipsForUser({ userId, companyId, worksp
   return validIds
 }
 
+/** Resolves the workspace to attribute a background/cron-created row to for a given user:
+ * their oldest workspace membership, falling back to the company's oldest workspace. */
+export async function getPrimaryWorkspaceIdForUser(userId, companyId) {
+  const membership = await UserWorkspace.findOne({
+    where: { userId },
+    order: [['createdAt', 'ASC']],
+    attributes: ['workspaceId'],
+  })
+  if (membership) return membership.workspaceId
+
+  const fallback = await Workspace.findOne({
+    where: { companyId },
+    order: [['createdAt', 'ASC']],
+    attributes: ['id'],
+  })
+  return fallback ? fallback.id : null
+}
+
 export async function hydrateWorkspaceSummaryForUsers(userIds) {
   const uniqueUserIds = dedupeIds(userIds)
   if (!uniqueUserIds.length) return new Map()

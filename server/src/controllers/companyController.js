@@ -3,6 +3,7 @@ import { userAuthIncludes } from '../queries/userIncludes.js'
 import { patchMyCompanySchema } from '../validations/company.js'
 import { serializeUser } from '../serializers/userSerializer.js'
 import { ensureCompanyWorkspace } from '../services/workspaceService.js'
+import { ensureCompanyDefaultRoles } from '../services/companyRoleService.js'
 import { provisionPrimaryWorkspaceForCompany } from '../services/workspaceProvisionService.js'
 import { normalizeCurrencyCode } from '../utils/currency.js'
 
@@ -79,6 +80,7 @@ export async function patchMyCompany(req, res, next) {
 
     await company.save()
     await ensureCompanyWorkspace(company)
+    await ensureCompanyDefaultRoles(company)
 
     await user.reload({ include: userAuthIncludes })
 
@@ -120,6 +122,7 @@ export async function provisionMyWorkspace(req, res, next) {
     }
 
     await ensureCompanyWorkspace(company)
+    await ensureCompanyDefaultRoles(company)
     const provision = await provisionPrimaryWorkspaceForCompany(company)
     await user.reload({ include: userAuthIncludes })
 

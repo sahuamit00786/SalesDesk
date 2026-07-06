@@ -1,31 +1,7 @@
 import Joi from 'joi'
 import { Op } from 'sequelize'
 import { Workflow, WorkflowVersion, WorkflowRun, WorkflowRunStep, Lead } from '../models/index.js'
-import { allowedWorkspaceIdsForUser } from '../services/userWorkspaceService.js'
 import { startWorkflowRun } from '../services/workflowRunner.js'
-
-function assertWorkspace(req, workspaceId) {
-  const wid = String(workspaceId || '').trim()
-  if (!wid) {
-    const err = new Error('workspaceId is required')
-    err.status = 400
-    err.code = 'VALIDATION'
-    throw err
-  }
-  return wid
-}
-
-async function assertWorkspaceAccess(req, workspaceId) {
-  const wid = assertWorkspace(req, workspaceId)
-  const allowed = await allowedWorkspaceIdsForUser(req.user)
-  if (allowed.length && !allowed.includes(wid) && !req.user.isCompanyAdmin) {
-    const err = new Error('No access to workspace')
-    err.status = 403
-    err.code = 'FORBIDDEN'
-    throw err
-  }
-  return wid
-}
 
 const defaultDefinition = () => ({
   nodes: [
@@ -56,7 +32,7 @@ const testSchema = Joi.object({
 
 export async function list(req, res, next) {
   try {
-    const workspaceId = await assertWorkspaceAccess(req, req.headers['x-workspace-id'])
+    const workspaceId = req.workspaceId
     const rows = await Workflow.findAll({
       where: { workspaceId, companyId: req.user.companyId },
       order: [['updatedAt', 'DESC']],
@@ -126,7 +102,7 @@ export async function list(req, res, next) {
 
 export async function create(req, res, next) {
   try {
-    const workspaceId = await assertWorkspaceAccess(req, req.headers['x-workspace-id'])
+    const workspaceId = req.workspaceId
     const { error, value } = createSchema.validate(req.body || {}, { abortEarly: false, stripUnknown: true })
     if (error) {
       return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: error.message } })
@@ -148,7 +124,7 @@ export async function create(req, res, next) {
 
 export async function getOne(req, res, next) {
   try {
-    const workspaceId = await assertWorkspaceAccess(req, req.headers['x-workspace-id'])
+    const workspaceId = req.workspaceId
     const row = await Workflow.findOne({
       where: { id: req.params.id, companyId: req.user.companyId, workspaceId },
     })
@@ -161,7 +137,7 @@ export async function getOne(req, res, next) {
 
 export async function patch(req, res, next) {
   try {
-    const workspaceId = await assertWorkspaceAccess(req, req.headers['x-workspace-id'])
+    const workspaceId = req.workspaceId
     const { error, value } = patchSchema.validate(req.body || {}, { abortEarly: false, stripUnknown: true })
     if (error) {
       return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: error.message } })
@@ -184,7 +160,7 @@ export async function patch(req, res, next) {
 
 export async function remove(req, res, next) {
   try {
-    const workspaceId = await assertWorkspaceAccess(req, req.headers['x-workspace-id'])
+    const workspaceId = req.workspaceId
     const row = await Workflow.findOne({
       where: { id: req.params.id, companyId: req.user.companyId, workspaceId },
     })
@@ -249,7 +225,7 @@ function validateWorkflowDefinition(def) {
 
 export async function publish(req, res, next) {
   try {
-    const workspaceId = await assertWorkspaceAccess(req, req.headers['x-workspace-id'])
+    const workspaceId = req.workspaceId
     const row = await Workflow.findOne({
       where: { id: req.params.id, companyId: req.user.companyId, workspaceId },
     })
@@ -275,7 +251,7 @@ export async function publish(req, res, next) {
 
 export async function testRun(req, res, next) {
   try {
-    const workspaceId = await assertWorkspaceAccess(req, req.headers['x-workspace-id'])
+    const workspaceId = req.workspaceId
     const { error, value } = testSchema.validate(req.body || {}, { abortEarly: false, stripUnknown: true })
     if (error) {
       return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: error.message } })
@@ -320,7 +296,7 @@ export async function testRun(req, res, next) {
 
 export async function listRuns(req, res, next) {
   try {
-    const workspaceId = await assertWorkspaceAccess(req, req.headers['x-workspace-id'])
+    const workspaceId = req.workspaceId
     const wf = await Workflow.findOne({
       where: { id: req.params.id, companyId: req.user.companyId, workspaceId },
     })
@@ -338,7 +314,7 @@ export async function listRuns(req, res, next) {
 
 export async function getRun(req, res, next) {
   try {
-    const workspaceId = await assertWorkspaceAccess(req, req.headers['x-workspace-id'])
+    const workspaceId = req.workspaceId
     const run = await WorkflowRun.findOne({
       where: { id: req.params.runId },
       include: [{ model: Workflow, as: 'workflow', where: { companyId: req.user.companyId, workspaceId }, required: true }],

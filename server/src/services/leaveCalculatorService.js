@@ -132,9 +132,9 @@ export async function hasOverlappingLeave(userId, fromStr, toStr, excludeRequest
   return Boolean(row)
 }
 
-export async function getOrCreateBalance(userId, leaveTypeId, companyId, year) {
+export async function getOrCreateBalance(userId, leaveTypeId, companyId, year, workspaceId) {
   let row = await LeaveBalance.findOne({
-    where: { userId, leaveTypeId, companyId, year },
+    where: { userId, leaveTypeId, companyId, workspaceId, year },
     include: [{ model: LeaveType, as: 'leaveType' }],
   })
   if (row) return row
@@ -144,6 +144,7 @@ export async function getOrCreateBalance(userId, leaveTypeId, companyId, year) {
     userId,
     leaveTypeId,
     companyId,
+    workspaceId,
     year,
     allocated: lt.daysPerYear,
     used: 0,
@@ -169,6 +170,7 @@ export async function validateLeaveRequest({
   fromDate,
   toDate,
   companyId,
+  workspaceId,
   allowPastForSick = false,
   isHalfDay = false,
 }) {
@@ -205,7 +207,7 @@ export async function validateLeaveRequest({
   }
 
   const year = new Date(fromStr).getFullYear()
-  const balance = await getOrCreateBalance(userId, leaveTypeId, companyId, year)
+  const balance = await getOrCreateBalance(userId, leaveTypeId, companyId, year, workspaceId)
   if (!balance) return { ok: false, message: 'Leave balance not found' }
 
   if (String(lt.code || '').toUpperCase() !== 'UL' && Number(balance.available) < days) {

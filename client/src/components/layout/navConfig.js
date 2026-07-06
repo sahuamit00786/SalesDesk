@@ -1,5 +1,6 @@
 import {
   BarChart2,
+  BookOpen,
   Briefcase,
   Building2,
   CalendarCheck,
@@ -84,8 +85,8 @@ export const ROUTE_META = {
     sub: 'You have 34 tasks ongoing. Stay focused and complete them on time.',
   },
   '/meetings': {
-    title: 'Calls & meetings',
-    sub: 'Log, record, and analyse every phone call and meeting — full call intelligence',
+    title: 'Meetings',
+    sub: 'Log, record, and analyse every meeting — full call intelligence',
   },
   '/calls': {
     title: 'Calls',
@@ -179,6 +180,10 @@ export const ROUTE_META = {
     title: 'Leave settings',
     sub: 'Leave types, holidays, and balance adjustments',
   },
+  '/knowledge-base': {
+    title: 'Knowledge Base',
+    sub: 'Every module explained in plain language — searchable FAQs, guides, and troubleshooting',
+  },
 }
 
 const DEFAULT_META = {
@@ -232,7 +237,7 @@ export const NAV_SECTIONS = [
       { to: '/activities', label: 'Activities', icon: CheckSquare },
       { to: '/tasks', label: 'Tasks', icon: ListTodo },
       { to: '/calendar', label: 'Calendar & Reminders', icon: CalendarDays },
-      { to: '/meetings', label: 'Calls & meetings', icon: Phone },
+      { to: '/meetings', label: 'Meetings', icon: Phone },
       { to: '/calls', label: 'Calls', icon: PhoneCall },
       { to: '/email', label: 'Email', icon: Mail },
       { to: '/templates', label: 'Templates', icon: FileStack },
@@ -269,6 +274,12 @@ export const NAV_SECTIONS = [
       { to: '/document-settings', label: 'Document settings', icon: FileText },
       { to: '/team', label: 'Team & roles', icon: Users },
       { to: '/integrations', label: 'Integrations & API', icon: Puzzle },
+    ],
+  },
+  {
+    label: 'Knowledge',
+    items: [
+      { to: '/knowledge-base', label: 'Knowledge Base', icon: BookOpen },
     ],
   },
 ]

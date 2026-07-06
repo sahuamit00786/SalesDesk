@@ -2,8 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ChevronDown,
   Download,
-  Filter,
-  Kanban,
   LayoutGrid,
   List,
   Check,
@@ -17,18 +15,14 @@ import {
   UserMinus,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { useSelector } from 'react-redux'
 import toast from 'react-hot-toast'
 import { PageShell } from '@/components/layout/PageShell'
-import { CreateOpportunityModal } from '@/features/opportunities/components/CreateOpportunityModal'
 import { OpportunitiesKanban, formatStageLabel } from '@/features/opportunities/components/OpportunitiesKanban'
-import { useCreateOpportunityMutation, usePatchOpportunityStatusMutation } from '@/features/opportunities/opportunitiesApi'
+import { usePatchOpportunityStatusMutation } from '@/features/opportunities/opportunitiesApi'
 import { AddDealDrawer } from '@/features/deals/components/AddDealDrawer'
 import { useGetLeadFormMetaQuery, useGetLeadsQuery } from '@/features/leads/leadsApi'
-import { selectWorkspaceList } from '@/features/workspace/workspaceSlice'
 import { cn } from '@/utils/cn'
 import { TablePaginationBar } from '@/components/ui/TablePaginationBar'
-import { inputFieldClassName } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { DataGrid } from '@/components/shared/DataGrid'
 import { formatDealMoney } from '@/features/deals/dealCurrencies'
@@ -107,22 +101,17 @@ const PIPELINE_SORT_MAP = {
 
 export function PipelinePage() {
   const navigate = useNavigate()
-  const user = useSelector((s) => s.auth.user)
-  const workspaceList = useSelector(selectWorkspaceList)
-  const isCompanyAdmin = Boolean(user?.isCompanyAdmin)
 
-  const [mode, setMode] = useState('list')
+  const [mode, setMode] = useState('kanban')
   const [searchInput, setSearchInput] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [selectedStages, setSelectedStages] = useState([])
   const [selectedAssignees, setSelectedAssignees] = useState([])
-  const [pipelineWorkspaceId, setPipelineWorkspaceId] = useState('')
   const [openStageDropdown, setOpenStageDropdown] = useState(false)
   const [openAssigneeDropdown, setOpenAssigneeDropdown] = useState(false)
   const [sortValue, setSortValue] = useState('updatedAt:desc')
   const [page, setPage] = useState(1)
   const [limit, setLimit] = useState(10)
-  const [openCreate, setOpenCreate] = useState(false)
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchInput.trim()), 350)
@@ -142,14 +131,12 @@ export function PipelinePage() {
       assignedTo: selectedAssignees.length ? selectedAssignees.join(',') : undefined,
       sort: apiSort,
       order,
-      workspaceId: isCompanyAdmin && pipelineWorkspaceId ? pipelineWorkspaceId : undefined,
     }
     return Object.fromEntries(Object.entries(q).filter(([, v]) => v !== undefined && v !== ''))
-  }, [page, limit, mode, debouncedSearch, selectedStages, selectedAssignees, sort, order, isCompanyAdmin, pipelineWorkspaceId])
+  }, [page, limit, mode, debouncedSearch, selectedStages, selectedAssignees, sort, order])
 
   const { data, isLoading, isFetching } = useGetLeadsQuery(listQuery)
   const { data: formMetaData } = useGetLeadFormMetaQuery()
-  const [createOpportunity, { isLoading: saving }] = useCreateOpportunityMutation()
   const [patchOpportunityStatus, { isLoading: updatingStage }] = usePatchOpportunityStatusMutation()
   const [addDealRow, setAddDealRow] = useState(null)
 
@@ -176,7 +163,7 @@ export function PipelinePage() {
 
   useEffect(() => {
     setPage(1)
-  }, [mode, debouncedSearch, selectedStages, selectedAssignees, sortValue, limit, pipelineWorkspaceId])
+  }, [mode, debouncedSearch, selectedStages, selectedAssignees, sortValue, limit])
 
   const highScoreCount = useMemo(() => rows.filter((r) => Number(r.leadScore || 0) >= 80).length, [rows])
   const unassignedCount = useMemo(() => rows.filter((r) => !r.owner?.id).length, [rows])
@@ -201,9 +188,8 @@ export function PipelinePage() {
     if (selectedStages.length) n += 1
     if (selectedAssignees.length) n += 1
     if (sortValue !== 'updatedAt:desc') n += 1
-    if (isCompanyAdmin && pipelineWorkspaceId) n += 1
     return n
-  }, [debouncedSearch, selectedStages, selectedAssignees, sortValue, isCompanyAdmin, pipelineWorkspaceId])
+  }, [debouncedSearch, selectedStages, selectedAssignees, sortValue])
 
   function resetFilters() {
     setSelectedStages([])
@@ -211,7 +197,6 @@ export function PipelinePage() {
     setSearchInput('')
     setDebouncedSearch('')
     setSortValue('updatedAt:desc')
-    setPipelineWorkspaceId('')
     setPage(1)
   }
 
@@ -255,18 +240,6 @@ export function PipelinePage() {
     a.click()
     URL.revokeObjectURL(url)
     toast.success('Exported current page')
-  }
-
-  async function handleSave(payload) {
-    await createOpportunity(payload).unwrap()
-    toast.success('Opportunity created')
-    setOpenCreate(false)
-  }
-
-  async function handleSaveAddAnother(payload, reset) {
-    await createOpportunity(payload).unwrap()
-    toast.success('Opportunity created')
-    reset()
   }
 
   function addOpportunityToDealsPipeline(row) {
@@ -412,7 +385,7 @@ export function PipelinePage() {
 
   return (
     <PageShell fullWidth>
-      <div className="flex h-[calc(100dvh-4.5rem)] min-h-0 flex-col gap-3 px-2 py-2">
+      <div className="flex min-h-[calc(100dvh-4.5rem)] flex-col gap-3 px-2 py-2">
         <div className="flex flex-col gap-3 rounded-2xl border border-surface-border bg-gradient-to-br from-white via-slate-50 to-slate-50 px-4 py-4 sm:px-5">
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
             <div className="rounded-xl border border-white/80 bg-white/90 px-3 py-2 shadow-sm">
@@ -459,42 +432,21 @@ export function PipelinePage() {
             </div>
           </div>
 
-          <div className="relative w-full min-w-[16rem] shrink-0">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
-            <input
-              className="h-10 w-full rounded-xl border border-surface-border bg-white pl-10 pr-3 text-sm outline-none ring-brand-500/30 focus:border-brand-400 focus:ring-2"
-              placeholder="Search name, company, email, job title, phone…"
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              aria-label="Search pipeline"
-            />
-            {isFetching ? (
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-medium text-ink-muted">Updating…</span>
-            ) : null}
-          </div>
-
           <div className="flex flex-col gap-3 border-t border-surface-border/60 pt-3">
             <div className="flex flex-wrap items-center gap-2">
-                {isCompanyAdmin && workspaceList.length ? (
-                  <label className="inline-flex flex-col gap-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
-                   <select
-                      className={cn(inputFieldClassName, 'h-9 min-w-[9.5rem] cursor-pointer py-0 text-xs font-medium text-ink')}
-                      value={pipelineWorkspaceId}
-                      onChange={(e) => {
-                        setPipelineWorkspaceId(e.target.value)
-                        setPage(1)
-                      }}
-                      aria-label="Filter pipeline by workspace"
-                    >
-                      <option value="">All workspaces</option>
-                      {workspaceList.map((w) => (
-                        <option key={w.id} value={w.id}>
-                          {w.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                ) : null}
+                <div className="relative min-w-[18rem] flex-1 sm:flex-1 sm:max-w-[28rem]">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
+                  <input
+                    className="h-9 w-full rounded-xl border border-surface-border bg-white pl-10 pr-3 text-sm outline-none ring-brand-500/30 focus:border-brand-400 focus:ring-2"
+                    placeholder="Search name, company, email, job title, phone…"
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                    aria-label="Search pipeline"
+                  />
+                  {isFetching ? (
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-medium text-ink-muted">Updating…</span>
+                  ) : null}
+                </div>
                 <div className="relative">
                   <button
                     type="button"
@@ -654,18 +606,11 @@ export function PipelinePage() {
                 <button
                   type="button"
                   onClick={exportVisibleRows}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-surface-border bg-white px-3 text-xs font-semibold shadow-sm hover:bg-surface-subtle"
+                  aria-label="Export"
+                  title="Export"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-surface-border bg-white text-ink-muted shadow-sm hover:bg-surface-subtle hover:text-ink"
                 >
-                  <Download className="h-3.5 w-3.5" />
-                  Export
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[var(--brand-primary)] px-3 text-xs font-semibold text-white shadow-sm hover:bg-[var(--brand-primary-dark)]"
-                  onClick={() => setOpenCreate(true)}
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  New opportunity
+                  <Download className="h-4 w-4" />
                 </button>
             </div>
             {activeFilterCount > 0 ? (
@@ -703,7 +648,7 @@ export function PipelinePage() {
         <section
           className={cn(
             'rounded-xl border border-surface-border bg-white shadow-sm',
-            mode === 'kanban' ? 'min-h-0 flex-1 overflow-hidden' : 'overflow-visible',
+            mode === 'kanban' ? 'h-[160vh] overflow-hidden' : 'overflow-visible',
           )}
         >
           {mode === 'kanban' ? (
@@ -762,16 +707,6 @@ export function PipelinePage() {
           )}
         </section>
       </div>
-
-      <CreateOpportunityModal
-        open={openCreate}
-        onClose={() => setOpenCreate(false)}
-        onSave={handleSave}
-        onSaveAndAddAnother={handleSaveAddAnother}
-        users={users}
-        opportunityStatuses={opportunityStatuses}
-        saving={saving}
-      />
 
       <AddDealDrawer
         open={Boolean(addDealRow)}

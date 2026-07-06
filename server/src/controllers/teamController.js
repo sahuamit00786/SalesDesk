@@ -1349,7 +1349,7 @@ export async function listTeams(req, res, next) {
   try {
     const companyId = req.user.companyId
     const rows = await Team.findAll({
-      where: { companyId },
+      where: { companyId, workspaceId: req.workspaceId },
       order: [['name', 'ASC']],
       include: [
         {
@@ -1391,6 +1391,7 @@ export async function createTeam(req, res, next) {
     }
     const team = await Team.create({
       companyId: req.user.companyId,
+      workspaceId: req.workspaceId,
       name: value.name.trim(),
       description: value.description?.trim() || null,
     })
@@ -1414,7 +1415,7 @@ export async function patchTeam(req, res, next) {
       err.publicMessage = joiPublicMessages(error)
       throw err
     }
-    const team = await Team.findOne({ where: { id: req.params.id, companyId: req.user.companyId } })
+    const team = await Team.findOne({ where: { id: req.params.id, companyId: req.user.companyId, workspaceId: req.workspaceId } })
     if (!team) {
       const err = new Error('Not found')
       err.status = 404
@@ -1433,7 +1434,7 @@ export async function patchTeam(req, res, next) {
 
 export async function deleteTeam(req, res, next) {
   try {
-    const team = await Team.findOne({ where: { id: req.params.id, companyId: req.user.companyId } })
+    const team = await Team.findOne({ where: { id: req.params.id, companyId: req.user.companyId, workspaceId: req.workspaceId } })
     if (!team) {
       const err = new Error('Not found')
       err.status = 404
@@ -1458,7 +1459,7 @@ export async function addTeamMember(req, res, next) {
       err.publicMessage = joiPublicMessages(error)
       throw err
     }
-    const team = await Team.findOne({ where: { id: req.params.id, companyId: req.user.companyId } })
+    const team = await Team.findOne({ where: { id: req.params.id, companyId: req.user.companyId, workspaceId: req.workspaceId } })
     if (!team) {
       const err = new Error('Not found')
       err.status = 404
@@ -1486,7 +1487,7 @@ export async function addTeamMember(req, res, next) {
 
 export async function removeTeamMember(req, res, next) {
   try {
-    const team = await Team.findOne({ where: { id: req.params.id, companyId: req.user.companyId } })
+    const team = await Team.findOne({ where: { id: req.params.id, companyId: req.user.companyId, workspaceId: req.workspaceId } })
     if (!team) {
       const err = new Error('Not found')
       err.status = 404

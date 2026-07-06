@@ -12,7 +12,7 @@ export async function uploadTranscription(req, res, next) {
 
     const meetingId = req.body?.meetingId
     if (meetingId) {
-      await assertMeetingAccess(meetingId, req.user, req.headers['x-workspace-id'])
+      await assertMeetingAccess(meetingId, req.user, req.workspaceId)
     }
 
     const transcript = await whisperService.transcribeAudio(req.file.path, meetingId)
@@ -37,7 +37,7 @@ export async function liveStart(req, res, next) {
       err.code = 'VALIDATION'
       throw err
     }
-    await assertMeetingAccess(meetingId, req.user, req.headers['x-workspace-id'])
+    await assertMeetingAccess(meetingId, req.user, req.workspaceId)
 
     const data = await whisperService.startLiveStream(meetingId)
 

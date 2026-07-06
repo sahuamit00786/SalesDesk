@@ -3,7 +3,7 @@ import { assertMeetingAccess } from '../services/meetingAccessService.js'
 
 export async function summarizeMeeting(req, res, next) {
   try {
-    await assertMeetingAccess(req.params.id, req.user, req.headers['x-workspace-id'])
+    await assertMeetingAccess(req.params.id, req.user, req.workspaceId)
     const data = await aiService.generateSummary(req.params.id)
 
     res.json({
@@ -17,7 +17,7 @@ export async function summarizeMeeting(req, res, next) {
 
 export async function actionItems(req, res, next) {
   try {
-    await assertMeetingAccess(req.params.id, req.user, req.headers['x-workspace-id'])
+    await assertMeetingAccess(req.params.id, req.user, req.workspaceId)
     const data = await aiService.extractActions(req.params.id)
 
     res.json({
@@ -31,7 +31,7 @@ export async function actionItems(req, res, next) {
 
 export async function sentiment(req, res, next) {
   try {
-    await assertMeetingAccess(req.params.id, req.user, req.headers['x-workspace-id'])
+    await assertMeetingAccess(req.params.id, req.user, req.workspaceId)
     const data = await aiService.analyzeSentiment(req.params.id)
 
     res.json({

@@ -57,6 +57,7 @@ import { LeadFlowLandingPage } from '@/pages/LeadFlowLandingPage'
 import { AnalyticsPage } from '@/pages/AnalyticsPage'
 import { ReportDetailPage } from '@/pages/ReportDetailPage'
 import { DealPaymentsPage } from '@/pages/DealPaymentsPage'
+import { KnowledgeBasePage } from '@/features/knowledge/pages/KnowledgeBasePage'
 
 export default function App() {
   return (
@@ -117,6 +118,7 @@ export default function App() {
             <Route path="/team/:userId" element={<TeamMemberProfilePage />} />
             <Route path="/team/:userId/permissions" element={<TeamMemberPermissionsPage />} />
             <Route path="/integrations" element={<IntegrationsPage />} />
+            <Route path="/knowledge-base" element={<KnowledgeBasePage />} />
             <Route path="/documents" element={<DocumentsPage />} />
             <Route path="/forms" element={<WebFormsListPage />} />
             <Route path="/forms/:id/builder" element={<FormBuilderPage />} />

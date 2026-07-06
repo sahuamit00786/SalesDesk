@@ -1,38 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowDownWideNarrow, ArrowUpNarrowWide, Phone, Plus, Search } from 'lucide-react'
+import { ArrowDownWideNarrow, ArrowUpNarrowWide, Plus, Search } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
 import { CreateMeetingModal } from '@/features/meetings/components/CreateMeetingModal'
 import { MeetingsListPanel } from '@/features/meetings/components/MeetingsListPanel'
 import { useGetMeetingsQuery } from '@/features/meetings/meetingsApi'
 import { useGetLeadFormMetaQuery } from '@/features/leads/leadsApi'
-import { cn } from '@/utils/cn'
-
-/** Google Meet–style mark (not an official Google asset). */
-function GoogleMeetLogo({ className }) {
-  return (
-    <svg className={className} viewBox="0 0 48 48" aria-hidden xmlns="http://www.w3.org/2000/svg">
-      <rect width="48" height="48" rx="10" fill="#fff" />
-      <rect x="14" y="8" width="26" height="6" fill="#FBBC04" />
-      <path fill="#EA4335" d="M8 8h6L8 13.5V8z" />
-      <path fill="#4285F4" d="M8 14h6v26H8V14z" />
-      <rect x="14" y="34" width="26" height="6" fill="#34A853" />
-      <rect x="34" y="14" width="6" height="20" fill="#34A853" />
-      <path fill="#34A853" d="M40 11.5L48 24L40 36.5z" />
-    </svg>
-  )
-}
-
-const CHANNEL_TABS = [
-  { id: 'video', label: 'Meeting', Logo: GoogleMeetLogo, logoClass: 'h-4 w-4' },
-  { id: 'call', label: 'Call', Logo: Phone, logoClass: 'h-4 w-4 text-emerald-700' },
-]
-
-function hasMeetLink(m) {
-  return Boolean(String(m?.googleMeetLink || '').trim())
-}
 
 export function MeetingsPage() {
-  const [channel, setChannel] = useState('video')
+  const channel = 'video'
   const [searchInput, setSearchInput] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [dateFrom, setDateFrom] = useState('')
@@ -64,50 +39,14 @@ export function MeetingsPage() {
   const users = formMeta?.data?.users || []
 
   const filteredMeetings = useMemo(() => {
-    const list = Array.isArray(data?.data) ? data.data : []
-    if (channel === 'video') return list.filter(hasMeetLink)
-    return list.filter((m) => !hasMeetLink(m))
-  }, [data, channel])
+    return Array.isArray(data?.data) ? data.data : []
+  }, [data])
 
   return (
     <PageShell fullWidth flush mainClassName="bg-white p-6">
       <div className="w-full min-h-full">
-        <div className="w-full space-y-3 border-b border-gray-100 pb-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              {CHANNEL_TABS.map(({ id, label, Logo, logoClass }) => {
-                const active = channel === id
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setChannel(id)}
-                    className={cn(
-                      'inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition',
-                      active
-                        ? id === 'video'
-                          ? 'border-brand-300 bg-brand-50 text-indigo-900'
-                          : 'border-emerald-300 bg-emerald-50 text-emerald-900'
-                        : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50',
-                    )}
-                  >
-                    <Logo className={logoClass} aria-hidden />
-                    {label}
-                  </button>
-                )
-              })}
-            </div>
-            <button
-              type="button"
-              onClick={() => setCreatingMeeting(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand-primary)] px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--brand-primary-dark)]"
-            >
-              <Plus className="h-4 w-4" aria-hidden />
-              New meeting
-            </button>
-          </div>
-
-          <div className="flex flex-col gap-2 border-t border-gray-100 bg-white pt-3 sm:flex-row sm:flex-wrap sm:items-end">
+        <div className="w-full border-b border-gray-100 pb-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
             <div className="relative min-w-0 flex-1 sm:min-w-[260px]">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <input
@@ -154,6 +93,14 @@ export function MeetingsPage() {
                   Latest first
                 </>
               )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setCreatingMeeting(true)}
+              className="inline-flex items-center justify-center gap-1.5 self-stretch rounded-lg bg-[var(--brand-primary)] px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--brand-primary-dark)] sm:self-auto"
+            >
+              <Plus className="h-4 w-4" aria-hidden />
+              New meeting
             </button>
           </div>
         </div>

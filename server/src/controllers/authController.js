@@ -2,6 +2,7 @@ import bcrypt from 'bcrypt'
 import { Company, sequelize, User } from '../models/index.js'
 import { userAuthIncludes } from '../queries/userIncludes.js'
 import { ensureCompanyWorkspace } from '../services/workspaceService.js'
+import { ensureCompanyDefaultRoles } from '../services/companyRoleService.js'
 import {
   signAccessToken,
   signRefreshToken,
@@ -122,6 +123,7 @@ export async function register(req, res, next) {
       }
 
       await ensureCompanyWorkspace(company, { transaction: t })
+      await ensureCompanyDefaultRoles(company, { transaction: t })
 
       const userCount = await User.unscoped().count({
         where: { companyId: company.id },
@@ -390,6 +392,7 @@ export async function login(req, res, next) {
       await sequelize.transaction(async (t) => {
         const company = await Company.create({ name: label }, { transaction: t })
         await ensureCompanyWorkspace(company, { transaction: t })
+        await ensureCompanyDefaultRoles(company, { transaction: t })
         user.companyId = company.id
         user.isCompanyAdmin = true
         user.companyRoleId = null

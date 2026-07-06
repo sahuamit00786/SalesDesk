@@ -21,9 +21,8 @@ import {
   Users,
   X,
   Clock,
-  CheckCircle,
 } from 'lucide-react'
-import { COMPANY_USER_ROLE_KIND_ALL_OPTIONS, COMPANY_USER_ROLE_KIND_CREATE_OPTIONS, labelCompanyUserRoleKind } from '@/constants/companyUserRoleKind'
+import { COMPANY_USER_ROLE_KIND_ALL_OPTIONS, labelCompanyUserRoleKind } from '@/constants/companyUserRoleKind'
 import { Modal } from '@/components/ui/Modal'
 import { RightDrawer } from '@/components/ui/RightDrawer'
 import { PhoneField } from '@/components/ui/PhoneField'
@@ -32,7 +31,6 @@ import { useWorkspacesQuery } from '@/features/workspace/workspaceApi'
 import { selectResolvedActiveWorkspaceId } from '@/features/workspace/workspaceSlice'
 import {
   useCancelInvitationMutation,
-  useCreateRoleMutation,
   useDeleteRoleMutation,
   useCreateInvitationMutation,
   useDeactivateUserMutation,
@@ -63,27 +61,6 @@ function isoCountryForPhone(countryField) {
 }
 
 const TEAM_TAB_STORAGE_KEY = 'leadflow.team.activeTab'
-
-function KpiCard({ icon: Icon, label, value, accent = 'brand' }) {
-  const palette = {
-    brand: 'bg-slate-100 text-brand-700',
-    amber: 'bg-amber-50 text-amber-700',
-    indigo: 'bg-brand-50 text-brand-700',
-    emerald: 'bg-emerald-50 text-emerald-700',
-    rose: 'bg-rose-50 text-rose-700',
-  }
-  return (
-    <div className="flex items-center gap-3 rounded-2xl border border-surface-border bg-white px-4 py-3 shadow-sm">
-      <div className={cn('flex h-9 w-9 items-center justify-center rounded-xl', palette[accent] || palette.brand)}>
-        <Icon className="h-4 w-4" strokeWidth={2} />
-      </div>
-      <div className="min-w-0">
-        <p className="text-[11px] font-medium uppercase tracking-wide text-ink-faint">{label}</p>
-        <p className="truncate text-lg font-semibold text-ink">{value}</p>
-      </div>
-    </div>
-  )
-}
 
 const EMPTY_INVITE_FORM = {
   name: '',
@@ -250,7 +227,6 @@ export function TeamPage() {
   const { data: wsData } = useWorkspacesQuery()
 
   const [createInvitation, { isLoading: creatingInvite }] = useCreateInvitationMutation()
-  const [createRole, { isLoading: creatingRole }] = useCreateRoleMutation()
   const [patchRole, { isLoading: patchingRoleMeta }] = usePatchRoleMutation()
   const [deleteRole, { isLoading: deletingRole }] = useDeleteRoleMutation()
   const [cancelInvitation, { isLoading: cancellingInvite }] = useCancelInvitationMutation()
@@ -276,7 +252,6 @@ export function TeamPage() {
   )
 
   const [inviteDrawerOpen, setInviteDrawerOpen] = useState(false)
-  const [roleDrawerOpen, setRoleDrawerOpen] = useState(false)
   const [roleEditDrawerOpen, setRoleEditDrawerOpen] = useState(false)
   const [activeTab, setActiveTab] = useState(() => {
     try {
@@ -823,103 +798,14 @@ export function TeamPage() {
 
   const accessUser = users.find((u) => u.id === accessUserId) || null
 
-  const activeMembers = useMemo(() => users.filter(u => u.isActive).length, [users])
-  const inactiveMembers = useMemo(() => users.filter(u => !u.isActive).length, [users])
-
   return (
     <PageShell fullWidth>
-      <div className="flex min-h-screen gap-4 p-4 sm:p-6 lg:gap-6">
-        {/* Left Sidebar */}
-        <aside className="w-full flex-shrink-0 space-y-3 lg:w-80">
-          {/* Team Header Card */}
-          <section className="rounded-2xl border border-surface-border bg-white p-5">
-            <div className="flex flex-col items-center gap-3 text-center">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-brand-200 bg-brand-50 text-2xl font-bold text-brand-700">
-                {(users[0]?.companyRole?.name || 'TEAM').slice(0, 2).toUpperCase()}
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-ink">Team Overview</h2>
-                <p className="mt-1 text-xs text-ink-muted">Manage your organization</p>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const wsId = inviteWorkspace?.id
-                    setInviteForm({
-                      ...EMPTY_INVITE_FORM,
-                      workspaceIds: wsId ? [wsId] : [],
-                    })
-                    setInviteDrawerOpen(true)
-                  }}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-brand-200 bg-white px-3 text-xs font-medium text-brand-700 shadow-sm hover:bg-white"
-                >
-                  <UserPlus className="h-3.5 w-3.5" />
-                  Add user
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRoleForm({ name: '', description: '', userRoleKind: '' })
-                    setRoleDrawerOpen(true)
-                  }}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-brand-200 bg-white px-3 text-xs font-medium text-brand-700 shadow-sm hover:bg-white"
-                >
-                  <ShieldCheck className="h-3.5 w-3.5" />
-                  Create role
-                </button>
-              </div>
-            </div>
-          </section>
-
-          {/* Statistics Sections */}
-          <section className="rounded-2xl border border-surface-border bg-white p-5 space-y-4">
-            <h3 className="text-sm font-semibold text-ink">Members</h3>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
-                <span className="text-sm text-ink-muted">Total</span>
-                <span className="font-semibold text-ink">{users.length}</span>
-              </div>
-              <div className="flex items-center justify-between rounded-lg bg-emerald-50 px-3 py-2">
-                <span className="text-sm text-emerald-700">Active</span>
-                <span className="font-semibold text-emerald-900">{activeMembers}</span>
-              </div>
-              <div className="flex items-center justify-between rounded-lg bg-rose-50 px-3 py-2">
-                <span className="text-sm text-rose-700">Inactive</span>
-                <span className="font-semibold text-rose-900">{inactiveMembers}</span>
-              </div>
-            </div>
-          </section>
-
-          <section className="rounded-2xl border border-surface-border bg-white p-5 space-y-4">
-            <h3 className="text-sm font-semibold text-ink">Roles & Invites</h3>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between rounded-lg bg-indigo-50 px-3 py-2">
-                <span className="text-sm text-indigo-700">Total roles</span>
-                <span className="font-semibold text-indigo-900">{roles.length}</span>
-              </div>
-              <div className="flex items-center justify-between rounded-lg bg-amber-50 px-3 py-2">
-                <span className="text-sm text-amber-700">Pending invites</span>
-                <span className="font-semibold text-amber-900">{invitations.length}</span>
-              </div>
-            </div>
-          </section>
-        </aside>
-
-        {/* Right Content */}
+      <div className="min-h-screen p-4 sm:p-6">
         <main className="min-w-0 flex-1">
           <PageStack>
-            {/* KPI Cards */}
-            <section className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <KpiCard icon={Users} label="Total members" value={String(users.length)} accent="brand" />
-              <KpiCard icon={CheckCircle} label="Active" value={String(activeMembers)} accent="emerald" />
-              <KpiCard icon={UserMinus} label="Inactive" value={String(inactiveMembers)} accent="rose" />
-              <KpiCard icon={ShieldCheck} label="Total roles" value={String(roles.length)} accent="indigo" />
-            </section>
-
             {/* Tabs */}
-            <section className="border-b border-surface-border bg-white">
-              <div className="-mb-px flex gap-4 px-4 sm:px-6">
+            <section className="flex items-center justify-between border-b border-surface-border bg-white px-4 sm:px-6">
+              <div className="-mb-px flex gap-4">
                 {[
                   { id: 'members', label: 'Members' },
                   { id: 'invitations', label: 'Invitations' },
@@ -939,6 +825,21 @@ export function TeamPage() {
                   </button>
                 ))}
               </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const wsId = inviteWorkspace?.id
+                  setInviteForm({
+                    ...EMPTY_INVITE_FORM,
+                    workspaceIds: wsId ? [wsId] : [],
+                  })
+                  setInviteDrawerOpen(true)
+                }}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-brand-200 bg-white px-3 text-xs font-medium text-brand-700 shadow-sm hover:bg-white"
+              >
+                <UserPlus className="h-3.5 w-3.5" />
+                Add user
+              </button>
             </section>
 
             {/* Members Search & Filters */}
@@ -1466,83 +1367,6 @@ export function TeamPage() {
               value={roleForm.name}
               onChange={(e) => setRoleForm((f) => ({ ...f, name: e.target.value }))}
               className="mt-2 w-full rounded-xl border border-surface-border bg-white px-3 py-2 text-sm"
-            />
-          </div>
-          <div>
-            <label className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Description</label>
-            <textarea
-              rows={3}
-              value={roleForm.description}
-              onChange={(e) => setRoleForm((f) => ({ ...f, description: e.target.value }))}
-              className="mt-2 w-full rounded-xl border border-surface-border bg-white px-3 py-2 text-sm"
-            />
-          </div>
-        </div>
-      </RightDrawer>
-
-      <RightDrawer
-        open={roleDrawerOpen}
-        onClose={() => setRoleDrawerOpen(false)}
-        title="Create custom role"
-        description="Pick a role type and name the role. Menu access and workspaces are granted per person from their profile page after you invite or add them."
-        footer={
-          <div className="flex justify-end gap-2">
-            <button type="button" onClick={() => setRoleDrawerOpen(false)} className="h-10 rounded-xl border border-surface-border px-4 text-sm">
-              Cancel
-            </button>
-            <button
-              type="button"
-              disabled={creatingRole}
-              onClick={async () => {
-                if (!roleForm.name.trim()) return toast.error('Role name is required')
-                if (!roleForm.userRoleKind) return toast.error('Select a role type')
-                try {
-                  await createRole({
-                    name: roleForm.name.trim(),
-                    description: roleForm.description.trim() || null,
-                    userRoleKind: roleForm.userRoleKind,
-                  }).unwrap()
-                  toast.success('Role created')
-                  setRoleForm({ name: '', description: '', userRoleKind: '' })
-                  setRoleDrawerOpen(false)
-                } catch (err) {
-                  toast.error(apiErrorMessage(err))
-                }
-              }}
-              className="h-10 rounded-xl bg-slate-800 px-4 text-sm font-medium text-white"
-            >
-              {creatingRole ? 'Creating…' : 'Create role'}
-            </button>
-          </div>
-        }
-      >
-        <div className="flex h-full min-h-0 flex-col gap-4">
-          <div>
-            <label className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Role type</label>
-            <p className="mt-1 text-[11px] leading-snug text-ink-muted">
-              Workspace admin, Manager, or Sales. You will grant menu access and assign workspaces per person when you invite them or edit a member.
-            </p>
-            <select
-              value={roleForm.userRoleKind}
-              onChange={(e) => setRoleForm((f) => ({ ...f, userRoleKind: e.target.value }))}
-              className="mt-2 h-10 w-full cursor-pointer rounded-xl border border-surface-border bg-white px-3 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/15"
-            >
-              <option value="">Select role type…</option>
-              {COMPANY_USER_ROLE_KIND_CREATE_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Role name</label>
-            <input
-              type="text"
-              value={roleForm.name}
-              onChange={(e) => setRoleForm((f) => ({ ...f, name: e.target.value }))}
-              className="mt-2 w-full rounded-xl border border-surface-border bg-white px-3 py-2 text-sm"
-              placeholder="e.g. SDR"
             />
           </div>
           <div>

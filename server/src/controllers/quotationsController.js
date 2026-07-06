@@ -11,7 +11,6 @@ import {
   Lead,
   Deal,
 } from '../models/index.js'
-import { requireWorkspaceFromRequest } from '../services/workspaceScope.js'
 import { aggregateQuotationTotals } from '../services/salesTotals.js'
 import { buildDocNumber, allocateInvoiceNumber } from '../services/docNumberFormat.js'
 import { buildCustomerSnapshotFromLead, mergeBillingIntoPaymentSnapshot } from '../services/salesCustomerSnapshot.js'
@@ -103,7 +102,7 @@ function serializeQuotation(q, items = []) {
 
 export async function listQuotations(req, res, next) {
   try {
-    const { workspaceId } = await requireWorkspaceFromRequest(req)
+    const workspaceId = req.workspaceId
     const leadId = req.query.leadId || null
     const dealId = req.query.dealId || null
     const page = Math.max(1, Number(req.query.page) || 1)
@@ -179,7 +178,7 @@ export async function listQuotations(req, res, next) {
 
 export async function getQuotation(req, res, next) {
   try {
-    const { workspaceId } = await requireWorkspaceFromRequest(req)
+    const workspaceId = req.workspaceId
     const row = await Quotation.findOne({
       where: {
         id: req.params.id,
@@ -197,7 +196,7 @@ export async function getQuotation(req, res, next) {
 
 export async function createQuotation(req, res, next) {
   try {
-    const { workspace, workspaceId } = await requireWorkspaceFromRequest(req)
+    const { workspace, workspaceId } = req
     const { error, value } = createSchema.validate(req.body, { abortEarly: false, stripUnknown: true })
     if (error) {
       return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: error.message } })
@@ -358,7 +357,7 @@ export async function createQuotation(req, res, next) {
 
 export async function patchQuotation(req, res, next) {
   try {
-    const { workspaceId } = await requireWorkspaceFromRequest(req)
+    const workspaceId = req.workspaceId
     const { error, value } = patchSchema.validate(req.body, { abortEarly: false, stripUnknown: true })
     if (error) {
       return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: error.message } })
@@ -476,7 +475,7 @@ const convertSchema = Joi.object({
 
 export async function convertQuotationToInvoice(req, res, next) {
   try {
-    const { workspace, workspaceId } = await requireWorkspaceFromRequest(req)
+    const { workspace, workspaceId } = req
     const { error, value } = convertSchema.validate(req.body || {}, { abortEarly: false, stripUnknown: true })
     if (error) {
       return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: error.message } })
@@ -681,7 +680,7 @@ export async function convertQuotationToInvoice(req, res, next) {
 
 export async function deleteQuotation(req, res, next) {
   try {
-    const { workspaceId } = await requireWorkspaceFromRequest(req)
+    const workspaceId = req.workspaceId
     const row = await Quotation.findOne({
       where: { id: req.params.id, workspaceId, companyId: req.user.companyId },
     })

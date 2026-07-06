@@ -18,7 +18,7 @@ import { generateLeadEmailTemplate, OpenAiServiceError } from '../services/openA
 function currentScope(req) {
   return {
     companyId: req.company?.id || req.user?.companyId,
-    workspaceId: req.headers['x-workspace-id'],
+    workspaceId: req.workspaceId,
   }
 }
 

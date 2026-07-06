@@ -1,5 +1,4 @@
 import { WorkspaceBillingProfile } from '../models/index.js'
-import { requireWorkspaceFromRequest } from '../services/workspaceScope.js'
 import { DOC_NUMBER_FORMATS } from '../services/docNumberFormat.js'
 import Joi from 'joi'
 
@@ -85,7 +84,7 @@ function serialize(p) {
 
 export async function getBillingProfile(req, res, next) {
   try {
-    const { workspace, workspaceId } = await requireWorkspaceFromRequest(req)
+    const { workspace, workspaceId } = req
     const [profile] = await WorkspaceBillingProfile.findOrCreate({
       where: { workspaceId },
       defaults: {
@@ -104,7 +103,7 @@ export async function getBillingProfile(req, res, next) {
 
 export async function patchBillingProfile(req, res, next) {
   try {
-    const { workspace, workspaceId } = await requireWorkspaceFromRequest(req)
+    const { workspace, workspaceId } = req
     const { error, value } = patchSchema.validate(req.body, { abortEarly: false, stripUnknown: true })
     if (error) {
       return res.status(400).json({

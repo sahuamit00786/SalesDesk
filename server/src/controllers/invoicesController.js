@@ -12,7 +12,6 @@ import {
   DealPayment,
   Quotation,
 } from '../models/index.js'
-import { requireWorkspaceFromRequest } from '../services/workspaceScope.js'
 import { aggregateInvoiceTotals } from '../services/salesTotals.js'
 import { allocateInvoiceNumber } from '../services/docNumberFormat.js'
 import { buildCustomerSnapshotFromLead, mergeBillingIntoPaymentSnapshot } from '../services/salesCustomerSnapshot.js'
@@ -141,7 +140,7 @@ function deriveInvoiceStatus(amountPaid, grandTotal, priorStatus) {
 
 export async function listInvoices(req, res, next) {
   try {
-    const { workspaceId } = await requireWorkspaceFromRequest(req)
+    const workspaceId = req.workspaceId
     const leadId = req.query.leadId || null
     const dealId = req.query.dealId || null
     const page = Math.max(1, Number(req.query.page) || 1)
@@ -229,7 +228,7 @@ export async function listInvoices(req, res, next) {
 
 export async function getInvoice(req, res, next) {
   try {
-    const { workspaceId } = await requireWorkspaceFromRequest(req)
+    const workspaceId = req.workspaceId
     const row = await Invoice.findOne({
       where: {
         id: req.params.id,
@@ -254,7 +253,7 @@ export async function getInvoice(req, res, next) {
 
 export async function createInvoice(req, res, next) {
   try {
-    const { workspace, workspaceId } = await requireWorkspaceFromRequest(req)
+    const { workspace, workspaceId } = req
     const { error, value } = createSchema.validate(req.body, { abortEarly: false, stripUnknown: true })
     if (error) {
       return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: error.message } })
@@ -413,7 +412,7 @@ export async function createInvoice(req, res, next) {
 
 export async function patchInvoice(req, res, next) {
   try {
-    const { workspaceId } = await requireWorkspaceFromRequest(req)
+    const workspaceId = req.workspaceId
     const { error, value } = patchSchema.validate(req.body, { abortEarly: false, stripUnknown: true })
     if (error) {
       return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: error.message } })
@@ -566,7 +565,7 @@ export async function patchInvoice(req, res, next) {
 
 export async function recordInvoicePayment(req, res, next) {
   try {
-    const { workspaceId } = await requireWorkspaceFromRequest(req)
+    const workspaceId = req.workspaceId
     const { error, value } = paymentSchema.validate(req.body, { abortEarly: false, stripUnknown: true })
     if (error) {
       return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: error.message } })
@@ -677,7 +676,7 @@ export async function recordInvoicePayment(req, res, next) {
 
 export async function deleteInvoicePayment(req, res, next) {
   try {
-    const { workspaceId } = await requireWorkspaceFromRequest(req)
+    const workspaceId = req.workspaceId
     const invoice = await Invoice.findOne({
       where: { id: req.params.id, workspaceId, companyId: req.user.companyId },
     })
@@ -718,7 +717,7 @@ export async function deleteInvoicePayment(req, res, next) {
 
 export async function deleteInvoice(req, res, next) {
   try {
-    const { workspaceId } = await requireWorkspaceFromRequest(req)
+    const workspaceId = req.workspaceId
     const row = await Invoice.findOne({
       where: { id: req.params.id, workspaceId, companyId: req.user.companyId },
     })

@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { Building2, Check, ChevronDown } from 'lucide-react'
 import { useAppDispatch, useAppSelector } from '@/app/hooks'
+import { baseApi } from '@/features/api/baseApi'
 import { useWorkspacesQuery } from '@/features/workspace/workspaceApi'
 import {
   selectActiveWorkspace,
@@ -67,6 +68,7 @@ export function WorkspaceSwitcher() {
                   aria-selected={w.id === activeId}
                   onClick={() => {
                     dispatch(setActiveWorkspace(w.id))
+                    dispatch(baseApi.util.resetApiState())
                     setOpen(false)
                   }}
                   className={cn(

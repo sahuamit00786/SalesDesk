@@ -19,6 +19,9 @@ export function buildAllowedRouteSet(allowedMenus, { isCompanyAdmin = false } = 
   }
   allowed.add('/')
   allowed.add(DASHBOARD_PATH)
+  // The Knowledge Base is a help resource, not a permission-gated feature — every
+  // authenticated user can open it regardless of their menu permission matrix.
+  allowed.add('/knowledge-base')
   return allowed
 }
 

@@ -562,9 +562,9 @@ footer{background:var(--bg-2)}
 }
 
 /* Logo image */
-.logo-img{height:94px;width:auto;display:block;object-fit:contain}
-.foot-grid .logo-img{height:80px;margin-bottom:4px}
-@media(max-width:640px){.logo-img{height:76px}}
+.logo-img{height:84px;width:auto;display:block;object-fit:contain}
+.foot-grid .logo-img{height:144px;margin-bottom:4px}
+@media(max-width:640px){.logo-img{height:66px}}
 
 /* ============ ILLUSTRATION ANIMATIONS ============ */
 @keyframes illu-flt{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}

@@ -24,6 +24,9 @@ import {
   Pencil,
   Phone,
   PhoneCall,
+  PhoneIncoming,
+  PhoneMissed,
+  PhoneOutgoing,
   Presentation,
   Search,
   Sparkles,
@@ -91,6 +94,7 @@ import { DealQuotationsPanel, DealInvoicesPanel } from '@/features/deals/compone
 import { LeadPaymentsTab } from '@/features/leads/components/LeadPaymentsTab'
 import { formatDealMoney } from '@/features/deals/dealCurrencies'
 import { useGetDealsQuery, useDeleteDealMutation } from '@/features/deals/dealsApi'
+import { useGetCallsQuery, CALL_OUTCOMES } from '@/features/calls/callsApi'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { parsePhoneNumber } from 'libphonenumber-js/min'
 import { digitsOnlyE164, inferE164FromStored, mergePartsToE164 } from '@/utils/phoneNumbers'
@@ -610,6 +614,9 @@ export function LeadDetailPage() {
   )
   const [deleteMeeting] = useDeleteMeetingMutation()
   const meetings = meetingsData?.data || []
+
+  const { data: callLogsData } = useGetCallsQuery({ leadId: id }, { skip: !id })
+  const leadCallLogs = callLogsData?.data || []
 
   const tabs = useMemo(() => {
     const base = [
@@ -2009,6 +2016,50 @@ export function LeadDetailPage() {
                   </button>
                 </div>
               ) : null}
+              {activeTab === 'calls' && leadCallLogs.length > 0 ? (
+                <div className="space-y-2">
+                  {leadCallLogs.map((call) => {
+                    const missed = call.callType === 'inbound' && call.outcome === 'no_answer'
+                    const CallIcon = missed ? PhoneMissed : call.callType === 'outbound' ? PhoneOutgoing : PhoneIncoming
+                    const iconTone = missed
+                      ? 'bg-rose-100 text-rose-600'
+                      : call.callType === 'outbound'
+                        ? 'bg-sky-100 text-sky-600'
+                        : 'bg-emerald-100 text-emerald-600'
+                    const outcomeLabel = CALL_OUTCOMES.find((o) => o.value === call.outcome)?.label || null
+                    const durationLabel = call.duration
+                      ? call.duration >= 60
+                        ? `${Math.floor(call.duration / 60)}m ${call.duration % 60}s`
+                        : `${call.duration}s`
+                      : null
+                    return (
+                      <div key={call.id} className="flex items-start gap-2.5 rounded-xl border border-surface-border bg-white p-2.5">
+                        <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${iconTone}`}>
+                          <CallIcon size={14} />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                            <p className="text-sm font-semibold text-ink">
+                              {missed ? 'Missed call' : call.callType === 'outbound' ? 'Outgoing call' : 'Incoming call'}
+                            </p>
+                            {call.source === 'device_sync' ? (
+                              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">Device sync</span>
+                            ) : null}
+                            {outcomeLabel ? (
+                              <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-600">{outcomeLabel}</span>
+                            ) : null}
+                          </div>
+                          <p className="mt-0.5 text-xs text-ink-muted">
+                            {[call.phoneNumber, durationLabel].filter(Boolean).join(' · ') || '—'}
+                          </p>
+                          {call.notes ? <p className="mt-1 text-xs leading-relaxed text-ink-muted">{call.notes}</p> : null}
+                        </div>
+                        <span className="shrink-0 pt-0.5 text-[11px] text-ink-muted">{activityDateTimeLabel(call.createdAt)}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : null}
               <div className="space-y-2">
               {filteredActivities.map((activity, index) => {
                 const isNote = activity.type === 'note'
@@ -2152,7 +2203,7 @@ export function LeadDetailPage() {
                   </article>
                 )
               })}
-              {filteredActivities.length === 0 ? (
+              {filteredActivities.length === 0 && !(activeTab === 'calls' && leadCallLogs.length > 0) ? (
                 <LeadTabEmptyState
                   icon={Sparkles}
                   title={activeTab === 'calls' ? 'No calls logged yet' : 'No activity yet'}

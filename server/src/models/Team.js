@@ -14,6 +14,12 @@ export const Team = sequelize.define(
       allowNull: false,
       field: 'company_id',
     },
+    workspaceId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      field: 'workspace_id',
+      references: { model: 'workspaces', key: 'id' },
+    },
     name: {
       type: DataTypes.STRING(120),
       allowNull: false,

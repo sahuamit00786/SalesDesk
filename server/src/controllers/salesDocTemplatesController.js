@@ -1,6 +1,5 @@
 import Joi from 'joi'
 import { SalesDocTemplate } from '../models/index.js'
-import { requireWorkspaceFromRequest } from '../services/workspaceScope.js'
 
 const SHARED_CREATE = {
   name: Joi.string().trim().max(200).required(),
@@ -102,7 +101,7 @@ function serialize(t) {
 
 export async function listSalesDocTemplates(req, res, next) {
   try {
-    const { workspaceId } = await requireWorkspaceFromRequest(req)
+    const workspaceId = req.workspaceId
     const where = { workspaceId, companyId: req.user.companyId }
     if (req.query.docType === 'quotation' || req.query.docType === 'invoice') {
       where.docType = req.query.docType
@@ -116,7 +115,7 @@ export async function listSalesDocTemplates(req, res, next) {
 
 export async function getSalesDocTemplate(req, res, next) {
   try {
-    const { workspaceId } = await requireWorkspaceFromRequest(req)
+    const workspaceId = req.workspaceId
     const row = await SalesDocTemplate.findOne({
       where: { id: req.params.id, workspaceId, companyId: req.user.companyId },
     })
@@ -129,7 +128,7 @@ export async function getSalesDocTemplate(req, res, next) {
 
 export async function createSalesDocTemplate(req, res, next) {
   try {
-    const { workspaceId } = await requireWorkspaceFromRequest(req)
+    const workspaceId = req.workspaceId
     const docType = req.body?.docType
     if (docType !== 'quotation' && docType !== 'invoice') {
       return res.status(400).json({
@@ -162,7 +161,7 @@ export async function createSalesDocTemplate(req, res, next) {
 
 export async function patchSalesDocTemplate(req, res, next) {
   try {
-    const { workspaceId } = await requireWorkspaceFromRequest(req)
+    const workspaceId = req.workspaceId
     const row = await SalesDocTemplate.findOne({
       where: { id: req.params.id, workspaceId, companyId: req.user.companyId },
     })
@@ -194,7 +193,7 @@ export async function patchSalesDocTemplate(req, res, next) {
 
 export async function deleteSalesDocTemplate(req, res, next) {
   try {
-    const { workspaceId } = await requireWorkspaceFromRequest(req)
+    const workspaceId = req.workspaceId
     const row = await SalesDocTemplate.findOne({
       where: { id: req.params.id, workspaceId, companyId: req.user.companyId },
     })

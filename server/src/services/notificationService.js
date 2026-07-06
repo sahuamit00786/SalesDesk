@@ -1,10 +1,11 @@
 import { Notification } from '../models/index.js'
 import { getMailTransport, appDisplayName } from './mailService.js'
 
-export async function createNotification({ userId, companyId, title, message, type = 'info', link = null }) {
+export async function createNotification({ userId, companyId, workspaceId, title, message, type = 'info', link = null }) {
   return Notification.create({
     userId,
     companyId,
+    workspaceId,
     title,
     message,
     type,

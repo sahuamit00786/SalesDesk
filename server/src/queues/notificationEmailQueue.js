@@ -133,6 +133,7 @@ async function processNotificationJob(job) {
       const notification = await createNotification({
         userId: recipientUserId,
         companyId,
+        workspaceId,
         title: inAppTitle(eventType, payload),
         message: inAppMessage(eventType, payload, actorName, workspaceName),
         type: eventType,

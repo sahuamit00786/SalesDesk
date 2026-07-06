@@ -27,7 +27,7 @@ import {
 import { createNotification, notifyUserEmail } from '../services/notificationService.js'
 import { Notification } from '../models/index.js'
 
-async function notifyLeaveApprovers({ companyId, applicant, leaveType, fromDate, toDate }) {
+async function notifyLeaveApprovers({ companyId, workspaceId, applicant, leaveType, fromDate, toDate }) {
   const roles = await CompanyRole.findAll({
     where: { companyId },
     attributes: ['id', 'userRoleKind'],
@@ -58,6 +58,7 @@ async function notifyLeaveApprovers({ companyId, applicant, leaveType, fromDate,
     await createNotification({
       userId: u.id,
       companyId,
+      workspaceId,
       title: 'Leave approval needed',
       message: `${who} requested ${typeName} from ${fromDate} to ${toDate}.`,
       type: 'leave',
@@ -160,7 +161,7 @@ export async function getMyLeaveBalance(req, res, next) {
   try {
     const year = Number(req.query.year) || new Date().getFullYear()
     const rows = await LeaveBalance.findAll({
-      where: { userId: req.user.id, companyId: req.user.companyId, year },
+      where: { userId: req.user.id, companyId: req.user.companyId, workspaceId: req.workspaceId, year },
       include: [{ model: LeaveType, as: 'leaveType', required: true }],
     })
     return res.json({ success: true, data: rows, meta: {} })
@@ -177,7 +178,7 @@ export async function getUserLeaveBalance(req, res, next) {
     }
     const year = Number(req.query.year) || new Date().getFullYear()
     const rows = await LeaveBalance.findAll({
-      where: { userId: req.params.userId, companyId: req.user.companyId, year },
+      where: { userId: req.params.userId, companyId: req.user.companyId, workspaceId: req.workspaceId, year },
       include: [{ model: LeaveType, as: 'leaveType', required: true }],
     })
     return res.json({ success: true, data: rows, meta: {} })
@@ -197,7 +198,7 @@ export async function adjustLeaveBalance(req, res, next) {
       return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'userId and leaveTypeId required' } })
     }
     const y = Number(year) || new Date().getFullYear()
-    const row = await getOrCreateBalance(userId, leaveTypeId, req.user.companyId, y)
+    const row = await getOrCreateBalance(userId, leaveTypeId, req.user.companyId, y, req.workspaceId)
     if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Leave type not found' } })
     const updates = { allocated: Number(allocated) }
     if (reason !== undefined) updates.adjustmentNote = reason ? String(reason).trim() : null
@@ -319,6 +320,7 @@ export async function applyLeave(req, res, next) {
       fromDate,
       toDate: effectiveToDate,
       companyId: req.user.companyId,
+      workspaceId: req.workspaceId,
       isHalfDay: halfDay,
     })
     if (!validation.ok) {
@@ -334,6 +336,7 @@ export async function applyLeave(req, res, next) {
       userId: applicantId,
       leaveTypeId,
       companyId: req.user.companyId,
+      workspaceId: req.workspaceId,
       fromDate: validation.fromStr,
       toDate: validation.toStr,
       days,
@@ -352,6 +355,7 @@ export async function applyLeave(req, res, next) {
     const leaveType = created?.leaveType || (await LeaveType.findByPk(leaveTypeId))
     await notifyLeaveApprovers({
       companyId: req.user.companyId,
+      workspaceId: req.workspaceId,
       applicant,
       leaveType,
       fromDate: validation.fromStr,
@@ -371,7 +375,7 @@ export async function applyLeave(req, res, next) {
 export async function getMyLeaves(req, res, next) {
   try {
     const rows = await LeaveRequest.findAll({
-      where: { userId: req.user.id, companyId: req.user.companyId },
+      where: { userId: req.user.id, companyId: req.user.companyId, workspaceId: req.workspaceId },
       include: leaveInclude,
       order: [['appliedAt', 'DESC']],
     })
@@ -390,7 +394,7 @@ export async function getAllLeaves(req, res, next) {
     const userWhere = await companyUserScopeWhere(req, hrRole)
     const users = await User.findAll({ where: userWhere, attributes: ['id'] })
     const userIds = users.map((u) => u.id)
-    const where = { companyId: req.user.companyId, userId: { [Op.in]: userIds } }
+    const where = { companyId: req.user.companyId, workspaceId: req.workspaceId, userId: { [Op.in]: userIds } }
     if (req.query.status) where.status = String(req.query.status)
     if (req.query.leaveTypeId) where.leaveTypeId = String(req.query.leaveTypeId)
     if (req.query.from) where.fromDate = { [Op.gte]: String(req.query.from).slice(0, 10) }
@@ -413,6 +417,7 @@ async function finalizeLeaveApproval(request, approverId) {
     request.leaveTypeId,
     request.companyId,
     new Date(request.fromDate).getFullYear(),
+    request.workspaceId,
   )
   if (!balance) {
     const err = new Error('Leave balance not found — cannot approve leave')
@@ -446,7 +451,7 @@ export async function approveLeave(req, res, next) {
       return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Not allowed' } })
     }
     const request = await LeaveRequest.findOne({
-      where: { id: req.params.id, companyId: req.user.companyId },
+      where: { id: req.params.id, companyId: req.user.companyId, workspaceId: req.workspaceId },
       include: [{ model: User, as: 'user' }],
     })
     if (!request) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Not found' } })
@@ -460,6 +465,7 @@ export async function approveLeave(req, res, next) {
     await createNotification({
       userId: request.userId,
       companyId: req.user.companyId,
+      workspaceId: request.workspaceId,
       title: 'Leave approved',
       message: `Your ${typeName} from ${request.fromDate} to ${request.toDate} was approved.`,
       type: 'leave',
@@ -496,7 +502,7 @@ export async function rejectLeave(req, res, next) {
       })
     }
     const request = await LeaveRequest.findOne({
-      where: { id: req.params.id, companyId: req.user.companyId },
+      where: { id: req.params.id, companyId: req.user.companyId, workspaceId: req.workspaceId },
       include: [{ model: User, as: 'user' }],
     })
     if (!request) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Not found' } })
@@ -508,6 +514,7 @@ export async function rejectLeave(req, res, next) {
       request.leaveTypeId,
       request.companyId,
       new Date(request.fromDate).getFullYear(),
+      request.workspaceId,
     )
     await sequelize.transaction(async (t) => {
       await request.update({ status: 'rejected', rejectionReason, approvedBy: req.user.id }, { transaction: t })
@@ -521,6 +528,7 @@ export async function rejectLeave(req, res, next) {
     await createNotification({
       userId: request.userId,
       companyId: req.user.companyId,
+      workspaceId: request.workspaceId,
       title: 'Leave rejected',
       message: `Your leave was rejected: ${rejectionReason}`,
       type: 'leave',
@@ -546,7 +554,7 @@ export async function rejectLeave(req, res, next) {
 export async function cancelLeave(req, res, next) {
   try {
     const request = await LeaveRequest.findOne({
-      where: { id: req.params.id, userId: req.user.id, companyId: req.user.companyId },
+      where: { id: req.params.id, userId: req.user.id, companyId: req.user.companyId, workspaceId: req.workspaceId },
     })
     if (!request) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Not found' } })
     const today = new Date().toISOString().slice(0, 10)
@@ -567,6 +575,7 @@ export async function cancelLeave(req, res, next) {
       request.leaveTypeId,
       request.companyId,
       new Date(request.fromDate).getFullYear(),
+      request.workspaceId,
     )
     if (balance) {
       if (wasPending) {
@@ -598,13 +607,14 @@ export async function bulkApproveLeaves(req, res, next) {
       return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'ids required' } })
     }
     const rows = await LeaveRequest.findAll({
-      where: { id: { [Op.in]: ids }, companyId: req.user.companyId, status: 'pending' },
+      where: { id: { [Op.in]: ids }, companyId: req.user.companyId, workspaceId: req.workspaceId, status: 'pending' },
     })
     for (const row of rows) {
       await finalizeLeaveApproval(row, req.user.id)
       await createNotification({
         userId: row.userId,
         companyId: req.user.companyId,
+        workspaceId: row.workspaceId,
         title: 'Leave approved',
         message: `Your leave from ${row.fromDate} to ${row.toDate} was approved.`,
         type: 'leave',
@@ -626,6 +636,7 @@ export async function getTeamLeaveCalendar(req, res, next) {
     const to = String(req.query.to || '').slice(0, 10)
     const where = {
       companyId: req.user.companyId,
+      workspaceId: req.workspaceId,
       userId: { [Op.in]: users.map((u) => u.id) },
       status: 'approved',
     }
@@ -732,12 +743,12 @@ export async function getNotifications(req, res, next) {
   try {
     const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20))
     const rows = await Notification.findAll({
-      where: { userId: req.user.id, companyId: req.user.companyId },
+      where: { userId: req.user.id, companyId: req.user.companyId, workspaceId: req.workspaceId },
       order: [['createdAt', 'DESC']],
       limit,
     })
     const unread = await Notification.count({
-      where: { userId: req.user.id, companyId: req.user.companyId, isRead: false },
+      where: { userId: req.user.id, companyId: req.user.companyId, workspaceId: req.workspaceId, isRead: false },
     })
     return res.json({ success: true, data: rows, meta: { unread } })
   } catch (e) {
@@ -748,7 +759,7 @@ export async function getNotifications(req, res, next) {
 export async function markNotificationRead(req, res, next) {
   try {
     const row = await Notification.findOne({
-      where: { id: req.params.id, userId: req.user.id, companyId: req.user.companyId },
+      where: { id: req.params.id, userId: req.user.id, companyId: req.user.companyId, workspaceId: req.workspaceId },
     })
     if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Not found' } })
     await row.update({ isRead: true })
@@ -762,7 +773,7 @@ export async function markAllNotificationsRead(req, res, next) {
   try {
     await Notification.update(
       { isRead: true },
-      { where: { userId: req.user.id, companyId: req.user.companyId, isRead: false } },
+      { where: { userId: req.user.id, companyId: req.user.companyId, workspaceId: req.workspaceId, isRead: false } },
     )
     return res.json({ success: true, data: { ok: true }, meta: {} })
   } catch (e) {
@@ -791,6 +802,7 @@ export async function getPendingApprovals(req, res, next) {
     const rows = await LeaveRequest.findAll({
       where: {
         companyId: req.user.companyId,
+        workspaceId: req.workspaceId,
         userId: { [Op.in]: reportIds },
         status: 'pending',
       },
@@ -811,7 +823,7 @@ export async function getPendingApprovals(req, res, next) {
 export async function managerApproveLeave(req, res, next) {
   try {
     const request = await LeaveRequest.findOne({
-      where: { id: req.params.id, companyId: req.user.companyId },
+      where: { id: req.params.id, companyId: req.user.companyId, workspaceId: req.workspaceId },
       include: [{ model: User, as: 'user' }],
     })
     if (!request) {
@@ -837,6 +849,7 @@ export async function managerApproveLeave(req, res, next) {
     await createNotification({
       userId: request.userId,
       companyId: req.user.companyId,
+      workspaceId: request.workspaceId,
       title: 'Leave approved',
       message: `Your ${typeName} from ${request.fromDate} to ${request.toDate} was approved by your manager.`,
       type: 'leave',
@@ -868,7 +881,7 @@ export async function managerRejectLeave(req, res, next) {
     }
 
     const request = await LeaveRequest.findOne({
-      where: { id: req.params.id, companyId: req.user.companyId },
+      where: { id: req.params.id, companyId: req.user.companyId, workspaceId: req.workspaceId },
       include: [{ model: User, as: 'user' }],
     })
     if (!request) {
@@ -893,6 +906,7 @@ export async function managerRejectLeave(req, res, next) {
       request.leaveTypeId,
       request.companyId,
       new Date(request.fromDate).getFullYear(),
+      request.workspaceId,
     )
 
     await sequelize.transaction(async (t) => {
@@ -907,6 +921,7 @@ export async function managerRejectLeave(req, res, next) {
     await createNotification({
       userId: request.userId,
       companyId: req.user.companyId,
+      workspaceId: request.workspaceId,
       title: 'Leave rejected',
       message: `Your leave was rejected by your manager: ${rejectionReason}`,
       type: 'leave',
