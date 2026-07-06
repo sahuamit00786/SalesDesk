@@ -1,4 +1,4 @@
-import { Children, useMemo, useRef } from 'react'
+import { Children } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { uniqueSlug } from './slug'
@@ -23,17 +23,15 @@ const HEADING_STYLES = {
 
 /** Renders one Knowledge Base markdown document, assigning stable anchor ids to headings. */
 export function KnowledgeMarkdown({ content }) {
-  // Reset the slug-dedupe map on every render (not just content changes) so heading anchor ids
-  // stay stable and match the search index — otherwise re-renders would keep incrementing counts.
-  const seenRef = useRef(new Map())
-  seenRef.current.clear()
+  // A fresh map per render (not a ref) so heading anchor ids stay deterministic
+  // within this render pass without touching refs during render.
+  const seen = new Map()
 
-  const components = useMemo(
-    () => ({
-      h1: (props) => makeHeading(1, props, seenRef),
-      h2: (props) => makeHeading(2, props, seenRef),
-      h3: (props) => makeHeading(3, props, seenRef),
-      h4: (props) => makeHeading(4, props, seenRef),
+  const components = {
+      h1: (props) => makeHeading(1, props, seen),
+      h2: (props) => makeHeading(2, props, seen),
+      h3: (props) => makeHeading(3, props, seen),
+      h4: (props) => makeHeading(4, props, seen),
       p: ({ children }) => <p className="mb-3 text-[13.5px] leading-relaxed text-ink-muted">{children}</p>,
       strong: ({ children }) => <strong className="font-semibold text-ink">{children}</strong>,
       em: ({ children }) => <em className="text-ink-muted">{children}</em>,
@@ -67,9 +65,7 @@ export function KnowledgeMarkdown({ content }) {
       tr: ({ children }) => <tr className="align-top">{children}</tr>,
       th: ({ children }) => <th className="px-3 py-2 font-semibold text-ink">{children}</th>,
       td: ({ children }) => <td className="px-3 py-2 text-ink-muted">{children}</td>,
-    }),
-    [],
-  )
+  }
 
   return (
     <div className="kb-markdown min-w-0">
@@ -80,10 +76,10 @@ export function KnowledgeMarkdown({ content }) {
   )
 }
 
-function makeHeading(level, { children }, seenRef) {
+function makeHeading(level, { children }, seen) {
   const Tag = `h${level}`
   const text = textOf(children)
-  const id = uniqueSlug(text, seenRef.current)
+  const id = uniqueSlug(text, seen)
   return (
     <Tag id={id} className={HEADING_STYLES[level]}>
       {children}

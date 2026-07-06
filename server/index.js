@@ -3,7 +3,10 @@ import http from 'node:http'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
+import { Server as SocketIOServer } from 'socket.io'
 import { validateEnv } from './src/config/env.js'
+import { allowedOrigins } from './src/config/corsOrigins.js'
+import { registerCopilotSocket } from './src/services/copilot/copilotSocket.js'
 import {
   isGoogleCalendarConfigured,
   missingGoogleOAuthEnvKeys,
@@ -133,6 +136,17 @@ async function start() {
   startCampaignExpiryJob()
   startTaskDigestNotificationJob()
   const server = http.createServer(app)
+  const io = new SocketIOServer(server, {
+    cors: {
+      origin: (origin, callback) => {
+        if (!origin) return callback(null, true)
+        if (allowedOrigins.has(origin)) return callback(null, true)
+        return callback(new Error(`Socket.IO CORS: origin '${origin}' is not allowed`))
+      },
+      credentials: true,
+    },
+  })
+  registerCopilotSocket(io)
   server.listen(port, () => {
     // eslint-disable-next-line no-console
     console.log(`LeadFlow API listening on http://localhost:${port}`)

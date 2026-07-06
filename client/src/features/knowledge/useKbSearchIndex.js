@@ -1,53 +1,33 @@
 import { useMemo } from 'react'
-import { uniqueSlug } from './slug'
+import { parseKbModules } from './parseKbModules'
 
-const HEADING_RE = /^(#{2,3})\s+(.*)$/
-const QUESTION_RE = /^\*\*(.+?)\*\*$/
-
-function stripMarkup(text) {
-  return text.replace(/[*_`]/g, '').trim()
-}
-
-/** Builds a flat search index of headings + FAQ questions across all KB sections. */
+/** Builds a flat search index of module headings + FAQ questions across all KB sections. */
 export function buildSearchIndex(sections) {
   const index = []
   for (const section of sections) {
-    const seen = new Map()
-    let currentAnchor = null
-    let currentHeading = ''
-    const lines = section.content.split('\n')
-    for (const raw of lines) {
-      const line = raw.trim()
-      const hMatch = line.match(HEADING_RE)
-      if (hMatch) {
-        const text = stripMarkup(hMatch[2])
-        const slug = uniqueSlug(text, seen)
-        currentAnchor = slug
-        currentHeading = text
+    const { modules } = parseKbModules(section.content)
+    for (const mod of modules) {
+      index.push({
+        sectionId: section.id,
+        sectionLabel: section.label,
+        moduleAnchor: mod.anchor,
+        itemId: null,
+        type: 'heading',
+        text: mod.title,
+        heading: mod.title,
+      })
+      mod.nodes.forEach((node, i) => {
+        if (node.type !== 'faq') return
         index.push({
           sectionId: section.id,
           sectionLabel: section.label,
-          anchor: slug,
-          type: 'heading',
-          text,
-          heading: text,
+          moduleAnchor: mod.anchor,
+          itemId: `${mod.anchor}--faq-${i}`,
+          type: 'question',
+          text: node.question,
+          heading: mod.title,
         })
-        continue
-      }
-      const qMatch = line.match(QUESTION_RE)
-      if (qMatch && currentAnchor) {
-        const text = stripMarkup(qMatch[1])
-        if (text.length > 3) {
-          index.push({
-            sectionId: section.id,
-            sectionLabel: section.label,
-            anchor: currentAnchor,
-            type: 'question',
-            text,
-            heading: currentHeading,
-          })
-        }
-      }
+      })
     }
   }
   return index

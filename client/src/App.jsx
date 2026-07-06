@@ -20,6 +20,7 @@ import { DocumentsPage } from '@/pages/DocumentsPage'
 import { ActivitiesPage } from '@/pages/ActivitiesPage'
 import { TasksPage } from '@/pages/TasksPage'
 import { EmailPage } from '@/pages/EmailPage'
+import { CopilotPage } from '@/pages/CopilotPage'
 import { OpportunitiesPage } from '@/pages/OpportunitiesPage'
 import { PipelinePage } from '@/pages/PipelinePage'
 import { DealsPage } from '@/pages/DealsPage'
@@ -94,6 +95,7 @@ export default function App() {
             <Route path="/activities" element={<ActivitiesPage />} />
             <Route path="/tasks" element={<TasksPage />} />
             <Route path="/email" element={<EmailPage />} />
+            <Route path="/copilot" element={<CopilotPage />} />
             <Route path="/templates" element={<TemplatesPage />} />
             <Route path="/quotations" element={<QuotationsPage />} />
             <Route path="/quotations/new" element={<NewQuotationPage />} />

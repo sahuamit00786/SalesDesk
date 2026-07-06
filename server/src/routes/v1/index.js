@@ -46,6 +46,7 @@ import { handleGmailPubSubPushHttp } from '../../services/gmail/gmailPushService
 import meetingRoutes from '../meetingRoutes.js'
 import transcriptionRoutes from '../transcriptionRoutes.js'
 import aiMeetingRoutes from '../AiMeetingRoutes.js'
+import copilotRoutes from '../copilotRoutes.js'
 import { getFilterPresets, createFilterPreset, deleteFilterPreset } from '../../controllers/filterPresetsController.js'
 import { getNotifications as getNotificationsV2, markNotificationRead as markNotificationReadV2, markAllRead, getUnreadCount } from '../../controllers/notificationController.js'
 import * as auditLogController from '../../controllers/auditLogController.js'
@@ -125,6 +126,15 @@ router.use(
   loadPermissions,
   requirePermission('engage.meetings', 'view'),
   aiMeetingRoutes
+)
+
+router.use(
+  '/copilot',
+  requireAuth,
+  requireCompany, workspaceContext,
+  loadPermissions,
+  requirePermission('main.copilot', 'view'),
+  copilotRoutes
 )
 
 

@@ -146,6 +146,7 @@ export const baseApi = createApi({
     'NotificationSettings',
     'NotificationDeliveryHistory',
     'FilterPreset',
+    'CopilotSession',
   ],
   endpoints: () => ({}),
 })

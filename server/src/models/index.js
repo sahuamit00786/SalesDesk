@@ -54,6 +54,8 @@ import { MeetingTranscript } from './MeetingTranscript.js'
 import { MeetingRecording } from './MeetingRecording.js'
 import { MeetingNotification } from './MeetingNotification.js'
 import { Reminder } from './Reminder.js'
+import { ChatSession } from './ChatSession.js'
+import { ChatMessage } from './ChatMessage.js'
 import { EmailTemplate } from './EmailTemplate.js'
 import { LeadEmailLog } from './LeadEmailLog.js'
 import { EmailSuppression } from './EmailSuppression.js'
@@ -308,6 +310,14 @@ User.hasMany(Reminder, { foreignKey: 'ownerUserId', as: 'ownedReminders' })
 Reminder.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' })
 User.hasMany(Reminder, { foreignKey: 'createdBy', as: 'createdReminders' })
 
+ChatSession.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
+ChatSession.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
+ChatSession.belongsTo(User, { foreignKey: 'userId', as: 'user' })
+User.hasMany(ChatSession, { foreignKey: 'userId', as: 'chatSessions' })
+
+ChatSession.hasMany(ChatMessage, { foreignKey: 'sessionId', as: 'messages' })
+ChatMessage.belongsTo(ChatSession, { foreignKey: 'sessionId', as: 'session' })
+
 EmailTemplate.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
 Company.hasMany(EmailTemplate, { foreignKey: 'companyId', as: 'emailTemplates' })
 EmailTemplate.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
@@ -558,6 +568,8 @@ export {
   MeetingParticipant,
   MeetingNotification,
   Reminder,
+  ChatSession,
+  ChatMessage,
   MeetingRecording,
   MeetingTranscript,
   AiMeetingSummary,

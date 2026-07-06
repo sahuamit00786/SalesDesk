@@ -5,6 +5,7 @@ import authReducer from '@/features/auth/authSlice'
 import workspaceReducer from '@/features/workspace/workspaceSlice'
 import leadsReducer from '@/features/leads/leadsSlice'
 import meetingsReducer from '@/features/meetings/meetingsSlice'
+import copilotReducer from '@/features/copilot/copilotSlice'
 
 export const store = configureStore({
   reducer: {
@@ -12,6 +13,7 @@ export const store = configureStore({
     workspace: workspaceReducer,
     leads: leadsReducer,
     meetings: meetingsReducer,
+    copilot: copilotReducer,
     [baseApi.reducerPath]: baseApi.reducer,
   },
   middleware: (getDefaultMiddleware) =>

@@ -25,6 +25,7 @@ import {
   SlidersHorizontal,
   Settings2,
   Shuffle,
+  Sparkles,
   Umbrella,
   Users,
   Workflow,
@@ -184,6 +185,10 @@ export const ROUTE_META = {
     title: 'Knowledge Base',
     sub: 'Every module explained in plain language — searchable FAQs, guides, and troubleshooting',
   },
+  '/copilot': {
+    title: 'AI Copilot',
+    sub: 'Ask about leads, campaigns, deals, team performance, and reports for this workspace',
+  },
 }
 
 const DEFAULT_META = {
@@ -211,6 +216,7 @@ export const NAV_SECTIONS = [
     label: 'Main',
     items: [
       { to: '/dashboard', label: 'Dashboard', icon: LayoutGrid, end: true },
+      { to: '/copilot', label: 'AI Copilot', icon: Sparkles },
       { to: '/leads', label: 'Leads', icon: Users },
       { to: '/lead-distribution', label: 'Lead distribution', icon: Shuffle },
       { to: '/opportunities', label: 'Opportunities', icon: Briefcase },
