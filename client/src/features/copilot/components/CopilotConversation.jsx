@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useDispatch } from 'react-redux'
-import { ArrowUp, BarChart3, CalendarClock, Sparkles, TrendingUp, Users } from 'lucide-react'
+import { ArrowUp, BarChart3, CalendarClock, PanelLeftOpen, Sparkles, TrendingUp, Users } from 'lucide-react'
 import { copilotApi, useGetCopilotSessionMessagesQuery, useSendCopilotMessageMutation } from '@/features/copilot/copilotApi'
 import { useCopilotSocket } from '@/features/copilot/useCopilotSocket'
 import { MessageBubble } from './MessageBubble'
@@ -12,7 +12,7 @@ const SUGGESTIONS = [
   { icon: BarChart3, label: 'Leads by source', text: 'Break down my leads by source as a chart' },
 ]
 
-export function CopilotConversation({ sessionId }) {
+export function CopilotConversation({ sessionId, sidebarOpen = true, onExpandSidebar }) {
   const dispatch = useDispatch()
   const [inputText, setInputText] = useState('')
   const [pendingUserText, setPendingUserText] = useState(null)
@@ -23,7 +23,7 @@ export function CopilotConversation({ sessionId }) {
   const [sendMessage] = useSendCopilotMessageMutation()
   const { data: history, refetch: refetchMessages } = useGetCopilotSessionMessagesQuery(sessionId, { skip: !sessionId })
 
-  const { streamingText, liveBlocks, isStreaming, socketError, resetTurn } = useCopilotSocket({
+  const { streamingText, liveBlocks, isStreaming, socketError, doneTick, resetTurn } = useCopilotSocket({
     sessionId,
     enabled: Boolean(sessionId),
   })
@@ -34,19 +34,20 @@ export function CopilotConversation({ sessionId }) {
     setIsSending(false)
   }, [sessionId])
 
-  const wasStreamingRef = useRef(false)
+  // A turn is finished when the socket reports done (doneTick bumps) — this
+  // fires even for token-less replies (e.g. disambiguation-only), which the old
+  // isStreaming transition missed, leaving the composer/chips stuck disabled.
   useEffect(() => {
-    if (wasStreamingRef.current && !isStreaming) {
-      refetchMessages()
-      resetTurn()
-      setPendingUserText(null)
-      setIsSending(false)
-      // First turn names the session server-side — refresh the sidebar so the
-      // new title and ordering show up.
-      dispatch(copilotApi.util.invalidateTags(['CopilotSession']))
-    }
-    wasStreamingRef.current = isStreaming
-  }, [isStreaming, refetchMessages, resetTurn, dispatch])
+    if (doneTick === 0) return
+    refetchMessages()
+    resetTurn()
+    setPendingUserText(null)
+    setIsSending(false)
+    // First turn names the session server-side — refresh the sidebar so the
+    // new title and ordering show up.
+    dispatch(copilotApi.util.invalidateTags(['CopilotSession']))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doneTick])
 
   useEffect(() => {
     if (socketError) {
@@ -64,6 +65,19 @@ export function CopilotConversation({ sessionId }) {
   const isBusy = isSending || isStreaming
   const isEmpty = !messages.length && !pendingUserText && !streamingText && !isStreaming
 
+  const expandBtn =
+    !sidebarOpen && onExpandSidebar ? (
+      <button
+        type="button"
+        onClick={onExpandSidebar}
+        aria-label="Open sidebar"
+        title="Open sidebar"
+        className="absolute left-3 top-3 z-10 flex h-8 w-8 animate-lf-fade-in items-center justify-center rounded-lg border border-surface-border bg-white text-ink-muted shadow-sm transition-colors hover:bg-brand-50 hover:text-brand-700"
+      >
+        <PanelLeftOpen className="h-4 w-4" />
+      </button>
+    ) : null
+
   function sendText(text) {
     const trimmed = text.trim()
     if (!trimmed || !sessionId || isBusy) return
@@ -73,15 +87,18 @@ export function CopilotConversation({ sessionId }) {
     sendMessage({ sessionId, text: trimmed })
   }
 
-  function handleSelectDisambiguation(option) {
-    if (!disambiguationBlock || !sessionId || isBusy) return
+  function handleSelectDisambiguation(option, nameQuery) {
+    // nameQuery comes from the clicked block itself so this works for a
+    // persisted disambiguation message too (not just the live one).
+    const nq = nameQuery ?? disambiguationBlock?.nameQuery
+    if (!nq || !sessionId || isBusy) return
     setPendingUserText(`Selected: ${option.label}`)
     setIsSending(true)
     sendMessage({
       sessionId,
       selection: {
         entityType: option.entityType,
-        nameQuery: disambiguationBlock.nameQuery,
+        nameQuery: nq,
         selectedId: option.id,
         selectedLabel: option.label,
       },
@@ -90,7 +107,8 @@ export function CopilotConversation({ sessionId }) {
 
   if (!sessionId) {
     return (
-      <div className="flex h-full flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+      <div className="relative flex h-full flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+        {expandBtn}
         <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-50 text-brand-600 ring-1 ring-brand-100">
           <Sparkles className="h-7 w-7" />
         </span>
@@ -101,6 +119,7 @@ export function CopilotConversation({ sessionId }) {
 
   return (
     <div className="relative flex h-full min-h-0 flex-1 flex-col bg-gradient-to-b from-surface-muted/40 to-white">
+      {expandBtn}
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-8">
         {isEmpty ? (
           <div className="mx-auto flex h-full max-w-2xl flex-col items-center justify-center gap-6 text-center">
@@ -133,7 +152,14 @@ export function CopilotConversation({ sessionId }) {
         ) : (
           <div className="w-full space-y-5">
             {messages.map((m) => (
-              <MessageBubble key={m.id} role={m.role} content={m.content} blocks={m.blocks} />
+              <MessageBubble
+                key={m.id}
+                role={m.role}
+                content={m.content}
+                blocks={m.blocks}
+                onSelectDisambiguation={handleSelectDisambiguation}
+                disambiguationDisabled={isBusy}
+              />
             ))}
 
             {pendingUserText ? <MessageBubble role="user" content={pendingUserText} /> : null}

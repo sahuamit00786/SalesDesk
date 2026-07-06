@@ -84,6 +84,10 @@ export default {
           '0%, 100%': { opacity: '0.45', transform: 'scale(1)' },
           '50%': { opacity: '0.85', transform: 'scale(1.05)' },
         },
+        'lf-fade-in': {
+          from: { opacity: '0', transform: 'scale(0.9)' },
+          to: { opacity: '1', transform: 'scale(1)' },
+        },
         'accordion-down': {
           from: { height: '0' },
           to: { height: 'var(--radix-accordion-content-height)' },
@@ -99,6 +103,7 @@ export default {
         'lf-shimmer': 'lf-shimmer 3s linear infinite',
         'lf-spin-slow': 'lf-spin-slow 18s linear infinite',
         'lf-pulse-glow': 'lf-pulse-glow 4s ease-in-out infinite',
+        'lf-fade-in': 'lf-fade-in 0.3s ease-out',
         'accordion-down': 'accordion-down 0.22s ease-out',
         'accordion-up': 'accordion-up 0.2s ease-out',
       },

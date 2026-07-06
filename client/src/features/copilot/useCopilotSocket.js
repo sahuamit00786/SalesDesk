@@ -32,13 +32,25 @@ export function useCopilotSocket({ sessionId, enabled }) {
   const [isStreaming, setIsStreaming] = useState(false)
   const [liveBlocks, setLiveBlocks] = useState([])
   const [socketError, setSocketError] = useState(null)
+  // Bumps once per fully-completed turn. This is the authoritative "turn is
+  // over" signal — it fires even for turns that stream no text tokens (e.g. a
+  // pure tool-call → disambiguation reply), which `isStreaming` never covers.
+  const [doneTick, setDoneTick] = useState(0)
   const socketRef = useRef(null)
 
   // Typewriter state (refs so the rAF loop reads the latest without re-subscribing).
   const targetRef = useRef('') // full text received from server so far
   const shownRef = useRef(0) // chars already revealed on screen
   const doneRef = useRef(false) // server signalled end-of-turn
+  const finalizedRef = useRef(false) // guard so a turn is finalized only once
   const rafRef = useRef(null)
+
+  const finalizeTurn = useCallback(() => {
+    if (finalizedRef.current) return
+    finalizedRef.current = true
+    setIsStreaming(false)
+    setDoneTick((t) => t + 1)
+  }, [])
 
   const stopRaf = useCallback(() => {
     if (rafRef.current) {
@@ -62,14 +74,14 @@ export function useCopilotSocket({ sessionId, enabled }) {
       } else if (doneRef.current) {
         // Fully drained and server is done — end the turn.
         rafRef.current = null
-        setIsStreaming(false)
+        finalizeTurn()
       } else {
         // Caught up but more tokens may still arrive.
         rafRef.current = null
       }
     }
     rafRef.current = requestAnimationFrame(tick)
-  }, [])
+  }, [finalizeTurn])
 
   useEffect(() => {
     if (!enabled || !sessionId) return undefined
@@ -110,16 +122,17 @@ export function useCopilotSocket({ sessionId, enabled }) {
 
     socket.on('copilot:done', () => {
       doneRef.current = true
-      // If the buffer already drained, close out now; otherwise the pump loop
-      // will flip isStreaming off once it finishes typing.
-      if (shownRef.current >= targetRef.current.length) setIsStreaming(false)
+      // If the buffer already drained (or there was never any text — e.g. a
+      // disambiguation-only reply), finalize now; otherwise let the pump loop
+      // finish typing and finalize when it drains.
+      if (shownRef.current >= targetRef.current.length) finalizeTurn()
       else pump()
     })
 
     socket.on('copilot:error', ({ message }) => {
       setSocketError(message)
       stopRaf()
-      setIsStreaming(false)
+      finalizeTurn()
     })
 
     return () => {
@@ -128,17 +141,18 @@ export function useCopilotSocket({ sessionId, enabled }) {
       socketRef.current = null
       stopRaf()
     }
-  }, [sessionId, enabled, reduxToken, pump, stopRaf, dispatch])
+  }, [sessionId, enabled, reduxToken, pump, stopRaf, dispatch, finalizeTurn])
 
   const resetTurn = useCallback(() => {
     stopRaf()
     targetRef.current = ''
     shownRef.current = 0
     doneRef.current = false
+    finalizedRef.current = false
     setStreamingText('')
     setLiveBlocks([])
     setSocketError(null)
   }, [stopRaf])
 
-  return { streamingText, liveBlocks, isStreaming, socketError, resetTurn }
+  return { streamingText, liveBlocks, isStreaming, socketError, doneTick, resetTurn }
 }

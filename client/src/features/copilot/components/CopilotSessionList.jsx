@@ -1,4 +1,4 @@
-import { MessageSquare, Plus, Sparkles, Trash2 } from 'lucide-react'
+import { MessageSquare, PanelLeftClose, Plus, Sparkles, Trash2 } from 'lucide-react'
 import { cn } from '@/utils/cn'
 
 function startOfDay(d) {
@@ -33,12 +33,18 @@ function relativeTime(dateValue) {
 
 const BUCKET_ORDER = ['Today', 'Yesterday', 'This week', 'Older']
 
+function sessionTime(s) {
+  return new Date(s.lastMessageAt || s.createdAt || 0).getTime()
+}
+
 function groupSessions(sessions) {
   const groups = new Map(BUCKET_ORDER.map((b) => [b, []]))
   for (const session of sessions) {
     const bucket = bucketFor(session.lastMessageAt || session.createdAt)
     groups.get(bucket).push(session)
   }
+  // Most-recent first within each bucket.
+  for (const list of groups.values()) list.sort((a, b) => sessionTime(b) - sessionTime(a))
   return BUCKET_ORDER.map((label) => ({ label, sessions: groups.get(label) })).filter((g) => g.sessions.length > 0)
 }
 
@@ -50,16 +56,29 @@ function handleDeleteClick(e, session, onDelete) {
   }
 }
 
-export function CopilotSessionList({ sessions, activeSessionId, onSelect, onNew, onDelete, creatingNew }) {
+export function CopilotSessionList({ sessions, activeSessionId, onSelect, onNew, onDelete, creatingNew, onCollapse }) {
   const groups = groupSessions(sessions)
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-surface-muted/40">
-      <div className="flex items-center gap-2 px-4 pb-3 pt-4">
-        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-sm">
-          <Sparkles className="h-4 w-4" />
-        </span>
-        <span className="text-sm font-semibold tracking-tight text-ink">Copilot</span>
+      <div className="flex items-center justify-between gap-2 px-3 pb-2 pt-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-sm">
+            <Sparkles className="h-4 w-4" />
+          </span>
+          <span className="truncate text-sm font-semibold tracking-tight text-ink">LeadNext Copilot</span>
+        </div>
+        {onCollapse ? (
+          <button
+            type="button"
+            onClick={onCollapse}
+            aria-label="Collapse sidebar"
+            title="Collapse sidebar"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-ink-faint transition-colors hover:bg-black/[0.05] hover:text-ink"
+          >
+            <PanelLeftClose className="h-4 w-4" />
+          </button>
+        ) : null}
       </div>
 
       <div className="px-3 pb-2">
@@ -67,9 +86,9 @@ export function CopilotSessionList({ sessions, activeSessionId, onSelect, onNew,
           type="button"
           onClick={onNew}
           disabled={creatingNew}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--brand-primary,#5B21B6)] px-3 py-2.5 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-surface-border bg-white px-2.5 py-1.5 text-xs font-semibold text-ink shadow-sm transition-colors hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 disabled:opacity-60"
         >
-          <Plus className="h-4 w-4" /> New chat
+          <Plus className="h-3.5 w-3.5" /> New chat
         </button>
       </div>
 

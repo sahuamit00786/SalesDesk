@@ -7,6 +7,25 @@ import { KpiBlock } from './KpiBlock'
 import { DisambiguationChips } from './DisambiguationChips'
 import { EntityLinksBlock } from './EntityLinksBlock'
 
+// Pretty renderers for GFM markdown tables the model returns inline — a bordered,
+// rounded, horizontally-scrollable card with a tinted header and hover rows.
+const MD_COMPONENTS = {
+  table: (props) => (
+    <div className="my-3 w-full overflow-x-auto rounded-xl border border-surface-border shadow-sm">
+      <table className="w-full border-collapse text-sm" {...props} />
+    </div>
+  ),
+  thead: (props) => <thead className="bg-surface-50" {...props} />,
+  th: (props) => (
+    <th
+      className="whitespace-nowrap border-b border-surface-border px-3.5 py-2 text-left text-xs font-semibold uppercase tracking-wide text-ink-muted"
+      {...props}
+    />
+  ),
+  tr: (props) => <tr className="transition-colors even:bg-surface-muted/30 hover:bg-brand-50/40" {...props} />,
+  td: (props) => <td className="border-t border-surface-border/70 px-3.5 py-2 align-top text-ink" {...props} />,
+}
+
 function renderBlock(block, i, onSelectDisambiguation, disambiguationDisabled) {
   switch (block.type) {
     case 'table':
@@ -22,7 +41,7 @@ function renderBlock(block, i, onSelectDisambiguation, disambiguationDisabled) {
         <DisambiguationChips
           key={i}
           block={block}
-          onSelect={onSelectDisambiguation}
+          onSelect={(opt) => onSelectDisambiguation?.(opt, block.nameQuery)}
           disabled={disambiguationDisabled}
         />
       )
@@ -33,7 +52,9 @@ function renderBlock(block, i, onSelectDisambiguation, disambiguationDisabled) {
           key={i}
           className="prose prose-sm max-w-none text-left text-sm leading-relaxed text-ink prose-p:my-1.5 prose-p:leading-relaxed prose-li:my-0.5 prose-headings:mb-1.5 prose-headings:mt-2.5 prose-pre:my-2.5 prose-strong:text-ink"
         >
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{block.markdown || ''}</ReactMarkdown>
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
+            {block.markdown || ''}
+          </ReactMarkdown>
         </div>
       )
   }

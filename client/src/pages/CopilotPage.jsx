@@ -1,6 +1,7 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import toast from 'react-hot-toast'
+import { cn } from '@/utils/cn'
 import { PageShell } from '@/components/layout/PageShell'
 import { setActiveCopilotSession } from '@/features/copilot/copilotSlice'
 import {
@@ -14,6 +15,7 @@ import { CopilotConversation } from '@/features/copilot/components/CopilotConver
 export function CopilotPage() {
   const dispatch = useDispatch()
   const activeSessionId = useSelector((s) => s.copilot.activeSessionId)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
 
   const { data: sessionsRes, isSuccess: sessionsLoaded, isFetching: sessionsFetching } = useListCopilotSessionsQuery()
   const [createSession, { isLoading: creatingSession }] = useCreateCopilotSessionMutation()
@@ -58,16 +60,32 @@ export function CopilotPage() {
     <PageShell fullWidth>
       <div className="h-full px-2 py-2.5 lg:px-3">
         <section className="flex h-[calc(100dvh-88px)] min-h-0 flex-col overflow-hidden rounded-xl border border-surface-border bg-white shadow-sm">
-          <div className="grid min-h-0 flex-1 divide-y divide-surface-border lg:grid-cols-[minmax(260px,28%)_minmax(0,1fr)] lg:divide-x lg:divide-y-0">
-            <CopilotSessionList
-              sessions={sessions}
-              activeSessionId={activeSessionId}
-              onSelect={(id) => dispatch(setActiveCopilotSession(id))}
-              onNew={handleNewChat}
-              onDelete={handleDelete}
-              creatingNew={creatingSession}
+          <div
+            className={cn(
+              'grid min-h-0 flex-1 divide-y divide-surface-border transition-[grid-template-columns] duration-300 ease-in-out',
+              sidebarOpen
+                ? 'lg:grid-cols-[20rem_minmax(0,1fr)] lg:divide-x lg:divide-y-0'
+                : 'lg:grid-cols-[0rem_minmax(0,1fr)] lg:divide-y-0',
+            )}
+          >
+            <div className={cn('overflow-hidden transition-opacity duration-300', !sidebarOpen && 'lg:pointer-events-none lg:opacity-0')}>
+              <div className="h-full lg:w-80">
+                <CopilotSessionList
+                  sessions={sessions}
+                  activeSessionId={activeSessionId}
+                  onSelect={(id) => dispatch(setActiveCopilotSession(id))}
+                  onNew={handleNewChat}
+                  onDelete={handleDelete}
+                  creatingNew={creatingSession}
+                  onCollapse={() => setSidebarOpen(false)}
+                />
+              </div>
+            </div>
+            <CopilotConversation
+              sessionId={activeSessionId}
+              sidebarOpen={sidebarOpen}
+              onExpandSidebar={() => setSidebarOpen(true)}
             />
-            <CopilotConversation sessionId={activeSessionId} />
           </div>
         </section>
       </div>
