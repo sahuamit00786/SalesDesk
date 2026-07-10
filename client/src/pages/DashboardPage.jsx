@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useSelector } from 'react-redux'
-import { Phone, FileText, Mail, Video, CheckSquare2, CalendarDays, TrendingUp, ArrowRight } from 'lucide-react'
+import { Phone, FileText, Mail, Video, CheckSquare2, TrendingUp, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useGetCalendarEventsQuery } from '@/features/calendar/calendarApi'
 import {
   Bar,
@@ -71,18 +71,6 @@ function timeAgo(iso) {
   return `${Math.floor(h / 24)}d ago`
 }
 
-function fmtEventTime(iso) {
-  if (!iso) return ''
-  const d = new Date(iso)
-  const today = new Date()
-  const tomorrow = new Date(today)
-  tomorrow.setDate(today.getDate() + 1)
-  const time = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-  if (d.toDateString() === today.toDateString()) return `Today · ${time}`
-  if (d.toDateString() === tomorrow.toDateString()) return `Tomorrow · ${time}`
-  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + ` · ${time}`
-}
-
 const ACTIVITY_ICON = {
   call:    { Icon: Phone,        color: 'text-sky-500',     bg: 'bg-sky-50' },
   note:    { Icon: FileText,     color: 'text-amber-500',   bg: 'bg-amber-50' },
@@ -111,6 +99,148 @@ function isoDate(d) {
   return d.toISOString().slice(0, 10)
 }
 
+// Local yyyy-mm-dd (no UTC shift) — used for calendar day matching
+function dayKey(d) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+
+// Mini month calendar with per-day meeting counts + grid lines
+function MiniCalendar({ month, meetingsByDay, selectedDay, onSelectDay, onMonthChange }) {
+  const year = month.getFullYear()
+  const mon = month.getMonth()
+  const firstWeekday = new Date(year, mon, 1).getDay()
+  const daysInMonth = new Date(year, mon + 1, 0).getDate()
+  const todayKey = dayKey(new Date())
+
+  const cells = []
+  for (let i = 0; i < firstWeekday; i++) cells.push(null)
+  for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, mon, d))
+  while (cells.length < 42) cells.push(null) // always 6 rows → stable height across months
+  const rows = 6
+
+  const monthLabel = month.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+
+  return (
+    <div className="flex h-full flex-col">
+      <div className="mb-3 flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => onMonthChange(new Date(year, mon - 1, 1))}
+          className="flex h-7 w-7 items-center justify-center rounded-lg border border-surface-border text-ink-muted hover:bg-surface-muted"
+          aria-label="Previous month"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <span className="text-sm font-semibold text-ink">{monthLabel}</span>
+        <button
+          type="button"
+          onClick={() => onMonthChange(new Date(year, mon + 1, 1))}
+          className="flex h-7 w-7 items-center justify-center rounded-lg border border-surface-border text-ink-muted hover:bg-surface-muted"
+          aria-label="Next month"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+      <div className="grid grid-cols-7">
+        {WEEKDAY_LABELS.map((w, i) => (
+          <div key={i} className="pb-2 text-center text-[10px] font-semibold uppercase text-ink-faint">{w}</div>
+        ))}
+      </div>
+      <div
+        className="grid flex-1 grid-cols-7 rounded-lg border border-surface-border"
+        style={{ gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))` }}
+      >
+        {cells.map((date, idx) => {
+          if (!date) {
+            return <div key={`e${idx}`} className="border-b border-r border-surface-border bg-surface-subtle/30" />
+          }
+          const key = dayKey(date)
+          const dayMeetings = meetingsByDay[key] || []
+          const count = dayMeetings.length
+          const isSelected = key === selectedDay
+          const isToday = key === todayKey
+          const isPast = key < todayKey
+          const col = idx % 7
+          const rowIdx = Math.floor(idx / 7)
+          const onLeft = col >= 5 // last two columns → open to the left
+          const onBottom = rowIdx >= rows - 2 // last two rows → anchor to bottom
+          return (
+            <div
+              key={key}
+              role="button"
+              tabIndex={0}
+              onClick={() => onSelectDay(key)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectDay(key) } }}
+              className={`group relative flex min-h-[44px] cursor-pointer flex-col items-center justify-center border-b border-r border-surface-border text-xs transition-colors ${
+                isSelected
+                  ? 'bg-[var(--brand-primary)] font-semibold text-white'
+                  : isToday
+                    ? 'bg-brand-50 font-semibold text-brand-700 hover:bg-brand-100'
+                    : isPast
+                      ? 'border-red-200 bg-red-50/60 text-ink-muted hover:bg-red-50'
+                      : 'text-ink hover:bg-surface-muted'
+              }`}
+            >
+              <span>{date.getDate()}</span>
+              {count > 0 && (
+                <span
+                  className={`mt-0.5 rounded-full px-1.5 text-[9px] font-bold leading-4 ${
+                    isSelected ? 'bg-white/25 text-white' : 'bg-emerald-100 text-emerald-700'
+                  }`}
+                >
+                  +{count}
+                </span>
+              )}
+              {count > 0 && (
+                <div
+                  className={`absolute z-30 hidden w-56 group-hover:block ${
+                    onLeft ? 'right-full pr-2' : 'left-full pl-2'
+                  } ${onBottom ? 'bottom-0' : 'top-0'}`}
+                >
+                  <div className="rounded-xl border border-surface-border bg-white p-3 text-left shadow-xl">
+                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
+                      {date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+                    </p>
+                    <div className="space-y-1">
+                      {dayMeetings.slice(0, 5).map((evt) => (
+                        <Link
+                          key={evt.id}
+                          to="/meetings"
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex items-start gap-2 rounded-lg px-1.5 py-1 hover:bg-surface-muted"
+                        >
+                          <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-emerald-50">
+                            <Video className="h-3.5 w-3.5 text-emerald-600" />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-semibold text-ink">{evt.title || 'Meeting'}</p>
+                            <p className="text-[11px] text-ink-muted">
+                              {new Date(evt.start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                            {evt.leadName && <p className="truncate text-[11px] text-ink-faint">{evt.leadName}</p>}
+                          </div>
+                        </Link>
+                      ))}
+                      {count > 5 && (
+                        <p className="px-1.5 text-[11px] font-medium text-ink-muted">+{count - 5} more</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 
 const tooltipStyle = {
   borderRadius: '12px',
@@ -122,6 +252,11 @@ export function DashboardPage() {
   const formatChartCurrency = useFormatChartCurrency()
   const [chartDatePreset, setChartDatePreset] = useState('30d')
   const [chartScope, setChartScope] = useState('all')
+  const [calMonth, setCalMonth] = useState(() => {
+    const d = new Date()
+    return new Date(d.getFullYear(), d.getMonth(), 1)
+  })
+  const [selectedDay, setSelectedDay] = useState(() => dayKey(new Date()))
 
   const axisStroke = '#e3e7f0'
   const tickStyle = { fill: '#4b5263', fontSize: 11 }
@@ -152,21 +287,32 @@ export function DashboardPage() {
 
   // ── Upcoming meetings (next 48h) ──
   const authUser = useSelector((s) => s.auth.user)
-  const meetingsFrom = useMemo(() => new Date().toISOString(), [])
-  const meetingsTo = useMemo(() => new Date(Date.now() + 48 * 3600 * 1000).toISOString(), [])
-  const { data: upcomingEventsData, isLoading: upcomingLoading } = useGetCalendarEventsQuery({
-    from: meetingsFrom,
-    to: meetingsTo,
+  // ── Calendar month meetings (for mini calendar) ──
+  const monthRange = useMemo(() => {
+    const start = new Date(calMonth.getFullYear(), calMonth.getMonth(), 1)
+    const end = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1)
+    return { from: start.toISOString(), to: end.toISOString() }
+  }, [calMonth])
+  const { data: monthEventsData } = useGetCalendarEventsQuery({
+    from: monthRange.from,
+    to: monthRange.to,
     types: 'meeting',
     ownerUserId: authUser?.id,
   })
-  const upcomingMeetings = useMemo(() => {
-    const evts = Array.isArray(upcomingEventsData?.data) ? upcomingEventsData.data : []
-    return evts
+  // Map of yyyy-mm-dd -> meetings[]
+  const meetingsByDay = useMemo(() => {
+    const evts = Array.isArray(monthEventsData?.data) ? monthEventsData.data : []
+    const map = {}
+    evts
       .filter((e) => e.source === 'meeting' || e.kind === 'meeting')
-      .sort((a, b) => new Date(a.start) - new Date(b.start))
-      .slice(0, 8)
-  }, [upcomingEventsData])
+      .forEach((e) => {
+        const key = dayKey(new Date(e.start))
+        if (!map[key]) map[key] = []
+        map[key].push(e)
+      })
+    Object.values(map).forEach((list) => list.sort((a, b) => new Date(a.start) - new Date(b.start)))
+    return map
+  }, [monthEventsData])
 
   // ── Existing stat card queries (unchanged) ──
   const activityFrom = useMemo(() => subDays(ACTIVITY_RANGE_DAYS).toISOString(), [])
@@ -234,13 +380,14 @@ export function DashboardPage() {
         )}
 
         {/* ── Revenue Forecast + Upcoming Meetings ── */}
-        <section aria-label="Revenue forecast and upcoming meetings" className="mt-6 grid gap-4 lg:grid-cols-3">
+        <section aria-label="Revenue forecast and upcoming meetings" className="mt-6 grid gap-4 lg:grid-cols-2">
 
           {/* Revenue Forecast */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-1 h-full">
             <DashboardChartCard
               title="Revenue forecast"
               subtitle="Open pipeline value by stage"
+              className="h-full"
             >
               {chartsLoading ? (
                 <ChartSkeleton height={200} />
@@ -306,41 +453,16 @@ export function DashboardPage() {
             </DashboardChartCard>
           </div>
 
-          {/* Upcoming Meetings */}
-          <div className="lg:col-span-1">
-            <DashboardChartCard title="Upcoming meetings" subtitle="Next 48 hours">
-              {upcomingLoading ? (
-                <ChartSkeleton height={200} />
-              ) : upcomingMeetings.length > 0 ? (
-                <div className="space-y-2">
-                  {upcomingMeetings.map((evt) => (
-                    <div key={evt.id} className="flex items-start gap-3 rounded-xl border border-surface-border bg-surface-subtle/50 px-3 py-2.5">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50">
-                        <Video className="h-4 w-4 text-emerald-600" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-semibold text-ink">{evt.title || 'Meeting'}</p>
-                        <p className="text-[11px] text-ink-muted">{fmtEventTime(evt.start)}</p>
-                        {evt.leadName && (
-                          <p className="truncate text-[11px] text-ink-faint">{evt.leadName}</p>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                  <Link
-                    to="/calendar"
-                    className="mt-1 flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700"
-                  >
-                    View calendar <ArrowRight className="h-3 w-3" />
-                  </Link>
-                </div>
-              ) : (
-                <div className="flex h-40 flex-col items-center justify-center gap-2 text-center">
-                  <CalendarDays className="h-8 w-8 text-ink-faint" />
-                  <p className="text-sm text-ink-muted">No meetings in the next 48 hours</p>
-                  <Link to="/calendar" className="text-xs font-semibold text-brand-600 hover:underline">Open calendar →</Link>
-                </div>
-              )}
+          {/* Calendar */}
+          <div className="lg:col-span-1 h-full">
+            <DashboardChartCard title="Calendar" subtitle="Meetings by day" fill>
+              <MiniCalendar
+                month={calMonth}
+                meetingsByDay={meetingsByDay}
+                selectedDay={selectedDay}
+                onSelectDay={setSelectedDay}
+                onMonthChange={setCalMonth}
+              />
             </DashboardChartCard>
           </div>
         </section>

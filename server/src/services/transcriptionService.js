@@ -1,8 +1,6 @@
 import fs from 'fs'
-import OpenAI from 'openai'
+import { getOpenAI } from './openAiClient.js'
 import { withRetry } from '../utils/withRetry.js'
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
 /**
  * Transcribe audio file using OpenAI whisper-1.
@@ -10,7 +8,7 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
  */
 export async function transcribeAudio(audioPath) {
   return withRetry(async () => {
-    const response = await openai.audio.transcriptions.create({
+    const response = await getOpenAI().audio.transcriptions.create({
       file: fs.createReadStream(audioPath),
       model: 'whisper-1',
       response_format: 'verbose_json',

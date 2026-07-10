@@ -91,6 +91,10 @@ import { EmailSequence } from './EmailSequence.js'
 import { EmailSequenceStep } from './EmailSequenceStep.js'
 import { EmailSequenceEnrollment } from './EmailSequenceEnrollment.js'
 import { ScoringRule } from './ScoringRule.js'
+import { CompanyEmailSettings } from './CompanyEmailSettings.js'
+import { RoleNotificationPreference } from './RoleNotificationPreference.js'
+import { UserNotificationPreference } from './UserNotificationPreference.js'
+import { SystemEmailTemplate } from './SystemEmailTemplate.js'
 
 User.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
 Company.hasMany(User, { foreignKey: 'companyId', as: 'users' })
@@ -515,6 +519,21 @@ EmailSequenceEnrollment.belongsTo(Company, { foreignKey: 'companyId', as: 'compa
 ScoringRule.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
 Company.hasMany(ScoringRule, { foreignKey: 'companyId', as: 'scoringRules' })
 
+// Role-based email notification system
+CompanyEmailSettings.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
+Company.hasOne(CompanyEmailSettings, { foreignKey: 'companyId', as: 'emailSettings' })
+
+RoleNotificationPreference.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
+Company.hasMany(RoleNotificationPreference, { foreignKey: 'companyId', as: 'roleNotificationPreferences' })
+
+UserNotificationPreference.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
+UserNotificationPreference.belongsTo(User, { foreignKey: 'userId', as: 'user' })
+User.hasMany(UserNotificationPreference, { foreignKey: 'userId', as: 'notificationPreferences' })
+
+SystemEmailTemplate.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
+Company.hasMany(SystemEmailTemplate, { foreignKey: 'companyId', as: 'systemEmailTemplates' })
+SystemEmailTemplate.belongsTo(User, { foreignKey: 'updatedBy', as: 'updater' })
+
 export {
   sequelize,
   User,
@@ -608,4 +627,8 @@ export {
   EmailSequenceStep,
   EmailSequenceEnrollment,
   ScoringRule,
+  CompanyEmailSettings,
+  RoleNotificationPreference,
+  UserNotificationPreference,
+  SystemEmailTemplate,
 }

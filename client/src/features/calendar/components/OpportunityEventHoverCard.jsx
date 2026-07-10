@@ -4,6 +4,7 @@ import { format } from 'date-fns'
 import { TrendingUp, Calendar, Clock3, Briefcase, ExternalLink, User, DollarSign } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { computeCalendarPopoverPosition } from '@/utils/calendarPopoverPosition'
+import { useOpportunityPanel } from '@/features/calendar/components/OpportunityPanelContext'
 
 function formatStage(stage) {
   if (stage == null || stage === '') return null
@@ -13,6 +14,19 @@ function formatStage(stage) {
 export function OpportunityEventHoverCard({ event, anchorRect, onMouseEnter, onMouseLeave, exiting = false, onExitTransitionEnd }) {
   const leadId = event?.leadId
   const opportunityId = event?.opportunityId || event?.sourceId
+  const openOpportunityPanel = useOpportunityPanel()
+
+  const opportunityPayload = {
+    id: opportunityId,
+    entityType: 'opportunity',
+    title: event?.title,
+    opportunityName: event?.opportunityName,
+    company: event?.opportunityName,
+    contactName: event?.leadName,
+    value: event?.meta?.dealValue,
+    opportunityStage: event?.meta?.stage ?? event?.status,
+    assignedTo: event?.ownerUserId,
+  }
 
   const { top, left, maxCardHeight } = useMemo(
     () => computeCalendarPopoverPosition(anchorRect),
@@ -127,15 +141,28 @@ export function OpportunityEventHoverCard({ event, anchorRect, onMouseEnter, onM
 
         <div className="flex flex-col gap-2 sm:flex-row">
           {opportunityId ? (
-            <Link
-              to={`/opportunities/${opportunityId}`}
-              className={cn(
-                'inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-brand-200 bg-white px-3 py-2 text-xs font-semibold text-brand-800 shadow-sm transition hover:bg-slate-50',
-              )}
-            >
-              Open deal
-              <ExternalLink className="h-3.5 w-3.5 opacity-80" />
-            </Link>
+            openOpportunityPanel ? (
+              <button
+                type="button"
+                onClick={() => openOpportunityPanel(opportunityPayload)}
+                className={cn(
+                  'inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-brand-200 bg-white px-3 py-2 text-xs font-semibold text-brand-800 shadow-sm transition hover:bg-slate-50',
+                )}
+              >
+                Open deal
+                <ExternalLink className="h-3.5 w-3.5 opacity-80" />
+              </button>
+            ) : (
+              <Link
+                to="/deals"
+                className={cn(
+                  'inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-brand-200 bg-white px-3 py-2 text-xs font-semibold text-brand-800 shadow-sm transition hover:bg-slate-50',
+                )}
+              >
+                Open deal
+                <ExternalLink className="h-3.5 w-3.5 opacity-80" />
+              </Link>
+            )
           ) : null}
         </div>
 

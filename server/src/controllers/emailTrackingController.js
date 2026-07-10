@@ -31,7 +31,15 @@ export async function trackOpen(req, res, next) {
 export async function trackClick(req, res, next) {
   try {
     const { id, t, log_id, url } = req.query
-    const destination = String(url || '')
+    // Only allow http(s) absolute URLs as redirect targets. Prevents the
+    // tracker from being abused as an open redirector / javascript: sink.
+    let destination = ''
+    try {
+      const parsed = new URL(String(url || ''))
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') destination = parsed.href
+    } catch {
+      destination = ''
+    }
     if (t === 'd' && id) {
       await LeadEmail.increment({ clickCount: 1 }, { where: { trackingId: id } })
       await LeadEmail.update({ clickedAt: new Date() }, { where: { trackingId: id, clickedAt: null } })

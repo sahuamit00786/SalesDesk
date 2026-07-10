@@ -12,6 +12,7 @@ import { DayNotesPanel } from '@/features/calendar/components/DayNotesPanel'
 import { EventChip } from '@/features/calendar/components/EventChip'
 import { DayEventsModal } from '@/features/calendar/components/DayEventsModal'
 import { DayEventsOverflowProvider } from '@/features/calendar/components/DayEventsOverflowContext'
+import { OpportunityPanelProvider } from '@/features/calendar/components/OpportunityPanelContext'
 import { MonthShowMoreButton } from '@/features/calendar/components/MonthShowMoreButton'
 import { getEventColor, CALENDAR_FILTERS } from '@/features/calendar/eventColors'
 import { useAppSelector } from '@/app/hooks'
@@ -28,6 +29,7 @@ export function AppCalendarShell({
   EventComponent,
   leftSidebar,
   rightPanel,
+  onOpenOpportunity,
   showRightPanel = true,
   showSearch = false,
   showFilters = false,
@@ -327,6 +329,7 @@ export function AppCalendarShell({
   const setTypes = onTypesChange ?? setSelectedTypes
 
   return (
+    <OpportunityPanelProvider value={onOpenOpportunity}>
     <div className={cn(
       'flex min-h-0 overflow-hidden bg-white',
       highlightAttendanceStatus && 'calendar-attendance-mode',
@@ -351,17 +354,6 @@ export function AppCalendarShell({
           </div>
 
           {leftSidebar}
-
-          {showFilters ? (
-            lockedTypes?.length ? (
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">
-                Showing only <strong className="text-gray-900">{lockedTypesLabel}</strong> from your workspace calendar
-                on this page.
-              </div>
-            ) : (
-              <CalendarFilters selectedTypes={types} onChange={setTypes} counts={typeCounts} />
-            )
-          ) : null}
 
           {showTodayList && (
             <div className="space-y-6 rounded-xl border border-brand-200 bg-white p-3">
@@ -592,13 +584,36 @@ export function AppCalendarShell({
 
       {showRightPanel ? (
         <div className="w-60 shrink-0 overflow-y-auto border-l border-gray-200 bg-gradient-to-b from-gray-50 to-white scrollbar-subtle">
-          <div className="p-3">
+          <div className="flex min-h-full flex-col gap-4 p-3">
             {rightPanel ?? (
-              <DayNotesPanel selectedDate={selectedDate} events={allEvents} onEventClick={handleEventClick} />
+              <>
+                <DayNotesPanel
+                  selectedDate={selectedDate}
+                  events={allEvents}
+                  onEventClick={handleEventClick}
+                  showSchedule={false}
+                />
+                {showFilters ? (
+                  lockedTypes?.length ? (
+                    <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">
+                      Showing only <strong className="text-gray-900">{lockedTypesLabel}</strong> from your workspace
+                      calendar on this page.
+                    </div>
+                  ) : (
+                    <CalendarFilters
+                      selectedTypes={types}
+                      onChange={setTypes}
+                      counts={typeCounts}
+                      className="flex-1"
+                    />
+                  )
+                ) : null}
+              </>
             )}
           </div>
         </div>
       ) : null}
     </div>
+    </OpportunityPanelProvider>
   )
 }

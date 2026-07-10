@@ -17,6 +17,27 @@ export function getDocumentKind(row) {
   return 'document'
 }
 
+// Text/code files we can safely fetch and render inline as plain text.
+const TEXT_PREVIEW_EXTS = [
+  'sql', 'txt', 'csv', 'tsv', 'json', 'log', 'md', 'markdown', 'xml', 'yml', 'yaml',
+  'js', 'jsx', 'ts', 'tsx', 'css', 'scss', 'html', 'htm', 'sh', 'bash', 'env',
+  'ini', 'conf', 'cfg', 'toml', 'py', 'rb', 'php', 'java', 'c', 'cpp', 'go', 'rs',
+]
+
+/**
+ * How the preview dialog should render a file:
+ * 'image' → <img>, 'pdf' → <iframe>, 'text' → fetched <pre>, 'download' → fallback card.
+ * Only images and PDFs are safely embeddable; everything else (e.g. .sql, .zip)
+ * would otherwise trigger a download inside an iframe and flicker.
+ */
+export function getPreviewMode(row) {
+  const kind = getDocumentKind(row)
+  if (kind === 'image') return 'image'
+  if (kind === 'pdf') return 'pdf'
+  if (TEXT_PREVIEW_EXTS.includes(fileExtLower(row?.name))) return 'text'
+  return 'download'
+}
+
 export function getDocCardPreviewMeta(row) {
   const kind = getDocumentKind(row)
   const ext = fileExtLower(row?.name)

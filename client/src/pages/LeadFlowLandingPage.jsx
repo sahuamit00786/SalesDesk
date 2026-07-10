@@ -18,15 +18,14 @@ export function LeadFlowLandingPage() {
   const token = useAppSelector((s) => s.auth.accessToken)
   const reduced = usePrefersReducedMotion()
 
-  if (token) return <Navigate to="/dashboard" replace />
-
   useEffect(() => {
+    if (token) return undefined
     const prev = document.title
-    document.title = 'LeadNest — Lead management, pipeline, and team workspace'
+    document.title = 'Connexify — Lead management, pipeline, and team workspace'
     let meta = document.querySelector('meta[name="description"]')
     let created = false
     const desc =
-      'LeadFlow CRM: full lifecycle lead management with pipeline, email inbox, workflow automation, campaigns, quotations, invoices, HR, and team roles.'
+      'Connexify CRM: full lifecycle lead management with pipeline, email inbox, workflow automation, campaigns, quotations, invoices, HR, and team roles.'
     if (!meta) {
       meta = document.createElement('meta')
       meta.setAttribute('name', 'description')

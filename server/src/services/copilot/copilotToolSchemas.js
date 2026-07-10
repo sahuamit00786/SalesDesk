@@ -10,7 +10,7 @@ Structured tools first: prefer getLeads / getLeadDetail / getDeals / getCampaign
 
 Be concise, structured, and actionable in your final answers. When numeric/tabular data is involved (lists of records, comparisons, analytics), prefer returning it as a table or chart block rather than prose.
 
-When summarizing a single record — "tell me about <person/lead>" — write it like a colleague briefing another colleague, NOT a field-by-field data dump. 2-4 natural sentences covering only what's relevant: who they are, their status/stage, who owns them, and anything noteworthy (recent activity, no activity yet, overdue tasks, deal value if meaningful). Do not list every raw field with a bold label (no "**Lead ID**:", "**Created At**:", "**Updated At**:" — internal ids and timestamps are noise unless the user is clearly trying to take an action that needs the id, or explicitly asks for a specific field). Skip fields that are empty/zero/default rather than reporting their absence for every single one.`
+When summarizing a single record — "tell me about <person/lead>" — resolve the name first, then call the matching detail tool: getUserDetail for a user (kind "user"), getLeadDetail for a lead (kind "lead"). Both render a profile card with the key metrics automatically, so your text should be a short colleague-style briefing, NOT a field-by-field data dump and NOT a re-listing of every number already on the card. 1-3 natural sentences covering only what's noteworthy: who they are, their status/stage, who owns them, and anything that stands out (recent activity, no activity yet, overdue tasks, strong/weak pipeline). Do not print raw ids or timestamps ("**Lead ID**:", "**Created At**:") unless the user is taking an action that needs them or explicitly asks. Skip empty/zero/default fields rather than reporting their absence.`
 
 export const COPILOT_TOOLS = [
   {
@@ -50,6 +50,20 @@ export const COPILOT_TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'getUserDetail',
+      description: 'Profile + performance metrics for ONE team member by id — leads assigned/owned, deals, pipeline & won value, meetings, activities, open/overdue tasks. Use this (NOT getUserPerformance) after resolveAmbiguousEntity resolves a name to a user (kind "user") to answer "tell me about <name>" / "how is <name> performing"-style questions about a single person. The frontend renders the returned metrics as a profile card automatically.',
+      parameters: {
+        type: 'object',
+        properties: {
+          userId: { type: 'string', description: 'The user id, e.g. from a resolveAmbiguousEntity candidate with kind "user"' },
+        },
+        required: ['userId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'getDeals',
       description: 'List/filter deals in the sales pipeline for the current workspace.',
       parameters: {
@@ -82,7 +96,7 @@ export const COPILOT_TOOLS = [
     type: 'function',
     function: {
       name: 'getUserPerformance',
-      description: 'Per-team-member performance: leads owned/assigned, task load, overdue tasks, meetings, activities, over a date range.',
+      description: 'Per-team-member performance for the WHOLE team (leaderboards, comparisons, "who has the most X"): leads owned/assigned, task load, overdue tasks, meetings, activities, over a date range. For a single named person use getUserDetail instead so you get one clean profile card rather than the entire team.',
       parameters: {
         type: 'object',
         properties: {
@@ -132,7 +146,7 @@ export const COPILOT_TOOLS = [
         type: 'object',
         properties: {
           nameQuery: { type: 'string', description: 'Partial or full name to search for' },
-          entityType: { type: 'string', enum: ['auto', 'user', 'lead'], description: 'Defaults to "auto" (search both team members and leads/contacts). Only narrow to "user" or "lead" if you already know which kind this name refers to.' },
+          entityType: { type: 'string', enum: ['auto', 'user', 'lead'], description: 'Defaults to "auto" (search both team members and leads/contacts). If the user\'s message explicitly qualifies the kind you MUST pass that entityType instead of "auto", so the disambiguation list is not polluted with the other kind: "lead named X" / "the lead X" / "contact X" / "opportunity X" → "lead"; "user X" / "team member X" / "salesperson X" / "rep X" / "agent X" → "user". Only use "auto" when the kind is genuinely unspecified.' },
         },
         required: ['nameQuery'],
       },

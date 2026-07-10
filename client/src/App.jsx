@@ -48,6 +48,8 @@ import { WorkflowsListPage } from '@/pages/WorkflowsListPage'
 import { WorkflowNewPage } from '@/pages/WorkflowNewPage'
 import { WorkflowEditorPage } from '@/pages/WorkflowEditorPage'
 import { LeadFlowLandingPage } from '@/pages/LeadFlowLandingPage'
+import { PrivacyPolicyPage } from '@/pages/PrivacyPolicyPage'
+import { TermsOfServicePage } from '@/pages/TermsOfServicePage'
 // HR modules disabled
 // import { AttendancePage } from '@/pages/AttendancePage'
 // import { LeavePage } from '@/pages/LeavePage'
@@ -68,6 +70,8 @@ export default function App() {
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/accept-invite" element={<AcceptInvitePage />} />
+      <Route path="/privacy" element={<PrivacyPolicyPage />} />
+      <Route path="/terms" element={<TermsOfServicePage />} />
       <Route element={<RequireAuth />}>
         <Route element={<SessionSync />}>
         <Route path="/onboarding" element={<OnboardingPage />} />

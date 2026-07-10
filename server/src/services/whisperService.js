@@ -1,13 +1,9 @@
 import fs from 'fs'
-import OpenAI from 'openai'
+import { getOpenAI } from './openAiClient.js'
 import {MeetingTranscript} from '../../src/models/MeetingTranscript.js'
 import dotenv from 'dotenv'
 
 dotenv.config()
-
-const openai=new OpenAI({
-apiKey:process.env.OPENAI_API_KEY
-})
 
 export async function transcribeAudio(
 filePath,
@@ -15,7 +11,7 @@ meetingId
 ){
 
 const result=
-await openai.audio.transcriptions.create({
+await getOpenAI().audio.transcriptions.create({
 file:fs.createReadStream(filePath),
 model:'whisper-1'
 })

@@ -1,8 +1,6 @@
-import OpenAI from 'openai'
+import { getOpenAI } from './openAiClient.js'
 import { MeetingTranscript } from '../models/MeetingTranscript.js'
 import { AiMeetingSummary } from '../models/AiMeetingSummary.js'
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
 async function getTranscript(meetingId) {
   const rows = await MeetingTranscript.findAll({ where: { meetingId } })
@@ -13,7 +11,7 @@ export async function generateSummary(meetingId) {
   const transcript = await getTranscript(meetingId)
   if (!transcript) throw Object.assign(new Error('No transcript found for this meeting'), { status: 404 })
 
-  const result = await openai.chat.completions.create({
+  const result = await getOpenAI().chat.completions.create({
     model: 'gpt-4o-mini',
     messages: [
       { role: 'system', content: 'Create a sales meeting summary covering key points, objections, and next steps.' },
@@ -30,7 +28,7 @@ export async function extractActions(meetingId) {
   const transcript = await getTranscript(meetingId)
   if (!transcript) throw Object.assign(new Error('No transcript found for this meeting'), { status: 404 })
 
-  const result = await openai.chat.completions.create({
+  const result = await getOpenAI().chat.completions.create({
     model: 'gpt-4o-mini',
     response_format: { type: 'json_object' },
     messages: [
@@ -55,7 +53,7 @@ export async function analyzeSentiment(meetingId) {
   const transcript = await getTranscript(meetingId)
   if (!transcript) throw Object.assign(new Error('No transcript found for this meeting'), { status: 404 })
 
-  const result = await openai.chat.completions.create({
+  const result = await getOpenAI().chat.completions.create({
     model: 'gpt-4o-mini',
     response_format: { type: 'json_object' },
     messages: [

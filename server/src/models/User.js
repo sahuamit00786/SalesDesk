@@ -89,6 +89,11 @@ export const User = sequelize.define(
       allowNull: true,
       field: 'last_login_at',
     },
+    lastLoginIp: {
+      type: DataTypes.STRING(64),
+      allowNull: true,
+      field: 'last_login_ip',
+    },
     onboardedAt: {
       type: DataTypes.DATE,
       allowNull: true,

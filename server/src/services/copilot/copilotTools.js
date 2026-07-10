@@ -89,6 +89,22 @@ export async function getUserPerformance(args, ctx) {
   return unwrap(callControllerAsTool(analyticsController.teamReport, buildSyntheticReq(ctx, query)))
 }
 
+/**
+ * One team member's profile + performance metrics — used after
+ * resolveAmbiguousEntity picks a user (kind "user"). Reuses the same
+ * workspace-scoped teamReport and returns just this user's row, so the
+ * frontend can render a single profile card instead of the whole team.
+ */
+export async function getUserDetail(args, ctx) {
+  const report = await unwrap(
+    callControllerAsTool(analyticsController.teamReport, buildSyntheticReq(ctx, { from: args.from, to: args.to })),
+  )
+  const rows = report?.data?.tables?.team || []
+  const user = rows.find((r) => r.id === args.userId)
+  if (!user) throw new Error('That user is not a member of the current workspace')
+  return { user }
+}
+
 export async function getFollowups(args, ctx) {
   const query = { from: args.from, to: args.to, view: args.view || 'all', userId: args.userId }
   return unwrap(callControllerAsTool(analyticsReportsExtended.followupsReport, buildSyntheticReq(ctx, query)))
@@ -198,6 +214,7 @@ export const COPILOT_TOOL_IMPLEMENTATIONS = {
   getDeals,
   getCampaignPerformance,
   getUserPerformance,
+  getUserDetail,
   getFollowups,
   getDashboardStats,
   resolveAmbiguousEntity,

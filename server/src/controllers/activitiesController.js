@@ -11,7 +11,7 @@ import {
   User,
 } from '../models/index.js'
 import { leadAccessWhere } from '../services/leadVisibility.js'
-import { allowedWorkspaceIdsForUser } from '../services/userWorkspaceService.js'
+import { allowedWorkspaceIdsForUser, scopedWorkspaceIdsForRequest } from '../services/userWorkspaceService.js'
 
 const DEFAULT_ACTIVITY_TYPES = [
   { key: 'call', name: 'Call', icon: 'PhoneCall', color: '#0f766e', description: 'Phone interaction with lead' },
@@ -98,7 +98,7 @@ async function resolveTypeConfig(companyId) {
 
 export async function listActivities(req, res, next) {
   try {
-    const workspaceIds = await allowedWorkspaceIdsForUser(req.user)
+    const workspaceIds = await scopedWorkspaceIdsForRequest(req)
     if (!workspaceIds.length) return res.json({ success: true, data: [], meta: { page: 1, limit: 20, total: 0 } })
     const scope = String(req.query.scope || 'global')
     const page = Math.max(1, Number(req.query.page) || 1)

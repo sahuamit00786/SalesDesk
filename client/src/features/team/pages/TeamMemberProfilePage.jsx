@@ -715,6 +715,7 @@ export function TeamMemberProfilePage() {
   const { userId } = useParams()
   const [activeTab, setActiveTab] = useState('activity')
   const [editOpen, setEditOpen] = useState(false)
+  const [meetingListNow] = useState(() => Date.now())
 
   const { data: userResp, isLoading: userLoading, error: userError, refetch: refetchUser } = useGetTeamUserQuery(userId, {
     skip: !userId,

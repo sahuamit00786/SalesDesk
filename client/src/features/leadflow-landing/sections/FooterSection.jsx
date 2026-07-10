@@ -78,10 +78,18 @@ export function FooterSection() {
           ))}
         </div>
 
-        <div className="mt-14 border-t border-zinc-100 pt-8">
+        <div className="mt-14 flex flex-col gap-4 border-t border-zinc-100 pt-8 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-zinc-400">
             © {new Date().getFullYear()} LeadNest. All rights reserved.
           </p>
+          <div className="flex items-center gap-5">
+            <Link to="/privacy" className="text-xs text-zinc-500 transition hover:text-violet-700">
+              Privacy Policy
+            </Link>
+            <Link to="/terms" className="text-xs text-zinc-500 transition hover:text-violet-700">
+              Terms of Service
+            </Link>
+          </div>
         </div>
       </div>
     </footer>

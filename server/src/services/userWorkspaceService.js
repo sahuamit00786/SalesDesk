@@ -1,5 +1,6 @@
 import { Op } from 'sequelize'
 import { UserWorkspace, Workspace } from '../models/index.js'
+import { resolveListWorkspaceFilterId } from '../utils/resolveListWorkspaceFilter.js'
 
 function dedupeIds(ids) {
   return [...new Set((Array.isArray(ids) ? ids : []).filter(Boolean))]
@@ -23,6 +24,31 @@ export async function allowedWorkspaceIdsForUser(user) {
     return dedupeIds(all.map((w) => w.id))
   }
   return listWorkspaceIdsForUser(user.id)
+}
+
+/**
+ * Workspace IDs a list query should scope to. When the request selects a single
+ * workspace (via `x-workspace-id` header or `workspaceId` query), narrow to just
+ * that one (after validating access); otherwise return all allowed workspaces.
+ * Mirrors the scoping used for the leads list so tasks/activities don't leak
+ * across workspaces. Throws 403 if the selected workspace isn't accessible.
+ */
+export async function scopedWorkspaceIdsForRequest(req) {
+  const allowed = await allowedWorkspaceIdsForUser(req.user)
+  const selected = resolveListWorkspaceFilterId(req)
+  if (!selected) return allowed
+  if (
+    !req.user.isCompanyAdmin &&
+    allowed.length &&
+    !allowed.includes(String(selected))
+  ) {
+    const err = new Error('You do not have access to this workspace')
+    err.status = 403
+    err.code = 'FORBIDDEN'
+    err.publicMessage = 'You do not have access to this workspace'
+    throw err
+  }
+  return [String(selected)]
 }
 
 /** Add workspaces without removing existing memberships (same user row in DB). */

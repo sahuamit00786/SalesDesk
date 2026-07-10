@@ -1,8 +1,10 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { AppCalendarShell } from '@/features/calendar/components/AppCalendarShell'
 import { CreateReminderDrawer } from '@/features/calendar/components/CreateReminderDrawer'
+import { DealDetailPanel } from '@/features/deals/components/DealDetailPanel'
 import { getEventColor } from '@/features/calendar/eventColors'
 import { useGetCalendarEventsQuery } from '@/features/calendar/calendarApi'
+import { useGetLeadFormMetaQuery } from '@/features/leads/leadsApi'
 import { useAppSelector } from '@/app/hooks'
 
 /**
@@ -18,6 +20,15 @@ export function CalendarWorkspace({ className, lockedTypes = null, filterAssigne
   const [queryRange, setQueryRange] = useState(null)
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false)
   const [createDrawerDate, setCreateDrawerDate] = useState(new Date())
+  const [dealPanel, setDealPanel] = useState({ open: false, opp: null })
+
+  const { data: formMetaData } = useGetLeadFormMetaQuery()
+  const opportunityStatuses = useMemo(() => {
+    const rows = formMetaData?.data?.opportunityStatuses || []
+    return [...rows].sort((a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0))
+  }, [formMetaData])
+
+  const openOpportunityPanel = useCallback((opp) => setDealPanel({ open: true, opp }), [])
 
   const user = useAppSelector((state) => state.auth.user)
   const activeWorkspaceId = useAppSelector((state) => state.workspace.activeWorkspaceId)
@@ -61,6 +72,7 @@ export function CalendarWorkspace({ className, lockedTypes = null, filterAssigne
         selectedTypes={selectedTypes}
         onTypesChange={setSelectedTypes}
         onDateRangeChange={setQueryRange}
+        onOpenOpportunity={openOpportunityPanel}
         onSelectSlot={(slotInfo) => {
           setCreateDrawerDate(slotInfo.start)
           setIsCreateDrawerOpen(true)
@@ -70,6 +82,12 @@ export function CalendarWorkspace({ className, lockedTypes = null, filterAssigne
         isOpen={isCreateDrawerOpen}
         onClose={() => setIsCreateDrawerOpen(false)}
         initialDate={createDrawerDate}
+      />
+      <DealDetailPanel
+        open={dealPanel.open}
+        opp={dealPanel.opp}
+        opportunityStatuses={opportunityStatuses}
+        onClose={() => setDealPanel({ open: false, opp: null })}
       />
     </>
   )

@@ -513,7 +513,10 @@ export function LeadDetailPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const isPipelineDealRoute = location.pathname.startsWith('/opportunities/')
-  const [activeTab, setActiveTab] = useState('activity')
+  const [activeTab, setActiveTab] = useState(() => {
+    const t = new URLSearchParams(location.search).get('tab')
+    return t || 'activity'
+  })
   const [profileInfoTab, setProfileInfoTab] = useState('lead')
   const [draft, setDraft] = useState('')
   const [taskDrawerOpen, setTaskDrawerOpen] = useState(false)

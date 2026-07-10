@@ -37,7 +37,7 @@ import { findDuplicates, saveDuplicateRecord } from '../services/duplicateDetect
 import { exportLeads, importLeads } from '../services/importExportService.js'
 import { recalculateScore, recalculateLeadScore } from '../services/leadScoringService.js'
 import { leadAccessWhere } from '../services/leadVisibility.js'
-import { allowedWorkspaceIdsForUser } from '../services/userWorkspaceService.js'
+import { allowedWorkspaceIdsForUser, scopedWorkspaceIdsForRequest } from '../services/userWorkspaceService.js'
 import { resolveListWorkspaceFilterId } from '../utils/resolveListWorkspaceFilter.js'
 import { buildAdvancedListWhere, parseFiltersParam } from '../services/listFilterService.js'
 import { LEAD_FILTER_FIELDS } from '../services/filterSchemas/leadFilterSchema.js'
@@ -2670,7 +2670,7 @@ export async function listTasks(req, res, next) {
 
 export async function listAllTasks(req, res, next) {
   try {
-    const workspaceIds = await allowedWorkspaceIdsForUser(req.user)
+    const workspaceIds = await scopedWorkspaceIdsForRequest(req)
     const page = Math.max(1, parseInt(req.query.page) || 1)
     const limit = Math.min(200, Math.max(1, parseInt(req.query.limit) || 50))
     const offset = (page - 1) * limit
@@ -3379,7 +3379,7 @@ export async function deleteSavedView(req, res, next) {
 export async function listAssignmentRules(req, res, next) {
   try {
     const workspaceId = req.headers['x-workspace-id']
-    const rows = await AssignmentRule.findAll({ where: { workspaceId }, order: [['priority', 'ASC']] })
+    const rows = await AssignmentRule.findAll({ where: { workspaceId, companyId: req.user.companyId }, order: [['priority', 'ASC']] })
     return res.json({ success: true, data: rows, meta: {} })
   } catch (e) {
     return next(e)
@@ -3407,12 +3407,11 @@ export async function createAssignmentRule(req, res, next) {
 
 export async function patchAssignmentRule(req, res, next) {
   try {
-    const row = await AssignmentRule.findByPk(req.params.id)
+    const row = await AssignmentRule.findOne({ where: { id: req.params.id, companyId: req.user.companyId } })
     if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Rule not found' } })
     const payload = { ...(req.body || {}) }
     if ('type' in payload) delete payload.type
     await row.update(payload)
-    if (row.type !== 'round_robin') await row.update({ type: 'round_robin' })
     return res.json({ success: true, data: row, meta: {} })
   } catch (e) {
     return next(e)
@@ -3421,7 +3420,8 @@ export async function patchAssignmentRule(req, res, next) {
 
 export async function deleteAssignmentRule(req, res, next) {
   try {
-    await AssignmentRule.destroy({ where: { id: req.params.id } })
+    const deleted = await AssignmentRule.destroy({ where: { id: req.params.id, companyId: req.user.companyId } })
+    if (!deleted) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Rule not found' } })
     return res.json({ success: true, data: { ok: true }, meta: {} })
   } catch (e) {
     return next(e)
@@ -3431,7 +3431,7 @@ export async function deleteAssignmentRule(req, res, next) {
 export async function listCustomFields(req, res, next) {
   try {
     const workspaceId = req.headers['x-workspace-id']
-    const rows = await CustomField.findAll({ where: { workspaceId }, order: [['order', 'ASC'], ['createdAt', 'ASC']] })
+    const rows = await CustomField.findAll({ where: { workspaceId, companyId: req.user.companyId }, order: [['order', 'ASC'], ['createdAt', 'ASC']] })
     return res.json({ success: true, data: rows, meta: {} })
   } catch (e) {
     return next(e)

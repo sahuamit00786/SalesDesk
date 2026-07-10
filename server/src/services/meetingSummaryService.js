@@ -1,7 +1,5 @@
-import OpenAI from 'openai'
+import { getOpenAI } from './openAiClient.js'
 import { withRetry } from '../utils/withRetry.js'
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
 /**
  * Generate a plain-text meeting summary using gpt-4o-mini.
@@ -9,7 +7,7 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
  */
 export async function generateSummary(transcript) {
   return withRetry(async () => {
-    const response = await openai.chat.completions.create({
+    const response = await getOpenAI().chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
         {

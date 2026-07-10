@@ -43,6 +43,30 @@ function capitalize(s) {
   return String(s || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
+// All configured pipeline stages for the workspace, with lead count/value per stage
+// (zero-count stages included so charts show the full pipeline, not just populated ones)
+async function getStageDist(scope, ctx) {
+  const [statuses, counts] = await Promise.all([
+    OpportunityStatus.findAll({
+      where: { workspaceId: ctx.workspaceId, companyId: ctx.companyId },
+      order: [['sortOrder', 'ASC']],
+      raw: true,
+    }),
+    Lead.findAll({
+      where: { ...scope, opportunityStatus: { [Op.ne]: null } },
+      attributes: ['opportunityStatus', [fn('COUNT', col('id')), 'count'], [fn('COALESCE', fn('SUM', col('value')), 0), 'totalValue']],
+      group: ['opportunityStatus'],
+      raw: true,
+    }),
+  ])
+  const countMap = Object.fromEntries(counts.map((r) => [r.opportunityStatus, r]))
+  return statuses.map((s) => ({
+    name: s.name,
+    count: Number(countMap[s.id]?.count || 0),
+    value: Number(countMap[s.id]?.totalValue || 0),
+  }))
+}
+
 async function enrichWithUserNames(rows, idField = 'ownerUserId') {
   const ids = [...new Set(rows.map((r) => r[idField]).filter(Boolean))]
   if (!ids.length) return rows
@@ -70,15 +94,7 @@ export async function opportunitiesReport(req, res, next) {
         attributes: [[fn('COUNT', col('id')), 'count'], [fn('COALESCE', fn('SUM', col('value')), 0), 'totalValue']],
         raw: true,
       }),
-      Lead.findAll({
-        where: scope,
-        attributes: ['opportunityStatus', [fn('COUNT', col('Lead.id')), 'count'], [fn('COALESCE', fn('SUM', col('Lead.value')), 0), 'totalValue']],
-        include: [{ model: OpportunityStatus, as: 'oppStatus', attributes: ['name'], required: false }],
-        group: ['opportunityStatus', 'oppStatus.id'],
-        order: [[literal('count'), 'DESC']],
-        raw: true,
-        nest: true,
-      }),
+      getStageDist(scope, ctx),
       Lead.findAll({
         where: scope,
         include: [
@@ -122,11 +138,7 @@ export async function opportunitiesReport(req, res, next) {
           }),
         },
         charts: {
-          stageDist: stageDistRaw.filter((r) => r.opportunityStatus).map((r) => ({
-            name: capitalize(r.oppStatus?.name || r.opportunityStatus),
-            count: Number(r.count),
-            value: Number(r.totalValue),
-          })),
+          stageDist: stageDistRaw,
         },
         tables: {
           byStage: allOpportunities.map((l) => ({

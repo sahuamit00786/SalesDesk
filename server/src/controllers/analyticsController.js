@@ -43,6 +43,30 @@ function capitalize(s) {
   return String(s || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
+// All configured pipeline stages for the workspace, with lead count/value per stage
+// (zero-count stages included so charts show the full pipeline, not just populated ones)
+async function getStageDist(scope, ctx) {
+  const [statuses, counts] = await Promise.all([
+    OpportunityStatus.findAll({
+      where: { workspaceId: ctx.workspaceId, companyId: ctx.companyId },
+      order: [['sortOrder', 'ASC']],
+      raw: true,
+    }),
+    Lead.findAll({
+      where: { ...scope, opportunityStatus: { [Op.ne]: null } },
+      attributes: ['opportunityStatus', [fn('COUNT', col('id')), 'count'], [fn('COALESCE', fn('SUM', col('value')), 0), 'totalValue']],
+      group: ['opportunityStatus'],
+      raw: true,
+    }),
+  ])
+  const countMap = Object.fromEntries(counts.map((r) => [r.opportunityStatus, r]))
+  return statuses.map((s) => ({
+    name: s.name,
+    count: Number(countMap[s.id]?.count || 0),
+    value: Number(countMap[s.id]?.totalValue || 0),
+  }))
+}
+
 function applyLeadFilters(scope, query) {
   const out = { ...scope }
   if (query.userId) {
@@ -309,11 +333,7 @@ export async function leadsReport(req, res, next) {
       Lead.count({ where: { ...scope, assignedTo: null } }),
       Lead.findAll({ where: scope, attributes: ['status', [fn('COUNT', col('id')), 'count']], group: ['status'], raw: true }),
       Lead.findAll({ where: scope, attributes: ['source', [fn('COUNT', col('id')), 'count']], group: ['source'], order: [[literal('count'), 'DESC']], raw: true }),
-      Lead.findAll({
-        where: { ...allLeadScope, isOpportunity: true, opportunityStage: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] } },
-        attributes: ['opportunityStage', [fn('COUNT', col('id')), 'count'], [fn('COALESCE', fn('SUM', col('value')), 0), 'totalValue']],
-        group: ['opportunityStage'], order: [[literal('count'), 'DESC']], raw: true,
-      }),
+      getStageDist({ ...allLeadScope, isOpportunity: true }, ctx),
       Lead.findAll({ where: periodScope, attributes: [[fn('DATE', col('created_at')), 'date'], [fn('COUNT', col('id')), 'count']], group: [fn('DATE', col('created_at'))], order: [[fn('DATE', col('created_at')), 'ASC']], raw: true }),
       Lead.findAll({ where: { ...scope, country: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] } }, attributes: ['country', [fn('COUNT', col('id')), 'count']], group: ['country'], order: [[literal('count'), 'DESC']], limit: 10, raw: true }),
       Lead.findAll({ where: { ...scope, ownerUserId: { [Op.ne]: null } }, attributes: ['ownerUserId', [fn('COUNT', col('id')), 'count']], group: ['ownerUserId'], order: [[literal('count'), 'DESC']], limit: 10, raw: true }),
@@ -373,7 +393,7 @@ export async function leadsReport(req, res, next) {
         charts: {
           statusDist: statusDist.map((r) => ({ name: capitalize(r.status), value: Number(r.count) })),
           sourceDist: sourceDist.map((r) => ({ name: capitalize(r.source || 'Unknown'), value: Number(r.count) })),
-          stageDist: stageDist.map((r) => ({ name: capitalize(r.opportunityStage), count: Number(r.count), value: Number(r.totalValue) })),
+          stageDist,
           trend: trend.map((r) => ({ date: r.date, count: Number(r.count) })),
           byCountry: byCountry.map((r) => ({ country: r.country, count: Number(r.count) })),
           byOwner: byOwner.map((r) => ({ name: r.name, count: Number(r.count) })),
@@ -428,13 +448,7 @@ export async function pipelineReport(req, res, next) {
           attributes: [[fn('COUNT', col('id')), 'count'], [fn('COALESCE', fn('SUM', col('value')), 0), 'totalValue']],
           raw: true,
         }),
-        Lead.findAll({
-          where: scope,
-          attributes: ['opportunityStage', [fn('COUNT', col('id')), 'count'], [fn('COALESCE', fn('SUM', col('value')), 0), 'totalValue']],
-          group: ['opportunityStage'],
-          order: [[literal('count'), 'DESC']],
-          raw: true,
-        }),
+        getStageDist(scope, ctx),
         Lead.findAll({
           where: { ...scope, status: { [Op.in]: ['won', 'lost'] }, createdAt: { [Op.between]: [from, to] } },
           attributes: [
@@ -462,7 +476,10 @@ export async function pipelineReport(req, res, next) {
         }),
         Lead.findAll({
           where: { ...scope, value: { [Op.ne]: null, [Op.gt]: 0 } },
-          include: [{ model: User, as: 'owner', attributes: ['name'], required: false }],
+          include: [
+            { model: User, as: 'owner', attributes: ['name'], required: false },
+            { model: OpportunityStatus, as: 'oppStatus', attributes: ['name'], required: false },
+          ],
           order: [['value', 'DESC']],
           limit: 10,
         }),
@@ -495,13 +512,7 @@ export async function pipelineReport(req, res, next) {
           }),
         },
         charts: {
-          stageDist: stageDistRaw
-            .filter((r) => r.opportunityStage)
-            .map((r) => ({
-              name: capitalize(r.opportunityStage),
-              count: Number(r.count),
-              value: Number(r.totalValue),
-            })),
+          stageDist: stageDistRaw,
           wonVsLost: Object.values(wonLostMap),
           closingForecast: closingForecastRaw.map((r) => ({
             week: r.week,
@@ -514,7 +525,7 @@ export async function pipelineReport(req, res, next) {
             id: l.id,
             title: l.title,
             company: l.company,
-            stage: capitalize(l.opportunityStage || ''),
+            stage: l.oppStatus?.name || '',
             status: l.status,
             value: l.value,
             valueCurrency: l.valueCurrency,

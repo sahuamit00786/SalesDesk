@@ -6,6 +6,7 @@ import { ChartBlock } from './ChartBlock'
 import { KpiBlock } from './KpiBlock'
 import { DisambiguationChips } from './DisambiguationChips'
 import { EntityLinksBlock } from './EntityLinksBlock'
+import { ProfileBlock } from './ProfileBlock'
 
 // Pretty renderers for GFM markdown tables the model returns inline — a bordered,
 // rounded, horizontally-scrollable card with a tinted header and hover rows.
@@ -34,6 +35,8 @@ function renderBlock(block, i, onSelectDisambiguation, disambiguationDisabled) {
       return <ChartBlock key={i} block={block} />
     case 'kpi':
       return <KpiBlock key={i} block={block} />
+    case 'profile':
+      return <ProfileBlock key={i} block={block} />
     case 'entities':
       return <EntityLinksBlock key={i} block={block} />
     case 'disambiguation':

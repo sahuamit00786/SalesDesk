@@ -1,11 +1,10 @@
-import OpenAI from 'openai'
+import { getOpenAI } from '../openAiClient.js'
 import { Op } from 'sequelize'
 import { ChatSession, ChatMessage } from '../../models/index.js'
 import { COPILOT_SYSTEM_PROMPT, COPILOT_TOOLS } from './copilotToolSchemas.js'
 import { COPILOT_TOOL_IMPLEMENTATIONS } from './copilotTools.js'
 import { emitToken, emitBlock, emitDone, emitError, emitTitle } from './copilotSocket.js'
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 const MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini'
 const MAX_TOOL_ROUNDTRIPS = 4
 const HISTORY_MESSAGE_LIMIT = 20
@@ -79,15 +78,82 @@ function extractEntityLinks(toolName, resultPayload) {
         out.push({ kind: 'campaign', id: c.id, label: c.name })
       }
     }
-    if (toolName === 'getUserPerformance' && Array.isArray(resultPayload?.data?.tables?.team)) {
-      for (const u of resultPayload.data.tables.team.slice(0, MAX_ENTITY_LINKS)) {
-        if (u.id && u.name) out.push({ kind: 'user', id: u.id, label: u.name })
-      }
-    }
+    // getUserPerformance (whole-team leaderboard) intentionally emits no entity
+    // links — dumping every team member as a chip is noise. Single-user questions
+    // go through getUserDetail, which renders a self-linking profile card instead.
   } catch {
     // best-effort — never let link extraction break the actual answer
   }
   return out
+}
+
+const fmtMoney = (n) => {
+  const v = Number(n) || 0
+  return `$${v.toLocaleString('en-US')}`
+}
+const titleCase = (s) => (s ? String(s).charAt(0).toUpperCase() + String(s).slice(1) : s)
+
+/**
+ * Turns a single-record detail tool result into a `profile` block the frontend
+ * renders as a card (header + badges + key fields + a metric grid), so "tell me
+ * about <person/lead>" shows structured UI instead of a prose data dump.
+ */
+function buildProfileBlock(toolName, payload) {
+  try {
+    if (toolName === 'getUserDetail' && payload?.user?.id) {
+      const u = payload.user
+      return {
+        type: 'profile',
+        kind: 'user',
+        id: u.id,
+        name: u.name,
+        subtitle: u.isAdmin ? 'Admin' : 'Team member',
+        href: `/team/${u.id}`,
+        badges: [{ label: u.isActive ? 'Active' : 'Inactive', tone: u.isActive ? 'green' : 'gray' }],
+        fields: [{ label: 'Email', value: u.email }].filter((f) => f.value),
+        stats: [
+          { label: 'Leads Assigned', value: u.leadsAssigned ?? 0 },
+          { label: 'Leads Owned', value: u.leadsOwned ?? 0 },
+          { label: 'Deals', value: u.deals ?? 0 },
+          { label: 'Meetings', value: u.meetings ?? 0 },
+          { label: 'Activities', value: u.activities ?? 0 },
+          { label: 'Open Tasks', value: u.tasksOpen ?? 0 },
+          { label: 'Overdue Tasks', value: u.tasksOverdue ?? 0 },
+          { label: 'Pipeline Value', value: fmtMoney(u.pipelineValue) },
+          { label: 'Won Value', value: fmtMoney(u.wonValue) },
+        ],
+      }
+    }
+    if (toolName === 'getLeadDetail' && payload?.data?.id) {
+      const l = payload.data
+      const s = payload.meta?.summary || {}
+      return {
+        type: 'profile',
+        kind: 'lead',
+        id: l.id,
+        name: l.contactName || l.title || 'Lead',
+        subtitle: l.isOpportunity ? 'Opportunity' : 'Lead',
+        href: `/leads/${l.id}`,
+        badges: [l.status ? { label: titleCase(l.status), tone: 'brand' } : null].filter(Boolean),
+        fields: [
+          { label: 'Company', value: l.company },
+          { label: 'Email', value: l.email },
+          { label: 'Phone', value: l.phone },
+          { label: 'Owner', value: l.assignee?.name },
+          { label: 'Source', value: l.source ? titleCase(String(l.source).replace(/_/g, ' ')) : null },
+        ].filter((f) => f.value),
+        stats: [
+          l.value ? { label: 'Value', value: fmtMoney(l.value) } : null,
+          { label: 'Open Tasks', value: s.openTasks ?? 0 },
+          { label: 'Completed Tasks', value: s.completedTasks ?? 0 },
+          { label: 'Activities', value: Array.isArray(l.activities) ? l.activities.length : 0 },
+        ].filter(Boolean),
+      }
+    }
+  } catch {
+    // best-effort — never let card building break the answer
+  }
+  return null
 }
 
 function dedupeEntityLinks(list) {
@@ -165,6 +231,7 @@ export async function runCopilotTurn({ session, userMessageText, systemAside, re
     let roundtrips = 0
     let pendingDisambiguation = null
     let touchedEntities = []
+    let profileBlocks = []
 
     // eslint-disable-next-line no-constant-condition
     while (true) {
@@ -220,6 +287,9 @@ export async function runCopilotTurn({ session, userMessageText, systemAside, re
 
         touchedEntities.push(...extractEntityLinks(call.name, resultPayload))
 
+        const profileBlock = buildProfileBlock(call.name, resultPayload)
+        if (profileBlock) profileBlocks.push(profileBlock)
+
         if (call.name === 'resolveAmbiguousEntity' && resultPayload?.matchCount > 1) {
           disambiguationHit = true
           pendingDisambiguation = {
@@ -259,12 +329,25 @@ export async function runCopilotTurn({ session, userMessageText, systemAside, re
       return
     }
 
-    const dedupedEntities = dedupeEntityLinks(touchedEntities)
+    // Dedupe profile cards (a record could be detailed more than once in a turn).
+    const seenProfiles = new Set()
+    const dedupedProfiles = profileBlocks.filter((p) => {
+      const key = `${p.kind}:${p.id}`
+      if (seenProfiles.has(key)) return false
+      seenProfiles.add(key)
+      return true
+    })
+    // A record already shown as a card doesn't also need a redundant link chip.
+    const dedupedEntities = dedupeEntityLinks(touchedEntities).filter((e) => !seenProfiles.has(`${e.kind}:${e.id}`))
+
     const blocks = [
+      ...dedupedProfiles,
       { type: 'text', markdown: finalText },
       ...(dedupedEntities.length ? [{ type: 'entities', items: dedupedEntities }] : []),
     ]
-    if (dedupedEntities.length) emitBlock(sessionId, blocks[1])
+    // Emit the structured blocks live (text already streamed token-by-token).
+    for (const p of dedupedProfiles) emitBlock(sessionId, p)
+    if (dedupedEntities.length) emitBlock(sessionId, { type: 'entities', items: dedupedEntities })
     await ChatMessage.create({
       sessionId,
       companyId: ctx.companyId,
@@ -324,7 +407,7 @@ function safeParse(text) {
 
 /** Streams one OpenAI completion, forwarding text tokens live, accumulating tool-call args by index. */
 async function streamOneCompletion(sessionId, messages) {
-  const stream = await openai.chat.completions.create({
+  const stream = await getOpenAI().chat.completions.create({
     model: MODEL,
     messages,
     tools: COPILOT_TOOLS,

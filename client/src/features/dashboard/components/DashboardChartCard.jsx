@@ -1,10 +1,11 @@
 import { cn } from '@/utils/cn'
 
-export function DashboardChartCard({ title, subtitle, children, className }) {
+export function DashboardChartCard({ title, subtitle, children, className, fill = false }) {
   return (
     <section
       className={cn(
         'rounded-xl border border-[#F7F5FB] bg-white p-2.5 shadow-sm sm:p-3',
+        fill && 'flex h-full flex-col',
         className,
       )}
     >
@@ -12,7 +13,7 @@ export function DashboardChartCard({ title, subtitle, children, className }) {
         <h2 className="text-sm font-semibold text-ink">{title}</h2>
         {subtitle ? <p className="mt-0.5 text-xs text-ink-muted">{subtitle}</p> : null}
       </div>
-      <div className="min-h-[180px] w-full">{children}</div>
+      <div className={cn('w-full', fill ? 'flex min-h-0 flex-1 flex-col' : 'min-h-[180px]')}>{children}</div>
     </section>
   )
 }

@@ -69,7 +69,12 @@ function calendarSegmentWindow(at) {
   if (!at) return { start: at, end: at, allDay: true }
   const start = at instanceof Date ? new Date(at.getTime()) : new Date(at)
   if (Number.isNaN(start.getTime())) return { start: at, end: at, allDay: true }
-  const end = new Date(start.getTime() + CALENDAR_SEGMENT_MINS * 60 * 1000)
+  let end = new Date(start.getTime() + CALENDAR_SEGMENT_MINS * 60 * 1000)
+  // Keep the segment on the same calendar day. Without this, a late start
+  // (e.g. 11:59 PM) + 30 min crosses midnight and react-big-calendar renders
+  // the event across two days. Cap to end-of-day of the start.
+  const dayEnd = endOfDay(start)
+  if (end > dayEnd) end = dayEnd
   return { start, end, allDay: false }
 }
 
@@ -311,6 +316,12 @@ export async function listEvents(req, res) {
         workspaceId,
         isDeleted: false,
         isOpportunity: true,
+        // Opportunities are shown on the calendar from their record (created) date.
+        // Filter by date in SQL so range results aren't cut off by the row limit.
+        createdAt: {
+          [Op.gte]: dateFrom,
+          [Op.lte]: dateTo,
+        },
       }
       if (opportunityId) oppWhere.id = opportunityId
       else if (leadId) oppWhere.id = leadId
@@ -325,7 +336,8 @@ export async function listEvents(req, res) {
             attributes: ['id', 'name'],
           },
         ],
-        limit: 100,
+        order: [['createdAt', 'ASC']],
+        limit: 500,
       })
 
       for (const o of opps) {

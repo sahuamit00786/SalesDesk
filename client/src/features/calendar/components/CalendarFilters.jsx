@@ -10,7 +10,7 @@ const iconMap = {
   Bell,
 }
 
-export function CalendarFilters({ selectedTypes, onChange, counts = {} }) {
+export function CalendarFilters({ selectedTypes, onChange, counts = {}, className }) {
   const toggleType = (typeId) => {
     if (selectedTypes.includes(typeId)) {
       onChange(selectedTypes.filter(t => t !== typeId))
@@ -22,7 +22,7 @@ export function CalendarFilters({ selectedTypes, onChange, counts = {} }) {
   const clearAll = () => onChange([])
 
   return (
-    <div className="space-y-1.5 rounded-xl border border-gray-200 bg-gray-50 p-2">
+    <div className={cn('space-y-1.5 rounded-xl border border-gray-200 bg-gray-50 p-2', className)}>
       <div className="flex items-center justify-between">
         <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
           My Calendars

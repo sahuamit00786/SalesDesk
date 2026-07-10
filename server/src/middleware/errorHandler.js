@@ -17,8 +17,6 @@ export function errorHandler(err, req, res, next) {
     message = devHint
   }
 
-  console.error('[debug-err]', req.method, req.originalUrl, status, code, err.message, '\n', err.stack)
-
   if (status >= 500) {
     // eslint-disable-next-line no-console
     console.error('[api]', req.method, req.originalUrl, code, err.message, devHint || '')

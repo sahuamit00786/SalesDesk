@@ -1,14 +1,8 @@
 import { Company } from '../../models/index.js'
+import { NOTIFICATION_EVENT_TYPES as FULL_EVENT_TYPES } from './notificationEventTypes.js'
 
-export const NOTIFICATION_EVENT_TYPES = {
-  LEAD_ASSIGNED: 'lead_assigned',
-  CAMPAIGN_LEADS_ADDED: 'campaign_leads_added',
-  TASK_ASSIGNED: 'task_assigned',
-  TASKS_DUE_TODAY: 'tasks_due_today',
-  FOLLOWUP_DUE: 'followup_due',
-  LEAD_EMAIL_REPLY: 'lead_email_reply',
-  MEETING_REMINDER: 'meeting_reminder',
-}
+/** Re-exported for backward compatibility — callers importing from this file keep working. */
+export const NOTIFICATION_EVENT_TYPES = FULL_EVENT_TYPES
 
 const DEFAULT_SETTINGS = {
   leadAssigned: { enabled: true, email: true, inApp: true },

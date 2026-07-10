@@ -1,8 +1,9 @@
 import { format, isSameDay, addDays } from 'date-fns'
-import { Video, CheckSquare, Phone, TrendingUp, Bell, Calendar, CheckCircle2, Clock } from 'lucide-react'
+import { Video, CheckSquare, Phone, TrendingUp, Bell, CalendarClock, CalendarDays, CheckCircle2, Clock, User } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { TaskAttachmentIcons } from '@/features/leads/components/TaskAttachmentIcons'
 import { getKindBgClass } from '../eventColors'
+import { statusPillClass } from './TodayList'
 
 const iconMap = {
   meeting: Video,
@@ -25,7 +26,7 @@ const statusLabels = {
   dismissed: 'Dismissed',
 }
 
-export function DayNotesPanel({ selectedDate, events, onEventClick }) {
+export function DayNotesPanel({ selectedDate, events, onEventClick, showSchedule = true }) {
   // Filter events for the selected date
   const dayEvents = events.filter(e => {
     const eventDate = new Date(e.start)
@@ -53,66 +54,64 @@ export function DayNotesPanel({ selectedDate, events, onEventClick }) {
 
   const isBusy = dayEvents.length > 3
 
+  const statCards = [
+    { label: 'Events', value: weekStats.total, Icon: CalendarDays, tint: 'text-gray-900', iconClass: 'bg-gray-100 text-gray-500' },
+    { label: 'Today', value: weekStats.today, Icon: Clock, tint: 'text-brand-600', iconClass: 'bg-brand-100 text-brand-600' },
+    { label: 'Completed', value: weekStats.completed, Icon: CheckCircle2, tint: 'text-emerald-600', iconClass: 'bg-emerald-100 text-emerald-600' },
+    { label: 'Scheduled', value: weekStats.scheduled, Icon: CalendarClock, tint: 'text-amber-600', iconClass: 'bg-amber-100 text-amber-600' },
+  ]
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {/* Day summary card */}
-      <div className="bg-white/90 backdrop-blur rounded-2xl p-4 border border-brand-100 shadow-sm">
-        <div className="flex items-start justify-between">
+      <div className="relative overflow-hidden rounded-2xl border border-brand-100 bg-gradient-to-br from-brand-50 via-white to-fuchsia-50/40 p-4 shadow-sm">
+        <div className="flex items-start justify-between gap-2">
           <div>
-            <p className="text-sm text-gray-500">{format(selectedDate, 'EEEE')}</p>
-            <p className="text-2xl font-bold text-gray-900">
-              {format(selectedDate, 'd MMMM')}
-            </p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-brand-500">{format(selectedDate, 'EEEE')}</p>
+            <p className="mt-0.5 text-2xl font-bold text-gray-900">{format(selectedDate, 'd MMMM')}</p>
           </div>
           <div className={cn(
-            'px-2.5 py-1 rounded-full text-xs font-medium',
-            isBusy ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'
+            'rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1',
+            isBusy ? 'bg-amber-100 text-amber-700 ring-amber-200' : 'bg-emerald-100 text-emerald-700 ring-emerald-200',
           )}>
             {isBusy ? 'Busy day' : 'Free'}
           </div>
         </div>
-        <p className="text-sm text-gray-500 mt-2">
-          {dayEvents.length} events scheduled
+        <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-gray-500">
+          <CalendarDays className="h-3.5 w-3.5" />
+          {dayEvents.length} {dayEvents.length === 1 ? 'event' : 'events'} scheduled
         </p>
       </div>
 
       {/* Week stats */}
       <div className="space-y-3 rounded-2xl border border-gray-100 bg-white p-3 shadow-sm">
-        <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-          This Week
-        </h4>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-gray-50 rounded-lg p-3">
-            <p className="text-2xl font-bold text-gray-900">{weekStats.total}</p>
-            <p className="text-xs text-gray-500">Events</p>
-          </div>
-          <div className="bg-gray-50 rounded-lg p-3">
-            <p className="text-2xl font-bold text-gray-900">{weekStats.today}</p>
-            <p className="text-xs text-gray-500">Today</p>
-          </div>
-          <div className="bg-gray-50 rounded-lg p-3">
-            <p className="text-2xl font-bold text-green-600">{weekStats.completed}</p>
-            <p className="text-xs text-gray-500">Completed</p>
-          </div>
-          <div className="bg-gray-50 rounded-lg p-3">
-            <p className="text-2xl font-bold text-brand-600">{weekStats.scheduled}</p>
-            <p className="text-xs text-gray-500">Scheduled</p>
-          </div>
+        <h4 className="text-[11px] font-bold uppercase tracking-wider text-gray-400">This Week</h4>
+        <div className="grid grid-cols-2 gap-2.5">
+          {statCards.map(({ label, value, Icon, tint, iconClass }) => (
+            <div key={label} className="rounded-xl border border-gray-100 bg-gray-50/70 p-2.5 transition-colors hover:bg-gray-50">
+              <div className="flex items-center justify-between">
+                <span className={cn('text-2xl font-bold tabular-nums', tint)}>{value}</span>
+                <span className={cn('flex h-6 w-6 items-center justify-center rounded-lg', iconClass)}>
+                  <Icon className="h-3.5 w-3.5" />
+                </span>
+              </div>
+              <p className="mt-0.5 text-[11px] font-medium text-gray-500">{label}</p>
+            </div>
+          ))}
         </div>
       </div>
 
       {/* Day events detail */}
+      {showSchedule && (
       <div className="space-y-3 rounded-2xl border border-gray-100 bg-white p-3 shadow-sm">
-        <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-          Schedule
-        </h4>
+        <h4 className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Schedule</h4>
         {dayEvents.length === 0 ? (
-          <div className="text-center py-8">
-            <Calendar className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-            <p className="text-sm text-gray-400">No events for this day</p>
+          <div className="flex flex-col items-center gap-1.5 rounded-xl border border-dashed border-gray-200 bg-gray-50/50 py-8 text-center">
+            <CalendarClock className="h-8 w-8 text-gray-300" />
+            <p className="text-xs font-medium text-gray-400">No events for this day</p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {dayEvents.map(event => {
               const EventIcon = iconMap[event.kind] || Bell
               const isCompleted = event.status === 'completed' || event.status === 'done'
@@ -122,46 +121,41 @@ export function DayNotesPanel({ selectedDate, events, onEventClick }) {
                   key={event.id}
                   onClick={() => onEventClick?.(event)}
                   className={cn(
-                    'bg-white border border-gray-100 rounded-lg p-3 cursor-pointer',
-                    'hover:border-brand-200 hover:shadow-sm transition-all'
+                    'group relative cursor-pointer overflow-hidden rounded-xl border border-gray-100 bg-white py-2.5 pl-4 pr-3 shadow-sm transition-all',
+                    'hover:-translate-y-px hover:border-brand-200 hover:shadow-md',
                   )}
                 >
-                  <div className="flex items-start gap-3">
-                    <div className={cn('p-1.5 rounded-lg', getKindBgClass(event.kind))}>
-                      <EventIcon className="w-4 h-4" />
+                  <span
+                    className="absolute inset-y-0 left-0 w-1.5 rounded-r"
+                    style={{ backgroundColor: event.color || '#94a3b8' }}
+                  />
+                  <div className="flex items-start gap-2.5">
+                    <div className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-lg', getKindBgClass(event.kind))}>
+                      <EventIcon className="h-4 w-4" />
                     </div>
-                    <div className="flex-1 min-w-0">
+                    <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
-                        <h5 className={cn(
-                          'font-medium text-sm truncate',
-                          isCompleted && 'line-through text-gray-400'
-                        )}>
+                        <h5 className={cn('truncate text-[13px] font-semibold text-gray-900', isCompleted && 'text-gray-400 line-through')}>
                           {event.title}
                         </h5>
-                        <span className={cn(
-                          'text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0',
-                          isCompleted
-                            ? 'bg-green-100 text-green-700'
-                            : event.status === 'in_progress'
-                              ? 'bg-amber-100 text-amber-800'
-                              : 'bg-brand-100 text-brand-700'
-                        )}>
+                        <span className={cn('shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold', statusPillClass(event.status))}>
                           {statusLabels[event.status] || event.status}
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
-                        <Clock className="w-3 h-3" />
+                      <div className="mt-1 flex items-center gap-1.5 text-[11px] font-medium text-gray-500">
+                        <Clock className="h-3 w-3" />
                         {format(new Date(event.start), 'h:mm a')}
                         {event.end && event.kind === 'meeting' && (
-                          <> - {format(new Date(event.end), 'h:mm a')}</>
+                          <> – {format(new Date(event.end), 'h:mm a')}</>
                         )}
                       </div>
 
                       {event.leadName && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          Lead: {event.leadName}
-                        </p>
+                        <div className="mt-1 flex items-center gap-1 text-[11px] text-gray-500">
+                          <User className="h-3 w-3 shrink-0" />
+                          <span className="truncate">{event.leadName}</span>
+                        </div>
                       )}
 
                       {/* Checklist items based on event type */}
@@ -202,6 +196,7 @@ export function DayNotesPanel({ selectedDate, events, onEventClick }) {
           </div>
         )}
       </div>
+      )}
     </div>
   )
 }
