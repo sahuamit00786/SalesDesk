@@ -26,7 +26,7 @@ const AT_TAG_RE = /@([a-z][a-z0-9_]*)/gi
 const MERGE_FIELD_SET = new Set(LEAD_MERGE_FIELDS)
 
 function mergeBlankSpan(key) {
-  return `<span data-merge-blank="${key}" title="Type ${mergeFieldLabel(key).toLowerCase()} here"></span>`
+  return `<span data-merge-blank="${key}" data-sync-group="${key}" title="Type ${mergeFieldLabel(key).toLowerCase()} here"></span>`
 }
 
 /** Body: known-but-empty fields become typable dark-red blanks instead of vanishing. */
