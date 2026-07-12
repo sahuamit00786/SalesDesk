@@ -232,6 +232,39 @@ export function EmailComposerDrawer({ open, onClose, initial = null, onSent }) {
     `${f.fileName || ''} ${f.mimeType || ''}`.toLowerCase().includes(leadDocsSearch.toLowerCase()),
   )
 
+  function handleEditorInput() {
+    // Update bodyHtml state with current editor content
+    if (editorRef.current) {
+      setBodyHtml(editorRef.current.innerHTML)
+    }
+
+    // Get current selection to detect if user is editing inside a merge-blank
+    const selection = window.getSelection()
+    if (!selection.rangeCount || selection.rangeCount === 0) return
+
+    const range = selection.getRangeAt(0)
+    const node = range.commonAncestorContainer
+
+    // Find the closest merge-blank span if we're editing inside one
+    let blankSpan = null
+    if (node.nodeType === Node.TEXT_NODE) {
+      blankSpan = node.parentElement?.closest('[data-merge-blank]')
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      blankSpan = node.closest('[data-merge-blank]')
+    }
+
+    if (!blankSpan) return
+
+    // Extract sync-group ID and new text
+    const syncGroupId = blankSpan.getAttribute('data-sync-group')
+    if (!syncGroupId) return
+
+    const newText = blankSpan.textContent || ''
+
+    // Sync all blanks with the same sync-group to the new text
+    syncMergeGroup(editorRef, syncGroupId, newText)
+  }
+
   useEffect(() => {
     if (!open) return
     setLeadId(initial?.leadId || '')
