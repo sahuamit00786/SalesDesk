@@ -51,7 +51,7 @@ function EmailRow({ thread, box, checked, onToggleChecked, onOpen, onMarkRead })
         <span className={cn(thread.isUnread ? 'font-bold text-ink' : 'text-ink')}>{thread.subject}</span>
         {thread.snippet ? <span className="text-ink-muted"> — {thread.snippet}</span> : null}
       </span>
-      {thread.hasAttachments ? <Paperclip size={13} className="shrink-0 text-ink-muted" /> : null}
+      {thread.hasAttachments ? <Paperclip size={13} className="mx-0.5 shrink-0 text-ink-muted" /> : null}
       {leadLabel ? (
         <Link
           to={`/leads/${thread.lead.id}`}
@@ -62,12 +62,12 @@ function EmailRow({ thread, box, checked, onToggleChecked, onOpen, onMarkRead })
           <span className="truncate">{leadLabel}</span>
         </Link>
       ) : null}
-      <span className="relative flex w-[74px] shrink-0 items-center justify-end">
+      <span className="relative flex shrink-0 items-center justify-end pl-1">
         <span
-          className={cn('text-[11px] tabular-nums', thread.isUnread ? 'font-bold text-ink' : 'text-ink-muted', onMarkRead && thread.isUnread && 'group-hover:invisible')}
+          className={cn('whitespace-nowrap text-[11px] tabular-nums', thread.isUnread ? 'font-bold text-ink' : 'text-ink-muted', onMarkRead && thread.isUnread && 'group-hover:invisible')}
           title={formatEmailDateTime(thread.lastMessageAt)}
         >
-          {thread.lastDateFormatted}
+          {formatEmailDateTime(thread.lastMessageAt) || thread.lastDateFormatted}
         </span>
         {onMarkRead && thread.isUnread ? (
           <button
