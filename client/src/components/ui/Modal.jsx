@@ -12,6 +12,7 @@ export function Modal({
   children,
   footer,
   maxWidthClassName = 'max-w-md',
+  maxHeightClassName = 'max-h-[min(90vh,calc(100dvh-2rem))]',
 }) {
   useEffect(() => {
     if (!open) return
@@ -43,8 +44,9 @@ export function Modal({
 
       <div
         className={cn(
-          'relative z-[101] flex w-full max-h-[min(90vh,calc(100dvh-2rem))] flex-col rounded-2xl bg-white p-6 shadow-2xl',
+          'relative z-[101] flex w-full flex-col rounded-2xl bg-white p-6 shadow-2xl',
           'animate-in fade-in zoom-in-95 duration-200',
+          maxHeightClassName,
           maxWidthClassName,
         )}
         role="dialog"

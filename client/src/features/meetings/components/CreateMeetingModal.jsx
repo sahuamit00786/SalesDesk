@@ -17,7 +17,6 @@ function getInitialForm(initialData) {
       scheduledStart: '',
       scheduledEnd: '',
       participants: [],
-      recordingBotConsent: false,
       leadId: '',
     }
   }
@@ -29,7 +28,6 @@ function getInitialForm(initialData) {
     scheduledStart: initialData.scheduledStart ? initialData.scheduledStart.slice(0, 16) : '',
     scheduledEnd: initialData.scheduledEnd ? initialData.scheduledEnd.slice(0, 16) : '',
     participants: initialData.participants?.map((p) => ({ userId: p.userId })) || [],
-    recordingBotConsent: Boolean(initialData.recordingBotConsent),
     leadId: initialData.leadId || '',
   }
 }
@@ -125,7 +123,6 @@ export function CreateMeetingModal({ open, onClose, users = [], leadId, initialD
         leadId: resolvedLeadId,
         scheduledStart: new Date(form.scheduledStart).toISOString(),
         scheduledEnd: new Date(form.scheduledEnd).toISOString(),
-        recordingBotConsent: Boolean(form.recordingBotConsent),
       }
 
       if (isEdit) {
@@ -135,14 +132,8 @@ export function CreateMeetingModal({ open, onClose, users = [], leadId, initialD
         }).unwrap()
         toast.success('Meeting updated')
       } else {
-        const res = await createMeeting(payload).unwrap()
+        await createMeeting(payload).unwrap()
         toast.success('Meeting created')
-        if (res.meta?.botConsent?.skippedReason === 'NO_GOOGLE_MEET_LINK') {
-          toast.error(
-            'Recording bot was not saved: Calendar did not return a Google Meet link. Fix Meet on the calendar event, then enable bot consent on this meeting.',
-            { duration: 7000 },
-          )
-        }
       }
 
       handleClose()
@@ -358,27 +349,6 @@ export function CreateMeetingModal({ open, onClose, users = [], leadId, initialD
                 onChange={(e) => update('agenda', e.target.value)}
               />
             </div>
-
-            {/* Recording bot consent — disabled for now
-            <label className="sm:col-span-2 flex cursor-pointer items-start gap-2.5 rounded-lg border border-surface-border bg-gradient-to-br from-slate-50 to-white p-3 shadow-sm">
-              <input
-                type="checkbox"
-                className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500/30"
-                checked={form.recordingBotConsent}
-                onChange={(e) => update('recordingBotConsent', e.target.checked)}
-              />
-              <span className="min-w-0 text-[13px]">
-                <span className="font-medium text-ink">Enable AI recording bot</span>
-                <span className="mt-0.5 block text-[11px] leading-relaxed text-ink-muted">
-                  After you confirm, the server can join Meet to record, transcribe, and summarize. Requires server setup
-                  (FFmpeg, Playwright, Groq key).
-                </span>
-                <div className="mt-1.5">
-                  <MeetingBotSetupHint />
-                </div>
-              </span>
-            </label>
-            */}
 
             <div className="sm:col-span-2">
               <FieldLabel>Attendees</FieldLabel>

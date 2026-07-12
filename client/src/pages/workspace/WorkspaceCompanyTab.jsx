@@ -205,66 +205,59 @@ function inputClass(extra = '') {
 
 function SectionCard({ icon: Icon, title, description, children, className }) {
   return (
-    <section className={cn('rounded-2xl border border-surface-border bg-white p-4 shadow-sm sm:p-5', className)}>
-      <div className="flex items-start gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-brand-100 bg-brand-50 text-brand-700">
+    <section className={cn('rounded-2xl border border-surface-border/70 bg-gradient-to-br from-white/80 to-white p-5 shadow-sm backdrop-blur-sm transition-all hover:border-surface-border', className)}>
+      <div className="flex items-start gap-3.5">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-brand-100 bg-gradient-to-br from-brand-50 to-brand-100/50 text-brand-700">
           <Icon className="h-4 w-4" aria-hidden />
         </span>
         <div className="min-w-0">
           <h3 className="text-sm font-semibold text-ink">{title}</h3>
-          {description ? <p className="mt-0.5 text-xs leading-snug text-ink-muted">{description}</p> : null}
+          {description ? <p className="mt-1 text-xs leading-relaxed text-ink-muted">{description}</p> : null}
         </div>
       </div>
-      <div className="mt-4">{children}</div>
+      <div className="mt-5">{children}</div>
     </section>
   )
 }
 
-/** Preview box + URL input + upload/clear controls, shared by logo / signature / stamp. */
+/** Preview box + upload/clear controls, shared by logo / signature / stamp. */
 function ImageField({ label, hint, value, onValueChange, onUpload, uploading, previewClass = 'h-20 w-20' }) {
   return (
     <div>
       {label ? <FieldLabel hint={hint}>{label}</FieldLabel> : null}
-      <div className="flex items-start gap-3">
+      <div className="flex flex-col items-start gap-3">
         <div
           className={cn(
-            'flex shrink-0 items-center justify-center overflow-hidden rounded-xl border bg-surface-muted/40',
-            value ? 'border-surface-border' : 'border-dashed border-surface-border',
+            'flex items-center justify-center overflow-hidden rounded-xl border bg-surface-muted/30 transition-colors',
+            value ? 'border-surface-border' : 'border-dashed border-surface-border/60 bg-surface-muted/10',
             previewClass,
           )}
         >
           {value ? (
             <img src={publicAssetUrl(value)} alt="" className="h-full w-full object-contain" />
           ) : (
-            <ImagePlus className="h-5 w-5 text-ink-faint" aria-hidden />
+            <div className="flex flex-col items-center justify-center gap-1.5">
+              <ImagePlus className="h-5 w-5 text-ink-faint" aria-hidden />
+              <span className="text-[11px] text-ink-faint">No image</span>
+            </div>
           )}
         </div>
-        <div className="min-w-0 flex-1 space-y-2">
-          <input
-            type="text"
-            value={value}
-            onChange={(e) => onValueChange(e.target.value)}
-            className={inputClass('h-9 font-mono text-xs')}
-            placeholder="/uploads/… or https://…"
-            maxLength={512}
-          />
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border border-surface-border bg-white px-2.5 text-xs font-medium text-ink transition hover:border-brand-300 hover:bg-brand-50">
-              {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <ImagePlus className="h-3.5 w-3.5" aria-hidden />}
-              {uploading ? 'Uploading…' : 'Upload image'}
-              <input type="file" accept="image/*" className="sr-only" onChange={onUpload} disabled={uploading} />
-            </label>
-            {value ? (
-              <button
-                type="button"
-                onClick={() => onValueChange('')}
-                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 text-xs font-medium text-danger transition hover:bg-red-100"
-              >
-                <Trash2 className="h-3.5 w-3.5" aria-hidden />
-                Clear
-              </button>
-            ) : null}
-          </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-surface-border bg-white px-3.5 text-xs font-medium text-ink transition hover:border-brand-300 hover:bg-brand-50">
+            {uploading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <ImagePlus className="h-4 w-4" aria-hidden />}
+            {uploading ? 'Uploading…' : 'Upload'}
+            <input type="file" accept="image/*" className="sr-only" onChange={onUpload} disabled={uploading} />
+          </label>
+          {value ? (
+            <button
+              type="button"
+              onClick={() => onValueChange('')}
+              className="inline-flex h-9 items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3.5 text-xs font-medium text-danger transition hover:bg-red-100"
+            >
+              <Trash2 className="h-4 w-4" aria-hidden />
+              Remove
+            </button>
+          ) : null}
         </div>
       </div>
     </div>
@@ -374,34 +367,34 @@ export function WorkspaceCompanyTab() {
 
   return (
     <form onSubmit={handleSave} className="w-full space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-surface-border bg-white p-4 shadow-sm sm:px-5">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-brand-100 bg-brand-50 text-brand-700">
+      <div className="flex flex-col gap-3 rounded-2xl border border-surface-border bg-gradient-to-br from-white to-white/50 p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3.5">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-brand-100 bg-brand-50 text-brand-700 shadow-sm">
             {draft.logoUrl ? (
               <img src={publicAssetUrl(draft.logoUrl)} alt="" className="h-full w-full object-contain" />
             ) : (
               <Building2 className="h-5 w-5" aria-hidden />
             )}
-          </span>
+          </div>
           <div className="min-w-0">
             <h2 className="truncate text-base font-semibold text-ink">
               {draft.legalName.trim() || 'Company information'}
             </h2>
-            <p className="mt-0.5 text-xs leading-snug text-ink-muted">
+            <p className="mt-1 text-xs leading-snug text-ink-muted">
               Shown on quotations and invoices. Numbers auto-format as{' '}
               <span className="font-mono text-ink">QT/DDMMYYYY/n</span> ·{' '}
               <span className="font-mono text-ink">INV/DDMMYYYY/n</span>
             </p>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2 sm:justify-end">
           {dirty ? (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-800">
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden />
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] font-medium text-amber-800">
+              <span className="h-2 w-2 rounded-full bg-amber-500" aria-hidden />
               Unsaved changes
             </span>
           ) : null}
-          <Button type="submit" disabled={saving || !dirty}>
+          <Button type="submit" disabled={saving || !dirty} className="whitespace-nowrap">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Save className="h-4 w-4" aria-hidden />}
             {saving ? 'Saving…' : 'Save changes'}
           </Button>
@@ -409,7 +402,7 @@ export function WorkspaceCompanyTab() {
       </div>
 
       <div
-        className="flex flex-wrap gap-1.5 rounded-2xl border border-surface-border bg-white p-1.5 shadow-sm"
+        className="flex flex-wrap gap-2 rounded-2xl border border-surface-border/50 bg-gradient-to-br from-white/60 to-white p-2 shadow-sm"
         role="tablist"
         aria-label="Company form sections"
       >
@@ -424,13 +417,13 @@ export function WorkspaceCompanyTab() {
               aria-selected={active}
               onClick={() => setCompanyTab(t.id)}
               className={cn(
-                'inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-xl px-3 text-xs font-medium transition-colors sm:flex-none sm:px-4',
+                'inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl px-3.5 text-xs font-medium transition-all sm:flex-none sm:px-4',
                 active
-                  ? 'bg-[var(--brand-primary)] text-white shadow-sm'
-                  : 'text-ink-muted hover:bg-brand-50 hover:text-brand-700',
+                  ? 'bg-[var(--brand-primary)] text-white shadow-md'
+                  : 'text-ink-muted hover:bg-brand-50 hover:text-brand-700 hover:shadow-sm',
               )}
             >
-              <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              <Icon className="h-4 w-4 shrink-0" aria-hidden />
               <span className="truncate">{t.label}</span>
             </button>
           )
@@ -834,16 +827,16 @@ export function WorkspaceCompanyTab() {
             <SectionCard
               icon={PenLine}
               title="Signature & stamp"
-              description="Optional images for PDFs — paste a URL or upload (stored in your workspace files)."
+              description="Optional images for PDFs — upload or paste a URL (stored in your workspace files)."
             >
-              <div className="grid gap-4">
+              <div className="grid gap-5 sm:grid-cols-2">
                 <ImageField
                   label="Signature"
                   value={draft.signatureImageUrl}
                   onValueChange={(v) => setDraft((d) => ({ ...d, signatureImageUrl: v }))}
                   onUpload={(e) => onDocImageUpload('signatureImageUrl', e)}
                   uploading={uploadingImage}
-                  previewClass="h-16 w-24"
+                  previewClass="h-20 w-32"
                 />
                 <ImageField
                   label="Company stamp"
@@ -851,7 +844,7 @@ export function WorkspaceCompanyTab() {
                   onValueChange={(v) => setDraft((d) => ({ ...d, stampImageUrl: v }))}
                   onUpload={(e) => onDocImageUpload('stampImageUrl', e)}
                   uploading={uploadingImage}
-                  previewClass="h-16 w-16"
+                  previewClass="h-20 w-20"
                 />
               </div>
             </SectionCard>

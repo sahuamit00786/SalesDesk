@@ -4,17 +4,6 @@ import { Meeting } from '../models/Meeting.js'
 import { Lead, LeadFollowup } from '../models/index.js'
 import { notifyMeetingParticipants } from '../services/notification/meetingNotificationService.js'
 import { notifyFollowupDue, notifyMeetingReminderInternal } from '../services/notification/teamNotificationService.js'
-import { runMeetingBot } from '../bot/meetingBot.js'
-import { processMeetingRecording } from '../services/meetingProcessingService.js'
-import { enqueueMeetingBot } from '../queues/meetingBotQueue.js'
-import { envTruthy } from '../utils/envTruthy.js'
-
-/** In-process guard: prevents the same meeting bot from being started twice when Redis is unavailable. */
-const botsInProgress = new Set()
-
-function meetingBotEnabled() {
-  return envTruthy('ENABLE_MEETING_BOT', false)
-}
 
 async function sendReminder(meeting) {
   console.log(`Reminder sent for ${meeting.title}`)
@@ -48,60 +37,6 @@ export async function scheduleReminders(_meeting) {
   return true
 }
 
-async function tryStartBotForMeeting(meetingRow) {
-  if (!meetingBotEnabled()) {
-    if (envTruthy('MEETING_BOT_DEBUG', false)) {
-      console.log('[cron] bot skipped: set ENABLE_MEETING_BOT=true (or 1/yes/on) in .env')
-    }
-    return
-  }
-
-  // In-process guard (applies when queue is unavailable)
-  if (botsInProgress.has(meetingRow.id)) return
-
-  const link = meetingRow.googleMeetLink?.trim()
-  if (!link) return
-
-  // Atomic DB claim — only the first cron tick wins
-  const [claimedCount] = await Meeting.update(
-    { botStatus: 'joining', recordingStatus: 'recording' },
-    {
-      where: {
-        id: meetingRow.id,
-        botStatus: 'scheduled',
-      },
-    },
-  )
-  if (!claimedCount) return
-
-  const meeting = await Meeting.findByPk(meetingRow.id)
-  if (!meeting) return
-
-  console.log(`🤖 Starting bot for ${meeting.title}`)
-
-  // Try BullMQ queue first — worker handles concurrency + retries
-  const enqueued = await enqueueMeetingBot(meeting.id).catch(() => null)
-  if (enqueued) {
-    console.log(`🤖 Bot job enqueued for ${meeting.title}`)
-    return
-  }
-
-  // Fallback: run in-process with botsInProgress guard
-  botsInProgress.add(meeting.id)
-
-  runMeetingBot(meeting.get({ plain: true }))
-    .then((transcript) => processMeetingRecording(meeting, transcript))
-    .catch(async (e) => {
-      console.error('❌ BOT / pipeline failed:', e?.message || e)
-      await Meeting.update(
-        { botStatus: 'failed', recordingStatus: 'pending' },
-        { where: { id: meeting.id } },
-      )
-    })
-    .finally(() => {
-      botsInProgress.delete(meeting.id)
-    })
-}
 
 export function startReminderJob() {
   cron.schedule('* * * * *', async () => {
@@ -119,28 +54,6 @@ export function startReminderJob() {
       for (const m of liveMeetings) {
         await m.update({ status: 'live' })
         console.log(`🔴 Meeting is LIVE: ${m.title}`)
-      }
-
-      // --- Bot + recording ---
-      const botCandidates = await Meeting.findAll({
-        where: {
-          recordingBotConsent: true,
-          botStatus: 'scheduled',
-          googleMeetLink: { [Op.ne]: null },
-          scheduledStart: { [Op.lte]: now },
-          scheduledEnd: { [Op.gt]: now },
-          status: { [Op.in]: ['scheduled', 'live'] },
-        },
-      })
-
-      if (envTruthy('MEETING_BOT_DEBUG', false)) {
-        console.log(
-          `[cron] bot candidates: ${botCandidates.length}, ENABLE_MEETING_BOT=${meetingBotEnabled()}, now=${now.toISOString()}`,
-        )
-      }
-
-      for (const m of botCandidates) {
-        await tryStartBotForMeeting(m)
       }
 
       // --- Reminders (next 10 minutes) ---
@@ -195,8 +108,5 @@ export function startReminderJob() {
     }
   })
 
-  console.log(
-    '[cron] Meeting job scheduled (* * * * *). ENABLE_MEETING_BOT=%s',
-    meetingBotEnabled() ? 'true' : 'false',
-  )
+  console.log('[cron] Meeting job scheduled (* * * * *)')
 }

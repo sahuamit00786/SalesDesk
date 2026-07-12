@@ -1,49 +1,4 @@
 import * as service from "../services/meetingService.js";
-import { buildMeetingBotRequirements } from "../services/meetingBotRequirements.js";
-import { envTruthy } from "../utils/envTruthy.js";
-
-export async function getMeetingBotRequirements(req, res, next) {
-  try {
-    const clientOs = req.query.os || req.headers["sec-ch-ua-platform"];
-    const data = buildMeetingBotRequirements(clientOs, process.platform);
-    data.serverMasterSwitchEnabled = envTruthy("ENABLE_MEETING_BOT", false);
-    res.json({
-      success: true,
-      data,
-      meta: {},
-    });
-  } catch (e) {
-    next(e);
-  }
-}
-
-export async function patchMeetingBotConsent(req, res, next) {
-  try {
-    const workspaceId = req.headers["x-workspace-id"];
-    const consent = Boolean(req.body?.consent);
-
-    const data = await service.setMeetingBotConsent(
-      req.params.id,
-      consent,
-      req.user,
-      workspaceId
-    );
-
-    const botOn = envTruthy("ENABLE_MEETING_BOT", false);
-    res.json({
-      success: true,
-      data,
-      meta: {
-        botBackendEnabled: botOn,
-        hint: !botOn
-          ? "Consent saved. Ask your admin to set ENABLE_MEETING_BOT=true on the API server for the bot to run."
-          : undefined,
-      },
-    });
-  } catch (e) {
-    next(e);
-  }
-}
 
 export async function createMeeting(req, res, next) {
   try {

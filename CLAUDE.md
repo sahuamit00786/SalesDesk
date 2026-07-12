@@ -32,7 +32,6 @@ Connexify/
 - Nodemailer for email, Multer for file upload
 - Google APIs (Calendar, Meet, Gmail OAuth + Pub/Sub)
 - OpenAI SDK (content generation), Groq (transcription + summaries)
-- Playwright (meeting bot browser automation)
 - node-cron for scheduled jobs
 
 ## Dev Commands
@@ -91,7 +90,6 @@ GOOGLE_REFRESH_TOKEN=
 GMAIL_PUBSUB_TOPIC=                # Gmail real-time inbox sync
 GMAIL_PUBSUB_PUSH_AUDIENCE=
 GMAIL_WATCH_RENEW_INTERVAL_MS=
-ENABLE_MEETING_BOT=true            # Meeting bot (Playwright)
 MEETING_CRON_ENABLED=true          # Enable/disable all cron jobs
 ```
 
@@ -108,7 +106,6 @@ services/         Business logic
   google/         Calendar/Meet helpers
   openAiService.js
   workflowRunner.js
-  meetingBotRequirements.js
 queues/           BullMQ job definitions
 jobs/             Cron jobs (reminderJob, attendanceJob)
 middleware/       auth.js, requirePermission.js, errorHandler.js
@@ -187,10 +184,8 @@ utils/            Helpers
 **Async jobs:** BullMQ queues in `server/src/queues/`. Workers process email sending, workflow triggers. Redis required for queues.
 
 **Cron jobs (server/index.js startup):**
-- `reminderJob` — meeting reminders, bot join, transcription trigger
+- `reminderJob` — meeting reminders, transcription trigger
 - `attendanceJob` — daily attendance reset
-
-**Meeting bot:** Playwright-based browser automation. Opt-in per meeting via `recording_bot_consent` field. Controlled by `ENABLE_MEETING_BOT` env var.
 
 **Workflow engine:** DAG-based visual builder (XYFlow). Triggers on lead events, email events. Runs async via BullMQ. Run history stored in `workflow_runs` + `workflow_run_steps`.
 

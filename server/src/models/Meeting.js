@@ -308,25 +308,6 @@ export const Meeting = sequelize.define(
       defaultValue: "pending",
     },
 
-    botStatus: {
-      type: DataTypes.ENUM(
-        "scheduled",
-        "joining",
-        "recording",
-        "processing",
-        "completed",
-        "failed"
-      ),
-      field: "bot_status",
-      defaultValue: "scheduled",
-    },
-
-    recordingBotConsent: {
-      type: DataTypes.BOOLEAN,
-      field: "recording_bot_consent",
-      defaultValue: false,
-    },
-
     audioFilePath: {
       type: DataTypes.TEXT,
       field: "audio_file_path",

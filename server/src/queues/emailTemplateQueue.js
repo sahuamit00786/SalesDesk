@@ -1,6 +1,6 @@
 import { Queue, Worker } from 'bullmq'
 import { getMailTransport } from '../services/mailService.js'
-import { sequelize, EmailSuppression, EmailTemplate, Lead, LeadEmailLog, User } from '../models/index.js'
+import { sequelize, EmailSuppression, EmailTemplate, Lead, LeadEmailLog, User, Workspace } from '../models/index.js'
 import {
   injectTrackingPixel,
   injectUnsubscribeLink,
@@ -126,11 +126,14 @@ async function sendToLead({ template, lead, senderName, source = 'bulk' }) {
 }
 
 async function processTemplateJob(job) {
-  const { templateId, leadIds, companyId, source = 'bulk' } = job.data
+  const { templateId, leadIds, companyId, workspaceId, source = 'bulk' } = job.data
   const template = await EmailTemplate.findOne({
     where: { id: templateId, companyId, isArchived: false },
   })
   if (!template) return { ok: false, reason: 'template_not_found' }
+
+  const workspace = await Workspace.findOne({ where: { id: workspaceId, companyId } })
+  if (!workspace || workspace.archivedAt) return { ok: false, reason: 'workspace_archived' }
 
   const sender = await User.findByPk(template.createdBy)
   const senderName = sender?.name || ''

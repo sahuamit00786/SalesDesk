@@ -41,14 +41,10 @@ function pickMeetingCreatePayload(body) {
     "scheduledEnd",
     "agenda",
     "timezone",
-    "recordingBotConsent",
   ];
   const out = {};
   for (const k of keys) {
     if (body[k] !== undefined && body[k] !== null) out[k] = body[k];
-  }
-  if (typeof out.recordingBotConsent === "string") {
-    out.recordingBotConsent = out.recordingBotConsent === "true";
   }
   return out;
 }
@@ -64,45 +60,6 @@ async function resolveAttendeeEmails(participants) {
   return users.map((u) => u.email).filter(Boolean);
 }
 
-export async function setMeetingBotConsent(id, consent, user, workspaceId) {
-  const meeting = await Meeting.findOne({
-    where: { id, workspaceId },
-  });
-
-  if (!meeting) {
-    const err = new Error("Meeting not found");
-    err.status = 404;
-    throw err;
-  }
-
-  if (String(meeting.ownerUserId) !== String(user.id)) {
-    const err = new Error("Only the meeting organizer can change bot consent");
-    err.status = 403;
-    throw err;
-  }
-
-  if (consent && !meeting.googleMeetLink?.trim()) {
-    const err = new Error("Meeting needs a Google Meet link before enabling the bot");
-    err.status = 400;
-    throw err;
-  }
-
-  if (
-    !consent &&
-    meeting.botStatus &&
-    !["scheduled"].includes(meeting.botStatus)
-  ) {
-    const err = new Error(
-      "Cannot disable the bot after it has started processing"
-    );
-    err.status = 400;
-    throw err;
-  }
-
-  await meeting.update({ recordingBotConsent: Boolean(consent) });
-  await meeting.reload();
-  return meeting;
-}
 
 /**
  * CREATE MEETING
@@ -127,14 +84,10 @@ export async function createMeeting(user, payload, workspaceId) {
     );
 
     const picked = pickMeetingCreatePayload(payload);
-    const wantsBot = Boolean(picked.recordingBotConsent);
-    const recordingBotConsent =
-      wantsBot && googleResult.meetLink ? true : false;
 
     const meeting = await Meeting.create(
       {
         ...picked,
-        recordingBotConsent,
         workspaceId,
         ownerUserId: user.id,
         googleEventId: googleResult.id || null,
@@ -142,15 +95,6 @@ export async function createMeeting(user, payload, workspaceId) {
       },
       { transaction: tx }
     );
-
-    const botConsentMeta = {
-      requested: wantsBot,
-      stored: recordingBotConsent,
-      skippedReason:
-        wantsBot && !googleResult.meetLink
-          ? 'NO_GOOGLE_MEET_LINK'
-          : null,
-    };
 
     if (payload.participants?.length) {
       await MeetingParticipant.bulkCreate(
@@ -171,7 +115,6 @@ export async function createMeeting(user, payload, workspaceId) {
     return {
       meeting,
       googleMeetMeta: googleResult.meta,
-      botConsentMeta,
     };
   } catch (e) {
     await tx.rollback();

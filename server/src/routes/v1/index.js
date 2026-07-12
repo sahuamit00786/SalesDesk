@@ -37,7 +37,6 @@ import documentsRoutes from './documents.js'
 import webFormsRoutes from '../webFormsRoutes.js'
 import * as googleController from '../../controllers/googleController.js'
 import * as mailboxController from '../../controllers/mailboxController.js'
-import * as attendanceController from '../../controllers/attendanceController.js'
 import * as leaveController from '../../controllers/leaveController.js'
 import * as duplicateLeadsController from '../../controllers/duplicateLeadsController.js'
 import * as callController from '../../controllers/callController.js'
@@ -1318,21 +1317,6 @@ router.get(
   requirePermission('main.leads', 'view'),
   templatesController.leadEmailHistory,
 )
-
-// —— HR: Attendance ——
-// Menu-CRUD gate (loadPermissions + requirePermission) runs first — cheap Set lookup that
-// answers "can this role touch the Attendance module at all". requireHrRole runs after —
-// answers "within Attendance, does this user have manager/admin-tier data visibility"
-// (hits the DB for resolveHrRole). The two are independent layers, both required.
-router.get('/attendance/today', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('hr.attendance', 'view'), attendanceController.getTodayStatus)
-router.post('/attendance/check-in', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('hr.attendance', 'create'), attendanceController.checkIn)
-router.post('/attendance/check-out', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('hr.attendance', 'update'), attendanceController.checkOut)
-router.get('/attendance/me', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('hr.attendance', 'view'), attendanceController.getMyAttendance)
-router.get('/attendance/team', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('hr.attendance', 'view'), requireHrRole('manager'), attendanceController.getTeamAttendance)
-router.get('/attendance/day/:date', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('hr.attendance', 'view'), requireHrRole('manager'), attendanceController.getDayDetail)
-router.get('/attendance/export', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('hr.attendance', 'view'), requireHrRole('manager'), attendanceController.exportAttendanceCsv)
-router.post('/attendance/logs', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('hr.attendance', 'create'), requireHrRole('admin'), attendanceController.createAttendanceLog)
-router.put('/attendance/logs/:id', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('hr.attendance', 'update'), requireHrRole('manager'), attendanceController.editAttendanceLog)
 
 // —— HR: Leave ——
 router.get('/leave/types', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('hr.leave_config', 'view'), leaveController.getLeaveTypes)

@@ -10,22 +10,6 @@ export const meetingsApi = baseApi.injectEndpoints({
       providesTags: ["Meetings"],
     }),
 
-    getMeetingBotRequirements: builder.query({
-      query: (params) => ({
-        url: "/meetings/bot-requirements",
-        params: params || {},
-      }),
-    }),
-
-    patchMeetingBotConsent: builder.mutation({
-      query: ({ id, consent }) => ({
-        url: `/meetings/${id}/bot-consent`,
-        method: "PATCH",
-        body: { consent },
-      }),
-      invalidatesTags: ["Meetings"],
-    }),
-
     getMeeting: builder.query({
       query: (id) => `/meetings/${id}`,
     }),
@@ -72,8 +56,6 @@ export const meetingsApi = baseApi.injectEndpoints({
 
 export const {
   useGetMeetingsQuery,
-  useGetMeetingBotRequirementsQuery,
-  usePatchMeetingBotConsentMutation,
   useGetMeetingQuery,
   useCreateMeetingMutation,
   useUpdateMeetingMutation,

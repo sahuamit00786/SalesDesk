@@ -5,6 +5,7 @@ import {
   EmailTemplate,
   Lead,
   LeadEmailLog,
+  Workspace,
 } from '../models/index.js'
 import {
   createTemplateSchema,
@@ -206,6 +207,10 @@ export async function sendTemplate(req, res, next) {
     const { companyId, workspaceId } = currentScope(req)
     const { value, error } = sendTemplateSchema.validate(req.body, { abortEarly: false })
     if (error) return res.status(400).json({ message: error.message })
+
+    const workspace = await Workspace.findOne({ where: { id: workspaceId, companyId } })
+    if (!workspace) return res.status(404).json({ message: 'Workspace not found' })
+    if (workspace.archivedAt) return res.status(400).json({ message: 'Cannot send emails from archived workspace' })
 
     const template = await EmailTemplate.findOne({
       where: { id: req.params.id, companyId, workspaceId, isArchived: false },

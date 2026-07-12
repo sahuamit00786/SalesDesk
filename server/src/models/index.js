@@ -73,8 +73,6 @@ import { Workflow } from './Workflow.js'
 import { WorkflowVersion } from './WorkflowVersion.js'
 import { WorkflowRun } from './WorkflowRun.js'
 import { WorkflowRunStep } from './WorkflowRunStep.js'
-import { AttendanceLog } from './AttendanceLog.js'
-import { AttendanceSession } from './AttendanceSession.js'
 import { DuplicateLead } from './DuplicateLead.js'
 import { LeaveType } from './LeaveType.js'
 import { LeaveBalance } from './LeaveBalance.js'
@@ -433,29 +431,15 @@ Workflow.hasMany(WorkflowRun, { foreignKey: 'workflowId', as: 'runs' })
 WorkflowRunStep.belongsTo(WorkflowRun, { foreignKey: 'runId', as: 'run' })
 WorkflowRun.hasMany(WorkflowRunStep, { foreignKey: 'runId', as: 'steps' })
 
-Company.hasMany(AttendanceLog, { foreignKey: 'companyId', as: 'attendanceLogs' })
 Company.hasMany(LeaveType, { foreignKey: 'companyId', as: 'leaveTypes' })
 Company.hasMany(LeaveBalance, { foreignKey: 'companyId', as: 'leaveBalances' })
 Company.hasMany(LeaveRequest, { foreignKey: 'companyId', as: 'leaveRequests' })
 Company.hasMany(PublicHoliday, { foreignKey: 'companyId', as: 'publicHolidays' })
 Company.hasMany(Notification, { foreignKey: 'companyId', as: 'notifications' })
 
-User.hasMany(AttendanceLog, { foreignKey: 'userId', as: 'attendanceLogs' })
 User.hasMany(LeaveBalance, { foreignKey: 'userId', as: 'leaveBalances' })
 User.hasMany(LeaveRequest, { foreignKey: 'userId', as: 'leaveRequests' })
 User.hasMany(Notification, { foreignKey: 'userId', as: 'notifications' })
-AttendanceLog.belongsTo(User, { foreignKey: 'userId', as: 'user' })
-AttendanceLog.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
-AttendanceLog.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
-Workspace.hasMany(AttendanceLog, { foreignKey: 'workspaceId', as: 'attendanceLogs' })
-AttendanceLog.hasMany(AttendanceSession, { foreignKey: 'logId', as: 'sessions' })
-
-AttendanceSession.belongsTo(AttendanceLog, { foreignKey: 'logId', as: 'log' })
-AttendanceSession.belongsTo(User, { foreignKey: 'userId', as: 'user' })
-AttendanceSession.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
-AttendanceSession.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
-Workspace.hasMany(AttendanceSession, { foreignKey: 'workspaceId', as: 'attendanceSessions' })
-User.hasMany(AttendanceSession, { foreignKey: 'userId', as: 'attendanceSessions' })
 
 LeaveType.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
 LeaveType.hasMany(LeaveBalance, { foreignKey: 'leaveTypeId', as: 'balances' })
@@ -612,8 +596,6 @@ export {
   WorkflowVersion,
   WorkflowRun,
   WorkflowRunStep,
-  AttendanceLog,
-  AttendanceSession,
   LeaveType,
   LeaveBalance,
   LeaveRequest,

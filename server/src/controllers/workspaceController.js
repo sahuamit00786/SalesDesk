@@ -98,6 +98,14 @@ export async function listWorkspaces(req, res, next) {
 
 export async function createWorkspace(req, res, next) {
   try {
+    if (!req.user.isCompanyAdmin) {
+      const err = new Error('Unauthorized')
+      err.status = 403
+      err.code = 'FORBIDDEN'
+      err.publicMessage = 'Only company admins can create workspaces'
+      throw err
+    }
+
     const { error, value } = createWorkspaceSchema.validate(req.body, { abortEarly: false, stripUnknown: true })
     if (error) {
       const err = new Error('Validation failed')
@@ -146,6 +154,14 @@ export async function createWorkspace(req, res, next) {
 
 export async function patchWorkspace(req, res, next) {
   try {
+    if (!req.user.isCompanyAdmin) {
+      const err = new Error('Unauthorized')
+      err.status = 403
+      err.code = 'FORBIDDEN'
+      err.publicMessage = 'Only company admins can modify workspaces'
+      throw err
+    }
+
     const { error, value } = patchWorkspaceSchema.validate(req.body, { abortEarly: false, stripUnknown: true })
     if (error) {
       const err = new Error('Validation failed')
@@ -224,6 +240,14 @@ export async function patchWorkspace(req, res, next) {
 
 export async function deleteWorkspace(req, res, next) {
   try {
+    if (!req.user.isCompanyAdmin) {
+      const err = new Error('Unauthorized')
+      err.status = 403
+      err.code = 'FORBIDDEN'
+      err.publicMessage = 'Only company admins can delete workspaces'
+      throw err
+    }
+
     const companyId = await userCompanyId(req.user.id)
     if (!companyId) {
       const err = new Error('No company linked')

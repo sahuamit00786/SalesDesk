@@ -1,22 +1,28 @@
+import { useState } from 'react'
 import { Menu } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
+import { useAppSelector } from '@/app/hooks'
 import { Button } from '@/components/ui/Button'
 import { getRouteMeta } from '@/components/layout/navConfig'
 import { WorkspaceSwitcher } from '@/components/layout/WorkspaceSwitcher'
-import { MeetingBotConsentBanner } from '@/features/meetings/components/MeetingBotConsentBanner'
-import { CheckInOutButton } from '@/features/attendance/components/CheckInOutButton'
+import { WorkspaceManagementModal } from '@/components/layout/WorkspaceManagementModal'
 import { HrNotificationBell } from '@/features/leave/components/HrNotificationBell'
 import { ProfileMenuDropdown } from '@/components/layout/ProfileMenuDropdown'
 import { useHrRole } from '@/features/hr/useHrRole'
+
+function selectIsCompanyAdmin(state) {
+  return state.auth.user?.isCompanyAdmin ?? false
+}
 
 export function Topbar({ onMenu }) {
   const { pathname } = useLocation()
   const meta = getRouteMeta(pathname)
   const hrRole = useHrRole()
+  const isCompanyAdmin = useAppSelector(selectIsCompanyAdmin)
+  const [workspaceModalOpen, setWorkspaceModalOpen] = useState(false)
 
   return (
     <>
-      <MeetingBotConsentBanner />
       <header className="cx-chrome-header flex shrink-0 items-center justify-between gap-3 border-b border-surface-border bg-white px-4 sm:px-6">
         <div className="flex min-h-0 min-w-0 flex-1 items-center gap-3">
           <Button
@@ -36,12 +42,14 @@ export function Topbar({ onMenu }) {
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-          {hrRole === 'employee' && <CheckInOutButton />}
-          <WorkspaceSwitcher />
+          <WorkspaceSwitcher onWorkspaceSettingsClick={() => setWorkspaceModalOpen(true)} />
           <HrNotificationBell />
           <ProfileMenuDropdown />
         </div>
       </header>
+      {isCompanyAdmin && (
+        <WorkspaceManagementModal open={workspaceModalOpen} onClose={() => setWorkspaceModalOpen(false)} />
+      )}
     </>
   )
 }

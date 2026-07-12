@@ -564,76 +564,6 @@ export function CampaignDetailPage() {
                     />
                   )}
                 </div>
-
-                {/* Action buttons — admins/managers only */}
-                {canManage && (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => setAddLeadsOpen(true)}
-                    >
-                      <Users className="h-3.5 w-3.5" />
-                      Add leads
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => setAddMembersOpen(true)}
-                    >
-                      <UserPlus className="h-3.5 w-3.5" />
-                      Add members
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      disabled={distributing}
-                      onClick={onDistribute}
-                      title="Distribute all unassigned leads round-robin to team members"
-                    >
-                      <Shuffle className="h-3.5 w-3.5" />
-                      {distributing ? 'Distributing…' : 'Distribute unassigned'}
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => setStageEditorOpen(true)}
-                    >
-                      <ListOrdered className="h-3.5 w-3.5" />
-                      Edit stages
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      disabled={exportingLeads}
-                      onClick={onExportLeads}
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                      {exportingLeads ? 'Exporting…' : 'Export leads'}
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      disabled={exportingPayments}
-                      onClick={onExportPayments}
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                      {exportingPayments ? 'Exporting…' : 'Export payments'}
-                    </Button>
-                    <Link
-                      to={`/campaigns/${id}/report`}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-sm font-semibold text-neutral-700 shadow-sm hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 transition"
-                    >
-                      <BarChart2 className="h-3.5 w-3.5" />
-                      View report
-                    </Link>
-                  </div>
-                )}
               </header>
 
               {/* KPI strip */}
@@ -662,6 +592,82 @@ export function CampaignDetailPage() {
                 </div>
               </div>
             </div>
+
+            {/* Action buttons — admins/managers only */}
+            {canManage && (
+              <div className="mt-3 flex w-full flex-nowrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => setAddLeadsOpen(true)}
+                >
+                  <Users className="h-3.5 w-3.5" />
+                  Add leads
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className="flex-1"
+                  onClick={() => setAddMembersOpen(true)}
+                >
+                  <UserPlus className="h-3.5 w-3.5" />
+                  Add members
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className="flex-1"
+                  disabled={distributing}
+                  onClick={onDistribute}
+                  title="Distribute all unassigned leads round-robin to team members"
+                >
+                  <Shuffle className="h-3.5 w-3.5" />
+                  {distributing ? 'Distributing…' : 'Distribute unassigned'}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className="flex-1"
+                  onClick={() => setStageEditorOpen(true)}
+                >
+                  <ListOrdered className="h-3.5 w-3.5" />
+                  Edit stages
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className="flex-1"
+                  disabled={exportingLeads}
+                  onClick={onExportLeads}
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  {exportingLeads ? 'Exporting…' : 'Export leads'}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className="flex-1"
+                  disabled={exportingPayments}
+                  onClick={onExportPayments}
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  {exportingPayments ? 'Exporting…' : 'Export payments'}
+                </Button>
+                <Link
+                  to={`/campaigns/${id}/report`}
+                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-sm font-semibold text-neutral-700 shadow-sm hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 transition"
+                >
+                  <BarChart2 className="h-3.5 w-3.5" />
+                  View report
+                </Link>
+              </div>
+            )}
 
             <CampaignHorizontalFunnel stages={displayFunnel} activeStageKey={stageKey} onStageClick={onFunnelClick} />
 

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Building2, Check, ChevronDown } from 'lucide-react'
+import { Building2, Check, ChevronDown, Settings } from 'lucide-react'
 import { useAppDispatch, useAppSelector } from '@/app/hooks'
 import { baseApi } from '@/features/api/baseApi'
 import { useWorkspacesQuery } from '@/features/workspace/workspaceApi'
@@ -11,13 +11,18 @@ import {
 import { useOutsideClick } from '@/hooks/useOutsideClick'
 import { cn } from '@/utils/cn'
 
-export function WorkspaceSwitcher() {
+function selectIsCompanyAdmin(state) {
+  return state.auth.user?.isCompanyAdmin ?? false
+}
+
+export function WorkspaceSwitcher({ onWorkspaceSettingsClick }) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef(null)
   const dispatch = useAppDispatch()
   const fallbackWorkspaces = useAppSelector(selectWorkspaceList)
   const persistedActiveId = useAppSelector((s) => s.workspace.activeWorkspaceId)
   const fallbackActive = useAppSelector(selectActiveWorkspace) ?? { id: '', name: 'Workspace' }
+  const isCompanyAdmin = useAppSelector(selectIsCompanyAdmin)
   const { data } = useWorkspacesQuery()
 
   const liveItems = Array.isArray(data?.data?.items) ? data.data.items : Array.isArray(data?.data) ? data.data : []
@@ -86,6 +91,21 @@ export function WorkspaceSwitcher() {
               ))
             )}
           </div>
+          {isCompanyAdmin && (
+            <div className="border-t border-surface-border px-1 py-1">
+              <button
+                type="button"
+                onClick={() => {
+                  onWorkspaceSettingsClick?.()
+                  setOpen(false)
+                }}
+                className="flex h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm text-ink-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
+              >
+                <Settings className="h-4 w-4 shrink-0" aria-hidden />
+                <span>Workspace settings</span>
+              </button>
+            </div>
+          )}
         </div>
       ) : null}
     </div>

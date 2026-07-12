@@ -1,17 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useSelector } from 'react-redux'
 import toast from 'react-hot-toast'
-import { Bell, Clock, Mail } from 'lucide-react'
+import { Clock, Mail } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
-import { DataGrid } from '@/components/shared/DataGrid'
 import {
-  useGetNotificationDeliveryHistoryQuery,
   useGetNotificationEmailSettingsQuery,
   usePatchNotificationEmailSettingsMutation,
 } from '@/features/settings/settingsApi'
-import { cn } from '@/utils/cn'
 
 const EVENT_ROWS = [
   { key: 'leadAssigned', label: 'Lead assigned', description: 'When leads are assigned to a user (bulk, create, round-robin).' },
@@ -58,34 +55,11 @@ function SectionHeader({ title, description, icon: Icon }) {
   )
 }
 
-const HISTORY_COLUMNS = [
-  {
-    field: 'createdAt',
-    headerName: 'When',
-    width: 160,
-    valueFormatter: ({ value }) => (value ? new Date(value).toLocaleString() : '—'),
-  },
-  { field: 'eventType', headerName: 'Event', width: 160 },
-  { field: 'channel', headerName: 'Channel', width: 90 },
-  { field: 'status', headerName: 'Status', width: 90 },
-  { field: 'subject', headerName: 'Subject', flex: 1, minWidth: 200 },
-  {
-    field: 'recipient',
-    headerName: 'Recipient',
-    width: 180,
-    valueGetter: (_v, row) => row.recipient?.name || row.recipient?.email || row.recipientEmail || '—',
-  },
-]
-
 export function NotificationEmailSettingsTab() {
   const user = useSelector((s) => s.auth.user)
   const isAdmin = Boolean(user?.isCompanyAdmin)
   const { data, isLoading } = useGetNotificationEmailSettingsQuery()
   const [patchSettings, { isLoading: saving }] = usePatchNotificationEmailSettingsMutation()
-  const { data: historyData, isLoading: historyLoading } = useGetNotificationDeliveryHistoryQuery(
-    { limit: 50 },
-    { skip: !isAdmin },
-  )
 
   const [form, setForm] = useState(null)
 
@@ -127,8 +101,6 @@ export function NotificationEmailSettingsTab() {
       </div>
     )
   }
-
-  const historyRows = (historyData?.data || []).map((row) => ({ ...row, id: row.id }))
 
   return (
     <div className="space-y-6">
@@ -298,28 +270,6 @@ export function NotificationEmailSettingsTab() {
         ) : null}
       </div>
 
-      {isAdmin ? (
-        <div className="rounded-xl border border-surface-border bg-white/90 p-5 sm:p-6">
-          <SectionHeader
-            title="Delivery history"
-            description="Audit log of queued, sent, skipped, and failed team notification emails and in-app alerts."
-            icon={Bell}
-          />
-          <div className={cn('min-h-[280px]', historyLoading && 'opacity-60')}>
-            <DataGrid
-              data={historyRows}
-              columns={HISTORY_COLUMNS}
-              loading={historyLoading}
-              selectable={false}
-              searchable={false}
-              showColumnToggle={false}
-              showExportCsv={false}
-              defaultPageSize={50}
-              autoHeight
-            />
-          </div>
-        </div>
-      ) : null}
     </div>
   )
 }
