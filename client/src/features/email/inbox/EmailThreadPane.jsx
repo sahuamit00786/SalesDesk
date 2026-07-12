@@ -1,7 +1,7 @@
 import { ArrowLeft, UserRound } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import GmailMessageCard from '@/features/gmail/GmailMessageCard'
 import { SkeletonEmailList } from '@/components/shared/SkeletonLoader'
+import InboxMessageCard, { ThreadTimelineRow } from '@/features/email/inbox/InboxMessageCard'
 import InlineReplyBox from '@/features/email/inbox/InlineReplyBox'
 
 export default function EmailThreadPane({
@@ -56,26 +56,36 @@ export default function EmailThreadPane({
           </Link>
         ) : null}
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-surface-muted/20 px-2 py-2 sm:px-4 sm:py-3">
-        <div className="mx-auto flex w-full max-w-4xl flex-col gap-2">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-surface-muted/20 px-3 py-3 sm:px-5 sm:py-4">
+        <div className="flex w-full flex-col">
           {thread.messages.map((message, idx) => (
-            <GmailMessageCard
+            <ThreadTimelineRow
               key={message.id}
-              message={message}
-              defaultExpanded={idx === thread.messages.length - 1}
-              mailboxMode={mailboxMode}
-              onOpenAttachment={onOpenAttachment}
-              onSaveAttachmentToLead={onSaveAttachmentToLead}
-            />
+              name={message.from?.name}
+              email={message.from?.email}
+              isLast={false}
+            >
+              <InboxMessageCard
+                message={message}
+                isReply={idx > 0}
+                defaultExpanded={idx === thread.messages.length - 1}
+                mailboxMode={mailboxMode}
+                myEmail={myEmail}
+                onOpenAttachment={onOpenAttachment}
+                onSaveAttachmentToLead={onSaveAttachmentToLead}
+              />
+            </ThreadTimelineRow>
           ))}
-          <InlineReplyBox
-            thread={thread}
-            myEmail={myEmail}
-            leads={leads}
-            leadByEmail={leadByEmail}
-            defaultLeadId={viewLeadId || ''}
-            onSent={onSent}
-          />
+          <ThreadTimelineRow name="You" email={myEmail} isLast>
+            <InlineReplyBox
+              thread={thread}
+              myEmail={myEmail}
+              leads={leads}
+              leadByEmail={leadByEmail}
+              defaultLeadId={viewLeadId || ''}
+              onSent={onSent}
+            />
+          </ThreadTimelineRow>
         </div>
       </div>
     </div>
