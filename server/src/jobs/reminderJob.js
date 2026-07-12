@@ -163,7 +163,7 @@ export function startReminderJob() {
           status: 'pending',
           scheduledAt: { [Op.between]: [fu14, fu15] },
         },
-        include: [{ model: Lead, as: 'lead', attributes: ['id', 'contactName', 'name', 'assignedTo', 'companyId', 'workspaceId'] }],
+        include: [{ model: Lead, as: 'lead', attributes: ['id', 'contactName', 'title', 'assignedTo', 'companyId', 'workspaceId'] }],
       })
       for (const followup of dueFollowups) {
         const lead = followup.lead
@@ -173,7 +173,7 @@ export function startReminderJob() {
           workspaceId: followup.workspaceId || lead.workspaceId,
           recipientUserId: lead.assignedTo,
           leadId: lead.id,
-          leadName: lead.contactName || lead.name || 'Lead',
+          leadName: lead.contactName || lead.title || 'Lead',
           scheduledAt: followup.scheduledAt,
           remark: followup.remark,
         }).catch(() => {})

@@ -60,7 +60,7 @@ export function LeadTagsInput({ value = [], onChange, availableTags = [], onCrea
         <div className="relative">
           <button
             type="button"
-            className="h-10 w-full rounded-xl border border-surface-border bg-white px-3 text-left text-sm text-ink outline-none hover:border-brand-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+            className="h-8 w-full rounded-lg border border-surface-border bg-white px-3 text-left text-[13px] text-ink outline-none hover:border-brand-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
             onClick={() => setSelectorOpen((v) => !v)}
             disabled={creating}
           >
@@ -96,7 +96,7 @@ export function LeadTagsInput({ value = [], onChange, availableTags = [], onCrea
         <button
           type="button"
           onClick={() => setCreateModalOpen(true)}
-          className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--brand-primary)] text-xl font-semibold text-white hover:bg-[var(--brand-primary-dark)]"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--brand-primary)] text-lg font-semibold text-white hover:bg-[var(--brand-primary-dark)]"
           aria-label="Create tag"
           title="Create tag"
         >

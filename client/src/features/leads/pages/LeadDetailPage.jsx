@@ -11,8 +11,11 @@ import {
   CheckSquare,
   ChevronRight,
   ClipboardList,
+  Copy,
+  FileText,
   Flag,
   Plus,
+  PartyPopper,
   Hash,
   Home,
   Mail,
@@ -28,13 +31,17 @@ import {
   PhoneMissed,
   PhoneOutgoing,
   Presentation,
+  RefreshCw,
+  Rocket,
   Search,
   Sparkles,
   Tag,
   Trash2,
   User,
+  UserCheck,
   UserCircle2,
   X,
+  Zap,
 } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
 import { SkeletonDetail } from '@/components/shared/SkeletonLoader'
@@ -60,7 +67,8 @@ import { LeadTagsInput } from '@/features/leads/components/LeadTagsInput'
 import { CustomFieldsDisplay } from '@/features/leads/components/CustomFieldsDisplay'
 import { mapCustomFieldValuesFromLead } from '@/features/leads/customFieldTypes'
 import { getFileUrl } from '@/features/documents/documentUtils'
-import { useUploadDocumentMutation } from '@/features/documents/documentsApi'
+import { useUploadDocumentMutation, useGetDocumentsQuery } from '@/features/documents/documentsApi'
+import { LeadFilesBrowser, LeadFilesPanel } from '@/features/leads/components/LeadFilesBrowser'
 import {
   useCreateLeadActivityMutation,
   useCreateLeadTagMutation,
@@ -269,9 +277,58 @@ const ACTIVITY_STYLE = {
   system: {
     label: 'Activity',
     Icon: Sparkles,
-    iconWrap: 'bg-slate-100 text-slate-700',
-    chip: 'border-slate-200 bg-slate-50 text-slate-700',
-    card: 'bg-slate-50',
+    iconWrap: 'bg-indigo-100 text-indigo-600',
+    chip: 'border-indigo-200 bg-indigo-50 text-indigo-700',
+    card: 'bg-indigo-50/60',
+  },
+  created: {
+    label: 'Created',
+    Icon: PartyPopper,
+    iconWrap: 'bg-emerald-100 text-emerald-600',
+    chip: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    card: 'bg-emerald-50/70',
+  },
+  converted: {
+    label: 'Converted',
+    Icon: Rocket,
+    iconWrap: 'bg-amber-100 text-amber-600',
+    chip: 'border-amber-200 bg-amber-50 text-amber-700',
+    card: 'bg-amber-50/70',
+  },
+  assigned: {
+    label: 'Assigned',
+    Icon: UserCheck,
+    iconWrap: 'bg-violet-100 text-violet-600',
+    chip: 'border-violet-200 bg-violet-50 text-violet-700',
+    card: 'bg-violet-50/70',
+  },
+  automation: {
+    label: 'Automation',
+    Icon: Zap,
+    iconWrap: 'bg-fuchsia-100 text-fuchsia-600',
+    chip: 'border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700',
+    card: 'bg-fuchsia-50/70',
+  },
+  updated: {
+    label: 'Updated',
+    Icon: RefreshCw,
+    iconWrap: 'bg-blue-100 text-blue-600',
+    chip: 'border-blue-200 bg-blue-50 text-blue-700',
+    card: 'bg-blue-50/70',
+  },
+  document: {
+    label: 'Document',
+    Icon: FileText,
+    iconWrap: 'bg-teal-100 text-teal-600',
+    chip: 'border-teal-200 bg-teal-50 text-teal-700',
+    card: 'bg-teal-50/70',
+  },
+  duplicate: {
+    label: 'Import',
+    Icon: Copy,
+    iconWrap: 'bg-orange-100 text-orange-600',
+    chip: 'border-orange-200 bg-orange-50 text-orange-700',
+    card: 'bg-orange-50/70',
   },
   payment: {
     label: 'Payment',
@@ -301,6 +358,14 @@ function inferStyleKeyFromSystemAction(action) {
   if (a.startsWith('note_')) return 'note'
   if (a.startsWith('followup_')) return 'follow_up'
   if (a === 'payment_recorded' || a === 'deal_payment_recorded' || a === 'campaign_payment_recorded') return 'payment'
+  if (a === 'lead_created' || a === 'deal_created' || a === 'created_from_duplicate') return 'created'
+  if (a === 'converted_to_opportunity') return 'converted'
+  if (a === 'owner_reassigned' || a === 'workflow_assign_owner') return 'assigned'
+  if (a.startsWith('workflow_triggers_') || a === 'workflow_create_task' || a === 'workflow_create_followup' || a === 'workflow_send_email') return 'automation'
+  if (a === 'lead_field_changed' || a === 'lead_collaborators_changed' || a === 'deal_stage_changed' || a === 'opportunity_status_changed') return 'updated'
+  if (a === 'quotation_created' || a === 'invoice_created') return 'document'
+  if (a === 'document_uploaded' || a === 'document_moved' || a === 'document_deleted') return 'document'
+  if (a === 'lead_imported_csv' || a === 'duplicate_merged') return 'duplicate'
   return null
 }
 
@@ -386,18 +451,18 @@ function parseFollowUpTime(activity, headline, detailRaw) {
 
 function LeadInfoItem({ Icon, label, value, href }) {
   return (
-    <div className="flex items-start gap-2.5 py-2.5">
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-surface-subtle text-ink-muted">
+    <div className="flex items-start gap-2.5 py-1.5">
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-surface-subtle text-ink-muted">
         <Icon className="h-3.5 w-3.5" aria-hidden />
       </span>
       <div className="min-w-0 flex-1">
         <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-muted">{label}</p>
         {href && value !== '-' ? (
-          <a href={href} className="mt-0.5 block break-all text-sm font-medium text-ink hover:text-brand-700">
+          <a href={href} className="mt-0.5 block break-all text-[13px] font-medium text-ink hover:text-brand-700">
             {value}
           </a>
         ) : (
-          <p className="mt-0.5 break-words text-sm font-medium text-ink">{value}</p>
+          <p className="mt-0.5 break-words text-[13px] font-medium text-ink">{value}</p>
         )}
       </div>
     </div>
@@ -563,6 +628,19 @@ export function LeadDetailPage() {
   const { data: notesData } = useGetLeadNotesQuery(id, { skip: !id })
   const { data: filesData } = useGetLeadFilesQuery(id, { skip: !id })
 
+  const [addDocumentOpen, setAddDocumentOpen] = useState(false)
+  const billingTabActive = activeTab === 'billing'
+  const { data: proposalDocsData } = useGetDocumentsQuery(
+    { leadId: id, fileType: 'Proposal' },
+    { skip: !id || !billingTabActive },
+  )
+  const { data: invoiceDocsData } = useGetDocumentsQuery(
+    { leadId: id, fileType: 'Invoice' },
+    { skip: !id || !billingTabActive },
+  )
+  const proposalFileDocs = proposalDocsData?.data || []
+  const invoiceFileDocs = invoiceDocsData?.data || []
+
   const [createActivity, { isLoading: creatingActivity }] = useCreateLeadActivityMutation()
   const [createNote, { isLoading: creatingNote }] = useCreateLeadNoteMutation()
   const [patchNote, { isLoading: patchingNote }] = usePatchLeadNoteMutation()
@@ -631,6 +709,7 @@ export function LeadDetailPage() {
       { id: 'notes', label: 'Notes' },
       { id: 'meetings', label: 'Meetings' },
       { id: 'documents', label: 'Documents' },
+      { id: 'billing', label: 'Billing' },
       { id: 'payments', label: 'Payments' },
     ]
     if (lead?.isOpportunity) {
@@ -957,16 +1036,16 @@ export function LeadDetailPage() {
   return (
     <PageShell fullWidth>
       <div className="grid gap-2 px-2 py-2 lg:grid-cols-[320px_1fr] lg:px-3 lg:py-2.5">
-        <aside className="space-y-3">
+        <aside className="space-y-2">
           <section className="overflow-hidden rounded-2xl border border-surface-border bg-white">
-            <div className="p-3.5">
+            <div className="p-3">
               <div className="flex flex-col items-center text-center">
-                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-100 text-2xl font-semibold text-brand-700">
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-xl font-semibold text-brand-700">
                   {avatarLetter}
                 </div>
-                <div className="mt-2 flex w-full min-w-0 items-center justify-center gap-2">
+                <div className="mt-1.5 flex w-full min-w-0 items-center justify-center gap-2">
                   <p
-                    className="min-w-0 max-w-full truncate text-xl font-semibold text-ink"
+                    className="min-w-0 max-w-full truncate text-lg font-semibold text-ink"
                     title={fullName}
                   >
                     {fullName}
@@ -981,33 +1060,33 @@ export function LeadDetailPage() {
                     <Pencil className="h-3.5 w-3.5" aria-hidden />
                   </button>
                 </div>
-                <p className="mt-1 text-sm text-ink-muted">
+                <p className="mt-0.5 text-xs text-ink-muted">
                   {isPipelineDealRoute ? lead.company || lead.designation || 'Opportunity' : lead.company || lead.designation || 'Lead profile'}
                 </p>
               </div>
 
               {!lead.isOpportunity ? (
-                <div className="mt-3">
+                <div className="mt-2">
                   <button
                     type="button"
                     disabled={convertingToOpportunity}
                     onClick={convertToOpportunity}
-                    className="h-10 w-full rounded-xl bg-[var(--brand-primary)] px-4 text-sm font-semibold text-white disabled:opacity-60"
+                    className="h-8 w-full rounded-lg bg-[var(--brand-primary)] px-4 text-[13px] font-semibold text-white disabled:opacity-60"
                   >
                     {convertingToOpportunity ? 'Creating…' : 'Convert to opportunity'}
                   </button>
                 </div>
               ) : null}
 
-              <div className="mt-3 rounded-xl border border-surface-border bg-surface-subtle/60 p-2.5">
+              <div className="mt-2 rounded-lg border border-surface-border bg-surface-subtle/60 p-1.5">
                 <div className="flex items-center justify-between gap-2 px-0.5">
-                  <p className="text-left text-[11px] font-semibold uppercase tracking-wide text-ink-muted">Lead status (pipeline)</p>
-                  <span className="rounded-full border border-surface-border bg-white px-2 py-0.5 text-[11px] font-medium text-ink">
+                  <p className="text-left text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Lead status (pipeline)</p>
+                  <span className="rounded-full border border-surface-border bg-white px-1.5 py-0.5 text-[10px] font-medium text-ink">
                     {lead.oppStatus?.name || 'Not set'}
                   </span>
                 </div>
                 <Select
-                  className="mt-2 h-10 rounded-xl bg-white text-sm"
+                  className="mt-1.5 h-8 rounded-lg bg-white text-[13px]"
                   value={lead.opportunityStatus || ''}
                   disabled={pipelineSaving}
                   onChange={async (e) => {
@@ -1042,14 +1121,14 @@ export function LeadDetailPage() {
                 <button
                   type="button"
                   onClick={() => setProfileInfoTab('lead')}
-                  className={`px-4 py-2.5 transition-colors ${profileInfoTab === 'lead' ? 'border-b-2 border-ink text-ink' : 'text-ink-muted hover:text-ink'}`}
+                  className={`px-4 py-2 transition-colors ${profileInfoTab === 'lead' ? 'border-b-2 border-ink text-ink' : 'text-ink-muted hover:text-ink'}`}
                 >
                   Leads info
                 </button>
                 <button
                   type="button"
                   onClick={() => setProfileInfoTab('address')}
-                  className={`px-4 py-2.5 transition-colors ${profileInfoTab === 'address' ? 'border-b-2 border-ink text-ink' : 'text-ink-muted hover:text-ink'}`}
+                  className={`px-4 py-2 transition-colors ${profileInfoTab === 'address' ? 'border-b-2 border-ink text-ink' : 'text-ink-muted hover:text-ink'}`}
                 >
                   Address info
                 </button>
@@ -1068,8 +1147,8 @@ export function LeadDetailPage() {
                     <LeadInfoItem Icon={User} label="Lead owner" value={leadOwnerName} />
                     <LeadInfoItem Icon={UserCircle2} label="Job title" value={lead.designation || '-'} />
                     <LeadInfoItem Icon={BadgeIndianRupee} label="Annual revenue" value={formattedValue} />
-                    <div className="flex items-start gap-2.5 py-2.5">
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-surface-subtle text-ink-muted">
+                    <div className="flex items-start gap-2.5 py-1.5">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-surface-subtle text-ink-muted">
                         <Tag className="h-3.5 w-3.5" aria-hidden />
                       </span>
                       <div className="min-w-0 flex-1">
@@ -1079,10 +1158,10 @@ export function LeadDetailPage() {
                     </div>
                     <LeadInfoItem Icon={CheckSquare} label="Open tasks" value={String(summary.openTasks ?? 0)} />
                     <LeadInfoItem Icon={CheckSquare} label="Completed tasks" value={String(summary.completedTasks ?? 0)} />
-                    <div className="py-2.5">
+                    <div className="py-2">
                       <LeadScorePill score={lead.score || 0} showBar />
                     </div>
-                    <div className="py-2.5">
+                    <div className="py-2">
                       <CustomFieldsDisplay fields={customFieldDefs} values={customFieldValues} />
                     </div>
                   </>
@@ -1099,7 +1178,7 @@ export function LeadDetailPage() {
               </div>
             </div>
           </section>
-          <section className="rounded-2xl border border-surface-border bg-white p-3.5">
+          <section className="rounded-2xl border border-surface-border bg-white p-3">
             <p className="text-sm font-semibold text-ink">Tags</p>
             <div className="mt-1.5">
               <LeadTagsInput
@@ -1117,7 +1196,7 @@ export function LeadDetailPage() {
           </section>
         </aside>
 
-        <section className="rounded-2xl border border-surface-border bg-white p-4 sm:p-5">
+        <section className="flex flex-col rounded-2xl border border-surface-border bg-white p-4 sm:p-5">
           <div className="flex flex-col gap-3 border-b border-surface-border pb-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
             <div className="-mx-1 flex min-w-0 flex-1 items-center gap-1 overflow-x-auto px-1">
               {tabs.map((tab) => (
@@ -1146,7 +1225,7 @@ export function LeadDetailPage() {
 
           {activeTab === 'emails' ? (
             googleEmailConnected ? (
-              <div className="mt-4 space-y-4">
+              <div className="mt-4 flex flex-1 flex-col space-y-4 lg:min-h-0">
                 <LeadTabSectionHeader
                   title="Emails"
                   description="Synced Gmail threads for this contact. Sync to pull the latest replies."
@@ -1183,9 +1262,9 @@ export function LeadDetailPage() {
                     </>
                   }
                 />
-                <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
-                <section className="overflow-hidden rounded-xl border border-surface-border bg-white lg:h-[660px]">
-                  <div className="h-full overflow-y-auto">
+                <div className="grid flex-1 gap-4 lg:min-h-[420px] lg:grid-cols-[340px_1fr]">
+                <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-surface-border bg-white">
+                  <div className="min-h-0 flex-1 overflow-y-auto">
                     <GmailThreadList
                       threads={parsedThreads}
                       selectedId={selectedThreadId}
@@ -1193,11 +1272,10 @@ export function LeadDetailPage() {
                     />
                   </div>
                 </section>
-                <section className="overflow-hidden rounded-xl border border-surface-border bg-white lg:h-[660px]">
+                <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-surface-border bg-white">
                   <GmailThreadView
                     thread={activeThread}
                     onBack={() => setSelectedThreadId(null)}
-                    onSync={() => syncLeadEmails({ id })}
                     onCreateEmail={() => setIsComposeOpen(true)}
                   />
                 </section>
@@ -1795,10 +1873,30 @@ export function LeadDetailPage() {
             <div className="mt-4 space-y-3">
               <LeadTabSectionHeader
                 title="Documents"
-                description="Quotations and invoices linked to this record."
+                description="Folders and files uploaded for this lead."
               />
-              <DealQuotationsPanel leadId={id} hideActions sectioned />
-              <DealInvoicesPanel leadId={id} hideActions sectioned />
+              <div className="h-[560px] overflow-hidden rounded-2xl border border-surface-border bg-white shadow-sm">
+                <LeadFilesPanel leadId={id} leadName={fullName} hideSidebar />
+              </div>
+            </div>
+          ) : activeTab === 'billing' ? (
+            <div className="mt-4 space-y-3">
+              <LeadTabSectionHeader
+                title="Billing"
+                description="Quotations and invoices linked to this record."
+                action={
+                  <button
+                    type="button"
+                    onClick={() => setAddDocumentOpen(true)}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-slate-800 px-3 text-xs font-semibold text-white shadow-sm hover:bg-slate-900"
+                  >
+                    <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    Add document
+                  </button>
+                }
+              />
+              <DealQuotationsPanel leadId={id} hideActions sectioned proposalDocs={proposalFileDocs} />
+              <DealInvoicesPanel leadId={id} hideActions sectioned invoiceFileDocs={invoiceFileDocs} />
             </div>
           ) : activeTab === 'payments' ? (
             <LeadPaymentsTab leadId={id} />
@@ -2375,6 +2473,14 @@ export function LeadDetailPage() {
             initialLead={lead}
             onSubmit={submitLeadEdit}
           />
+          {addDocumentOpen ? (
+            <LeadFilesBrowser
+              open
+              onClose={() => setAddDocumentOpen(false)}
+              leadId={id}
+              leadName={fullName}
+            />
+          ) : null}
         </section>
       </div>
     </PageShell>

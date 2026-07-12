@@ -140,35 +140,37 @@ export function DocumentSettingsPage() {
         {isLoading ? (
           <p className="text-sm text-ink-muted">Loading…</p>
         ) : (
-          <div className="mx-auto w-full max-w-3xl space-y-4">
-            <NumberingCard
-              icon={FileText}
-              iconClass="bg-brand-50 text-brand-700"
-              title="Quotation numbering"
-              description="Prefix, sequence, and format applied to every new quotation in this workspace."
-              value={quotation}
-              initial={profile?.quotationNextSeq}
-              onChange={setQuotation}
-            />
+          <div className="w-full space-y-4">
+            <div className="grid gap-4 lg:grid-cols-2">
+              <NumberingCard
+                icon={FileText}
+                iconClass="bg-brand-50 text-brand-700"
+                title="Quotation numbering"
+                description="Prefix, sequence, and format applied to every new quotation in this workspace."
+                value={quotation}
+                initial={profile?.quotationNextSeq}
+                onChange={setQuotation}
+              />
 
-            <NumberingCard
-              icon={Receipt}
-              iconClass="bg-violet-50 text-violet-700"
-              title="Invoice numbering"
-              description="Prefix, sequence, and format applied to new invoices, including quotations converted to invoices."
-              value={invoice}
-              initial={profile?.invoiceNextSeq}
-              onChange={setInvoice}
-            >
-              <p className="mt-3 text-xs leading-relaxed text-ink-muted">
-                Invoice templates with <span className="font-medium text-ink">“Use template numbering”</span> enabled
-                override these settings for invoices created from that template — manage them in{' '}
-                <Link to="/sales-docs/templates?tab=invoice" className="font-medium text-brand-700 hover:underline">
-                  Doc templates
-                </Link>
-                .
-              </p>
-            </NumberingCard>
+              <NumberingCard
+                icon={Receipt}
+                iconClass="bg-violet-50 text-violet-700"
+                title="Invoice numbering"
+                description="Prefix, sequence, and format applied to new invoices, including quotations converted to invoices."
+                value={invoice}
+                initial={profile?.invoiceNextSeq}
+                onChange={setInvoice}
+              >
+                <p className="mt-3 text-xs leading-relaxed text-ink-muted">
+                  Invoice templates with <span className="font-medium text-ink">“Use template numbering”</span> enabled
+                  override these settings for invoices created from that template — manage them in{' '}
+                  <Link to="/sales-docs/templates?tab=invoice" className="font-medium text-brand-700 hover:underline">
+                    Doc templates
+                  </Link>
+                  .
+                </p>
+              </NumberingCard>
+            </div>
 
             <div className="flex justify-end">
               <Button type="button" onClick={save} disabled={saving}>

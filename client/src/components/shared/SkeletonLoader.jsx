@@ -229,7 +229,7 @@ export function SkeletonEmailList({ rows = 8 }) {
       {Array.from({ length: rows }).map((_, i) => (
         <div
           key={i}
-          className={`animate-pulse flex items-center gap-3 px-4 py-3 ${i < rows - 1 ? 'border-b border-purple-300' : ''}`}
+          className={`animate-pulse flex items-center gap-3 px-3.5 py-3 ${i < rows - 1 ? 'border-b border-purple-300' : ''}`}
           style={{ animationDelay: `${i * 50}ms` }}
         >
           <div className="h-8 w-8 shrink-0 rounded-full bg-purple-200" />

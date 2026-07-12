@@ -83,17 +83,6 @@ export function extractAttachments(payload) {
   return atts
 }
 
-export function stripQuotedReply(html) {
-  if (!html) return ''
-  const div = document.createElement('div')
-  div.innerHTML = html
-  div.querySelectorAll('blockquote, .gmail_quote, [class*="quote"]').forEach((el) => {
-    el.dataset.quoted = 'true'
-    el.style.display = 'none'
-  })
-  return div.innerHTML
-}
-
 export function removeTrackingPixels(html) {
   if (!html) return ''
   const div = document.createElement('div')
@@ -115,6 +104,18 @@ export function formatEmailDate(date) {
   if (isToday) return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
   if (isThisYear) return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
   return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+/** Full date + time, used as a native tooltip (title attribute) alongside the compact formatEmailDate text. */
+export function formatEmailDateTime(date) {
+  if (!date || Number.isNaN(new Date(date).getTime())) return ''
+  return new Date(date).toLocaleString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
 export function parseGmailMessage(rawMsg) {

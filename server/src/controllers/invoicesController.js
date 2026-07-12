@@ -22,6 +22,8 @@ import { enrichSalesDocListRow } from '../services/salesDocListSerialize.js'
 const listIncludes = [
   { model: Lead, as: 'lead', attributes: ['id', 'title', 'contactName', 'company', 'email'], required: false },
   { model: Deal, as: 'deal', attributes: ['id', 'name', 'stage'], required: false },
+  // separate: true runs this as its own query (not a JOIN) so it doesn't multiply rows under LIMIT/OFFSET.
+  { model: InvoicePayment, as: 'payments', separate: true, order: [['paidAt', 'DESC']] },
 ]
 
 /** True unless template explicitly sets sectionSettings.showBankDetails === false */
@@ -206,7 +208,7 @@ export async function listInvoices(req, res, next) {
     return res.json({
       success: true,
       data: {
-        items: rows.map((r) => enrichSalesDocListRow(serializeInvoice(r), r)),
+        items: rows.map((r) => enrichSalesDocListRow(serializeInvoice(r, [], r.payments), r)),
         total: count,
         page,
         limit,

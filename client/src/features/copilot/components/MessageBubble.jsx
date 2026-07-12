@@ -69,7 +69,7 @@ export function MessageBubble({ role, content, blocks, onSelectDisambiguation, d
   if (isUser) {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[80%] whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-brand-600 px-4 py-2.5 text-sm text-white shadow-sm">
+        <div className="max-w-[80%] whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-brand-600 px-4 py-2.5 text-sm text-white">
           {content}
         </div>
       </div>
@@ -78,10 +78,10 @@ export function MessageBubble({ role, content, blocks, onSelectDisambiguation, d
 
   return (
     <div className="flex gap-3">
-      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-sm">
+      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
         <Sparkles className="h-4 w-4" />
       </span>
-      <div className="min-w-0 flex-1 space-y-2 overflow-x-auto break-words rounded-2xl rounded-tl-md border border-surface-border bg-white px-4 py-3 text-left text-sm leading-relaxed text-ink shadow-sm">
+      <div className="min-w-0 flex-1 space-y-2 overflow-x-auto break-words rounded-2xl rounded-tl-md bg-surface-50 px-4 py-3 text-left text-sm leading-relaxed text-ink">
         {blocks?.length ? (
           blocks.map((b, i) => renderBlock(b, i, onSelectDisambiguation, disambiguationDisabled))
         ) : (

@@ -26,16 +26,20 @@ function firstTruthy(...keys) {
 }
 
 export function readGoogleOAuthEnv() {
+  // Precedence MUST match the Integrations connect flow (emailOAuthClient in
+  // leadsController.js), which mints CompanyGoogleToken refresh tokens under
+  // GOOGLE_OAUTH_CLIENT_ID. Refreshing a token with a different client_id than
+  // it was issued under returns `unauthorized_client`, so prefer GOOGLE_OAUTH_*.
   return {
-    clientId: firstTruthy('GOOGLE_CLIENT_ID', 'GOOGLE_OAUTH_CLIENT_ID'),
+    clientId: firstTruthy('GOOGLE_OAUTH_CLIENT_ID', 'GOOGLE_CLIENT_ID'),
     clientSecret: firstTruthy(
-      'GOOGLE_CLIENT_SECRET',
       'GOOGLE_OAUTH_CLIENT_SECRET',
+      'GOOGLE_CLIENT_SECRET',
     ),
     redirectUri: firstTruthy(
+      'GOOGLE_OAUTH_REDIRECT_URI',
       'GOOGLE_REDIRECT_URI',
       'GOOGLE_CALLBACK_URL',
-      'GOOGLE_OAUTH_REDIRECT_URI',
     ),
     refreshToken: firstTruthy(
       'GOOGLE_REFRESH_TOKEN',

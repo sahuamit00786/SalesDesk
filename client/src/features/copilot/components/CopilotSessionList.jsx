@@ -60,10 +60,10 @@ export function CopilotSessionList({ sessions, activeSessionId, onSelect, onNew,
   const groups = groupSessions(sessions)
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-surface-muted/40">
+    <div className="flex h-full min-h-0 flex-col bg-white">
       <div className="flex items-center justify-between gap-2 px-3 pb-2 pt-3">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-sm">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
             <Sparkles className="h-4 w-4" />
           </span>
           <span className="truncate text-sm font-semibold tracking-tight text-ink">LeadNext Copilot</span>
@@ -86,7 +86,7 @@ export function CopilotSessionList({ sessions, activeSessionId, onSelect, onNew,
           type="button"
           onClick={onNew}
           disabled={creatingNew}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-surface-border bg-white px-2.5 py-1.5 text-xs font-semibold text-ink shadow-sm transition-colors hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 disabled:opacity-60"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-surface-border bg-white px-2.5 py-1.5 text-xs font-semibold text-ink transition-colors hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 disabled:opacity-60"
         >
           <Plus className="h-3.5 w-3.5" /> New chat
         </button>
@@ -121,15 +121,13 @@ export function CopilotSessionList({ sessions, activeSessionId, onSelect, onNew,
                       }}
                       className={cn(
                         'group flex cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-sm transition-colors',
-                        active
-                          ? 'bg-white font-medium text-ink shadow-sm ring-1 ring-brand-100'
-                          : 'text-ink-muted hover:bg-white/70 hover:text-ink',
+                        active ? 'bg-brand-50 font-medium text-ink' : 'text-ink-muted hover:bg-surface-50 hover:text-ink',
                       )}
                     >
                       <span
                         className={cn(
                           'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors',
-                          active ? 'bg-brand-50 text-brand-600' : 'bg-black/[0.04] text-ink-faint group-hover:text-brand-500',
+                          active ? 'bg-white text-brand-600' : 'bg-black/[0.04] text-ink-faint group-hover:text-brand-500',
                         )}
                       >
                         <MessageSquare className="h-3.5 w-3.5" />

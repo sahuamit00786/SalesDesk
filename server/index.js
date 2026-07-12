@@ -75,7 +75,7 @@ async function start() {
       ? `OpenAI key loaded from .env: ${openAiMasked} (model: ${process.env.OPENAI_MODEL || 'gpt-4o-mini'})`
       : 'OpenAI key missing — AI generation will fail until OPENAI_API_KEY is set in .env',
   )
-  const syncIntervalMs = Number(process.env.EMAIL_AUTOSYNC_INTERVAL_MS || 300000)
+  const syncIntervalMs = Number(process.env.EMAIL_AUTOSYNC_INTERVAL_MS || 60000)
   if (syncIntervalMs > 0) {
     setInterval(() => {
       runEmailAutoSyncJob().catch(() => {})

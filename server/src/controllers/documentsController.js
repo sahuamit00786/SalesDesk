@@ -17,6 +17,7 @@ import {
   patchDocumentMetadata,
   restoreVersion,
 } from '../services/documentsService.js'
+import { recordDocumentActivityOnLead } from '../services/leadDocumentActivity.js'
 
 function resolveWorkspaceId(req) {
   return req.headers['x-workspace-id']
@@ -63,6 +64,13 @@ export async function createDocument(req, res, next) {
       source: req.body?.source || 'manual',
     })
 
+    await recordDocumentActivityOnLead({
+      documentId: row.id,
+      userId: req.user.id,
+      action: 'document_uploaded',
+      body: `Uploaded file "${name}"`,
+    })
+
     const payload = await getDocumentApiPayload({ id: row.id, workspaceId })
     return res.status(201).json({ success: true, data: payload || row.get({ plain: true }), meta: {} })
   } catch (error) {
@@ -97,7 +105,14 @@ export async function deleteDocument(req, res, next) {
     const workspaceId = resolveWorkspaceId(req)
     const row = await Document.findOne({ where: { id: req.params.id, workspaceId } })
     if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Document not found' } })
+    const { id: documentId, name } = row
     await row.destroy()
+    await recordDocumentActivityOnLead({
+      documentId,
+      userId: req.user.id,
+      action: 'document_deleted',
+      body: `Deleted file "${name}"`,
+    })
     return res.json({ success: true, meta: {} })
   } catch (e) {
     return next(e)
@@ -209,6 +224,21 @@ export async function moveDocumentFolder(req, res, next) {
     if (fromFolderId && fromFolderId !== toFolderId) {
       await DocumentFolderLink.destroy({ where: { documentId: id, folderId: fromFolderId } })
     }
+
+    const [toFolder, fromFolder] = await Promise.all([
+      Folder.findByPk(toFolderId, { attributes: ['id', 'name'] }),
+      fromFolderId && fromFolderId !== toFolderId ? Folder.findByPk(fromFolderId, { attributes: ['id', 'name'] }) : null,
+    ])
+    const body = fromFolder
+      ? `Moved file "${doc.name}" from "${fromFolder.name}" to "${toFolder?.name || 'a folder'}"`
+      : `Moved file "${doc.name}" to folder "${toFolder?.name || ''}"`
+    await recordDocumentActivityOnLead({
+      documentId: id,
+      userId: req.user.id,
+      action: 'document_moved',
+      body,
+      metadata: { toFolderId, toFolderName: toFolder?.name || null, fromFolderId: fromFolderId || null, fromFolderName: fromFolder?.name || null },
+    })
 
     return res.json({ success: true, meta: {} })
   } catch (e) {

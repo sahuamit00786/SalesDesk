@@ -168,7 +168,6 @@ export function LeadsListPage({ variant = "leads" }) {
     pagination,
     isOpportunity: isOpportunities,
   });
-  if (!isOpportunities && !filters.assignedTo?.length) query.assignedOnly = true;
   const { data, isLoading, refetch } = useGetLeadsQuery(query);
   const [fetchLeadsPage] = useLazyGetLeadsQuery();
   const { data: formMetaData } = useGetLeadFormMetaQuery();

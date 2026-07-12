@@ -330,7 +330,9 @@ export function DocumentsPage() {
   const [triggerFolderInfo] = useLazyGetFolderInfoQuery()
   const [deleteFolder] = useDeleteFolderMutation()
   const { data: treeData, refetch: refetchTree } = useGetDocumentFolderTreeQuery()
-  const flatFolders = treeData?.data?.manualFolders || []
+  const allFolders = useMemo(() => treeData?.data?.manualFolders || [], [treeData])
+  // Global folders only — shown in the sidebar tree and at the "All documents" root.
+  const flatFolders = useMemo(() => allFolders.filter((f) => !f.entityType), [allFolders])
   const nestedFolders = useMemo(() => nestFolders(flatFolders), [flatFolders])
   const leadNodes = treeData?.data?.roots?.find((r) => r.id === 'auto-leads-root')?.children || []
   const companyNodes = treeData?.data?.roots?.find((r) => r.id === 'auto-companies-root')?.children || []
@@ -344,12 +346,16 @@ export function DocumentsPage() {
     }
   }, [leadNodes, context.type, context.id, context.name])
 
-  // Folder tiles in the main area: root folders on "All documents", children inside a folder
+  // Folder tiles in the main area: root folders on "All documents", children inside a folder,
+  // or that lead/company's own folders when browsing its record.
   const currentSubfolders = useMemo(() => {
-    if (context.type === 'folder') return flatFolders.filter((f) => (f.parentFolderId ?? null) === context.id)
+    if (context.type === 'folder') return allFolders.filter((f) => (f.parentFolderId ?? null) === context.id)
     if (context.type === 'all') return flatFolders.filter((f) => (f.parentFolderId ?? null) === null)
+    if (context.type === 'lead' || context.type === 'company') {
+      return allFolders.filter((f) => f.entityType === context.type && String(f.entityId) === String(context.id) && (f.parentFolderId ?? null) === null)
+    }
     return []
-  }, [context, flatFolders])
+  }, [context, flatFolders, allFolders])
 
   const [leadLimit, setLeadLimit] = useState(15)
   const [companyLimit, setCompanyLimit] = useState(15)
@@ -373,7 +379,20 @@ export function DocumentsPage() {
     return {}
   }, [context])
   const { data: docsData, isLoading: docsLoading, refetch: refetchDocs } = useGetDocumentsQuery(docParams)
-  const allRows = docsData?.data || []
+  // On a "root" view (all documents, or a lead/company's own list), hide files already sitting inside
+  // one of the folders shown as tiles here — they only render as folder contents once that folder is open.
+  const rootFolderIds = useMemo(() => {
+    if (context.type === 'all') return new Set(flatFolders.map((f) => f.id))
+    if (context.type === 'lead' || context.type === 'company') {
+      return new Set(allFolders.filter((f) => f.entityType === context.type && String(f.entityId) === String(context.id)).map((f) => f.id))
+    }
+    return null
+  }, [context, flatFolders, allFolders])
+  const allRows = useMemo(() => {
+    const list = docsData?.data || []
+    if (!rootFolderIds) return list
+    return list.filter((r) => !(r.folderLinks || []).some((l) => rootFolderIds.has(l.folderId)))
+  }, [docsData, rootFolderIds])
 
   const filtered = useMemo(() => {
     let list = [...allRows]
@@ -407,7 +426,7 @@ export function DocumentsPage() {
   // Breadcrumb chain for nested folders
   const folderPath = useMemo(() => {
     if (context.type !== 'folder') return []
-    const byId = new Map(flatFolders.map((f) => [f.id, f]))
+    const byId = new Map(allFolders.map((f) => [f.id, f]))
     const path = []
     let cur = byId.get(context.id)
     let guard = 0
@@ -416,7 +435,7 @@ export function DocumentsPage() {
       cur = cur.parentFolderId ? byId.get(cur.parentFolderId) : null
     }
     return path
-  }, [context, flatFolders])
+  }, [context, allFolders])
 
   const [createFolder, { isLoading: creatingFolder }] = useCreateDocumentFolderMutation()
   const [addToFolder] = useAddDocumentToFolderMutation()

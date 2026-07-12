@@ -20,6 +20,7 @@ export default function GmailAttachmentChip({
       <button
         type="button"
         onClick={open}
+        title={attachment?.name || 'Attachment'}
         style={{
           border: `1px solid ${cfg.border}`,
           background: cfg.bg,

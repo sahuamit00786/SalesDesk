@@ -123,7 +123,9 @@ export async function ingestGmailHistoryFromPush(tokenRow, notificationHistoryId
   const leadByEmail = new Map()
   for (const l of leads) {
     const k = normalizeEmail(l.email)
-    if (k && !leadByEmail.has(k)) leadByEmail.set(k, l)
+    // A lead sharing the connected mailbox's own address has no counterpart to match —
+    // letting it in makes every message in the mailbox look like "this lead's conversation".
+    if (k && k !== mailboxEmail && !leadByEmail.has(k)) leadByEmail.set(k, l)
   }
 
   const messageIds = new Set()

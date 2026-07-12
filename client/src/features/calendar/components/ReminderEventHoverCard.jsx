@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { format } from 'date-fns'
-import { Bell, Clock3, Calendar, StickyNote, User } from 'lucide-react'
+import { Bell, Clock3, Calendar, StickyNote, User, Briefcase, TrendingUp, Video, CheckSquare, ExternalLink } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { computeCalendarPopoverPosition } from '@/utils/calendarPopoverPosition'
 
@@ -43,7 +43,23 @@ export function ReminderEventHoverCard({ event, anchorRect, onMouseEnter, onMous
   const notes = event?.meta?.notes?.trim()
   const targetType = event?.meta?.targetType
   const targetId = event?.meta?.targetId
-  const leadHref = targetType === 'lead' && targetId ? `/leads/${targetId}` : null
+
+  const linkTarget = useMemo(() => {
+    if (!targetId) return null
+    switch (targetType) {
+      case 'lead':
+        return { to: `/leads/${targetId}`, label: 'Open linked lead', Icon: Briefcase }
+      case 'opportunity':
+        return { to: `/opportunities/${targetId}`, label: 'Open linked deal', Icon: TrendingUp }
+      case 'meeting':
+        return { to: '/meetings', label: 'Open meetings', Icon: Video }
+      case 'task':
+      case 'followup':
+        return { to: '/tasks', label: 'Open tasks', Icon: CheckSquare }
+      default:
+        return null
+    }
+  }, [targetType, targetId])
 
   if (!anchorRect) return null
 
@@ -129,12 +145,14 @@ export function ReminderEventHoverCard({ event, anchorRect, onMouseEnter, onMous
           </div>
         ) : null}
 
-        {leadHref ? (
+        {linkTarget ? (
           <Link
-            to={leadHref}
-            className="inline-flex items-center justify-center rounded-lg border border-rose-100 bg-white px-3 py-2 text-xs font-semibold text-rose-800 hover:bg-rose-50/60"
+            to={linkTarget.to}
+            className="inline-flex items-center gap-2 rounded-lg border border-rose-100 bg-white px-3 py-2 text-xs font-semibold text-rose-800 hover:bg-rose-50/60"
           >
-            Open linked lead
+            <linkTarget.Icon className="h-4 w-4 shrink-0" aria-hidden />
+            {linkTarget.label}
+            <ExternalLink className="h-3.5 w-3.5 opacity-70" aria-hidden />
           </Link>
         ) : null}
       </div>

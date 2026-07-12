@@ -59,7 +59,7 @@ export function CopilotPage() {
   return (
     <PageShell fullWidth>
       <div className="h-full px-2 py-2.5 lg:px-3">
-        <section className="flex h-[calc(100dvh-88px)] min-h-0 flex-col overflow-hidden rounded-xl border border-surface-border bg-white shadow-sm">
+        <section className="flex h-[calc(100dvh-88px)] min-h-0 flex-col overflow-hidden rounded-xl border border-surface-border bg-white">
           <div
             className={cn(
               'grid min-h-0 flex-1 divide-y divide-surface-border transition-[grid-template-columns] duration-300 ease-in-out',

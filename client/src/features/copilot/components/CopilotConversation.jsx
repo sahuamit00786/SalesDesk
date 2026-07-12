@@ -39,13 +39,24 @@ export function CopilotConversation({ sessionId, sidebarOpen = true, onExpandSid
   // isStreaming transition missed, leaving the composer/chips stuck disabled.
   useEffect(() => {
     if (doneTick === 0) return
-    refetchMessages()
-    resetTurn()
-    setPendingUserText(null)
-    setIsSending(false)
+    let cancelled = false
+    // Wait for the authoritative history to land before dropping the optimistic
+    // bubbles/streamed text — clearing them first left a gap where `messages`
+    // still held the stale pre-turn list, which briefly rendered as an empty/
+    // older chat and yanked the scroll position around.
+    const clear = () => {
+      if (cancelled) return
+      resetTurn()
+      setPendingUserText(null)
+      setIsSending(false)
+    }
+    refetchMessages().then(clear, clear)
     // First turn names the session server-side — refresh the sidebar so the
     // new title and ordering show up.
     dispatch(copilotApi.util.invalidateTags(['CopilotSession']))
+    return () => {
+      cancelled = true
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doneTick])
 
@@ -72,7 +83,7 @@ export function CopilotConversation({ sessionId, sidebarOpen = true, onExpandSid
         onClick={onExpandSidebar}
         aria-label="Open sidebar"
         title="Open sidebar"
-        className="absolute left-3 top-3 z-10 flex h-8 w-8 animate-lf-fade-in items-center justify-center rounded-lg border border-surface-border bg-white text-ink-muted shadow-sm transition-colors hover:bg-brand-50 hover:text-brand-700"
+        className="absolute left-3 top-3 z-10 flex h-8 w-8 animate-lf-fade-in items-center justify-center rounded-lg border border-surface-border bg-white text-ink-muted transition-colors hover:bg-brand-50 hover:text-brand-700"
       >
         <PanelLeftOpen className="h-4 w-4" />
       </button>
@@ -118,13 +129,13 @@ export function CopilotConversation({ sessionId, sidebarOpen = true, onExpandSid
   }
 
   return (
-    <div className="relative flex h-full min-h-0 flex-1 flex-col bg-gradient-to-b from-surface-muted/40 to-white">
+    <div className="relative flex h-full min-h-0 flex-1 flex-col bg-white">
       {expandBtn}
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-8">
         {isEmpty ? (
           <div className="mx-auto flex h-full max-w-2xl flex-col items-center justify-center gap-6 text-center">
-            <span className="flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-lg shadow-brand-500/25">
-              <Sparkles className="h-8 w-8" />
+            <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-50 text-brand-600">
+              <Sparkles className="h-7 w-7" />
             </span>
             <div className="space-y-1.5">
               <h2 className="text-2xl font-semibold tracking-tight text-ink">How can I help you today?</h2>
@@ -136,9 +147,9 @@ export function CopilotConversation({ sessionId, sidebarOpen = true, onExpandSid
                   key={label}
                   type="button"
                   onClick={() => sendText(text)}
-                  className="group flex items-center gap-3 rounded-2xl border border-surface-border bg-white/80 px-4 py-3 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-md"
+                  className="group flex items-center gap-3 rounded-2xl border border-surface-border bg-white px-4 py-3 text-left transition-colors hover:border-brand-300 hover:bg-brand-50/40"
                 >
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600 transition-colors group-hover:bg-brand-100">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-surface-50 text-brand-600 transition-colors group-hover:bg-brand-100">
                     <Icon className="h-[18px] w-[18px]" />
                   </span>
                   <span className="min-w-0">
@@ -199,14 +210,14 @@ export function CopilotConversation({ sessionId, sidebarOpen = true, onExpandSid
                 type="button"
                 onClick={() => sendText(text)}
                 disabled={isBusy}
-                className="inline-flex items-center gap-1.5 rounded-full border border-surface-border bg-white px-3 py-1.5 text-xs font-medium text-ink-muted shadow-sm transition-colors hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-full border border-surface-border bg-white px-3 py-1.5 text-xs font-medium text-ink-muted transition-colors hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Icon className="h-3.5 w-3.5" />
                 {label}
               </button>
             ))}
           </div>
-          <div className="flex items-end gap-2 rounded-2xl border border-surface-border bg-white p-2 shadow-sm transition-colors focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-100">
+          <div className="flex items-end gap-2 rounded-2xl border border-surface-border bg-white p-2 transition-colors focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-100">
             <textarea
               ref={inputRef}
               value={inputText}
@@ -227,7 +238,7 @@ export function CopilotConversation({ sessionId, sidebarOpen = true, onExpandSid
               onClick={() => sendText(inputText)}
               disabled={isBusy || !inputText.trim()}
               aria-label="Send message"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--brand-primary,#5B21B6)] text-white shadow-sm transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--brand-primary,#5B21B6)] text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <ArrowUp className="h-[18px] w-[18px]" />
             </button>

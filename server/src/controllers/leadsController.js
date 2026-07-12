@@ -446,6 +446,11 @@ function buildListWhere(query) {
   if (iso === 'true' || iso === '1') where.isOpportunity = true
   if (iso === 'false' || iso === '0') where.isOpportunity = false
 
+  const emails = parseCsvList(query.emails).map((e) => e.trim().toLowerCase()).filter(Boolean)
+  if (emails.length) {
+    where[Op.and] = (where[Op.and] || []).concat([sqlWhere(fn('LOWER', col('Lead.email')), { [Op.in]: emails })])
+  }
+
   const createdFrom = query.createdFrom ? String(query.createdFrom).slice(0, 10) : null
   const createdTo = query.createdTo ? String(query.createdTo).slice(0, 10) : null
   if (createdFrom || createdTo) {
@@ -693,6 +698,9 @@ async function syncRepliesForLead({ lead, tokenRow, userId }) {
   if (!lead?.email || !tokenRow?.refreshToken) return { created: 0 }
   const leadEmail = normalizeEmail(lead.email)
   const mailboxEmail = normalizeEmail(tokenRow.email)
+  // A lead sharing the connected mailbox's own address has no counterpart to sync —
+  // matching degenerates to "every message in the mailbox" (from===to===lead).
+  if (leadEmail && mailboxEmail && leadEmail === mailboxEmail) return { created: 0 }
   const oauth2Client = getGoogleOAuthClient()
   oauth2Client.setCredentials({
     access_token: tokenRow.accessToken || undefined,
@@ -813,7 +821,10 @@ const leadSchema = Joi.object({
 export async function list(req, res, next) {
   try {
     const page = Math.max(1, Number(req.query.page) || 1)
-    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20))
+    const requestedEmails = parseCsvList(req.query.emails).filter(Boolean)
+    const limit = requestedEmails.length
+      ? Math.min(200, requestedEmails.length)
+      : Math.min(100, Math.max(1, Number(req.query.limit) || 20))
     const offset = (page - 1) * limit
 
     let accessWhere
@@ -3292,20 +3303,23 @@ export async function runEmailAutoSyncJob() {
     order: [['updatedAt', 'DESC']],
     limit: 50,
   })
+  const perCompanyLeadLimit = Number(process.env.EMAIL_AUTOSYNC_LEADS_PER_COMPANY || 25)
   for (const token of tokens) {
-    const lead = await Lead.findOne({
+    const leads = await Lead.findAll({
       where: {
         companyId: token.companyId,
         isDeleted: false,
         email: { [Op.ne]: null },
       },
       order: [['updatedAt', 'DESC']],
+      limit: perCompanyLeadLimit,
     })
-    if (!lead) continue
-    try {
-      await syncRepliesForLead({ lead, tokenRow: token, userId: token.userId })
-    } catch {
-      // keep job resilient; individual company sync failures are best-effort
+    for (const lead of leads) {
+      try {
+        await syncRepliesForLead({ lead, tokenRow: token, userId: token.userId })
+      } catch {
+        // keep job resilient; individual lead sync failures are best-effort
+      }
     }
   }
 }

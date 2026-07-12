@@ -77,7 +77,8 @@ const KNOWN = new Set([
   'value', 'deal_value', 'source', 'status', 'city', 'state', 'country', 'street', 'postal_code',
   'title', 'sender_name', 'requirement',
 ])
-const FALLBACK = new Set(['first_name', 'last_name', 'contact_name', 'name', 'sender_name'])
+export const FALLBACK_MERGE_KEYS = new Set(['first_name', 'last_name', 'contact_name', 'name', 'sender_name'])
+const FALLBACK = FALLBACK_MERGE_KEYS
 
 const FIELD_LABELS = {
   first_name: 'First name',

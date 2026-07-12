@@ -800,10 +800,8 @@ export function TeamPage() {
 
   return (
     <PageShell fullWidth>
-      <div className="min-h-screen p-4 sm:p-6">
-        <main className="min-w-0 flex-1">
-          <PageStack>
-            {/* Tabs */}
+      <PageStack>
+        {/* Tabs */}
             <section className="flex items-center justify-between border-b border-surface-border bg-white px-4 sm:px-6">
               <div className="-mb-px flex gap-4">
                 {[
@@ -926,9 +924,7 @@ export function TeamPage() {
                 />
               ) : null}
             </section>
-          </PageStack>
-        </main>
-      </div>
+      </PageStack>
 
       <RightDrawer
         open={accessDrawerOpen}

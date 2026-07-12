@@ -61,9 +61,13 @@ function fmtDate(d) {
   catch { return d }
 }
 
-function PaymentForm({ initial, onSave, onCancel, saving }) {
+function PaymentForm({ initial, onSave, onCancel, saving, balanceBeforeThis }) {
   const [form, setForm] = useState({ ...EMPTY_FORM, ...initial })
   const set = (k, v) => setForm((p) => ({ ...p, [k]: v }))
+
+  const hasBalance = Number.isFinite(balanceBeforeThis)
+  const entered = Number(form.amount) || 0
+  const balanceAfter = hasBalance ? balanceBeforeThis - entered : null
 
   function handleSubmit(e) {
     e.preventDefault()
@@ -101,6 +105,25 @@ function PaymentForm({ initial, onSave, onCancel, saving }) {
             onChange={(e) => set('amount', e.target.value)}
             placeholder="0.00"
           />
+          {hasBalance && (
+            <p className="mt-1 text-[11px] text-ink-muted">
+              {fmtMoney(Math.max(balanceBeforeThis, 0), form.currency)} left to collect
+              {entered > 0 && (
+                <>
+                  {' · '}
+                  {balanceAfter < 0 ? (
+                    <span className="font-semibold text-rose-600">
+                      Overpaying by {fmtMoney(Math.abs(balanceAfter), form.currency)}
+                    </span>
+                  ) : (
+                    <span className="font-semibold text-emerald-700">
+                      {fmtMoney(balanceAfter, form.currency)} left after this payment
+                    </span>
+                  )}
+                </>
+              )}
+            </p>
+          )}
         </label>
         <label className="block">
           <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">Currency</span>
@@ -272,6 +295,7 @@ export function DealPaymentsTab({ dealId, dealValue, dealCurrency }) {
           onSave={handleCreate}
           onCancel={() => setShowForm(false)}
           saving={creating}
+          balanceBeforeThis={Number.isFinite(Number(dealValue)) ? Number(dealValue) - totalReceived : null}
         />
       )}
 
@@ -303,6 +327,11 @@ export function DealPaymentsTab({ dealId, dealValue, dealCurrency }) {
                     onSave={(body) => handlePatch(p.id, body)}
                     onCancel={() => setEditId(null)}
                     saving={patching}
+                    balanceBeforeThis={
+                      Number.isFinite(Number(dealValue))
+                        ? Number(dealValue) - totalReceived + (p.status === 'received' ? Number(p.amount) : 0)
+                        : null
+                    }
                   />
                 </li>
               )

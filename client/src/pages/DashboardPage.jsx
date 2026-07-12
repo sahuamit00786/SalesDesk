@@ -22,6 +22,8 @@ import { PageShell } from '@/components/layout/PageShell'
 import { useGetActivitiesFeedQuery } from '@/features/activities/activitiesApi'
 import { useGetLeadsQuery } from '@/features/leads/leadsApi'
 import { useGetTasksQuery } from '@/features/tasks/tasksApi'
+import { useGetCallsQuery } from '@/features/calls/callsApi'
+import { useGetMeetingsQuery } from '@/features/meetings/meetingsApi'
 import { useGetDashboardChartsQuery } from '@/features/analytics/analyticsApi'
 import { CHART_COLORS } from '@/features/dashboard/dummyDashboardData'
 import { STATUS_OPTIONS } from '@/features/leads/constants'
@@ -80,20 +82,14 @@ const ACTIVITY_ICON = {
 }
 
 const CHART_DATE_PRESETS = [
+  { id: 'all', label: 'All time' },
   { id: '7d', label: 'Last 7 days' },
   { id: '30d', label: 'Last 30 days' },
   { id: '90d', label: 'Last quarter' },
 ]
 
-const NEW_LEADS_DAYS = 30
-const ACTIVITY_RANGE_DAYS = 30
-
-function subDays(n) {
-  const d = new Date()
-  d.setDate(d.getDate() - n)
-  d.setHours(0, 0, 0, 0)
-  return d
-}
+// Floor for "all time" ranges — predates any real record, so it behaves as an open start.
+const EPOCH_DATE = '2000-01-01'
 
 function isoDate(d) {
   return d.toISOString().slice(0, 10)
@@ -250,7 +246,7 @@ const tooltipStyle = {
 
 export function DashboardPage() {
   const formatChartCurrency = useFormatChartCurrency()
-  const [chartDatePreset, setChartDatePreset] = useState('30d')
+  const [chartDatePreset, setChartDatePreset] = useState('all')
   const [chartScope, setChartScope] = useState('all')
   const [calMonth, setCalMonth] = useState(() => {
     const d = new Date()
@@ -263,8 +259,11 @@ export function DashboardPage() {
 
   // ── Date range for chart API ──
   const { from, to } = useMemo(() => {
-    const days = chartDatePreset === '7d' ? 7 : chartDatePreset === '90d' ? 90 : 30
     const now = new Date()
+    if (chartDatePreset === 'all') {
+      return { from: EPOCH_DATE, to: isoDate(now) }
+    }
+    const days = chartDatePreset === '7d' ? 7 : chartDatePreset === '90d' ? 90 : 30
     return {
       from: isoDate(new Date(now.getTime() - days * 86400000)),
       to: isoDate(now),
@@ -314,44 +313,32 @@ export function DashboardPage() {
     return map
   }, [monthEventsData])
 
-  // ── Existing stat card queries (unchanged) ──
-  const activityFrom = useMemo(() => subDays(ACTIVITY_RANGE_DAYS).toISOString(), [])
+  // ── Existing stat card queries — all-time (from account start to now) ──
+  const activityFrom = useMemo(() => new Date(EPOCH_DATE).toISOString(), [])
   const activityTo = useMemo(() => new Date().toISOString(), [])
 
   const { data: leadsTotalData, isLoading: leadsTotalLoading, isError: leadsTotalError } = useGetLeadsQuery({ page: 1, limit: 1 })
-  const { data: leadsRecentData, isLoading: leadsRecentLoading } = useGetLeadsQuery({ page: 1, limit: 100, sort: 'createdAt', order: 'desc' })
   const { data: oppsData, isLoading: oppsLoading, isError: oppsError } = useGetLeadsQuery({ page: 1, limit: 1, isOpportunity: true })
   const { data: tasksData, isLoading: tasksLoading, isError: tasksError } = useGetTasksQuery({})
 
   const activityParams = useMemo(() => ({ from: activityFrom, to: activityTo, limit: 1 }), [activityFrom, activityTo])
-  const { data: callsFeed } = useGetActivitiesFeedQuery({ ...activityParams, types: 'call' })
-  const { data: meetingsFeed } = useGetActivitiesFeedQuery({ ...activityParams, types: 'meeting' })
   const { data: emailsFeed } = useGetActivitiesFeedQuery({ ...activityParams, types: 'email' })
+  // Calls/meetings live in their own tables, not the activity log — count those directly.
+  const { data: callsData } = useGetCallsQuery({})
+  const { data: meetingsData } = useGetMeetingsQuery({ limit: 1 })
 
   const totalLeads = leadsTotalData?.meta?.total
   const totalOpportunities = oppsData?.meta?.total
-
-  const newLeadsCount = useMemo(() => {
-    const rows = Array.isArray(leadsRecentData?.data) ? leadsRecentData.data : []
-    const since = subDays(NEW_LEADS_DAYS).getTime()
-    let n = 0
-    for (const lead of rows) {
-      const c = lead?.createdAt ? new Date(lead.createdAt).getTime() : 0
-      if (c >= since) n += 1
-    }
-    const hitCap = rows.length === 100 && n === 100
-    return { n, hitCap }
-  }, [leadsRecentData])
 
   const expiringTasks = useMemo(() => {
     const rows = Array.isArray(tasksData?.data) ? tasksData.data : []
     return sortExpiringTasks(rows.filter(isExpiringTask)).slice(0, DASHBOARD_EXPIRING_TASK_LIMIT)
   }, [tasksData])
 
-  const callsTotal = callsFeed?.meta?.total ?? 0
-  const meetingsTotal = meetingsFeed?.meta?.total ?? 0
+  const callsTotal = Array.isArray(callsData?.data) ? callsData.data.length : 0
+  const meetingsTotal = meetingsData?.meta?.total ?? 0
   const emailsTotal = emailsFeed?.meta?.total ?? 0
-  const loadingTop = leadsTotalLoading || leadsRecentLoading || oppsLoading
+  const loadingTop = leadsTotalLoading || oppsLoading
 
   return (
     <PageShell fullWidth>
@@ -368,14 +355,13 @@ export function DashboardPage() {
             <StatDeltaCard label="Total opportunities" value={oppsError ? '—' : String(totalOpportunities ?? 0)} hint="Open pipeline records" compact />
             <StatDeltaCard
               label="New leads"
-              value={leadsTotalError ? '—' : newLeadsCount.hitCap ? `${newLeadsCount.n}+` : String(newLeadsCount.n)}
-              hint={`Created in the last ${NEW_LEADS_DAYS} days`}
-              delta={newLeadsCount.hitCap ? 'Top 100 by recency' : undefined}
-              deltaPositive compact
+              value={leadsTotalError ? '—' : String(totalLeads ?? 0)}
+              hint="Since account start"
+              compact
             />
-            <StatDeltaCard label="Calls" value={String(callsTotal ?? 0)} hint={`Activity in last ${ACTIVITY_RANGE_DAYS} days`} compact />
-            <StatDeltaCard label="Meetings" value={String(meetingsTotal ?? 0)} hint={`Activity in last ${ACTIVITY_RANGE_DAYS} days`} compact />
-            <StatDeltaCard label="Emails" value={String(emailsTotal ?? 0)} hint={`Activity in last ${ACTIVITY_RANGE_DAYS} days`} compact />
+            <StatDeltaCard label="Calls" value={String(callsTotal ?? 0)} hint="All-time activity" compact />
+            <StatDeltaCard label="Meetings" value={String(meetingsTotal ?? 0)} hint="All-time activity" compact />
+            <StatDeltaCard label="Emails" value={String(emailsTotal ?? 0)} hint="All-time activity" compact />
           </section>
         )}
 

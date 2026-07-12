@@ -1,19 +1,160 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useSelector } from 'react-redux'
 import toast from 'react-hot-toast'
 import {
-  Bold, Italic, Underline, List, ListOrdered, Link2,
-  Mail, MessageSquare, Paperclip, Search, Users, X, ChevronDown, ChevronUp,
+  AlertCircle, Bold, Italic, Underline, LayoutTemplate, List, ListOrdered, Link2,
+  Mail, MessageSquare, Paperclip, Search, Users, X,
 } from 'lucide-react'
 import { Select } from '@/components/ui/Select'
 import { IconInput } from '@/components/ui/IconInput'
 import { useGetLeadFilesQuery, useGetLeadsQuery } from '@/features/leads/leadsApi'
 import { useSendEmailForLeadMutation, useUploadEmailAttachmentsMutation } from '@/features/email/emailApi'
+import {
+  FALLBACK_MERGE_KEYS,
+  buildLeadMergeValues,
+  extractMergeKeysFromTemplate,
+  mergeFieldLabel,
+} from '@/features/leads/utils/mergeLeadValues'
+import { LEAD_MERGE_FIELDS } from '@/features/templates/mergeTags'
+import { useGetTemplatesQuery } from '@/features/templates/templatesApi'
 import { cn } from '@/utils/cn'
 
 const GMAIL_ATTACHMENT_SOFT_CAP = 24 * 1024 * 1024
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const CURLY_TAG_RE = /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g
+const AT_TAG_RE = /@([a-z][a-z0-9_]*)/gi
+const MERGE_FIELD_SET = new Set(LEAD_MERGE_FIELDS)
+
+function mergeBlankSpan(key) {
+  return `<span data-merge-blank="${key}" title="Type ${mergeFieldLabel(key).toLowerCase()} here"></span>`
+}
+
+/** Body: known-but-empty fields become typable dark-red blanks instead of vanishing. */
+function fillBodyMergeTags(input, values) {
+  let out = String(input || '')
+  out = out.replace(CURLY_TAG_RE, (_m, rawKey) => {
+    const key = String(rawKey || '').toLowerCase()
+    const v = values[key]
+    if (v != null && String(v).trim()) return String(v)
+    if (FALLBACK_MERGE_KEYS.has(key)) return ''
+    return key in values ? mergeBlankSpan(key) : ''
+  })
+  out = out.replace(AT_TAG_RE, (match, rawKey) => {
+    const key = String(rawKey || '').toLowerCase()
+    if (!MERGE_FIELD_SET.has(key)) return match
+    const v = values[key]
+    if (v != null && String(v).trim()) return String(v)
+    return FALLBACK_MERGE_KEYS.has(key) ? '' : mergeBlankSpan(key)
+  })
+  return out
+}
+
+/** Subject is plain text: keep missing tokens visible so they can be edited (and gate send on them). */
+function fillSubjectMergeTags(input, values) {
+  let out = String(input || '')
+  out = out.replace(CURLY_TAG_RE, (m, rawKey) => {
+    const key = String(rawKey || '').toLowerCase()
+    const v = values[key]
+    if (v != null && String(v).trim()) return String(v)
+    if (FALLBACK_MERGE_KEYS.has(key)) return ''
+    return key in values ? m : ''
+  })
+  out = out.replace(AT_TAG_RE, (match, rawKey) => {
+    const key = String(rawKey || '').toLowerCase()
+    if (!MERGE_FIELD_SET.has(key)) return match
+    const v = values[key]
+    if (v != null && String(v).trim()) return String(v)
+    return FALLBACK_MERGE_KEYS.has(key) ? '' : match
+  })
+  return out
+}
 
 function normalizeRecipients(value) {
+  if (Array.isArray(value)) return value.map((x) => String(x).trim()).filter(Boolean)
   return String(value || '').split(',').map((x) => x.trim()).filter(Boolean)
+}
+
+function RecipientChipsInput({ values, onChange, placeholder, autoValue = null, maxValues = Infinity }) {
+  const [draft, setDraft] = useState('')
+  const inputRef = useRef(null)
+  const atCapacity = values.length >= maxValues
+
+  function commit(raw) {
+    const parts = String(raw || '').split(/[,;\s]+/).map((x) => x.trim()).filter(Boolean)
+    if (!parts.length) return
+    const invalid = parts.find((p) => !EMAIL_RE.test(p))
+    if (invalid) {
+      toast.error(`Invalid email: ${invalid}`)
+      return
+    }
+    const next = [...values]
+    for (const p of parts) {
+      if (!next.some((v) => v.toLowerCase() === p.toLowerCase())) next.push(p)
+    }
+    if (next.length > maxValues) {
+      toast.error(`Only ${maxValues} recipient${maxValues === 1 ? '' : 's'} allowed here`)
+      return
+    }
+    onChange(next)
+    setDraft('')
+  }
+
+  function handleKeyDown(e) {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault()
+      commit(draft)
+    } else if (e.key === 'Backspace' && !draft && values.length) {
+      onChange(values.slice(0, -1))
+    }
+  }
+
+  function handlePaste(e) {
+    const text = e.clipboardData.getData('text')
+    if (/[,;\s]/.test(text)) {
+      e.preventDefault()
+      commit(`${draft} ${text}`)
+    }
+  }
+
+  return (
+    <div
+      onClick={() => inputRef.current?.focus()}
+      className="flex min-h-9 w-full cursor-text flex-wrap items-center gap-1 rounded-xl border border-slate-300 bg-white px-2 py-1 shadow-sm focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-100"
+    >
+      <Mail className="ml-1 h-3.5 w-3.5 shrink-0 text-ink-muted" strokeWidth={1.75} />
+      {values.map((email) => (
+        <span
+          key={email}
+          className={cn(
+            'inline-flex max-w-[220px] items-center gap-1 rounded-full border px-2 py-0.5 text-xs',
+            email === autoValue ? 'border-brand-200 bg-brand-50 text-brand-800' : 'border-slate-300 bg-slate-50 text-ink',
+          )}
+        >
+          <span className="truncate">{email}</span>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onChange(values.filter((v) => v !== email)) }}
+            className="shrink-0 rounded-full p-0.5 text-ink-muted hover:bg-slate-200 hover:text-ink"
+          >
+            <X size={10} />
+          </button>
+        </span>
+      ))}
+      {!atCapacity && (
+        <input
+          ref={inputRef}
+          type="text"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
+          onBlur={() => draft.trim() && commit(draft)}
+          placeholder={values.length ? '' : placeholder}
+          className="h-6 min-w-[140px] flex-1 border-0 bg-transparent px-1 text-sm text-ink outline-none placeholder:text-ink-faint"
+        />
+      )}
+    </div>
+  )
 }
 
 function formatBytes(n) {
@@ -26,10 +167,12 @@ function formatBytes(n) {
 export function EmailComposerDrawer({ open, onClose, initial = null, onSent }) {
   const editorRef = useRef(null)
   const [leadId, setLeadId] = useState('')
-  const [toInput, setToInput] = useState('')
-  const [ccInput, setCcInput] = useState('')
-  const [bccInput, setBccInput] = useState('')
+  const [toRecipients, setToRecipients] = useState([])
+  const [ccRecipients, setCcRecipients] = useState([])
+  const [bccRecipients, setBccRecipients] = useState([])
+  const [autoLeadEmail, setAutoLeadEmail] = useState(null)
   const [showCcBcc, setShowCcBcc] = useState(false)
+  const [templateId, setTemplateId] = useState('')
   const [subject, setSubject] = useState('')
   const [bodyHtml, setBodyHtml] = useState('')
   const [selectedLeadFileIds, setSelectedLeadFileIds] = useState([])
@@ -37,8 +180,12 @@ export function EmailComposerDrawer({ open, onClose, initial = null, onSent }) {
   const [leadDocsSearch, setLeadDocsSearch] = useState('')
   const [uploadedAttachments, setUploadedAttachments] = useState([])
 
+  const user = useSelector((s) => s.auth.user)
+  const senderName = user?.name || user?.email || 'Sales team'
+
   const { data: leadsData } = useGetLeadsQuery({ page: 1, limit: 300, search: '' }, { skip: !open })
   const { data: leadFilesData } = useGetLeadFilesQuery(leadId, { skip: !open || !leadId })
+  const { data: templatesRes, isLoading: templatesLoading } = useGetTemplatesQuery(undefined, { skip: !open })
   const [uploadAttachments, { isLoading: uploading }] = useUploadEmailAttachmentsMutation()
   const [sendEmail, { isLoading: sending }] = useSendEmailForLeadMutation()
 
@@ -46,6 +193,31 @@ export function EmailComposerDrawer({ open, onClose, initial = null, onSent }) {
     const rows = Array.isArray(leadsData?.data) ? leadsData.data : []
     return rows.filter((l) => String(l.email || '').trim())
   }, [leadsData])
+  const templates = Array.isArray(templatesRes?.data) ? templatesRes.data : []
+  const selectedTemplate = templates.find((t) => String(t.id) === String(templateId)) || null
+  const selectedLead = leads.find((l) => String(l.id) === String(leadId)) || null
+
+  // Blanks still empty in the body (data-merge-blank spans) — recomputed on every keystroke.
+  const unfilledBodyKeys = useMemo(() => {
+    const div = document.createElement('div')
+    div.innerHTML = bodyHtml || ''
+    return [...div.querySelectorAll('[data-merge-blank]')]
+      .filter((el) => !el.textContent.replace(/[\u00a0\u200b]/g, '').trim())
+      .map((el) => el.getAttribute('data-merge-blank'))
+  }, [bodyHtml])
+
+  // Merge tokens still sitting in the subject line (plain text, no spans there).
+  // Only checked while a template is active, so a plain "john@company.com" in a
+  // hand-written subject can't false-positive on the @tag syntax.
+  const unfilledSubjectKeys = useMemo(
+    () => (selectedTemplate ? extractMergeKeysFromTemplate(subject, '') : []),
+    [selectedTemplate, subject],
+  )
+
+  const unresolvedKeys = useMemo(
+    () => [...new Set([...unfilledBodyKeys, ...unfilledSubjectKeys])],
+    [unfilledBodyKeys, unfilledSubjectKeys],
+  )
   const leadFiles = Array.isArray(leadFilesData?.data) ? leadFilesData.data : []
   const filteredLeadFiles = leadFiles.filter((f) =>
     `${f.fileName || ''} ${f.mimeType || ''}`.toLowerCase().includes(leadDocsSearch.toLowerCase()),
@@ -53,12 +225,13 @@ export function EmailComposerDrawer({ open, onClose, initial = null, onSent }) {
 
   useEffect(() => {
     if (!open) return
-    const hasReply = Boolean(initial?.threadId)
     setLeadId(initial?.leadId || '')
-    setToInput(initial?.to || '')
-    setCcInput(initial?.cc || '')
-    setBccInput(initial?.bcc || '')
-    setShowCcBcc(Boolean(initial?.cc || initial?.bcc))
+    setToRecipients(normalizeRecipients(initial?.to))
+    setCcRecipients(normalizeRecipients(initial?.cc))
+    setBccRecipients(normalizeRecipients(initial?.bcc))
+    setAutoLeadEmail(initial?.leadId ? normalizeRecipients(initial?.to)[0] || null : null)
+    setShowCcBcc(Boolean(normalizeRecipients(initial?.cc).length || normalizeRecipients(initial?.bcc).length))
+    setTemplateId('')
     setSubject(initial?.subject || '')
     setBodyHtml(initial?.bodyHtml || '')
     setSelectedLeadFileIds([])
@@ -103,13 +276,57 @@ export function EmailComposerDrawer({ open, onClose, initial = null, onSent }) {
     }
   }
 
+  function applyTemplate(template, lead) {
+    const mergeValues = buildLeadMergeValues(lead || {}, senderName)
+    const mergedSubject = fillSubjectMergeTags(template.subject, mergeValues)
+    const mergedBody = fillBodyMergeTags(template.bodyHtml, mergeValues)
+    setSubject(mergedSubject)
+    setBodyHtml(mergedBody)
+    if (editorRef.current) editorRef.current.innerHTML = mergedBody || ''
+    if (mergedBody.includes('data-merge-blank') || extractMergeKeysFromTemplate(mergedSubject, '').length) {
+      toast('Some lead fields are empty — fill the dark-red blanks before sending.', { icon: '✍️' })
+    }
+  }
+
+  function handleTemplateChange(nextId) {
+    setTemplateId(nextId)
+    if (!nextId) return
+    const tpl = templates.find((t) => String(t.id) === String(nextId))
+    if (!tpl) return
+    if (!selectedLead) {
+      toast.error('Select a lead first — the template fills in their details')
+      return
+    }
+    applyTemplate(tpl, selectedLead)
+  }
+
+  function handleLeadChange(nextLeadId) {
+    setLeadId(nextLeadId)
+    setLeadDocsSearch('')
+    const nextLead = leads.find((l) => String(l.id) === String(nextLeadId)) || null
+    const nextEmail = String(nextLead?.email || '').trim() || null
+    setToRecipients((prev) => {
+      // Lead email owns the single To slot; keep a manual entry only when no lead is picked.
+      if (nextEmail) return [nextEmail]
+      return autoLeadEmail ? prev.filter((v) => v.toLowerCase() !== autoLeadEmail.toLowerCase()) : prev
+    })
+    setAutoLeadEmail(nextEmail)
+    // Re-fill the selected template with the new lead's details.
+    if (selectedTemplate && nextLead) applyTemplate(selectedTemplate, nextLead)
+  }
+
   async function handleSend() {
     if (!leadId) return toast.error('Please select a lead')
-    const to = normalizeRecipients(toInput)
+    if (unresolvedKeys.length) {
+      return toast.error(`Fill in the blanks first: ${unresolvedKeys.map(mergeFieldLabel).join(', ')}`)
+    }
+    const to = toRecipients
     if (!to.length) return toast.error('At least one recipient is required')
-    const cc = normalizeRecipients(ccInput)
-    const bcc = normalizeRecipients(bccInput)
-    const html = editorRef.current?.innerHTML || bodyHtml || ''
+    const cc = ccRecipients
+    const bcc = bccRecipients
+    const rawHtml = editorRef.current?.innerHTML || bodyHtml || ''
+    // Blank markers are editor-only; send clean spans.
+    const html = rawHtml.replace(/\s*data-merge-blank="[^"]*"/g, '').replace(/\u200b/g, '')
     const attachments = [...uploadedAttachments, ...pickedLeadAttachments]
     try {
       await sendEmail({ leadId, to, cc, bcc, subject, bodyHtml: html, attachments, threadId: initial?.threadId || null }).unwrap()
@@ -166,11 +383,11 @@ export function EmailComposerDrawer({ open, onClose, initial = null, onSent }) {
           {/* Scrollable body */}
           <div className="scrollbar-subtle flex-1 overflow-y-auto px-5 py-4 space-y-3">
             {/* Lead selector */}
-            <div className="grid grid-cols-[80px_1fr] items-center gap-2">
+            <div className="grid grid-cols-[96px_1fr] items-center gap-2">
               <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-muted">Lead</label>
               <div className="relative">
                 <Users className="pointer-events-none absolute left-3 top-1/2 z-[1] h-3.5 w-3.5 -translate-y-1/2 text-ink-muted" strokeWidth={1.75} />
-                <Select className="pl-9 h-9" value={leadId} onChange={(e) => { setLeadId(e.target.value); setLeadDocsSearch('') }}>
+                <Select className="pl-9 h-9" value={leadId} onChange={(e) => handleLeadChange(e.target.value)}>
                   <option value="">Select lead</option>
                   {leads.map((lead) => (
                     <option key={lead.id} value={lead.id}>
@@ -181,15 +398,57 @@ export function EmailComposerDrawer({ open, onClose, initial = null, onSent }) {
               </div>
             </div>
 
+            {/* Template */}
+            <div className="grid grid-cols-[96px_1fr] items-start gap-2">
+              <label className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-ink-muted">Template</label>
+              <div className="space-y-2">
+                <div className="relative">
+                  <LayoutTemplate className="pointer-events-none absolute left-3 top-1/2 z-[1] h-3.5 w-3.5 -translate-y-1/2 text-ink-muted" strokeWidth={1.75} />
+                  <Select className="pl-9 h-9" value={templateId} onChange={(e) => handleTemplateChange(e.target.value)} disabled={templatesLoading}>
+                    <option value="">No template — write your own</option>
+                    {templates.map((t) => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </Select>
+                </div>
+                {selectedTemplate && !unresolvedKeys.length ? (
+                  <p className="text-xs text-ink-muted">Subject and body filled with this lead&apos;s details — edit freely below.</p>
+                ) : null}
+                {!selectedTemplate ? (
+                  <p className="text-xs text-ink-faint">
+                    Pick a template to auto-fill from the lead, or{' '}
+                    <a href="/templates" target="_blank" rel="noreferrer" className="text-brand-600 underline">create your own</a>.
+                  </p>
+                ) : null}
+                {unresolvedKeys.length > 0 ? (
+                  <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-900">
+                    <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                    <p>
+                      This lead is missing: <span className="font-semibold">{unresolvedKeys.map(mergeFieldLabel).join(', ')}</span>.
+                      Type into the dark-red blanks below — Send unlocks once every blank is filled.
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
             {/* To */}
-            <div className="grid grid-cols-[80px_1fr] items-center gap-2">
-              <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-muted">To</label>
-              <div className="flex items-center gap-1">
-                <IconInput icon={Mail} value={toInput} onChange={(e) => setToInput(e.target.value)} placeholder="recipient@example.com" className="h-9 flex-1" />
+            <div className="grid grid-cols-[96px_1fr] items-start gap-2">
+              <label className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-ink-muted">To</label>
+              <div className="flex items-start gap-1">
+                <div className="flex-1">
+                  <RecipientChipsInput
+                    values={toRecipients}
+                    onChange={setToRecipients}
+                    placeholder="recipient@example.com"
+                    autoValue={autoLeadEmail}
+                    maxValues={1}
+                  />
+                </div>
                 <button
                   type="button"
                   onClick={() => setShowCcBcc((v) => !v)}
-                  className="shrink-0 rounded-lg px-2 py-1 text-xs text-ink-muted hover:bg-surface-subtle"
+                  className="mt-1.5 shrink-0 rounded-lg px-2 py-1 text-xs text-ink-muted hover:bg-surface-subtle"
                 >
                   CC/BCC
                 </button>
@@ -199,19 +458,19 @@ export function EmailComposerDrawer({ open, onClose, initial = null, onSent }) {
             {/* CC/BCC */}
             {showCcBcc && (
               <>
-                <div className="grid grid-cols-[80px_1fr] items-center gap-2">
-                  <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-muted">CC</label>
-                  <IconInput icon={Mail} value={ccInput} onChange={(e) => setCcInput(e.target.value)} placeholder="cc@example.com" className="h-9" />
+                <div className="grid grid-cols-[96px_1fr] items-start gap-2">
+                  <label className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-ink-muted">CC</label>
+                  <RecipientChipsInput values={ccRecipients} onChange={setCcRecipients} placeholder="cc@example.com" />
                 </div>
-                <div className="grid grid-cols-[80px_1fr] items-center gap-2">
-                  <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-muted">BCC</label>
-                  <IconInput icon={Mail} value={bccInput} onChange={(e) => setBccInput(e.target.value)} placeholder="bcc@example.com" className="h-9" />
+                <div className="grid grid-cols-[96px_1fr] items-start gap-2">
+                  <label className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-ink-muted">BCC</label>
+                  <RecipientChipsInput values={bccRecipients} onChange={setBccRecipients} placeholder="bcc@example.com" />
                 </div>
               </>
             )}
 
             {/* Subject */}
-            <div className="grid grid-cols-[80px_1fr] items-center gap-2">
+            <div className="grid grid-cols-[96px_1fr] items-center gap-2">
               <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-muted">Subject</label>
               <IconInput icon={MessageSquare} value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Email subject line" className="h-9" />
             </div>
@@ -256,6 +515,10 @@ export function EmailComposerDrawer({ open, onClose, initial = null, onSent }) {
                   '[&_li]:mb-0.5',
                   '[&_a]:text-brand-600 [&_a]:underline',
                   '[&_blockquote]:border-l-4 [&_blockquote]:border-slate-300 [&_blockquote]:pl-3 [&_blockquote]:text-ink-muted',
+                  // Merge blanks: dark-red underlined gap while empty; shrinks to typed text once filled.
+                  '[&_[data-merge-blank]]:inline-block [&_[data-merge-blank]]:align-baseline [&_[data-merge-blank]]:px-0.5',
+                  '[&_[data-merge-blank]]:border-b-2 [&_[data-merge-blank]]:border-red-800 [&_[data-merge-blank]]:text-red-800 [&_[data-merge-blank]]:font-medium',
+                  '[&_[data-merge-blank]:empty]:min-w-[3ch]',
                 )}
                 onInput={(e) => setBodyHtml(e.currentTarget.innerHTML)}
                 data-placeholder="Write your email here…"
@@ -336,8 +599,9 @@ export function EmailComposerDrawer({ open, onClose, initial = null, onSent }) {
             <button
               type="button"
               onClick={handleSend}
-              disabled={sending || uploading}
-              className="h-9 rounded-xl bg-brand-700 px-5 text-sm font-semibold text-white hover:bg-brand-800 disabled:opacity-60"
+              disabled={sending || uploading || unresolvedKeys.length > 0}
+              title={unresolvedKeys.length ? `Fill in the blanks first: ${unresolvedKeys.map(mergeFieldLabel).join(', ')}` : undefined}
+              className="h-9 rounded-xl bg-brand-700 px-5 text-sm font-semibold text-white hover:bg-brand-800 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {sending ? 'Sending…' : uploading ? 'Uploading…' : 'Send now'}
             </button>
