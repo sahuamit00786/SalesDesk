@@ -365,7 +365,9 @@ export function EmailPage() {
 
   const sidebarProps = {
     box,
-    onBoxChange: changeBox,
+    // Single URL update per click: box + threadId change together (two queued
+    // setSearchParams calls clobber each other — the second sees stale params).
+    onBoxChange: (b) => { setFilterMode('all'); setSidebarOpen(false); changeBox(b) },
     unreadCount: Number(badgeRes?.data?.unread || 0),
     unreadApproximate: Boolean(badgeRes?.data?.unreadApproximate),
     filterMode,

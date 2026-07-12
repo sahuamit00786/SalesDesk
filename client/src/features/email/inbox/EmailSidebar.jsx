@@ -46,9 +46,9 @@ function SidebarBody({
         </button>
       </div>
       <NavItem icon={Inbox} label="Inbox" active={box === 'inbox' && filterMode === 'all'} badge={unreadBadge}
-        onClick={() => { onBoxChange('inbox'); onFilterModeChange('all') }} />
+        onClick={() => onBoxChange('inbox')} />
       <NavItem icon={Send} label="Sent" active={box === 'sent' && filterMode === 'all'}
-        onClick={() => { onBoxChange('sent'); onFilterModeChange('all') }} />
+        onClick={() => onBoxChange('sent')} />
 
       <p className="mb-1 mt-4 px-5 text-[10px] font-semibold uppercase tracking-wider text-ink-muted">CRM filters</p>
       <NavItem

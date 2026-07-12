@@ -31,7 +31,7 @@ function EmailRow({ thread, box, checked, onToggleChecked, onOpen, onMarkRead })
       }}
       className={cn(
         'group flex w-full cursor-pointer items-center gap-2 border-b border-surface-border px-2 py-2 text-left transition-colors sm:px-3',
-        thread.isUnread ? 'bg-white hover:shadow-sm' : 'bg-surface-muted/40 hover:bg-surface-muted/70',
+        thread.isUnread ? 'bg-white hover:shadow-sm' : 'bg-slate-100/80 hover:bg-slate-200/70',
       )}
     >
       <label className="flex shrink-0 items-center justify-center rounded p-1.5" onClick={(e) => e.stopPropagation()} role="presentation">
