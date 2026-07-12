@@ -562,7 +562,7 @@ export function EmailComposerDrawer({ open, onClose, initial = null, onSent }) {
                   '[&_[data-merge-blank]]:border-b-2 [&_[data-merge-blank]]:border-red-800 [&_[data-merge-blank]]:text-red-800 [&_[data-merge-blank]]:font-medium',
                   '[&_[data-merge-blank]:empty]:min-w-[3ch]',
                 )}
-                onInput={(e) => setBodyHtml(e.currentTarget.innerHTML)}
+                onInput={handleEditorInput}
                 data-placeholder="Write your email here…"
                 style={{ '--placeholder': 'attr(data-placeholder)' }}
               />
