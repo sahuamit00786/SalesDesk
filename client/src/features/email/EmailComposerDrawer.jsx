@@ -164,6 +164,15 @@ function formatBytes(n) {
   return `${(n / 1024 / 1024).toFixed(1)} MB`
 }
 
+/** Sync all merge blanks with the same sync-group to a new text value. */
+function syncMergeGroup(editorRef, syncGroupId, newText) {
+  if (!editorRef.current) return
+  const blanks = editorRef.current.querySelectorAll(`[data-sync-group="${syncGroupId}"]`)
+  for (const blank of blanks) {
+    blank.textContent = newText
+  }
+}
+
 export function EmailComposerDrawer({ open, onClose, initial = null, onSent }) {
   const editorRef = useRef(null)
   const [leadId, setLeadId] = useState('')
