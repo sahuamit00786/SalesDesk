@@ -113,7 +113,7 @@ export function MeetingsTab({ queryParams, from, to }) {
                 <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-20} textAnchor="end" interval={0} />
                 <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
                 <Tooltip />
-                <Bar dataKey="value" name="Meetings" fill={CHART_COLORS.primary} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="value" name="Meetings" fill={CHART_COLORS.primary} maxBarSize={24} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -127,7 +127,7 @@ export function MeetingsTab({ queryParams, from, to }) {
                 <XAxis dataKey="range" tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
                 <Tooltip />
-                <Bar dataKey="count" name="Meetings" fill={CHART_COLORS.info} radius={[4, 4, 0, 0]}>
+                <Bar dataKey="count" name="Meetings" fill={CHART_COLORS.info} maxBarSize={24} radius={[4, 4, 0, 0]}>
                   {(charts.durationDist || []).map((_, i) => <Cell key={i} fill={SLICES[i % SLICES.length]} />)}
                 </Bar>
               </BarChart>

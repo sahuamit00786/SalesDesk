@@ -29,7 +29,7 @@ function ReportCard({ id, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className="group flex items-start gap-2.5 rounded-xl border border-[#F7F5FB] bg-white p-3 text-left shadow-sm transition-all hover:border-brand-300 hover:shadow-md"
+      className="group flex items-start gap-2.5 rounded-xl border border-surface-border bg-white p-3 text-left shadow-sm transition-all hover:border-brand-300 hover:shadow-md"
     >
       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-50">
         <Icon className="h-4 w-4 text-brand-600" strokeWidth={1.8} />
@@ -115,7 +115,7 @@ export function AnalyticsPage() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Find a report…"
-                className="border-[#F7F5FB] pl-9"
+                className="border-surface-border pl-9"
                 aria-label="Find a report"
               />
             </div>
@@ -129,7 +129,7 @@ export function AnalyticsPage() {
           <ReportKpiCard label="Win Rate" value={fmt(dk.winRate, '%')} icon={Percent} />
         </div>
 
-        <PageContentPanel className="border-[#F7F5FB] !p-2.5 sm:!p-3">
+        <PageContentPanel className="border-surface-border !p-2.5 sm:!p-3">
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-ink-faint">Needs attention</p>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             {alerts.map(({ label, value, icon, color, bg, onClick }) => (
@@ -147,12 +147,12 @@ export function AnalyticsPage() {
         </PageContentPanel>
 
         {filteredCategories.length === 0 ? (
-          <PageContentPanel className="border-[#F7F5FB] !p-2.5 sm:!p-3">
+          <PageContentPanel className="border-surface-border !p-2.5 sm:!p-3">
             <p className="py-8 text-center text-sm text-ink-muted">No reports match &ldquo;{query}&rdquo;.</p>
           </PageContentPanel>
         ) : (
           filteredCategories.map((cat) => (
-            <PageContentPanel key={cat.id} className="border-[#F7F5FB] !p-2.5 sm:!p-3">
+            <PageContentPanel key={cat.id} className="border-surface-border !p-2.5 sm:!p-3">
               <div className="mb-3">
                 <p className="font-semibold text-ink">{cat.label}</p>
                 <p className="text-xs text-ink-muted">{cat.desc}</p>

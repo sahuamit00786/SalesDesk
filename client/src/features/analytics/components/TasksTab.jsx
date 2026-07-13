@@ -74,7 +74,7 @@ export function TasksTab({ queryParams, from, to }) {
                 <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
                 <Tooltip />
-                <Bar dataKey="count" name="Tasks" radius={[4, 4, 0, 0]}>
+                <Bar dataKey="count" name="Tasks" maxBarSize={24} radius={[4, 4, 0, 0]}>
                   {(charts.priorityDist || []).map((_, i) => <Cell key={i} fill={SLICES[i % SLICES.length]} />)}
                 </Bar>
               </BarChart>
@@ -106,7 +106,7 @@ export function TasksTab({ queryParams, from, to }) {
                 <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
                 <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={100} />
                 <Tooltip />
-                <Bar dataKey="count" name="Tasks" fill={CHART_COLORS.primary} radius={[0, 4, 4, 0]} />
+                <Bar dataKey="count" name="Tasks" fill={CHART_COLORS.primary} maxBarSize={24} radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -120,8 +120,8 @@ export function TasksTab({ queryParams, from, to }) {
                 <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
                 <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={100} />
                 <Tooltip />
-                <Bar dataKey="open" name="Open" fill={CHART_COLORS.primary} radius={[0, 4, 4, 0]} />
-                <Bar dataKey="overdue" name="Overdue" fill={CHART_COLORS.danger} radius={[0, 4, 4, 0]} />
+                <Bar dataKey="open" name="Open" fill={CHART_COLORS.primary} maxBarSize={24} radius={[0, 4, 4, 0]} />
+                <Bar dataKey="overdue" name="Overdue" fill={CHART_COLORS.danger} maxBarSize={24} radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}

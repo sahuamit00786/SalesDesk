@@ -28,7 +28,7 @@ export function ReportChartGrid({ children, className }) {
 
 export function ReportTableSection({ title, subtitle, children, className, flush = true }) {
   return (
-    <PageContentPanel flush={flush} className={cn('border-[#F7F5FB]', className)}>
+    <PageContentPanel flush={flush} className={cn('border-surface-border', className)}>
       <div className={flush ? 'p-2.5 sm:p-3' : undefined}>
         <ReportSectionHeading title={title} subtitle={subtitle} />
         {children}

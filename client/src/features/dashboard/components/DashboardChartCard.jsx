@@ -4,7 +4,7 @@ export function DashboardChartCard({ title, subtitle, children, className, fill 
   return (
     <section
       className={cn(
-        'rounded-xl border border-[#F7F5FB] bg-white p-2.5 shadow-sm sm:p-3',
+        'rounded-xl border border-surface-border bg-white p-2.5 shadow-sm sm:p-3',
         fill && 'flex h-full flex-col',
         className,
       )}

@@ -75,7 +75,7 @@ export function TeamTab({ queryParams, from, to }) {
                 <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={fmtMoney} />
                 <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={100} />
                 <Tooltip formatter={(v) => [fmtMoney(v), 'Won value']} />
-                <Bar dataKey="value" name="Won value" fill={CHART_COLORS.success} radius={[0, 4, 4, 0]} />
+                <Bar dataKey="value" name="Won value" fill={CHART_COLORS.success} maxBarSize={24} radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -90,7 +90,7 @@ export function TeamTab({ queryParams, from, to }) {
                 <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
                 <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={100} />
                 <Tooltip />
-                <Bar dataKey="count" name="Activities" fill={CHART_COLORS.primary} radius={[0, 4, 4, 0]} />
+                <Bar dataKey="count" name="Activities" fill={CHART_COLORS.primary} maxBarSize={24} radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -107,8 +107,8 @@ export function TeamTab({ queryParams, from, to }) {
                 <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} tickFormatter={fmtMoney} />
                 <Tooltip formatter={(v, name) => name === 'pipelineValue' || name === 'wonValue' ? [fmtMoney(v), name] : [v, name]} />
                 <Legend />
-                <Bar yAxisId="left" dataKey="deals" name="Deals" fill={CHART_COLORS.primary} radius={[4, 4, 0, 0]} />
-                <Bar yAxisId="right" dataKey="wonValue" name="Won value" fill={CHART_COLORS.success} radius={[4, 4, 0, 0]} />
+                <Bar yAxisId="left" dataKey="deals" name="Deals" fill={CHART_COLORS.primary} maxBarSize={24} radius={[4, 4, 0, 0]} />
+                <Bar yAxisId="right" dataKey="wonValue" name="Won value" fill={CHART_COLORS.success} maxBarSize={24} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -122,7 +122,7 @@ export function TeamTab({ queryParams, from, to }) {
                 <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
                 <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={100} />
                 <Tooltip />
-                <Bar dataKey="count" name="Leads" fill={CHART_COLORS.info} radius={[0, 4, 4, 0]} />
+                <Bar dataKey="count" name="Leads" fill={CHART_COLORS.info} maxBarSize={24} radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -136,7 +136,7 @@ export function TeamTab({ queryParams, from, to }) {
                 <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
                 <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={100} />
                 <Tooltip />
-                <Bar dataKey="count" name="Meetings" fill={CHART_COLORS.secondary} radius={[0, 4, 4, 0]} />
+                <Bar dataKey="count" name="Meetings" fill={CHART_COLORS.secondary} maxBarSize={24} radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -150,7 +150,7 @@ export function TeamTab({ queryParams, from, to }) {
                 <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-20} textAnchor="end" interval={0} />
                 <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
                 <Tooltip />
-                <Bar dataKey="count" name="Completed tasks" fill={CHART_COLORS.success} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="count" name="Completed tasks" fill={CHART_COLORS.success} maxBarSize={24} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}

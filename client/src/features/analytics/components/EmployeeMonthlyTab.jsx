@@ -61,7 +61,7 @@ export function EmployeeMonthlyTab({ queryParams }) {
                 <XAxis dataKey="name" tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip />
-                <Bar dataKey="count" name="Activities" fill={CHART_COLORS.primary} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="count" name="Activities" fill={CHART_COLORS.primary} maxBarSize={24} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}

@@ -49,7 +49,7 @@ function pct(n, total) {
 
 function StatCard({ icon: Icon, label, value, sub }) {
   return (
-    <div className="rounded-xl border border-[#F7F5FB] bg-white p-3">
+    <div className="rounded-xl border border-surface-border bg-white p-3">
       <div className="mb-1.5 flex items-center gap-2 text-ink-muted">
         <Icon className="h-4 w-4" />
         <span className="text-xs font-semibold uppercase tracking-wide">{label}</span>
@@ -135,7 +135,7 @@ export function EmailTrackingReportsPage({ embedded = false }) {
             value={dateFrom}
             max={dateTo}
             onChange={(e) => setDateFrom(e.target.value)}
-            className="h-9 rounded-xl border border-[#F7F5FB] bg-white px-3 text-sm outline-none focus:border-brand-400"
+            className="h-9 rounded-xl border border-surface-border bg-white px-3 text-sm outline-none focus:border-brand-400"
           />
         </div>
         <div className="flex flex-col gap-1">
@@ -145,7 +145,7 @@ export function EmailTrackingReportsPage({ embedded = false }) {
             value={dateTo}
             min={dateFrom}
             onChange={(e) => setDateTo(e.target.value)}
-            className="h-9 rounded-xl border border-[#F7F5FB] bg-white px-3 text-sm outline-none focus:border-brand-400"
+            className="h-9 rounded-xl border border-surface-border bg-white px-3 text-sm outline-none focus:border-brand-400"
           />
         </div>
         <div className="flex flex-col gap-1">
@@ -176,7 +176,7 @@ export function EmailTrackingReportsPage({ embedded = false }) {
           <RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
           Refresh
         </Button>
-        <Button variant="icon" className="mt-auto border border-[#F7F5FB]" onClick={() => window.print()} aria-label="Print report">
+        <Button variant="icon" className="mt-auto border border-surface-border" onClick={() => window.print()} aria-label="Print report">
           <Printer className="h-4 w-4" />
         </Button>
       </div>
@@ -206,7 +206,7 @@ export function EmailTrackingReportsPage({ embedded = false }) {
 
       {/* Chart */}
       {chartData.length > 0 && groupBy !== 'none' && groupBy !== 'source' ? (
-        <div className="mb-3 rounded-xl border border-[#F7F5FB] bg-white p-3">
+        <div className="mb-3 rounded-xl border border-surface-border bg-white p-3">
           <h3 className="mb-2 text-sm font-semibold text-ink">Email activity over time</h3>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={chartData} barGap={2}>
@@ -235,7 +235,7 @@ export function EmailTrackingReportsPage({ embedded = false }) {
         showExportCsv={false}
         autoHeight={false}
         maxHeightClass="max-h-[420px]"
-        className="border-[#F7F5FB]"
+        className="border-surface-border"
         emptyTitle="No email data"
         emptyDescription="No email data for the selected range and source."
       />

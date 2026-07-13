@@ -1052,7 +1052,7 @@ export async function getCampaignReport(req, res, next) {
     const campaignLeads = await CampaignLead.findAll({
       where: reportClWhere,
       include: [
-        { model: Lead, as: 'lead', attributes: ['id', 'contactName', 'title', 'assignedTo'], required: false },
+        { model: Lead, as: 'lead', attributes: ['id', 'contactName', 'title', 'assignedTo', 'isDeleted'], required: false },
         { model: User, as: 'campaignAssignee', attributes: ['id', 'name', 'email'], required: false },
       ],
     })
@@ -1082,6 +1082,9 @@ export async function getCampaignReport(req, res, next) {
         lead: cl.lead || null,
         campaignAssignee: cl.campaignAssignee || null,
       })
+      // A campaign_lead can outlive its lead (soft-deleted) — its payment history
+      // still counts toward $ totals below, but it's not a "lead" for count purposes.
+      if (!cl.lead || cl.lead.isDeleted) continue
       const sk = cl.stageKey || 'new'
       if (stageMap[sk]) stageMap[sk].leadCount++
     }
@@ -1102,6 +1105,7 @@ export async function getCampaignReport(req, res, next) {
       }
     }
     for (const cl of campaignLeads) {
+      if (!cl.lead || cl.lead.isDeleted) continue
       const uid = cl.assignedUserId ? String(cl.assignedUserId) : null
       if (uid && memberMap[uid]) {
         memberMap[uid].leadsCount++
@@ -1176,8 +1180,9 @@ export async function getCampaignReport(req, res, next) {
 
     const leadTarget = campaign.leadTarget ? Number(campaign.leadTarget) : null
     const achievedPct = leadTarget > 0 ? Math.min(100, Math.round((totalReceived / leadTarget) * 100)) : null
-    const totalLeads = campaignLeads.length
-    const unassignedCount = campaignLeads.filter((cl) => !cl.assignedUserId).length
+    const activeCampaignLeads = campaignLeads.filter((cl) => cl.lead && !cl.lead.isDeleted)
+    const totalLeads = activeCampaignLeads.length
+    const unassignedCount = activeCampaignLeads.filter((cl) => !cl.assignedUserId).length
 
     return res.json({
       success: true,

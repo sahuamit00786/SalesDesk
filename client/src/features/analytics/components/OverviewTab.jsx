@@ -87,7 +87,7 @@ export function OverviewTab({ queryParams, from, to }) {
               <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
               <YAxis type="category" dataKey="stage" tick={{ fontSize: 11 }} width={110} />
               <Tooltip />
-              <Bar dataKey="count" name="Count" fill={CHART_COLORS.primary} radius={[0, 6, 6, 0]}>
+              <Bar dataKey="count" name="Count" fill={CHART_COLORS.primary} maxBarSize={24} radius={[0, 6, 6, 0]}>
                 {(leads?.charts?.conversionFunnel || []).map((_, i) => (
                   <Cell key={i} fill={SLICES[i % SLICES.length]} />
                 ))}
@@ -122,7 +122,7 @@ export function OverviewTab({ queryParams, from, to }) {
                 <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
                 <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={110} />
                 <Tooltip />
-                <Bar dataKey="count" name="Deals" fill={CHART_COLORS.primary} radius={[0, 4, 4, 0]} />
+                <Bar dataKey="count" name="Deals" fill={CHART_COLORS.primary} maxBarSize={24} radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -152,8 +152,8 @@ export function OverviewTab({ queryParams, from, to }) {
                 <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
                 <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={90} />
                 <Tooltip />
-                <Bar dataKey="open" name="Open" fill={CHART_COLORS.primary} radius={[0, 4, 4, 0]} />
-                <Bar dataKey="overdue" name="Overdue" fill={CHART_COLORS.danger} radius={[0, 4, 4, 0]} />
+                <Bar dataKey="open" name="Open" fill={CHART_COLORS.primary} maxBarSize={24} radius={[0, 4, 4, 0]} />
+                <Bar dataKey="overdue" name="Overdue" fill={CHART_COLORS.danger} maxBarSize={24} radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}

@@ -172,12 +172,12 @@ export function ReportDetailPage() {
   return (
     <PageShell fullWidth>
       <PageStack className="gap-2">
-        <PageContentPanel className="no-print border-[#F7F5FB] !p-2.5 sm:!p-3">
+        <PageContentPanel className="no-print border-surface-border !p-2.5 sm:!p-3">
           <div className="flex flex-wrap items-center gap-2.5">
             <Button
               type="button"
               variant="icon"
-              className="border border-[#F7F5FB]"
+              className="border border-surface-border"
               onClick={() => navigate('/reports')}
               aria-label="Back to reports"
             >
@@ -206,7 +206,7 @@ export function ReportDetailPage() {
               <Button
                 type="button"
                 variant="icon"
-                className="border border-[#F7F5FB]"
+                className="border border-surface-border"
                 onClick={handleRefresh}
                 aria-label="Refresh report data"
               >
@@ -222,7 +222,7 @@ export function ReportDetailPage() {
           )}
         />
 
-        <PageContentPanel className="border-[#F7F5FB] !p-2.5 sm:!p-3">
+        <PageContentPanel className="border-surface-border !p-2.5 sm:!p-3">
           {TabComponent ? (
             <TabComponent queryParams={filters.queryParams} from={filters.from} to={filters.to} />
           ) : (

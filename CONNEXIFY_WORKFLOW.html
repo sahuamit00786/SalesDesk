@@ -1,0 +1,650 @@
+<title>LeadNest — System Workflow Map</title>
+<style>
+  :root {
+    --paper: #F3F4F0;
+    --paper-raised: #FFFFFF;
+    --ink: #1A1F26;
+    --ink-soft: #545C55;
+    --line: #D8DAD2;
+    --accent: #1E6E62;
+    --accent-strong: #145A50;
+    --accent-tint: #E3EEEA;
+    --warn: #8A5A22;
+    --warn-tint: #F3E7D6;
+    --shadow: 0 1px 2px rgba(26,31,38,0.04), 0 8px 24px -12px rgba(26,31,38,0.10);
+
+    --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+    --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-mono: "SF Mono", SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #10141A;
+      --paper-raised: #171C24;
+      --ink: #E7EAE6;
+      --ink-soft: #98A29B;
+      --line: #2A313A;
+      --accent: #4FD1B8;
+      --accent-strong: #7EE0CC;
+      --accent-tint: rgba(79,209,184,0.14);
+      --warn: #E0A360;
+      --warn-tint: rgba(224,163,96,0.14);
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #10141A;
+    --paper-raised: #171C24;
+    --ink: #E7EAE6;
+    --ink-soft: #98A29B;
+    --line: #2A313A;
+    --accent: #4FD1B8;
+    --accent-strong: #7EE0CC;
+    --accent-tint: rgba(79,209,184,0.14);
+    --warn: #E0A360;
+    --warn-tint: rgba(224,163,96,0.14);
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
+  }
+  :root[data-theme="light"] {
+    --paper: #F3F4F0;
+    --paper-raised: #FFFFFF;
+    --ink: #1A1F26;
+    --ink-soft: #545C55;
+    --line: #D8DAD2;
+    --accent: #1E6E62;
+    --accent-strong: #145A50;
+    --accent-tint: #E3EEEA;
+    --warn: #8A5A22;
+    --warn-tint: #F3E7D6;
+    --shadow: 0 1px 2px rgba(26,31,38,0.04), 0 8px 24px -12px rgba(26,31,38,0.10);
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-body);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+  }
+
+  a { color: var(--accent-strong); }
+  h1, h2, h3 { font-family: var(--font-display); font-weight: 600; text-wrap: balance; color: var(--ink); }
+
+  .shell {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 24px 96px;
+  }
+
+  /* ---- Header ---- */
+  header.top {
+    padding: 56px 24px 40px;
+    max-width: 1180px;
+    margin: 0 auto;
+  }
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent-strong);
+    margin: 0 0 14px;
+  }
+  h1.title {
+    font-size: clamp(2rem, 4vw, 2.75rem);
+    line-height: 1.1;
+    margin: 0 0 14px;
+  }
+  .lede {
+    max-width: 62ch;
+    font-size: 1.05rem;
+    color: var(--ink-soft);
+    margin: 0 0 22px;
+  }
+  .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 18px;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+    border-top: 1px solid var(--line);
+    padding-top: 16px;
+  }
+  .meta-row b { color: var(--ink); font-weight: 600; }
+
+  /* ---- Layout: rail + content ---- */
+  .layout {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 48px;
+    align-items: start;
+  }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    .rail { position: static; order: -1; }
+  }
+  .rail {
+    position: sticky;
+    top: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 0.86rem;
+  }
+  .rail a {
+    color: var(--ink-soft);
+    text-decoration: none;
+    padding: 6px 0;
+    border-left: 2px solid transparent;
+    padding-left: 12px;
+  }
+  .rail a:hover { color: var(--ink); border-left-color: var(--line); }
+
+  /* ---- Pipeline diagram ---- */
+  .diagram {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 32px 28px 24px;
+    box-shadow: var(--shadow);
+    margin-bottom: 8px;
+  }
+  .stage-row {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+  }
+  .stage {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 14px 10px;
+    text-align: center;
+  }
+  .stage .label {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 1rem;
+  }
+  .stage .sub {
+    font-size: 0.74rem;
+    color: var(--ink-soft);
+    line-height: 1.35;
+  }
+  .connector {
+    flex: 0 0 28px;
+    position: relative;
+    align-self: center;
+    height: 2px;
+    background: var(--line);
+    margin-top: -18px;
+  }
+  .connector::after {
+    content: "";
+    position: absolute;
+    right: -1px;
+    top: 50%;
+    width: 7px;
+    height: 7px;
+    border-top: 2px solid var(--line);
+    border-right: 2px solid var(--line);
+    transform: translateY(-50%) rotate(45deg);
+  }
+  @media (max-width: 720px) {
+    .stage-row { flex-direction: column; }
+    .connector { width: 2px; height: 20px; flex-basis: 20px; margin: 0 auto; }
+    .connector::after { top: auto; bottom: -1px; left: 50%; transform: translateX(-50%) rotate(135deg); right: auto; }
+  }
+  .foundation {
+    margin-top: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .foundation-bar {
+    border: 1px dashed var(--line);
+    border-radius: 3px;
+    padding: 9px 14px;
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+  }
+  .foundation-bar b { color: var(--accent-strong); font-weight: 600; font-family: var(--font-mono); font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.04em; }
+
+  /* ---- Sections ---- */
+  section.block { margin-top: 64px; scroll-margin-top: 24px; }
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 10px;
+    margin-bottom: 22px;
+  }
+  .section-head h2 { font-size: 1.5rem; margin: 0; }
+  .section-head .tag {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--ink-soft);
+    text-transform: lowercase;
+  }
+  .section-note {
+    font-size: 0.92rem;
+    color: var(--ink-soft);
+    margin: -12px 0 20px;
+    max-width: 68ch;
+  }
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+  }
+  .card {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent);
+    border-radius: 3px;
+    padding: 18px 20px 20px;
+  }
+  .card h3 { font-size: 1.02rem; margin: 0 0 4px; }
+  .card .flow-desc { font-size: 0.88rem; color: var(--ink-soft); margin: 0 0 12px; }
+  .card ol {
+    margin: 0 0 12px;
+    padding-left: 20px;
+    font-size: 0.88rem;
+  }
+  .card ol li { margin-bottom: 4px; }
+  .card ol li::marker { color: var(--accent-strong); font-family: var(--font-mono); font-size: 0.82em; }
+  .chiprow { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .chip {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    background: var(--accent-tint);
+    color: var(--accent-strong);
+    padding: 3px 8px;
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+  .chip.perm { background: transparent; border: 1px solid var(--line); color: var(--ink-soft); }
+
+  .flow-wide {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent);
+    border-radius: 3px;
+    padding: 22px 24px;
+  }
+  .flow-wide ol {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px 20px;
+    counter-reset: step;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .flow-wide ol li {
+    counter-increment: step;
+    font-size: 0.88rem;
+    position: relative;
+    padding-left: 26px;
+  }
+  .flow-wide ol li::before {
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    top: 0;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--accent-strong);
+    border: 1px solid var(--accent);
+    border-radius: 50%;
+    width: 17px;
+    height: 17px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .flow-wide li b { display: block; font-weight: 600; margin-bottom: 2px; }
+  .flow-wide li span.note { color: var(--ink-soft); font-size: 0.82em; }
+
+  /* ---- Callout ---- */
+  .callout {
+    background: var(--warn-tint);
+    border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent);
+    border-radius: 4px;
+    padding: 20px 22px;
+  }
+  .callout h3 { font-size: 1rem; margin: 0 0 8px; color: var(--warn); font-family: var(--font-body); font-weight: 700; }
+  .callout p { font-size: 0.9rem; margin: 0 0 8px; }
+  .callout p:last-child { margin-bottom: 0; }
+  .callout code { font-family: var(--font-mono); font-size: 0.85em; }
+
+  /* ---- Footer ---- */
+  footer {
+    margin-top: 72px;
+    padding-top: 20px;
+    border-top: 1px solid var(--line);
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  footer .env {
+    font-family: var(--font-mono);
+  }
+
+  ::selection { background: var(--accent-tint); color: var(--ink); }
+</style>
+
+<header class="top">
+  <p class="eyebrow">Test reference · System workflow map</p>
+  <h1 class="title">LeadNest — CRM Workflow Map</h1>
+  <p class="lede">How data moves through the system, end to end — grouped the same way the app's own sidebar groups it, so what you read here matches what you'll click through. Built for QA walkthroughs, not a field-by-field spec.</p>
+  <div class="meta-row">
+    <span><b>Base URL</b> /api/v1</span>
+    <span><b>Auth</b> JWT access 15m · refresh 7d</span>
+    <span><b>Tenancy</b> per-workspace, via <code>x-workspace-id</code> header</span>
+    <span><b>Generated</b> 2026-07-14</span>
+  </div>
+</header>
+
+<div class="shell">
+<div class="layout">
+
+<nav class="rail">
+  <a href="#overview">Overview</a>
+  <a href="#auth">Auth &amp; Access</a>
+  <a href="#main">Main</a>
+  <a href="#engage">Engage</a>
+  <a href="#manage">Manage</a>
+  <a href="#automate">Automate</a>
+  <a href="#insights">Insights</a>
+  <a href="#settings">Settings</a>
+  <a href="#knowledge">Knowledge</a>
+  <a href="#gaps">Known gaps</a>
+</nav>
+
+<main>
+
+<section class="block" id="overview" style="margin-top:0;">
+  <div class="section-head"><h2>Overview</h2><span class="tag">macro flow</span></div>
+  <div class="diagram">
+    <div class="stage-row">
+      <div class="stage"><div class="label">Acquire</div><div class="sub">Manual entry, import, web forms, campaigns</div></div>
+      <div class="connector"></div>
+      <div class="stage"><div class="label">Qualify</div><div class="sub">Lead status, scoring, opportunity review</div></div>
+      <div class="connector"></div>
+      <div class="stage"><div class="label">Engage</div><div class="sub">Calls, meetings, email, tasks, activities</div></div>
+      <div class="connector"></div>
+      <div class="stage"><div class="label">Win</div><div class="sub">Deal pipeline stages → closed won/lost</div></div>
+      <div class="connector"></div>
+      <div class="stage"><div class="label">Fulfill</div><div class="sub">Quotation → invoice → payment</div></div>
+      <div class="connector"></div>
+      <div class="stage"><div class="label">Analyze</div><div class="sub">Reports across every stage above</div></div>
+    </div>
+    <div class="foundation">
+      <div class="foundation-bar"><b>Automate</b> Workflow triggers can fire off any lead/email event in the chain above — not a stage of its own, it runs alongside all of them.</div>
+      <div class="foundation-bar"><b>Access</b> Auth, role permissions, and workspace scoping wrap every stage — nothing above is reachable without them.</div>
+    </div>
+  </div>
+</section>
+
+<section class="block" id="auth">
+  <div class="section-head"><h2>Auth &amp; Access</h2><span class="tag">cross-cutting · sequential</span></div>
+  <p class="section-note">The one flow every other flow sits on top of. Worth testing in isolation before anything else, since a break here blocks every other module.</p>
+  <div class="flow-wide">
+    <ol>
+      <li><b>Register</b><span class="note">Company + first user created</span></li>
+      <li><b>Verify email</b><span class="note">OTP, resend available</span></li>
+      <li><b>Log in</b><span class="note">Access + refresh token issued</span></li>
+      <li><b>Accept invite</b><span class="note">Alt path, if invited instead of self-registered</span></li>
+      <li><b>Onboarding</b><span class="note">First-login company/workspace setup</span></li>
+      <li><b>Workspace selected</b><span class="note"><code>x-workspace-id</code> now sent on every request</span></li>
+      <li><b>Dashboard</b><span class="note">Landing screen</span></li>
+    </ol>
+  </div>
+  <p class="section-note" style="margin-top:16px;">Separate alt path: <code>forgot-password</code> → OTP → <code>reset-password</code>, independent of the flow above. Permission keys follow the same grouping as the sidebar sections below (<code>main.*</code>, <code>engage.*</code>, <code>manage.*</code>, <code>automate.*</code>, <code>settings.*</code>) — a role that's missing a key can't see that section at all, worth testing per role tier.</p>
+</section>
+
+<section class="block" id="main">
+  <div class="section-head"><h2>Main</h2><span class="tag">/dashboard · /leads · /opportunities · /deals</span></div>
+  <div class="cards">
+    <div class="card">
+      <h3>Dashboard</h3>
+      <p class="flow-desc">Landing screen — KPIs, tasks due today, pipeline health. Nothing to sequence; check widgets stay in sync with underlying data.</p>
+      <div class="chiprow"><span class="chip">/dashboard</span></div>
+    </div>
+    <div class="card">
+      <h3>Leads</h3>
+      <p class="flow-desc">The longest-lived record in the system — everything else eventually points back to a lead.</p>
+      <ol>
+        <li>Capture — manual, CSV import, web form, or campaign staging</li>
+        <li>Assign — manually, or round-robin distribution</li>
+        <li>Work — notes, tasks, follow-ups, logged calls/emails</li>
+        <li>Qualify — status moves through configurable categories</li>
+        <li>Convert — promoted to Opportunity or straight to Deal</li>
+      </ol>
+      <div class="chiprow"><span class="chip">/leads</span><span class="chip">/leads/:id</span><span class="chip">/lead-distribution</span><span class="chip perm">main.leads</span></div>
+    </div>
+    <div class="card">
+      <h3>Opportunities</h3>
+      <p class="flow-desc">Holding area for prospects not yet worth a full deal — qualify here, then convert.</p>
+      <div class="chiprow"><span class="chip">/opportunities</span><span class="chip perm">main.opportunities</span></div>
+    </div>
+    <div class="card">
+      <h3>Pipeline &amp; Deals</h3>
+      <p class="flow-desc">Board or list, by stage. Dragging a card patches its stage; each deal accumulates activities and payments on the way to close.</p>
+      <div class="chiprow"><span class="chip">/pipeline</span><span class="chip">/deals</span><span class="chip">/deals/:id</span><span class="chip perm">main.deals</span></div>
+    </div>
+    <div class="card">
+      <h3>Deal Payments</h3>
+      <p class="flow-desc">Cross-deal payment ledger — filter by status, mode, date, rep. Read-mostly view over payments recorded on individual deals.</p>
+      <div class="chiprow"><span class="chip">/deal-payments</span><span class="chip perm">main.deal_payments</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="block" id="engage">
+  <div class="section-head"><h2>Engage</h2><span class="tag">/activities · /meetings · /calls · /email</span></div>
+  <div class="cards">
+    <div class="card">
+      <h3>Activities</h3>
+      <p class="flow-desc">Unified timeline — every call, email, meeting, and note, filterable. Includes the public booking-link confirm page for external invitees.</p>
+      <div class="chiprow"><span class="chip">/activities</span><span class="chip">/activities/book/:token</span><span class="chip perm">engage.activities</span></div>
+    </div>
+    <div class="card">
+      <h3>Tasks</h3>
+      <p class="flow-desc">Cross-lead task list with comments and a per-task timeline.</p>
+      <div class="chiprow"><span class="chip">/tasks</span><span class="chip perm">engage.tasks</span></div>
+    </div>
+    <div class="card">
+      <h3>Calendar &amp; Reminders</h3>
+      <p class="flow-desc">Merges meetings, tasks, follow-ups, and standalone reminders into one daily digest.</p>
+      <div class="chiprow"><span class="chip">/calendar</span><span class="chip perm">engage.calendar</span></div>
+    </div>
+    <div class="card">
+      <h3>Meetings</h3>
+      <p class="flow-desc">The one flow with a real AI pipeline behind it.</p>
+      <ol>
+        <li>Schedule — Google Meet link generated</li>
+        <li>Meet — session auto-recorded</li>
+        <li>Transcribe — Groq Whisper-compatible job runs</li>
+        <li>Summarize — AI summary + action items</li>
+      </ol>
+      <div class="chiprow"><span class="chip">/meetings</span><span class="chip perm">engage.meetings</span></div>
+    </div>
+    <div class="card">
+      <h3>Calls</h3>
+      <p class="flow-desc">Logged manually or synced from a mobile call log; any call can be converted straight into a lead.</p>
+      <div class="chiprow"><span class="chip">/calls</span><span class="chip perm">engage.meetings</span></div>
+    </div>
+    <div class="card">
+      <h3>Email</h3>
+      <p class="flow-desc">Full mailbox inside the CRM — Gmail-synced threads, send/reply, attachments, save-to-lead. Templates (merge tags, send history) live alongside it.</p>
+      <div class="chiprow"><span class="chip">/email</span><span class="chip">/templates</span><span class="chip perm">engage.email</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="block" id="manage">
+  <div class="section-head"><h2>Manage</h2><span class="tag">/documents · /quotations · /invoices</span></div>
+  <div class="cards">
+    <div class="card">
+      <h3>Documents</h3>
+      <p class="flow-desc">Central file store — contracts, presentations, NDAs — each file linked back to a lead or deal.</p>
+      <div class="chiprow"><span class="chip">/documents</span><span class="chip perm">manage.documents</span></div>
+    </div>
+    <div class="card">
+      <h3>Quotations → Invoices</h3>
+      <p class="flow-desc">The fulfillment leg of the pipeline — one document becomes the next.</p>
+      <ol>
+        <li>Create quotation from a template</li>
+        <li>Send / print (PDF-ready layout)</li>
+        <li>Convert to invoice — line items carry over</li>
+        <li>Record payment(s) — status updates to partial/paid</li>
+      </ol>
+      <div class="chiprow"><span class="chip">/quotations/new</span><span class="chip">/invoices/new</span><span class="chip">/sales-docs/templates</span><span class="chip perm">manage.quotations</span><span class="chip perm">manage.invoices</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="block" id="automate">
+  <div class="section-head"><h2>Automate</h2><span class="tag">/automation · /campaigns · /forms</span></div>
+  <div class="cards">
+    <div class="card">
+      <h3>Automation (workflows)</h3>
+      <p class="flow-desc">No-code rule builder — DAG canvas of triggers, conditions, delays, actions.</p>
+      <ol>
+        <li>Define trigger — lead/email event</li>
+        <li>Build the graph — conditions, delays, actions</li>
+        <li>Test run — dry run before going live</li>
+        <li>Publish — version becomes active</li>
+        <li>Runs — every firing logged with step-by-step history</li>
+      </ol>
+      <div class="chiprow"><span class="chip">/automation</span><span class="chip">/automation/:id</span><span class="chip perm">automate.workflows</span></div>
+    </div>
+    <div class="card">
+      <h3>Campaigns</h3>
+      <p class="flow-desc">Multi-step outreach to a lead segment, tracked as its own mini-funnel.</p>
+      <ol>
+        <li>Create — pick leads, team, assignment rule</li>
+        <li>Stage leads into the campaign funnel</li>
+        <li>Move leads across stages — each move logged to stage history</li>
+        <li>Review the campaign report</li>
+      </ol>
+      <div class="chiprow"><span class="chip">/campaigns/new</span><span class="chip">/campaigns/:id</span><span class="chip">/campaigns/:id/report</span><span class="chip perm">automate.campaigns</span></div>
+    </div>
+    <div class="card">
+      <h3>Web forms &amp; lead capture</h3>
+      <p class="flow-desc">The outside-in path into Leads — no login required for the visitor.</p>
+      <ol>
+        <li>Build — drag-drop fields in the form builder</li>
+        <li>Publish &amp; embed — snippet placed on an external site</li>
+        <li>Visitor submits — public endpoint, no auth</li>
+        <li>Lead auto-created — source tagged as the form</li>
+      </ol>
+      <div class="chiprow"><span class="chip">/forms</span><span class="chip">/forms/:id/builder</span><span class="chip perm">automate.forms</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="block" id="insights">
+  <div class="section-head"><h2>Insights</h2><span class="tag">/reports</span></div>
+  <p class="section-note">One page, many tabs — each tab reads from the module it's named after, so most of the testing here is cross-checking a number against the module that produced it.</p>
+  <div class="cards">
+    <div class="card">
+      <h3>Reports</h3>
+      <p class="flow-desc">Leads, pipeline, activities, meetings, tasks, team, deals, opportunities, follow-ups, sales-docs, payments, campaigns. Data-health is admin-gated; leave / employee-monthly report tabs exist but have no HR data feeding them while HR is disabled (see Known gaps).</p>
+      <div class="chiprow"><span class="chip">/reports</span><span class="chip">/reports/:type</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="block" id="settings">
+  <div class="section-head"><h2>Settings</h2><span class="tag">/team · /workspace · /integrations</span></div>
+  <div class="cards">
+    <div class="card">
+      <h3>Team &amp; roles</h3>
+      <p class="flow-desc">Access control for everyone above.</p>
+      <ol>
+        <li>Admin sends invite with a role pre-selected</li>
+        <li>Invitee accepts via the invite link</li>
+        <li>Role, workspace(s), and menu permissions assigned</li>
+        <li>Later: change role, reassign leads, deactivate/reactivate</li>
+      </ol>
+      <div class="chiprow"><span class="chip">/team</span><span class="chip">/team/:userId/permissions</span><span class="chip perm">settings.team</span></div>
+    </div>
+    <div class="card">
+      <h3>Workspace settings</h3>
+      <p class="flow-desc">Company info (legal name, GSTIN, logo) and workspace create/rename/delete — the container all the multi-tenant scoping hangs off of.</p>
+      <div class="chiprow"><span class="chip">/workspace</span><span class="chip perm">settings.workspace</span></div>
+    </div>
+    <div class="card">
+      <h3>Lead configuration</h3>
+      <p class="flow-desc">Sources, tags, deal/opportunity statuses, custom fields — the vocabulary the Leads module is built from.</p>
+      <div class="chiprow"><span class="chip">/lead-configuration</span><span class="chip perm">main.leads (admin)</span></div>
+    </div>
+    <div class="card">
+      <h3>Document settings</h3>
+      <p class="flow-desc">Numbering, prefixes, and formats for quotations and invoices.</p>
+      <div class="chiprow"><span class="chip">/document-settings</span><span class="chip perm">settings.billing_profile</span></div>
+    </div>
+    <div class="card">
+      <h3>Integrations &amp; API</h3>
+      <p class="flow-desc">OAuth connect points — Google Calendar, Google Meet, Gmail. Anything meeting- or email-related upstream of this depends on the connection here staying alive.</p>
+      <div class="chiprow"><span class="chip">/integrations</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="block" id="knowledge">
+  <div class="section-head"><h2>Knowledge</h2><span class="tag">/knowledge-base · /copilot</span></div>
+  <div class="cards">
+    <div class="card">
+      <h3>Knowledge Base</h3>
+      <p class="flow-desc">In-app guide content, per module, searchable — the reference a confused user reaches for before filing a ticket.</p>
+      <div class="chiprow"><span class="chip">/knowledge-base</span></div>
+    </div>
+    <div class="card">
+      <h3>AI Copilot</h3>
+      <p class="flow-desc">Chat surface over leads, campaigns, deals, team performance, and reports for the current workspace.</p>
+      <div class="chiprow"><span class="chip">/copilot</span><span class="chip perm">main.copilot</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="block" id="gaps">
+  <div class="section-head"><h2>Known gaps</h2><span class="tag">read before you file a bug</span></div>
+  <div class="callout">
+    <h3>HR (Attendance &amp; Leave) — UI disabled, API live</h3>
+    <p>The HR nav section and its routes are commented out in the current build — you won't find Attendance or Leave in the sidebar, and that's expected, not a bug. The backend is fully implemented and reachable directly (<code>/leave/*</code>, <code>/attendance</code>), and the Leave and Employee-Monthly tabs still exist under Reports — expect those tabs to show empty rather than error, since nothing is writing HR data while the UI path is off.</p>
+  </div>
+  <div class="callout" style="margin-top:14px;">
+    <h3>Email sequences &amp; lead scoring rules — API exists, no dedicated page found</h3>
+    <p>Both have full CRUD endpoints (<code>/email-sequences</code>, <code>/scoring-rules</code>) but neither turned up as a top-level sidebar page in this pass. If you find them surfaced inside another screen (Lead configuration and Templates are the likely spots), note where — otherwise treat as backend-only for now.</p>
+  </div>
+</section>
+
+<footer>
+  <span>LeadNest CRM · workflow reference for test planning, not a field-level spec</span>
+  <span class="env">client :5173 → proxy → api :4000/api/v1</span>
+</footer>
+
+</main>
+</div>
+</div>

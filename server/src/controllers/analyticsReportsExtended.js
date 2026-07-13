@@ -88,10 +88,16 @@ export async function opportunitiesReport(req, res, next) {
     const scope = applyLeadFilters(leadScope(ctx, { isOpportunity: true }), req.query)
     const now = new Date()
 
-    const [allOpps, stageDistRaw, allOpportunities, top10] = await Promise.all([
+    const [allOpps, valueByCurrencyRaw, stageDistRaw, allOpportunities, top10] = await Promise.all([
       Lead.findAll({
         where: scope,
         attributes: [[fn('COUNT', col('id')), 'count'], [fn('COALESCE', fn('SUM', col('value')), 0), 'totalValue']],
+        raw: true,
+      }),
+      Lead.findAll({
+        where: { ...scope, value: { [Op.ne]: null, [Op.gt]: 0 } },
+        attributes: ['valueCurrency', [fn('COUNT', col('id')), 'count'], [fn('COALESCE', fn('SUM', col('value')), 0), 'totalValue']],
+        group: ['valueCurrency'],
         raw: true,
       }),
       getStageDist(scope, ctx),
@@ -119,6 +125,12 @@ export async function opportunitiesReport(req, res, next) {
     const total = Number(allOpps[0]?.count || 0)
     const totalValue = Number(allOpps[0]?.totalValue || 0)
     const wonCount = await Lead.count({ where: { ...scope, status: 'won' } })
+    const valueByCurrency = valueByCurrencyRaw.map((r) => ({
+      currency: r.valueCurrency || 'USD',
+      count: Number(r.count || 0),
+      total: Number(r.totalValue || 0),
+      avg: Number(r.count) > 0 ? Math.round(Number(r.totalValue || 0) / Number(r.count)) : 0,
+    }))
 
     return res.json({
       success: true,
@@ -126,6 +138,7 @@ export async function opportunitiesReport(req, res, next) {
         kpis: {
           total,
           totalValue,
+          valueByCurrency,
           avgDealSize: total > 0 ? Math.round(totalValue / total) : 0,
           winRate: total > 0 ? Math.round((wonCount / total) * 100) : 0,
           closingThisMonth: await Lead.count({

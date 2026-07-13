@@ -49,7 +49,7 @@ export function ReportFilterBar({
   })
 
   return (
-    <PageFilterBar className={cn('justify-between border-[#F7F5FB] py-2', className)}>
+    <PageFilterBar className={cn('justify-between border-surface-border py-2', className)}>
       <div className="flex flex-wrap items-center gap-2">
         {leading}
         <div className="relative">
@@ -68,7 +68,7 @@ export function ReportFilterBar({
           {rangeOpen && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setRangeOpen(false)} />
-              <div className="absolute left-0 z-20 mt-1 w-64 rounded-xl border border-[#F7F5FB] bg-white py-1 shadow-lg">
+              <div className="absolute left-0 z-20 mt-1 w-64 rounded-xl border border-surface-border bg-white py-1 shadow-lg">
                 {REPORT_PRESETS.filter((r) => r.key !== 'custom').map((r) => (
                   <button
                     key={r.key}
@@ -82,7 +82,7 @@ export function ReportFilterBar({
                     {r.label}
                   </button>
                 ))}
-                <div className="border-t border-[#F0EEF7] px-3 pb-1 pt-2">
+                <div className="border-t border-surface-border px-3 pb-1 pt-2">
                   <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-ink-muted">Custom range</p>
                   <div className="space-y-2">
                     <label className="block">
@@ -96,7 +96,7 @@ export function ReportFilterBar({
                           filters.setFilter('preset', 'custom')
                           filters.setFilter('from', e.target.value)
                         }}
-                        className="mt-0.5 h-8 w-full rounded-lg border border-[#F7F5FB] px-2 text-sm"
+                        className="mt-0.5 h-8 w-full rounded-lg border border-surface-border px-2 text-sm"
                       />
                     </label>
                     <label className="block">
@@ -110,7 +110,7 @@ export function ReportFilterBar({
                           filters.setFilter('preset', 'custom')
                           filters.setFilter('to', e.target.value)
                         }}
-                        className="mt-0.5 h-8 w-full rounded-lg border border-[#F7F5FB] px-2 text-sm"
+                        className="mt-0.5 h-8 w-full rounded-lg border border-surface-border px-2 text-sm"
                       />
                     </label>
                   </div>
@@ -159,12 +159,12 @@ export function ReportFilterBar({
           </Select>
         )}
 
-        <label className="flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-xl border border-[#F7F5FB] px-3 text-sm text-ink-muted whitespace-nowrap">
+        <label className="flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-xl border border-surface-border px-3 text-sm text-ink-muted whitespace-nowrap">
           <input
             type="checkbox"
             checked={filters.comparePrevious}
             onChange={(e) => filters.setFilter('comparePrevious', e.target.checked ? 'true' : '')}
-            className="rounded border-[#F7F5FB] text-brand-600"
+            className="rounded border-surface-border text-brand-600"
           />
           vs prior period
         </label>

@@ -38,7 +38,7 @@ export function ReportExportMenu({ onExportXlsx, onExportPdf, onPrint, label = '
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 z-20 mt-1 w-44 rounded-xl border border-[#F7F5FB] bg-white py-1 shadow-lg">
+          <div className="absolute right-0 z-20 mt-1 w-44 rounded-xl border border-surface-border bg-white py-1 shadow-lg">
             {onExportXlsx && (
               <button
                 type="button"

@@ -5,6 +5,7 @@ import { CHART_COLORS } from '@/features/dashboard/dummyDashboardData'
 import { formatDealMoney } from '@/features/deals/dealCurrencies'
 import { useFormatChartCurrency } from '@/hooks/useEffectiveCurrency'
 import { DataGrid } from '@/components/shared/DataGrid'
+import { MixedMoneyValue } from '@/components/shared/MixedMoneyValue'
 import { ReportKpiCard } from './ReportKpiCard'
 import { ChartSkeleton, KpiSkeleton } from './ChartSkeleton'
 import { useGetOpportunitiesReportQuery } from '@/features/analytics/analyticsApi'
@@ -29,14 +30,23 @@ export function OpportunitiesTab({ queryParams }) {
   const kpis = d?.kpis || {}
   const charts = d?.charts || {}
   const byStage = d?.tables?.byStage || []
+  const valueByCurrency = kpis.valueByCurrency || []
 
   return (
     <div id="report-export-root" className="space-y-4">
       <ReportKpiGrid>
         {isLoading ? Array.from({ length: 5 }).map((_, i) => <KpiSkeleton key={i} />) : <>
           <ReportKpiCard label="Total opportunities" value={kpis.total ?? 0} icon={Target} />
-          <ReportKpiCard label="Pipeline value" value={fmtMoney(kpis.totalValue)} icon={DollarSign} />
-          <ReportKpiCard label="Avg deal size" value={fmtMoney(kpis.avgDealSize)} icon={DollarSign} />
+          <ReportKpiCard
+            label="Pipeline value"
+            value={<MixedMoneyValue rows={valueByCurrency} getAmount={(r) => r.total} getCurrency={(r) => r.currency} />}
+            icon={DollarSign}
+          />
+          <ReportKpiCard
+            label="Avg deal size"
+            value={<MixedMoneyValue rows={valueByCurrency} getAmount={(r) => r.avg} getCurrency={(r) => r.currency} />}
+            icon={DollarSign}
+          />
           <ReportKpiCard label="Win rate" value={`${kpis.winRate ?? 0}%`} icon={Percent} />
           <ReportKpiCard label="Closing this month" value={kpis.closingThisMonth ?? 0} icon={Calendar} iconBg="bg-amber-50" iconColor="text-amber-600" />
         </>}
@@ -51,7 +61,7 @@ export function OpportunitiesTab({ queryParams }) {
                 <XAxis dataKey="name" tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip />
-                <Bar dataKey="count" name="Count" fill={CHART_COLORS.primary} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="count" name="Count" fill={CHART_COLORS.primary} maxBarSize={24} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}

@@ -46,7 +46,7 @@ export function LeaveTab({ queryParams }) {
                 <XAxis dataKey="name" tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip />
-                <Bar dataKey="days" name="Days" fill={CHART_COLORS.primary} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="days" name="Days" fill={CHART_COLORS.primary} maxBarSize={24} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -59,8 +59,8 @@ export function LeaveTab({ queryParams }) {
                 <XAxis dataKey="name" tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip />
-                <Bar dataKey="approved" name="Approved" fill={CHART_COLORS.success} radius={[4, 4, 0, 0]} />
-                <Bar dataKey="pending" name="Pending" fill={CHART_COLORS.warning} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="approved" name="Approved" fill={CHART_COLORS.success} maxBarSize={24} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="pending" name="Pending" fill={CHART_COLORS.warning} maxBarSize={24} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}

@@ -10,7 +10,6 @@ import { TablePaginationBar } from '@/components/ui/TablePaginationBar'
 import { cn } from '@/utils/cn'
 import { useGetCallsQuery } from '@/features/calls/callsApi'
 import { ConvertCallModal } from '@/features/calls/components/ConvertCallModal'
-import { DateRangeFilter } from '@/features/calls/components/DateRangeFilter'
 import { MoreFiltersMenu } from '@/features/calls/components/MoreFiltersMenu'
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200]
@@ -64,7 +63,7 @@ export function CallsPage() {
   const [callType, setCallType] = useState('')
   const [hasLead, setHasLead] = useState('')
 
-  // Secondary filters (in MoreFiltersMenu)
+  // Secondary filters (rendered inline in the filters row)
   const [outcome, setOutcome] = useState('')
   const [durationMin, setDurationMin] = useState(null)
   const [durationMax, setDurationMax] = useState(null)
@@ -91,8 +90,8 @@ export function CallsPage() {
     if (callType === 'missed') {
       q.callType = 'inbound'
       q.outcome = 'no_answer'
-    } else {
-      if (callType) q.callType = callType
+    } else if (callType) {
+      q.callType = callType
     }
 
     // Lead association
@@ -114,7 +113,14 @@ export function CallsPage() {
   const total = data?.meta?.total ?? rows.length
   const totalPages = Math.max(1, Math.ceil(total / limit) || 1)
 
-  const activeSecondaryCount = [outcome, durationMin !== null || durationMax !== null ? true : false, sortBy !== 'date' || sortOrder !== 'desc' ? true : false].filter(Boolean).length
+  const activeFilterCount = [
+    dateRange !== 'today',
+    Boolean(callType),
+    Boolean(hasLead),
+    Boolean(outcome),
+    durationMin !== null || durationMax !== null,
+    sortBy !== 'date' || sortOrder !== 'desc',
+  ].filter(Boolean).length
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages)
@@ -160,15 +166,6 @@ export function CallsPage() {
     setCustomDateEnd('')
     setCallType('')
     setHasLead('')
-    setOutcome('')
-    setDurationMin(null)
-    setDurationMax(null)
-    setSortBy('date')
-    setSortOrder('desc')
-    setPage(1)
-  }
-
-  function clearSecondaryFilters() {
     setOutcome('')
     setDurationMin(null)
     setDurationMax(null)
@@ -320,47 +317,25 @@ export function CallsPage() {
   const callsFilterBar = (
     <>
       <div className="shrink-0">
-        <DateRangeFilter
-          value={dateRange}
-          onChange={handleDateRangeChange}
-        />
-      </div>
-
-      <select
-        className="h-10 min-w-fit rounded-xl border border-surface-border bg-white px-3 text-xs font-semibold text-ink shadow-sm hover:bg-surface-subtle shrink-0"
-        value={callType}
-        onChange={(e) => handleCallTypeChange(e.target.value)}
-      >
-        <option value="">All types</option>
-        <option value="inbound">Incoming</option>
-        <option value="outbound">Outgoing</option>
-        <option value="missed">Missed</option>
-      </select>
-
-      <select
-        className="h-10 min-w-fit rounded-xl border border-surface-border bg-white px-3 text-xs font-semibold text-ink shadow-sm hover:bg-surface-subtle shrink-0"
-        value={hasLead}
-        onChange={(e) => handleHasLeadChange(e.target.value)}
-      >
-        <option value="">All calls</option>
-        <option value="true">With lead</option>
-        <option value="false">No lead</option>
-      </select>
-
-      <div className="shrink-0">
         <MoreFiltersMenu
+          dateRange={dateRange}
+          customDateStart={customDateStart}
+          customDateEnd={customDateEnd}
+          callType={callType}
           hasLead={hasLead}
           outcome={outcome}
           durationMin={durationMin}
           durationMax={durationMax}
           sortBy={sortBy}
           sortOrder={sortOrder}
-          activeSecondaryCount={activeSecondaryCount}
+          activeFilterCount={activeFilterCount}
+          onDateRangeChange={handleDateRangeChange}
+          onCallTypeChange={handleCallTypeChange}
           onHasLeadChange={handleHasLeadChange}
           onOutcomeChange={handleOutcomeChange}
           onDurationChange={handleDurationChange}
           onSortChange={handleSortChange}
-          onClearSecondary={clearSecondaryFilters}
+          onClearAll={clearAllFilters}
         />
       </div>
 

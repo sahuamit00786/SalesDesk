@@ -74,7 +74,7 @@ export function LeadsTab({ queryParams, from, to }) {
               <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
               <YAxis type="category" dataKey="stage" tick={{ fontSize: 11 }} width={120} />
               <Tooltip />
-              <Bar dataKey="count" name="Count" radius={[0, 6, 6, 0]}>
+              <Bar dataKey="count" name="Count" maxBarSize={24} radius={[0, 6, 6, 0]}>
                 {(charts.conversionFunnel || []).map((_, i) => <Cell key={i} fill={SLICES[i % SLICES.length]} />)}
               </Bar>
             </BarChart>
@@ -122,7 +122,7 @@ export function LeadsTab({ queryParams, from, to }) {
                 <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
                 <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={110} />
                 <Tooltip />
-                <Bar dataKey="count" name="Leads" fill={CHART_COLORS.primary} radius={[0, 4, 4, 0]} />
+                <Bar dataKey="count" name="Leads" fill={CHART_COLORS.primary} maxBarSize={24} radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -137,7 +137,7 @@ export function LeadsTab({ queryParams, from, to }) {
                 <XAxis dataKey="range" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
                 <Tooltip formatter={(v) => [v, 'Leads']} />
-                <Bar dataKey="count" name="Leads" radius={[4, 4, 0, 0]}>
+                <Bar dataKey="count" name="Leads" maxBarSize={24} radius={[4, 4, 0, 0]}>
                   {(charts.scoreDist || []).map((_, i) => <Cell key={i} fill={SLICES[i % SLICES.length]} />)}
                 </Bar>
               </BarChart>
@@ -175,7 +175,7 @@ export function LeadsTab({ queryParams, from, to }) {
                 <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-20} textAnchor="end" interval={0} />
                 <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
                 <Tooltip />
-                <Bar dataKey="count" name="Leads" fill={CHART_COLORS.primary} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="count" name="Leads" fill={CHART_COLORS.primary} maxBarSize={24} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -190,7 +190,7 @@ export function LeadsTab({ queryParams, from, to }) {
                 <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
                 <YAxis type="category" dataKey="country" tick={{ fontSize: 11 }} width={80} />
                 <Tooltip />
-                <Bar dataKey="count" name="Leads" fill={CHART_COLORS.info} radius={[0, 4, 4, 0]} />
+                <Bar dataKey="count" name="Leads" fill={CHART_COLORS.info} maxBarSize={24} radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}

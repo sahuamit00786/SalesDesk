@@ -1,12 +1,16 @@
-import { useMemo, useState, useEffect } from 'react'
+import { Fragment, useMemo, useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import {
   AlertCircle,
   ArrowUpRight,
   BadgeDollarSign,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock,
+  Mail,
+  Phone,
   Search,
   Target,
   TrendingUp,
@@ -15,8 +19,15 @@ import {
   Users,
   XCircle,
 } from 'lucide-react'
-import { useGetCampaignReportQuery } from '@/features/campaigns/campaignsApi'
+import { ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts'
+import { useGetCampaignReportQuery, useGetCampaignLeadsQuery } from '@/features/campaigns/campaignsApi'
 import { formatDealMoney } from '@/features/deals/dealCurrencies'
+import { CampaignFunnelChart } from '@/features/campaigns/components/CampaignFunnelChart'
+import { DashboardChartCard } from '@/features/dashboard/components/DashboardChartCard'
+import { CHART_COLORS } from '@/features/dashboard/dummyDashboardData'
+import { cn } from '@/utils/cn'
+
+const SLICES = CHART_COLORS.slices
 
 const MODE_LABEL = {
   bank_transfer: 'Bank Transfer',
@@ -88,6 +99,92 @@ function PillSelect({ value, onChange, options, placeholder }) {
   )
 }
 
+const STAGE_BADGE_CLASS = {
+  new: 'bg-sky-50 text-sky-700 ring-sky-200',
+  contacted: 'bg-amber-50 text-amber-700 ring-amber-200',
+  qualified: 'bg-violet-50 text-violet-700 ring-violet-200',
+  converted: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+}
+
+function leadInitials(name) {
+  return (
+    String(name || '?')
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((p) => p[0])
+      .join('')
+      .toUpperCase() || '?'
+  )
+}
+
+function MemberLeadsPanel({ campaignId, userId, currency, stageLabelByKey }) {
+  const { data: res, isFetching } = useGetCampaignLeadsQuery(
+    { campaignId, assignedUserId: userId },
+    { skip: !campaignId || !userId },
+  )
+  const leads = res?.data || []
+
+  if (isFetching) {
+    return <p className="px-4 py-6 text-center text-xs text-neutral-400">Loading leads…</p>
+  }
+  if (leads.length === 0) {
+    return <p className="px-4 py-6 text-center text-xs text-neutral-400">No leads assigned to this member.</p>
+  }
+  return (
+    <div className="divide-y divide-neutral-100">
+      {leads.map((row) => {
+        const l = row.lead || {}
+        const name = (l.contactName || l.title || 'Untitled').trim()
+        return (
+          <Link
+            key={row.campaignLeadId ?? l.id}
+            to={`/leads/${l.id}`}
+            className="flex items-center gap-3 px-4 py-2.5 text-xs transition hover:bg-white"
+          >
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-neutral-100 to-neutral-200 text-[10px] font-bold text-neutral-600 ring-1 ring-neutral-200/70">
+              {leadInitials(name)}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-semibold text-neutral-800">{name}</p>
+              <div className="flex items-center gap-3 text-[11px] text-neutral-400">
+                {l.email && (
+                  <span className="flex min-w-0 items-center gap-1 truncate">
+                    <Mail className="h-3 w-3 shrink-0" aria-hidden />
+                    <span className="truncate">{l.email}</span>
+                  </span>
+                )}
+                {l.phone && (
+                  <span className="flex shrink-0 items-center gap-1">
+                    <Phone className="h-3 w-3 shrink-0" aria-hidden />
+                    {l.phone}
+                  </span>
+                )}
+                {!l.email && !l.phone && '—'}
+              </div>
+            </div>
+            <span
+              className={cn(
+                'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1',
+                STAGE_BADGE_CLASS[row.stageKey] || 'bg-neutral-100 text-neutral-600 ring-neutral-200',
+              )}
+            >
+              {stageLabelByKey[row.stageKey] || row.stageKey}
+            </span>
+            {row.paymentTotal > 0 && (
+              <span className="w-20 shrink-0 text-right tabular-nums font-semibold text-emerald-700">
+                {fmt(row.paymentTotal, currency)}
+              </span>
+            )}
+            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-neutral-300" aria-hidden />
+          </Link>
+        )
+      })}
+    </div>
+  )
+}
+
 const PAGE_SIZE = 10
 
 export function CampaignReport({ campaignId, currency }) {
@@ -96,6 +193,16 @@ export function CampaignReport({ campaignId, currency }) {
   const [debouncedQ, setDebouncedQ] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [filterMode, setFilterMode] = useState('')
+  const [expandedMembers, setExpandedMembers] = useState(() => new Set())
+
+  const toggleMember = (userId) => {
+    setExpandedMembers((prev) => {
+      const next = new Set(prev)
+      if (next.has(userId)) next.delete(userId)
+      else next.add(userId)
+      return next
+    })
+  }
 
   useEffect(() => {
     const t = setTimeout(() => { setDebouncedQ(q.trim()); setPage(1) }, 300)
@@ -130,6 +237,25 @@ export function CampaignReport({ campaignId, currency }) {
   const totalModeAmount = useMemo(
     () => (report?.paymentsByMode ?? []).reduce((a, b) => a + b.amount, 0),
     [report?.paymentsByMode],
+  )
+  const funnelStages = useMemo(
+    () => (report?.stageBreakdown ?? []).map((s) => ({ key: s.key, label: s.label, count: s.leadCount })),
+    [report?.stageBreakdown],
+  )
+  const paymentsPieData = useMemo(
+    () => (report?.paymentsByMode ?? []).map((m) => ({ name: MODE_LABEL[m.mode] || m.mode, value: m.amount })),
+    [report?.paymentsByMode],
+  )
+  const topTeamByReceived = useMemo(
+    () => [...(report?.teamPerformance ?? [])]
+      .sort((a, b) => b.receivedAmount - a.receivedAmount)
+      .slice(0, 8)
+      .map((m) => ({ name: m.name, value: m.receivedAmount })),
+    [report?.teamPerformance],
+  )
+  const stageLabelByKey = useMemo(
+    () => Object.fromEntries((report?.stageBreakdown ?? []).map((s) => [s.key, s.label])),
+    [report?.stageBreakdown],
   )
 
   if (isLoading) {
@@ -225,7 +351,12 @@ export function CampaignReport({ campaignId, currency }) {
       {/* Stage Breakdown */}
       <section>
         <h2 className="mb-3 text-sm font-bold text-neutral-900">Stage breakdown</h2>
-        <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
+        <CampaignFunnelChart
+          stages={funnelStages}
+          title="Conversion funnel"
+          subtitle="Leads by stage, with drop-off vs the previous stage"
+        />
+        <div className="mt-4 overflow-hidden rounded-xl border border-neutral-200 bg-white">
           <table className="w-full text-sm">
             <thead className="bg-brand-600 text-xs font-bold uppercase tracking-wide text-white">
               <tr>
@@ -275,94 +406,109 @@ export function CampaignReport({ campaignId, currency }) {
       {teamPerformance.length > 0 && (
         <section>
           <h2 className="mb-3 text-sm font-bold text-neutral-900">Team performance</h2>
+          <DashboardChartCard
+            title="Received by team member"
+            subtitle={teamPerformance.length > 8 ? 'Top 8 by amount received — see table below for all members' : 'Amount received per member'}
+            className="mb-3"
+          >
+            <ResponsiveContainer width="100%" height={Math.max(160, topTeamByReceived.length * 34)}>
+              <BarChart data={topTeamByReceived} layout="vertical" margin={{ left: 10, right: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => fmt(v, cur)} />
+                <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={110} />
+                <Tooltip formatter={(v) => fmt(v, cur)} />
+                <Bar dataKey="value" name="Received" fill={CHART_COLORS.primary} maxBarSize={22} radius={[0, 4, 4, 0]}>
+                  {topTeamByReceived.map((_, i) => <Cell key={i} fill={SLICES[i % SLICES.length]} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </DashboardChartCard>
           <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
-            <table className="w-full text-sm">
-              <thead className="bg-brand-600 text-xs font-bold uppercase tracking-wide text-white">
-                <tr>
-                  <th className="px-4 py-2.5 text-left">Member</th>
-                  <th className="px-4 py-2.5 text-right">Leads</th>
-                  <th className="px-4 py-2.5 text-right">Received</th>
-                  <th className="px-4 py-2.5 text-left">Share of total</th>
-                  <th className="px-4 py-2.5 text-right">Pending</th>
-                  <th className="px-4 py-2.5 text-right">Avg / lead</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-100">
-                {teamPerformance.map((m) => {
-                  const avg = m.leadsCount > 0 ? m.receivedAmount / m.leadsCount : 0
-                  return (
-                    <tr key={m.userId} className="hover:bg-neutral-50">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2.5">
-                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-100 to-brand-200 text-xs font-bold text-brand-800">
-                            {String(m.name || '?').slice(0, 2).toUpperCase()}
-                          </span>
-                          <div>
-                            <p className="font-semibold text-neutral-900">{m.name}</p>
-                            <p className="text-[11px] text-neutral-500">{m.email}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums text-neutral-700">{m.leadsCount.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-right tabular-nums font-semibold text-emerald-700">
-                        {m.receivedAmount > 0 ? fmt(m.receivedAmount, cur) : '—'}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <ProgressBar value={m.receivedAmount} max={maxMemberReceived} className="flex-1" />
-                          <span className="w-9 text-right text-[11px] text-neutral-500">
-                            {pct(m.receivedAmount, summary.totalReceived)}%
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums text-amber-600">
-                        {m.pendingAmount > 0 ? fmt(m.pendingAmount, cur) : '—'}
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums text-neutral-500 text-xs">
-                        {avg > 0 ? fmt(avg, cur) : '—'}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          {stageBreakdown.length > 0 && (
-            <div className="mt-3 overflow-hidden rounded-xl border border-neutral-200 bg-white">
-              <div className="border-b border-neutral-100 px-4 py-2.5">
-                <p className="text-xs font-bold text-neutral-700">Leads by member &amp; stage</p>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead className="bg-neutral-50 text-[10px] font-bold uppercase tracking-wide text-neutral-600">
-                    <tr>
-                      <th className="px-4 py-2 text-left">Member</th>
-                      {stageBreakdown.map((s) => (
-                        <th key={s.key} className="px-3 py-2 text-right">{s.label}</th>
-                      ))}
-                      <th className="px-4 py-2 text-right">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-neutral-100">
-                    {teamPerformance.map((m) => (
-                      <tr key={m.userId} className="hover:bg-neutral-50">
-                        <td className="px-4 py-2 font-semibold text-neutral-800">{m.name}</td>
-                        {stageBreakdown.map((s) => (
-                          <td key={s.key} className="px-3 py-2 text-right tabular-nums text-neutral-600">
-                            {m.byStage[s.key] ?? 0}
-                          </td>
-                        ))}
-                        <td className="px-4 py-2 text-right tabular-nums font-bold text-neutral-900">
-                          {m.leadsCount}
-                        </td>
-                      </tr>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-brand-600 text-xs font-bold uppercase tracking-wide text-white">
+                  <tr>
+                    <th className="px-4 py-2.5 text-left">Member</th>
+                    {stageBreakdown.map((s) => (
+                      <th key={s.key} className="px-3 py-2.5 text-right">{s.label}</th>
                     ))}
-                  </tbody>
-                </table>
-              </div>
+                    <th className="px-4 py-2.5 text-right">Leads</th>
+                    <th className="px-4 py-2.5 text-right">Received</th>
+                    <th className="px-4 py-2.5 text-left">Share of total</th>
+                    <th className="px-4 py-2.5 text-right">Pending</th>
+                    <th className="px-4 py-2.5 text-right">Avg / lead</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-100">
+                  {teamPerformance.map((m) => {
+                    const avg = m.leadsCount > 0 ? m.receivedAmount / m.leadsCount : 0
+                    const isExpanded = expandedMembers.has(m.userId)
+                    const colSpan = 6 + stageBreakdown.length
+                    return (
+                      <Fragment key={m.userId}>
+                        <tr className="hover:bg-neutral-50">
+                          <td className="px-4 py-3">
+                            <button
+                              type="button"
+                              onClick={() => toggleMember(m.userId)}
+                              className="flex w-full items-center gap-2.5 text-left"
+                              aria-expanded={isExpanded}
+                            >
+                              <ChevronDown
+                                className={`h-3.5 w-3.5 shrink-0 text-neutral-400 transition-transform ${isExpanded ? '' : '-rotate-90'}`}
+                              />
+                              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-100 to-brand-200 text-xs font-bold text-brand-800">
+                                {String(m.name || '?').slice(0, 2).toUpperCase()}
+                              </span>
+                              <div>
+                                <p className="font-semibold text-neutral-900">{m.name}</p>
+                                <p className="text-[11px] text-neutral-500">{m.email}</p>
+                              </div>
+                            </button>
+                          </td>
+                          {stageBreakdown.map((s) => (
+                            <td key={s.key} className="px-3 py-3 text-right tabular-nums text-neutral-600">
+                              {m.byStage[s.key] ?? 0}
+                            </td>
+                          ))}
+                          <td className="px-4 py-3 text-right tabular-nums font-bold text-neutral-900">{m.leadsCount.toLocaleString()}</td>
+                          <td className="px-4 py-3 text-right tabular-nums font-semibold text-emerald-700">
+                            {m.receivedAmount > 0 ? fmt(m.receivedAmount, cur) : '—'}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <ProgressBar value={m.receivedAmount} max={maxMemberReceived} className="flex-1" />
+                              <span className="w-9 text-right text-[11px] text-neutral-500">
+                                {pct(m.receivedAmount, summary.totalReceived)}%
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-right tabular-nums text-amber-600">
+                            {m.pendingAmount > 0 ? fmt(m.pendingAmount, cur) : '—'}
+                          </td>
+                          <td className="px-4 py-3 text-right tabular-nums text-neutral-500 text-xs">
+                            {avg > 0 ? fmt(avg, cur) : '—'}
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr>
+                            <td colSpan={colSpan} className="border-t border-neutral-100 bg-neutral-50/70 p-0">
+                              <MemberLeadsPanel
+                                campaignId={campaignId}
+                                userId={m.userId}
+                                currency={cur}
+                                stageLabelByKey={stageLabelByKey}
+                              />
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
-          )}
+          </div>
         </section>
       )}
 
@@ -370,29 +516,35 @@ export function CampaignReport({ campaignId, currency }) {
       {paymentsByMode.length > 0 && (
         <section>
           <h2 className="mb-3 text-sm font-bold text-neutral-900">Payments by method</h2>
-          <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white p-4">
-            <div className="space-y-3">
-              {paymentsByMode.map((m) => (
-                <div key={m.mode} className="flex items-center gap-3">
-                  <span className="w-28 shrink-0 text-xs font-semibold text-neutral-700">
-                    {MODE_LABEL[m.mode] || m.mode}
-                  </span>
-                  <div className="flex-1 overflow-hidden rounded-full bg-neutral-100">
-                    <div
-                      className="h-2 rounded-full bg-brand-500"
-                      style={{ width: `${pct(m.amount, totalModeAmount)}%` }}
-                    />
+          <DashboardChartCard title="Distribution" subtitle="Share of received/pending amount per payment method">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie data={paymentsPieData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={2}>
+                    {paymentsPieData.map((_, i) => <Cell key={i} fill={SLICES[i % SLICES.length]} />)}
+                  </Pie>
+                  <Tooltip formatter={(v) => fmt(v, cur)} />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="flex flex-col justify-center space-y-3">
+                {paymentsByMode.map((m, i) => (
+                  <div key={m.mode} className="flex items-center gap-3">
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: SLICES[i % SLICES.length] }} />
+                    <span className="w-28 shrink-0 text-xs font-semibold text-neutral-700">
+                      {MODE_LABEL[m.mode] || m.mode}
+                    </span>
+                    <span className="flex-1 text-right text-xs tabular-nums font-semibold text-neutral-800">
+                      {fmt(m.amount, cur)}
+                    </span>
+                    <span className="w-10 text-right text-[11px] text-neutral-500">
+                      {pct(m.amount, totalModeAmount)}%
+                    </span>
                   </div>
-                  <span className="w-28 text-right text-xs tabular-nums font-semibold text-neutral-800">
-                    {fmt(m.amount, cur)}
-                  </span>
-                  <span className="w-10 text-right text-[11px] text-neutral-500">
-                    {pct(m.amount, totalModeAmount)}%
-                  </span>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+          </DashboardChartCard>
         </section>
       )}
 

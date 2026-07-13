@@ -103,7 +103,7 @@ export function ActivitiesTab({ queryParams, from, to }) {
                 <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
                 <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={100} />
                 <Tooltip />
-                <Bar dataKey="count" name="Activities" fill={CHART_COLORS.primary} radius={[0, 4, 4, 0]} />
+                <Bar dataKey="count" name="Activities" fill={CHART_COLORS.primary} maxBarSize={24} radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -137,7 +137,7 @@ export function ActivitiesTab({ queryParams, from, to }) {
                 <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
                 <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={120} />
                 <Tooltip />
-                <Bar dataKey="count" name="Activities" fill={CHART_COLORS.info} radius={[0, 4, 4, 0]} />
+                <Bar dataKey="count" name="Activities" fill={CHART_COLORS.info} maxBarSize={24} radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}

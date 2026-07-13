@@ -51,8 +51,8 @@ export function FollowupsTab({ queryParams }) {
                 <XAxis dataKey="name" tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip />
-                <Bar dataKey="created" name="Created" fill={CHART_COLORS.primary} radius={[4, 4, 0, 0]} />
-                <Bar dataKey="done" name="Done" fill={CHART_COLORS.success} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="created" name="Created" fill={CHART_COLORS.primary} maxBarSize={24} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="done" name="Done" fill={CHART_COLORS.success} maxBarSize={24} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
