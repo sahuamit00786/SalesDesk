@@ -7,7 +7,6 @@ import {
   Clock3,
   Copy,
   ExternalLink,
-  Loader2,
   MapPin,
   Pencil,
   Phone,
@@ -46,6 +45,7 @@ function humanizeStatus(s) {
     completed: 'Completed',
     cancelled: 'Cancelled',
     missed: 'Missed',
+    expired: 'Expired',
   }
   return map[s] || String(s || '').replace(/_/g, ' ')
 }
@@ -58,6 +58,7 @@ function statusPillClass(status) {
       return 'bg-slate-100 text-slate-700 ring-slate-200'
     case 'cancelled':
     case 'missed':
+    case 'expired':
       return 'bg-amber-50 text-amber-800 ring-amber-200'
     default:
       return 'bg-brand-50 text-brand-800 ring-brand-200'
@@ -113,6 +114,21 @@ function MeetingDetailCard({ meeting: meetingProp, channel, onEdit, onDelete, de
 
   const attendeeCount = Array.isArray(meeting.participants) ? meeting.participants.length : 0
   const leadId = meeting.leadId
+
+  const displayStatus = (() => {
+    if (!start || Number.isNaN(start.getTime())) return meeting.status
+    const now = new Date()
+    if (end && !Number.isNaN(end.getTime())) {
+      if (now < start) return 'scheduled'
+      if (now >= start && now <= end) return 'live'
+      if (now > end) return 'expired'
+    } else if (now < start) {
+      return 'scheduled'
+    } else {
+      return 'expired'
+    }
+    return meeting.status
+  })()
 
   const copyMeetLink = useCallback(async () => {
     if (!meetLink) return
@@ -209,8 +225,8 @@ function MeetingDetailCard({ meeting: meetingProp, channel, onEdit, onDelete, de
         ) : null}
 
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className={cn('inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1', statusPillClass(meeting.status))}>
-            {humanizeStatus(meeting.status)}
+          <span className={cn('inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1', statusPillClass(displayStatus))}>
+            {humanizeStatus(displayStatus)}
           </span>
           <span className="rounded-md bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-brand-800 ring-1 ring-brand-100">
             {humanizeMeetingType(meeting.meetingType)}
@@ -230,33 +246,6 @@ function MeetingDetailCard({ meeting: meetingProp, channel, onEdit, onDelete, de
             </div>
           </div>
         ) : null}
-
-        <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-600">
-          {meeting.recordingStatus ? (
-            <span className="flex items-center gap-1">
-              Rec:{' '}
-              <span className="font-medium capitalize text-gray-800">{String(meeting.recordingStatus).replace(/_/g, ' ')}</span>
-            </span>
-          ) : null}
-          {meeting.transcriptionStatus ? (
-            <span className="flex items-center gap-1">
-              Tx:{' '}
-              <span className="font-medium capitalize text-gray-800">{String(meeting.transcriptionStatus).replace(/_/g, ' ')}</span>
-              {meeting.transcriptionStatus === 'processing' && (
-                <Loader2 className="h-3 w-3 animate-spin text-brand-500" />
-              )}
-            </span>
-          ) : null}
-          {meeting.aiSummaryStatus && meeting.aiSummaryStatus !== 'pending' ? (
-            <span className="flex items-center gap-1">
-              AI:{' '}
-              <span className="font-medium capitalize text-gray-800">{String(meeting.aiSummaryStatus).replace(/_/g, ' ')}</span>
-              {meeting.aiSummaryStatus === 'processing' && (
-                <Loader2 className="h-3 w-3 animate-spin text-brand-500" />
-              )}
-            </span>
-          ) : null}
-        </div>
 
         {attendeeCount > 0 ? (
           <div className="flex items-center gap-1.5 text-xs text-gray-700">

@@ -16,8 +16,8 @@ export async function createCall(req, res, next) {
 export async function getCalls(req, res, next) {
   try {
     const filters = { ...req.query, workspaceId: workspaceIdOf(req) }
-    const data = await callService.getCalls(req.user, filters)
-    res.json({ success: true, data })
+    const result = await callService.getCalls(req.user, filters)
+    res.json({ success: true, data: result.data, meta: result.meta })
   } catch (err) {
     next(err)
   }

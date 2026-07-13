@@ -113,14 +113,87 @@ export async function createCall(user, payload, workspaceId) {
 
 export async function getCalls(user, filters = {}) {
   const where = { companyId: user.companyId }
+
+  // Lead association
   if (filters.leadId) where.leadId = filters.leadId
   if (String(filters.hasLead ?? '').toLowerCase() === 'true') where.leadId = { [Op.ne]: null }
   else if (String(filters.hasLead ?? '').toLowerCase() === 'false') where.leadId = null
   if (filters.workspaceId) where.workspaceId = filters.workspaceId
+
+  // Call type and outcome
   if (filters.callType) where.callType = filters.callType
   if (filters.outcome) where.outcome = filters.outcome
 
-  return CallLog.findAll({ where, include: CALL_INCLUDE, order: [['createdAt', 'DESC']] })
+  // Date range filtering
+  if (filters.dateRange || filters.customDateStart || filters.customDateEnd) {
+    const now = new Date()
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    let startDate, endDate
+
+    if (filters.dateRange === 'today') {
+      startDate = today
+      endDate = new Date(today.getTime() + 86400000)
+    } else if (filters.dateRange === 'yesterday') {
+      startDate = new Date(today.getTime() - 86400000)
+      endDate = today
+    } else if (filters.dateRange === 'last7d') {
+      startDate = new Date(today.getTime() - 7 * 86400000)
+      endDate = new Date(today.getTime() + 86400000)
+    } else if (filters.dateRange === 'last30d') {
+      startDate = new Date(today.getTime() - 30 * 86400000)
+      endDate = new Date(today.getTime() + 86400000)
+    } else if (filters.dateRange === 'lastMonth') {
+      const first = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+      startDate = first
+      endDate = today
+    } else if (filters.dateRange === 'last6m') {
+      startDate = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate())
+      endDate = new Date(today.getTime() + 86400000)
+    } else if (filters.dateRange === 'custom') {
+      startDate = filters.customDateStart ? new Date(filters.customDateStart) : null
+      endDate = filters.customDateEnd ? new Date(filters.customDateEnd) : null
+      if (endDate) endDate.setHours(23, 59, 59, 999)
+    }
+
+    if (startDate && endDate) {
+      where.createdAt = { [Op.between]: [startDate, endDate] }
+    }
+  }
+
+  // Duration filtering (in seconds)
+  const durationMin = filters.durationMin ? parseInt(filters.durationMin) : null
+  const durationMax = filters.durationMax ? parseInt(filters.durationMax) : null
+  if (durationMin !== null || durationMax !== null) {
+    where.duration = {}
+    if (durationMin !== null) where.duration[Op.gte] = durationMin
+    if (durationMax !== null) where.duration[Op.lte] = durationMax
+  }
+
+  // Sorting
+  let order = [['createdAt', 'DESC']]
+  if (filters.sortBy === 'duration') {
+    order = [['duration', filters.sortOrder === 'asc' ? 'ASC' : 'DESC']]
+  } else if (filters.sortBy === 'date') {
+    order = [['createdAt', filters.sortOrder === 'asc' ? 'ASC' : 'DESC']]
+  }
+
+  // Pagination
+  const page = Math.max(1, parseInt(filters.page) || 1)
+  const limit = Math.max(1, Math.min(1000, parseInt(filters.limit) || 50))
+  const offset = (page - 1) * limit
+
+  const { count, rows } = await CallLog.findAndCountAll({
+    where,
+    include: CALL_INCLUDE,
+    order,
+    limit,
+    offset,
+  })
+
+  return {
+    data: rows,
+    meta: { total: count, page, limit, totalPages: Math.ceil(count / limit) },
+  }
 }
 
 export async function getCallById(user, id) {

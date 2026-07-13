@@ -13,6 +13,7 @@ export function MeetingsPage() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [sortOrder, setSortOrder] = useState('asc')
+  const [statusFilter, setStatusFilter] = useState('active')
   const [editMeeting, setEditMeeting] = useState(null)
   const [creatingMeeting, setCreatingMeeting] = useState(false)
 
@@ -39,8 +40,40 @@ export function MeetingsPage() {
   const users = formMeta?.data?.users || []
 
   const filteredMeetings = useMemo(() => {
-    return Array.isArray(data?.data) ? data.data : []
-  }, [data])
+    const meetings = Array.isArray(data?.data) ? data.data : []
+
+    const getDisplayStatus = (m) => {
+      const start = m.scheduledStart ? new Date(m.scheduledStart) : null
+      const end = m.scheduledEnd ? new Date(m.scheduledEnd) : null
+      if (!start || Number.isNaN(start.getTime())) return m.status
+      const now = new Date()
+      if (end && !Number.isNaN(end.getTime())) {
+        if (now < start) return 'scheduled'
+        if (now >= start && now <= end) return 'live'
+        if (now > end) return 'expired'
+      } else if (now < start) {
+        return 'scheduled'
+      } else {
+        return 'expired'
+      }
+      return m.status
+    }
+
+    if (statusFilter === 'all') return meetings
+    if (statusFilter === 'active') {
+      return meetings.filter((m) => {
+        const status = getDisplayStatus(m)
+        return status === 'scheduled' || status === 'live'
+      })
+    }
+    if (statusFilter === 'completed') {
+      return meetings.filter((m) => {
+        const status = getDisplayStatus(m)
+        return status === 'completed' || status === 'cancelled' || status === 'missed' || status === 'expired'
+      })
+    }
+    return meetings
+  }, [data, statusFilter])
 
   return (
     <PageShell fullWidth flush mainClassName="bg-white p-6">
@@ -94,6 +127,15 @@ export function MeetingsPage() {
                 </>
               )}
             </button>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+            >
+              <option value="active">Active</option>
+              <option value="completed">Completed</option>
+              <option value="all">All</option>
+            </select>
             <button
               type="button"
               onClick={() => setCreatingMeeting(true)}
