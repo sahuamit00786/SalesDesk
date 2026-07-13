@@ -56,15 +56,20 @@ export function AnalyticsPage() {
   const params = filters.queryParams
   const [query, setQuery] = useState('')
 
-  const { data: ld } = useGetLeadsReportQuery(params)
-  const { data: dd } = useGetDealsReportQuery(params)
-  const { data: td } = useGetTasksReportQuery(params)
-  const { data: fd } = useGetFollowupsReportQuery(params)
+  const { data: leadsReportData } = useGetLeadsReportQuery(params)
+  const { data: dealsReportData } = useGetDealsReportQuery(params)
+  const { data: tasksReportData } = useGetTasksReportQuery(params)
+  const { data: followupsReportData } = useGetFollowupsReportQuery(params)
 
-  const lk = ld?.data?.kpis || {}
-  const dk = dd?.data?.kpis || {}
-  const tk = td?.data?.kpis || {}
-  const fk = fd?.data?.kpis || {}
+  const leads = leadsReportData?.data || {}
+  const deals = dealsReportData?.data || {}
+  const tasks = tasksReportData?.data || {}
+  const followups = followupsReportData?.data || {}
+
+  const lk = leads.kpis || {}
+  const dk = deals.kpis || {}
+  const tk = tasks.kpis || {}
+  const fk = followups.kpis || {}
 
   function open(type) {
     const q = new URLSearchParams()

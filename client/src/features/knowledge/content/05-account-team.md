@@ -3,7 +3,7 @@
 ## 1. Getting Started / First Login
 
 ### Module overview
-This is how you get into Connexify for the first time: creating an account, confirming your email address, and signing in. Every account belongs to one **company** (your organization) and, inside that company, one or more **workspaces** (teams or business units). The very first person to register for a company automatically becomes that company's **Company Admin** — everyone invited afterward joins as a regular team member with a role you assign.
+This is how you get into LeadNest for the first time: creating an account, confirming your email address, and signing in. Every account belongs to one **company** (your organization) and, inside that company, one or more **workspaces** (teams or business units). The very first person to register for a company automatically becomes that company's **Company Admin** — everyone invited afterward joins as a regular team member with a role you assign.
 
 ### FAQ
 
@@ -184,7 +184,7 @@ Yes. Team → Roles tab → create with a name, description, and a role "type" (
 You must first choose a "fallback role" to reassign all affected users to — the system blocks deletion until you do. Default (system-seeded) roles can never be deleted.
 
 ### Permissions — full explanation
-Connexify's access model has three layers, and it helps to think of them separately:
+LeadNest's access model has three layers, and it helps to think of them separately:
 
 1. **Company Admin flag** — a single yes/no flag on a user. If set, that person can do absolutely everything, everywhere, and this cannot be edited via the role or permission screens (it's fixed to whoever created the company, or promoted through other means outside these screens).
 2. **Role (label)** — describes what kind of job the person does (Sales, Finance, HR, etc.). Useful for filtering the team list and for some reports, but grants **no actual access by itself**.
@@ -236,7 +236,7 @@ Company Settings hold the information that identifies your business on official 
 **Q: Where do I update my company's legal name, address, and logo?**
 Go to **Workspace settings** → **Company information** tab. This covers legal/company name, contact email and phone, website, registered address, logo, and tax registration details.
 
-**Q: Does Connexify support GSTIN (Indian tax ID)?**
+**Q: Does LeadNest support GSTIN (Indian tax ID)?**
 Yes — the Tax ID field lets you choose from GSTIN (India), VAT ID, EIN (US), ABN (Australia), Company registration no., PAN (India), or a fully custom label, then enter the corresponding number. GSTIN input is auto-formatted to uppercase alphanumeric, capped at 15 characters; PAN is capped at 10 characters with a hint about its format.
 
 **Q: What are the bank and payment fields for?**
@@ -280,7 +280,7 @@ It's an admin-only audit log of every notification email/in-app alert the system
 ## 5. Integrations & API
 
 ### Module overview
-This is where Connexify connects to outside tools your company already uses. Today the built-in integration is **Google** (Gmail + Calendar), used for sending/reading email inside the CRM, syncing lead conversations, and creating Google Meet links for meetings. A placeholder exists for enterprise SSO (Google/SAML) but isn't active yet.
+This is where LeadNest connects to outside tools your company already uses. Today the built-in integration is **Google** (Gmail + Calendar), used for sending/reading email inside the CRM, syncing lead conversations, and creating Google Meet links for meetings. A placeholder exists for enterprise SSO (Google/SAML) but isn't active yet.
 
 ### FAQ
 
@@ -327,7 +327,7 @@ Not yet for self-serve setup — the system currently returns "Google / SAML SSO
 ## 6. Onboarding
 
 ### Module overview
-Onboarding is a short guided setup wizard shown only to the Company Admin, right after their account is created (and only until it's completed). It gathers basic company profile information Connexify needs to tailor the experience — industry, country, team size, monthly lead volume, and current tooling/goals — then provisions your primary workspace and default roles behind the scenes.
+Onboarding is a short guided setup wizard shown only to the Company Admin, right after their account is created (and only until it's completed). It gathers basic company profile information LeadNest needs to tailor the experience — industry, country, team size, monthly lead volume, and current tooling/goals — then provisions your primary workspace and default roles behind the scenes.
 
 ### FAQ
 
@@ -372,7 +372,7 @@ Yes, you can navigate back to any step you've already reached (but not skip ahea
 
 | Term | Plain-language meaning |
 |---|---|
-| **Company** | Your whole organization's account in Connexify. Holds your billing profile, roles, and every team member. |
+| **Company** | Your whole organization's account in LeadNest. Holds your billing profile, roles, and every team member. |
 | **Workspace** | A team or business-unit division inside your company (e.g., "APAC Sales"). You belong to one or more; you work "inside" one at a time via the workspace switcher. |
 | **Company Admin** | The special, unrestricted-access status held by whoever created the company (or was promoted). Can do anything, anywhere — bypasses all fine-grained permission checks. |
 | **Role** | A label describing someone's job function (Sales, Manager, Finance, etc.). Used for filtering/reporting — does **not** by itself grant any access. |

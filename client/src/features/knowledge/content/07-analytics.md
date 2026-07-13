@@ -267,7 +267,7 @@ Notifications are always personal — you only see notifications addressed to yo
 
 ### Module Overview
 
-Connexify does not currently have one unified "search everything" bar across the whole app. Instead, search is **per-module**: each major section (Leads, Documents, Team, Campaigns, Tasks, etc.) has its own search/filter box scoped to that section's data. There is no dedicated global search feature indexed across all record types at once.
+LeadNest does not currently have one unified "search everything" bar across the whole app. Instead, search is **per-module**: each major section (Leads, Documents, Team, Campaigns, Tasks, etc.) has its own search/filter box scoped to that section's data. There is no dedicated global search feature indexed across all record types at once.
 
 ### FAQ
 
@@ -308,7 +308,7 @@ The most common cause is being in the wrong workspace — switch workspaces usin
 - **KPI (Key Performance Indicator)** — a single important number used to judge performance at a glance, e.g. "Win Rate" or "Open Tasks."
 - **Widget** — an individual chart, stat card, or table block on the Dashboard or a report.
 - **Notification** — a message generated automatically by the system about an event relevant to you, delivered in-app and/or by email.
-- **In-app notification** — a notification that appears in the bell dropdown inside Connexify itself.
+- **In-app notification** — a notification that appears in the bell dropdown inside LeadNest itself.
 - **Email notification** — the same event, but sent to your inbox as an email.
 - **Digest** — a bundled notification sent once at a scheduled time (e.g. "Tasks due today" every morning) instead of one notification per event.
 - **Quiet hours** — a configured time window during which notification emails are held back and sent once the window ends.

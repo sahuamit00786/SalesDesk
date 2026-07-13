@@ -232,7 +232,7 @@ The meeting must already have a Google Meet link — if Google Calendar didn't r
 No — once the bot has moved past "scheduled" (i.e., it's joining, recording, or processing), you can't disable it anymore. You can only toggle consent while it's still in the "scheduled" state.
 
 **Q: What does the bot actually need on the server side (in plain terms)?**
-Ask your IT/admin to confirm these are set up on the server that runs Connexify:
+Ask your IT/admin to confirm these are set up on the server that runs LeadNest:
 - The "enable meeting recording" master switch must be turned on and the server restarted.
 - The web browser used to join meetings (Chromium via Playwright) must be installed on that server.
 - Your company's Google Workspace account needs **Live Captions** turned on in Google Meet — the bot reads the live captions text, it does not record audio/video, and needs no FFmpeg.
@@ -459,7 +459,7 @@ Templates let you write an email once (with placeholders for lead-specific detai
 Merge tags are placeholders like `@first_name`, `@company`, or `@contact_name` that get replaced with each lead's actual data when the email is sent. Type `@` in the Subject or Body while editing a template, and a popover suggests available fields (first name, last name, company, designation, email, phone, deal value, source, status, city/state/country, street, postal code, title, sender name) — click one to insert it.
 
 **Q: Can I preview what the email will look like before sending?**
-Yes — the Preview panel shows the template filled in with realistic sample data (e.g. "Amit Sahu," "Connexify Labs") so you can sanity-check formatting and merge tags before it goes to real leads.
+Yes — the Preview panel shows the template filled in with realistic sample data (e.g. "Amit Sahu," "LeadNest Labs") so you can sanity-check formatting and merge tags before it goes to real leads.
 
 **Q: How do I get AI help writing a template?**
 Switch to the **Ask AI** tab, describe what you want the email to do (audience, problem, value, call-to-action), and click **Generate Template** — it drafts a subject and body using your merge tags, which you can then edit.

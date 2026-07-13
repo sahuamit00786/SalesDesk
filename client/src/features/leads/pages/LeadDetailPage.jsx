@@ -614,7 +614,7 @@ export function LeadDetailPage() {
   const { data: formMetaData } = useGetLeadFormMetaQuery()
   const { data: activityData } = useGetLeadActivitiesQuery({ id, page: 1, limit: 100 }, { skip: !id })
   const { data: taskData } = useGetLeadTasksQuery(id, { skip: !id })
-  const { data: googleEmailStatus } = useGetGoogleEmailStatusQuery()
+  const { data: googleEmailStatus, isFetching: fetchingGoogleStatus } = useGetGoogleEmailStatusQuery()
   const googleEmailConnected = Boolean(googleEmailStatus?.data?.connected)
   const emailsTabActive = activeTab === 'emails'
   const { data: emailThreadsData } = useGetLeadEmailThreadsQuery(id, {
@@ -1224,7 +1224,7 @@ export function LeadDetailPage() {
           </div>
 
           {activeTab === 'emails' ? (
-            googleEmailConnected ? (
+            googleEmailConnected || fetchingGoogleStatus ? (
               <div className="mt-4 flex flex-1 flex-col space-y-4 lg:min-h-0">
                 <LeadTabSectionHeader
                   title="Emails"

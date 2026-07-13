@@ -1,12 +1,12 @@
-# Connexify Knowledge Base — Leads, Opportunities, Pipeline & Deals
+# LeadNest Knowledge Base — Leads, Opportunities, Pipeline & Deals
 
-This section of the Knowledge Base covers everything related to managing your sales records in Connexify: Leads, Opportunities, the Pipeline board, Deals, Deal Payments, and the two setup screens that control how these work — Lead Configuration and Lead Distribution.
+This section of the Knowledge Base covers everything related to managing your sales records in LeadNest: Leads, Opportunities, the Pipeline board, Deals, Deal Payments, and the two setup screens that control how these work — Lead Configuration and Lead Distribution.
 
 ---
 
 ## A note on "Contacts" and "Companies"
 
-Connexify does not have separate stand‑alone "Contacts" or "Companies" list screens. Instead, contact details (name, email, phone, job title/designation) and company details (company name, address, city, state, country, postal code) are stored directly **on each Lead and Opportunity record**. When a Lead is converted into an Opportunity, its contact and company information carries over automatically. If you were looking for a dedicated address book, use the **Leads** list (filter/search by company or contact name) instead — it serves that purpose.
+LeadNest does not have separate stand‑alone "Contacts" or "Companies" list screens. Instead, contact details (name, email, phone, job title/designation) and company details (company name, address, city, state, country, postal code) are stored directly **on each Lead and Opportunity record**. When a Lead is converted into an Opportunity, its contact and company information carries over automatically. If you were looking for a dedicated address book, use the **Leads** list (filter/search by company or contact name) instead — it serves that purpose.
 
 ---
 
@@ -87,7 +87,7 @@ Auto-assignment rules let leads get an owner automatically as soon as they're cr
 **What's the difference between "Lead Distribution" and "Assignment Rules"?**
 Assignment Rules are automatic, ongoing rules applied at creation time. **Lead Distribution** (see its own section below) is a manual, on-demand tool for taking a batch of currently-unassigned leads/opportunities and splitting them evenly among chosen callers right now.
 
-**Can I email a lead directly from Connexify?**
+**Can I email a lead directly from LeadNest?**
 Yes, if your company has connected Google/Gmail. Each lead has an **Emails** tab where you can send messages, see threaded conversation history, and sync replies. Inbound replies notify the lead's assigned owner.
 
 **What are Tasks, Follow-ups, and Notes on a lead?**
@@ -126,7 +126,7 @@ Yes. Every create/update fires **workflow triggers** (`lead_created`, `lead_upda
 
 ### 1.5 Tips & best practices
 
-- Always fill in **phone** with the correct **country code** — Connexify validates and normalizes phone numbers, and duplicate detection relies on the normalized number.
+- Always fill in **phone** with the correct **country code** — LeadNest validates and normalizes phone numbers, and duplicate detection relies on the normalized number.
 - Don't set the alternate phone to the same number as the primary phone — the system blocks this with a validation error.
 - Use **tags** for cross-cutting labels (e.g., "Hot," "Enterprise") rather than creating many near-duplicate lead sources.
 - Before a big CSV import, download and check the template so your columns map cleanly — unmapped columns are simply skipped, which can silently drop data you meant to import.
@@ -458,4 +458,4 @@ Lead Distribution relies on the same `main.leads` — **Update** permission used
 
 ---
 
-*This Knowledge Base content reflects the Leads, Opportunities, Pipeline, Deals, Deal Payments, Lead Configuration, and Lead Distribution features as implemented in Connexify's current codebase.*
+*This Knowledge Base content reflects the Leads, Opportunities, Pipeline, Deals, Deal Payments, Lead Configuration, and Lead Distribution features as implemented in LeadNest's current codebase.*

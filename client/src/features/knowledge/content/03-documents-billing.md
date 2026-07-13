@@ -1,4 +1,4 @@
-# Connexify Knowledge Base — Documents, Quotations, Invoices & Billing
+# LeadNest Knowledge Base — Documents, Quotations, Invoices & Billing
 
 This section covers every module you use to store files, create sales paperwork, and collect payments: **Documents**, **Quotations**, **Invoices**, **Document Templates**, **Document Settings (Numbering)**, and **Billing Profile (Company Info)**.
 
@@ -42,7 +42,7 @@ Yes — you can rename it and change its description at any time via **Edit**. Y
 A confirmation dialog appears. Once confirmed, the file is permanently removed — there is no undo, recycle bin, or restore for deleted documents.
 
 **What happens when I delete a folder?**
-Before deleting, Connexify shows you how many files and sub-folders are inside so you know the scope of the deletion. Deleting a folder removes it (and its contents) — this cannot be undone.
+Before deleting, LeadNest shows you how many files and sub-folders are inside so you know the scope of the deletion. Deleting a folder removes it (and its contents) — this cannot be undone.
 
 **Can I search and filter documents?**
 Yes — search by name/description, filter by type, group by file type or date added, and sort by name/date/size, both on the main Documents page and inside any lead's document tab.
@@ -65,7 +65,7 @@ Viewing the Documents module requires the **Documents – View** permission. Upl
 ### Troubleshooting
 **Why can't I delete a document?** You likely don't have the Documents – Edit permission, or the request failed after the confirmation — check for a toast error message describing the specific failure.
 
-**Why did my file get renamed with extra numbers/letters?** That's expected — Connexify appends a timestamp to the base name so uploads never silently overwrite one another.
+**Why did my file get renamed with extra numbers/letters?** That's expected — LeadNest appends a timestamp to the base name so uploads never silently overwrite one another.
 
 ---
 

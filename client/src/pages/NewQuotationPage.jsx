@@ -229,6 +229,12 @@ function NewQuotationEditor({ templateId, quotationId = '', initialLeadId = '', 
   }, [activeDealId, dealCard, isEditingExisting, savedId, templateId])
 
   useEffect(() => {
+    if (isEditingExisting || savedId) return
+    if (!activeDealId || !dealCard) return
+    applyDealSelection(activeDealId)
+  }, [activeDealId, dealCard, isEditingExisting, savedId])
+
+  useEffect(() => {
     if (!quotationId || !existingQuotation) return
     if (hydratedQuotationIdRef.current === quotationId) return
     hydratedQuotationIdRef.current = quotationId
