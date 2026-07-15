@@ -23,8 +23,8 @@ export function CalendarWorkspace({ className, lockedTypes = null, filterAssigne
   const [dealPanel, setDealPanel] = useState({ open: false, opp: null })
 
   const { data: formMetaData } = useGetLeadFormMetaQuery()
-  const opportunityStatuses = useMemo(() => {
-    const rows = formMetaData?.data?.opportunityStatuses || []
+  const pipelineStatuses = useMemo(() => {
+    const rows = formMetaData?.data?.pipelineStatuses || []
     return [...rows].sort((a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0))
   }, [formMetaData])
 
@@ -86,7 +86,7 @@ export function CalendarWorkspace({ className, lockedTypes = null, filterAssigne
       <DealDetailPanel
         open={dealPanel.open}
         opp={dealPanel.opp}
-        opportunityStatuses={opportunityStatuses}
+        pipelineStatuses={pipelineStatuses}
         onClose={() => setDealPanel({ open: false, opp: null })}
       />
     </>

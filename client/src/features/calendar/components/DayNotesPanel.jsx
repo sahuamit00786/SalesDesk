@@ -1,5 +1,5 @@
 import { format, isSameDay, addDays } from 'date-fns'
-import { Video, CheckSquare, Phone, TrendingUp, Bell, CalendarClock, CalendarDays, CheckCircle2, Clock, User } from 'lucide-react'
+import { Video, CheckSquare, Phone, TrendingUp, Bell, CalendarClock, CalendarDays, CheckCircle2, Clock, User } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 import { TaskAttachmentIcons } from '@/features/leads/components/TaskAttachmentIcons'
 import { getKindBgClass } from '../eventColors'

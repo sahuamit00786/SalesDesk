@@ -1,4 +1,4 @@
-import { Megaphone, Users, Target } from 'lucide-react'
+import { Megaphone, Users, Target } from '@/components/ui/icons'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
 import { DashboardChartCard } from '@/features/dashboard/components/DashboardChartCard'
 import { CHART_COLORS } from '@/features/dashboard/dummyDashboardData'

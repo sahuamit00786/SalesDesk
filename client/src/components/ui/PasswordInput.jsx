@@ -1,5 +1,5 @@
 import { forwardRef, useState } from 'react'
-import { Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeOff } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 import { inputFieldClassName } from '@/components/ui/Input'
 

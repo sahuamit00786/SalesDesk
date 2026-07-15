@@ -1,4 +1,4 @@
-import { Wallet } from 'lucide-react'
+import { Wallet } from '@/components/ui/icons'
 import { HrCard } from '@/features/hr/components/HrCard'
 import { HrEmptyState } from '@/features/hr/components/HrEmptyState'
 import { cn } from '@/utils/cn'

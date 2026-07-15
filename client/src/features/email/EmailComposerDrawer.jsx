@@ -4,7 +4,7 @@ import toast from 'react-hot-toast'
 import {
   AlertCircle, Bold, Italic, Underline, LayoutTemplate, List, ListOrdered, Link2,
   Mail, MessageSquare, Paperclip, Search, Users, X,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import { Select } from '@/components/ui/Select'
 import { IconInput } from '@/components/ui/IconInput'
 import { useGetLeadFilesQuery, useGetLeadsQuery } from '@/features/leads/leadsApi'

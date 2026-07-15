@@ -1,5 +1,5 @@
 import { format } from 'date-fns'
-import { CalendarDays, Palmtree, UserCheck } from 'lucide-react'
+import { CalendarDays, Palmtree, UserCheck } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 
 const kindIcon = {

@@ -9,7 +9,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts'
-import { Mail, MailOpen, MousePointerClick, Reply, RefreshCw, Printer } from 'lucide-react'
+import { Mail, MailOpen, MousePointerClick, Reply, RefreshCw, Printer } from '@/components/ui/icons'
 import { PageShell } from '@/components/layout/PageShell'
 import { Button } from '@/components/ui/Button'
 import { Select } from '@/components/ui/Select'

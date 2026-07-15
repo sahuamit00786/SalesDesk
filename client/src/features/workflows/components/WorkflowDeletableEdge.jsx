@@ -1,6 +1,6 @@
 import { memo, useCallback, useState } from 'react'
 import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath, useReactFlow } from '@xyflow/react'
-import { X } from 'lucide-react'
+import { X } from '@/components/ui/icons'
 
 function WorkflowDeletableEdge({
   id,

@@ -1,4 +1,4 @@
-import { CheckCircle2 } from 'lucide-react'
+import { CheckCircle2 } from '@/components/ui/icons'
 import { Button } from '@/components/ui/Button'
 
 export function BulkApproveBar({ selectedCount, onApprove, busy }) {

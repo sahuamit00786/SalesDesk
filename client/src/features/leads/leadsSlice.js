@@ -23,6 +23,8 @@ const initialState = {
   pagination: { page: 1, limit: 20, total: 0 },
   selected: [],
   viewMode: 'table',
+  /** Which list variant ('leads' | 'opportunities') currently owns filters/pagination/selection. */
+  activeVariant: null,
 }
 
 const leadsSlice = createSlice({
@@ -56,8 +58,15 @@ const leadsSlice = createSlice({
     clearSelected(state) {
       state.selected = []
     },
-    /** Reset list filters, selection, and page when entering a fresh list view. */
-    resetListSession(state) {
+    /**
+     * Reset list filters, selection, and page when switching between the leads and
+     * opportunities variants. A no-op when re-entering the same variant (e.g. navigating
+     * back from a detail page), so pagination position is preserved.
+     */
+    resetListSession(state, action) {
+      const nextVariant = action.payload?.variant ?? null
+      if (state.activeVariant === nextVariant) return
+      state.activeVariant = nextVariant
       state.filters = { ...initialState.filters }
       state.pagination = { ...initialState.pagination, total: state.pagination.total }
       state.selected = []

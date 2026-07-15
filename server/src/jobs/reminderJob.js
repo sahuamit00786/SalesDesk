@@ -68,28 +68,33 @@ export function startReminderJob() {
         await sendReminder(meeting)
       }
 
-      // --- Follow-up reminders (due in 14–15 minutes) ---
-      const fu14 = new Date(now.getTime() + 14 * 60 * 1000)
-      const fu15 = new Date(now.getTime() + 15 * 60 * 1000)
+      // --- Follow-up reminders (fire once when due) ---
       const dueFollowups = await LeadFollowup.findAll({
         where: {
           status: 'pending',
-          scheduledAt: { [Op.between]: [fu14, fu15] },
+          notifiedAt: null,
+          scheduledAt: { [Op.lte]: now },
         },
         include: [{ model: Lead, as: 'lead', attributes: ['id', 'contactName', 'title', 'assignedTo', 'companyId', 'workspaceId'] }],
       })
       for (const followup of dueFollowups) {
         const lead = followup.lead
-        if (!lead?.assignedTo) continue
-        notifyFollowupDue({
-          companyId: lead.companyId,
-          workspaceId: followup.workspaceId || lead.workspaceId,
-          recipientUserId: lead.assignedTo,
-          leadId: lead.id,
-          leadName: lead.contactName || lead.title || 'Lead',
-          scheduledAt: followup.scheduledAt,
-          remark: followup.remark,
-        }).catch(() => {})
+        if (!lead) continue
+        const recipients = new Set()
+        if (followup.createdBy) recipients.add(followup.createdBy)
+        if (lead.assignedTo) recipients.add(lead.assignedTo)
+        for (const recipientUserId of recipients) {
+          notifyFollowupDue({
+            companyId: lead.companyId,
+            workspaceId: followup.workspaceId || lead.workspaceId,
+            recipientUserId,
+            leadId: lead.id,
+            leadName: lead.contactName || lead.title || 'Lead',
+            scheduledAt: followup.scheduledAt,
+            remark: followup.remark,
+          }).catch(() => {})
+        }
+        await followup.update({ notifiedAt: now })
       }
 
       // --- Mark COMPLETED ---

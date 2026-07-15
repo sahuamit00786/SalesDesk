@@ -1,4 +1,4 @@
-import { Calendar, CheckSquare, Circle, FileText, Hash, Heading, List, Mail, Minus, Phone, Type, Upload, ChevronDown, AlignLeft, EyeOff } from 'lucide-react'
+import { Calendar, CheckSquare, Circle, FileText, Hash, Heading, List, Mail, Minus, Phone, Type, Upload, ChevronDown, AlignLeft, EyeOff } from '@/components/ui/icons'
 import { useDraggable } from '@dnd-kit/core'
 
 const FIELD_TYPES = {

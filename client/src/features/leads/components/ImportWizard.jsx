@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { AlertTriangle, CheckCircle2, ChevronRight, Upload } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ChevronRight, Upload } from '@/components/ui/icons'
 import { RightDrawer } from '@/components/ui/RightDrawer'
 import { useGetLeadsQuery } from '@/features/leads/leadsApi'
 import { cn } from '@/utils/cn'

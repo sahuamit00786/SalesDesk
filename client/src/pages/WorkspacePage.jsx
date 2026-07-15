@@ -1,5 +1,5 @@
 import { useSearchParams } from 'react-router-dom'
-import { Bell, IdCard } from 'lucide-react'
+import { Bell, IdCard } from '@/components/ui/icons'
 import { PageShell } from '@/components/layout/PageShell'
 import { WorkspaceCompanyTab } from '@/pages/workspace/WorkspaceCompanyTab'
 import { NotificationEmailSettingsTab } from '@/pages/workspace/NotificationEmailSettingsTab'

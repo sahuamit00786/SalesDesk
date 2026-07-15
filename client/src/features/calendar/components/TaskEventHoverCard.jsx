@@ -10,7 +10,7 @@ import {
   Briefcase,
   ListChecks,
   Paperclip,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import toast from 'react-hot-toast'
 import { cn } from '@/utils/cn'
 import { computeCalendarPopoverPosition } from '@/utils/calendarPopoverPosition'

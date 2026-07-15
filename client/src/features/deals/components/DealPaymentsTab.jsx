@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { BadgeDollarSign, CheckCircle2, Clock, FileText, Pencil, Plus, Trash2, XCircle } from 'lucide-react'
+import { BadgeDollarSign, CheckCircle2, Clock, FileText, Pencil, Plus, Trash2, XCircle } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 import {
   useListDealPaymentsQuery,

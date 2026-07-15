@@ -15,7 +15,7 @@ import {
   Maximize2,
   ZoomIn,
   ZoomOut,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import { PageShell } from '@/components/layout/PageShell'
 import { SkeletonForm } from '@/components/shared/SkeletonLoader'
 import { DataGrid } from '@/components/shared/DataGrid'
@@ -105,7 +105,7 @@ function TestRunModal({ open, onClose, workflowId, onRan }) {
             <button
               type="submit"
               disabled={isLoading || !selectedLead}
-              className="inline-flex items-center gap-2 rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-900 disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold cx-icon-inherit text-white hover:bg-slate-900 disabled:opacity-60"
             >
               {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
               Run test
@@ -326,7 +326,7 @@ function WorkflowEditorLoaded({ wf, refetchWorkflow, teamUsers, templates, leadS
               type="button"
               disabled={publishing}
               onClick={onPublish}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-slate-800 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-900 disabled:opacity-60"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-slate-800 px-3 py-2 text-xs font-semibold cx-icon-inherit text-white hover:bg-slate-900 disabled:opacity-60"
             >
               {publishing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Rocket className="h-3.5 w-3.5" />}
               Publish

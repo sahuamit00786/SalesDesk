@@ -1,4 +1,4 @@
-import { Flag, Settings } from 'lucide-react'
+import { Flag, Settings } from '@/components/ui/icons'
 import { ChoiceChip } from '@/features/onboarding/components/ChoiceChipGrid'
 import { OnboardingFieldSection } from '@/features/onboarding/components/OnboardingFieldSection'
 import { OnboardingStepHeader } from '@/features/onboarding/components/OnboardingStepHeader'

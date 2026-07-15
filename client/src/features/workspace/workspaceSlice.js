@@ -2,6 +2,8 @@ import { createSlice } from '@reduxjs/toolkit'
 import { setCredentials, updateSessionUser, logout } from '@/features/auth/authSlice'
 
 const WORKSPACE_ID_KEY = 'leadflow.workspaceId'
+/** Session-scoped: survives reload, cleared on tab close and on every fresh login. */
+const WORKSPACE_CONFIRMED_KEY = 'leadflow.workspaceConfirmed'
 
 function workspacesFromUser(user) {
   const ws = user?.company?.workspaces
@@ -48,9 +50,33 @@ function persistPreference(id) {
   }
 }
 
+function readStoredConfirmed() {
+  try {
+    return sessionStorage.getItem(WORKSPACE_CONFIRMED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function persistConfirmed(confirmed) {
+  try {
+    if (confirmed) sessionStorage.setItem(WORKSPACE_CONFIRMED_KEY, '1')
+    else sessionStorage.removeItem(WORKSPACE_CONFIRMED_KEY)
+  } catch {
+    // ignore
+  }
+}
+
+/** A lone workspace needs no choosing — confirm it so the picker never shows. */
+function isAutoConfirmable(list) {
+  return list.length === 1
+}
+
 const initialState = {
   /** Last explicit choice; validated against current workspace list in selectors. */
   activeWorkspaceId: readStoredPreferenceId(),
+  /** False until the user picks a workspace for this session; gates the app behind the picker. */
+  workspaceConfirmed: readStoredConfirmed(),
 }
 
 const workspaceSlice = createSlice({
@@ -61,35 +87,58 @@ const workspaceSlice = createSlice({
       const id = action.payload
       state.activeWorkspaceId = id
       persistPreference(id)
+      state.workspaceConfirmed = Boolean(id)
+      persistConfirmed(Boolean(id))
     },
   },
   extraReducers: (builder) => {
     builder
+      // Fresh login drops any prior confirmation so the picker runs again. Silent token
+      // refreshes reuse this action, and must keep the session's existing choice.
       .addCase(setCredentials, (state, action) => {
         const list = workspacesFromUser(action.payload?.user)
         if (!list.length) {
           state.activeWorkspaceId = null
           persistPreference(null)
+          state.workspaceConfirmed = false
+          persistConfirmed(false)
           return
         }
+        const silent = action.payload?.silent === true
+        const stillValid =
+          silent && state.workspaceConfirmed && list.some((w) => w.id === state.activeWorkspaceId)
         const next = pickActiveId(list, state.activeWorkspaceId, readStoredPreferenceId())
         state.activeWorkspaceId = next
         persistPreference(next)
+        const confirmed = stillValid || isAutoConfirmable(list)
+        state.workspaceConfirmed = confirmed
+        persistConfirmed(confirmed)
       })
+      // Reload / periodic /auth/me: keep an existing confirmation unless access changed.
       .addCase(updateSessionUser, (state, action) => {
         const list = workspacesFromUser(action.payload)
         if (!list.length) {
           state.activeWorkspaceId = null
           persistPreference(null)
+          state.workspaceConfirmed = false
+          persistConfirmed(false)
           return
         }
+        // Access to the confirmed workspace can be revoked server-side. Test the id the
+        // user actually confirmed, before pickActiveId falls back to another workspace.
+        const stillValid = state.workspaceConfirmed && list.some((w) => w.id === state.activeWorkspaceId)
         const next = pickActiveId(list, state.activeWorkspaceId, readStoredPreferenceId())
         state.activeWorkspaceId = next
         persistPreference(next)
+        const confirmed = stillValid || isAutoConfirmable(list)
+        state.workspaceConfirmed = confirmed
+        persistConfirmed(confirmed)
       })
       .addCase(logout, (state) => {
         state.activeWorkspaceId = null
         persistPreference(null)
+        state.workspaceConfirmed = false
+        persistConfirmed(false)
       })
   },
 })
@@ -111,6 +160,8 @@ export const selectWorkspaceList = (state) => {
   }
   return []
 }
+
+export const selectWorkspaceConfirmed = (state) => state.workspace.workspaceConfirmed
 
 export const selectResolvedActiveWorkspaceId = (state) => {
   const list = selectWorkspaceList(state)

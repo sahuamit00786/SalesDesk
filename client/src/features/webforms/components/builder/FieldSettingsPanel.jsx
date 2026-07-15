@@ -1,4 +1,4 @@
-import { Plus, X } from 'lucide-react'
+import { Plus, X } from '@/components/ui/icons'
 
 const LEAD_CRM_FIELDS = [
   { value: 'lead.contactName', label: 'Lead Name', placeholder: 'Enter full name' },

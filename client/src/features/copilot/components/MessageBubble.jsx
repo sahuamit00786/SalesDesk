@@ -1,6 +1,6 @@
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Sparkles } from 'lucide-react'
+import { Sparkles } from '@/components/ui/icons'
 import { TableBlock } from './TableBlock'
 import { ChartBlock } from './ChartBlock'
 import { KpiBlock } from './KpiBlock'
@@ -69,7 +69,7 @@ export function MessageBubble({ role, content, blocks, onSelectDisambiguation, d
   if (isUser) {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[80%] whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-brand-600 px-4 py-2.5 text-sm text-white">
+        <div className="max-w-[80%] whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-brand-600 px-4 py-2.5 text-sm cx-icon-inherit text-white">
           {content}
         </div>
       </div>

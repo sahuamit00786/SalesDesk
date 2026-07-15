@@ -4,7 +4,7 @@ import {
   AlertTriangle, ArrowDown, ArrowUp, Building2, ChevronRight, File, FileArchive,
   FileImage, FileSpreadsheet, FileText, Folder, FolderOpen, FolderPlus,
   Grid3X3, List, Music, Pencil, Plus, Presentation, Search, Trash2, Upload, Users, Video, X,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import toast from 'react-hot-toast'
 import { PageShell } from '@/components/layout/PageShell'
 import { Button } from '@/components/ui/Button'
@@ -735,7 +735,7 @@ export function DocumentsPage() {
                       placeholder="Folder name"
                       className="h-7 min-w-0 flex-1 rounded-lg border border-brand-300 px-2 text-xs outline-none focus:border-brand-500"
                     />
-                    <button type="button" onClick={handleCreateFolder} disabled={creatingFolder} className="h-7 shrink-0 rounded-lg bg-brand-700 px-2 text-xs text-white disabled:opacity-60">
+                    <button type="button" onClick={handleCreateFolder} disabled={creatingFolder} className="h-7 shrink-0 rounded-lg bg-brand-700 px-2 text-xs cx-icon-inherit text-white disabled:opacity-60">
                       {creatingFolder ? '…' : <Plus size={12} />}
                     </button>
                   </div>

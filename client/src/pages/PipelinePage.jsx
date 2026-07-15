@@ -13,12 +13,12 @@ import {
   Sparkles,
   TrendingUp,
   UserMinus,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { PageShell } from '@/components/layout/PageShell'
 import { OpportunitiesKanban, formatStageLabel } from '@/features/opportunities/components/OpportunitiesKanban'
-import { usePatchOpportunityStatusMutation } from '@/features/opportunities/opportunitiesApi'
+import { usePatchPipelineStatusMutation } from '@/features/opportunities/opportunitiesApi'
 import { AddDealDrawer } from '@/features/deals/components/AddDealDrawer'
 import { useGetLeadFormMetaQuery, useGetLeadsQuery } from '@/features/leads/leadsApi'
 import { cn } from '@/utils/cn'
@@ -78,7 +78,7 @@ function pipelineRowFromLead(lead) {
     companyName: (lead.company || '').trim() || 'Unknown company',
     dealValue: lead.value,
     dealCurrency: lead.valueCurrency || lead.value_currency || 'USD',
-    currentStage: lead.oppStatus?.name || '',
+    currentStage: lead.pipelineStatusInfo?.name || '',
     leadScore: lead.score,
     tags: (lead.tags || []).map((t) => String(t.name || t).trim().toLowerCase()).filter(Boolean),
     lastActivityType: null,
@@ -137,18 +137,18 @@ export function PipelinePage() {
 
   const { data, isLoading, isFetching } = useGetLeadsQuery(listQuery)
   const { data: formMetaData } = useGetLeadFormMetaQuery()
-  const [patchOpportunityStatus, { isLoading: updatingStage }] = usePatchOpportunityStatusMutation()
+  const [patchPipelineStatus, { isLoading: updatingStage }] = usePatchPipelineStatusMutation()
   const [addDealRow, setAddDealRow] = useState(null)
 
   const rows = useMemo(() => (data?.data || []).map(pipelineRowFromLead), [data?.data])
   const total = data?.meta?.total || 0
   const totalPages = Math.max(1, Math.ceil(total / (mode === 'kanban' ? listQuery.limit : limit)))
   const users = formMetaData?.data?.users || []
-  const opportunityStatuses = formMetaData?.data?.opportunityStatuses || []
+  const pipelineStatuses = formMetaData?.data?.pipelineStatuses || []
 
   const stageFilterOptions = useMemo(
-    () => opportunityStatuses.map((s) => s.name).filter(Boolean),
-    [opportunityStatuses],
+    () => pipelineStatuses.map((s) => s.name).filter(Boolean),
+    [pipelineStatuses],
   )
 
   useEffect(() => {
@@ -253,10 +253,10 @@ export function PipelinePage() {
 
   async function handleStageChange(row, nextStageName) {
     if (!nextStageName || nextStageName === row.currentStage) return
-    const status = opportunityStatuses.find((s) => s.name === nextStageName)
+    const status = pipelineStatuses.find((s) => s.name === nextStageName)
     if (!status) return
     try {
-      await patchOpportunityStatus({ id: row.id, opportunityStatusId: status.id }).unwrap()
+      await patchPipelineStatus({ id: row.id, pipelineStatusId: status.id }).unwrap()
       toast.success(`Status updated to ${formatStageLabel(nextStageName)}`)
     } catch (err) {
       toast.error(err?.data?.error?.message || err?.error || 'Could not update status')
@@ -308,7 +308,7 @@ export function PipelinePage() {
               aria-label={`Pipeline status for ${row.fullName || 'opportunity'}`}
             >
               {!row.currentStage ? <option value="">Select status</option> : null}
-              {opportunityStatuses
+              {pipelineStatuses
                 .filter((s) => s?.name)
                 .map((s) => (
                   <option key={`${row.id}-${s.name}`} value={s.name}>
@@ -373,7 +373,7 @@ export function PipelinePage() {
         ),
       },
     ],
-    [opportunityStatuses, updatingStage, navigate],
+    [pipelineStatuses, updatingStage, navigate],
   )
 
   const onPipelineRowClick = useCallback(
@@ -482,7 +482,7 @@ export function PipelinePage() {
                           return (
                             <label key={s} className="flex cursor-pointer items-center justify-between rounded-lg px-2 py-1.5 hover:bg-surface-subtle">
                               <span className="text-xs text-ink">{formatStageLabel(s)}</span>
-                              <span className={cn('inline-flex h-4 w-4 items-center justify-center rounded border', checked ? 'border-brand-600 bg-[var(--brand-primary)] text-white' : 'border-surface-border')}>
+                              <span className={cn('inline-flex h-4 w-4 items-center justify-center rounded border', checked ? 'border-brand-600 bg-[var(--brand-primary)] cx-icon-inherit text-white' : 'border-surface-border')}>
                                 {checked ? <Check className="h-3 w-3" /> : null}
                               </span>
                               <input type="checkbox" className="sr-only" checked={checked} onChange={() => toggleStage(s)} />
@@ -529,7 +529,7 @@ export function PipelinePage() {
                           return (
                             <label key={u.id} className="flex cursor-pointer items-center justify-between rounded-lg px-2 py-1.5 hover:bg-surface-subtle">
                               <span className="truncate text-xs text-ink">{u.name || u.email || 'User'}</span>
-                              <span className={cn('inline-flex h-4 w-4 items-center justify-center rounded border', checked ? 'border-brand-600 bg-[var(--brand-primary)] text-white' : 'border-surface-border')}>
+                              <span className={cn('inline-flex h-4 w-4 items-center justify-center rounded border', checked ? 'border-brand-600 bg-[var(--brand-primary)] cx-icon-inherit text-white' : 'border-surface-border')}>
                                 {checked ? <Check className="h-3 w-3" /> : null}
                               </span>
                               <input type="checkbox" className="sr-only" checked={checked} onChange={() => toggleAssignee(u.id)} />
@@ -596,7 +596,7 @@ export function PipelinePage() {
                     onClick={() => setMode('kanban')}
                     className={cn(
                       'inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold',
-                      mode === 'kanban' ? 'bg-[var(--brand-primary)] text-white' : 'text-ink-muted hover:bg-surface-subtle',
+                      mode === 'kanban' ? 'bg-[var(--brand-primary)] cx-icon-inherit text-white' : 'text-ink-muted hover:bg-surface-subtle',
                     )}
                   >
                     <LayoutGrid className="h-3.5 w-3.5" />
@@ -656,7 +656,7 @@ export function PipelinePage() {
               <div className="min-h-0 flex-1">
                 <OpportunitiesKanban
                   opportunities={rows}
-                  opportunityStatuses={opportunityStatuses}
+                  pipelineStatuses={pipelineStatuses}
                   isLoading={isLoading}
                   onCreateDeal={(row) => addOpportunityToDealsPipeline(row)}
                 />

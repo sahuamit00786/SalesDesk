@@ -12,6 +12,7 @@ import {
   AssignmentRule,
   CustomField,
   CustomFieldValue,
+  Deal,
   Lead,
   LeadAssignment,
   LeadFile,
@@ -20,7 +21,7 @@ import {
   LeadTaskComment,
   LeadFollowup,
   LeadSource,
-  OpportunityStatus,
+  PipelineStatus,
   DealStatus,
   CountryPhoneCode,
   CompanyGoogleToken,
@@ -46,7 +47,7 @@ import {
   promotePendingTasksByDueOrStartMany,
 } from '../services/leadTaskAutoStatusService.js'
 import { createLeadSystemActivity as createSystemActivity } from '../services/leadSystemActivity.js'
-import { logLeadFieldChanges, logLeadCollaboratorsChange } from '../services/leadFieldChangeActivity.js'
+import { logLeadFieldChanges, logLeadCollaboratorsChange, humanizeEnumLabel } from '../services/leadFieldChangeActivity.js'
 import { emitLeadWorkflowTriggers, emitLeadWorkflowTriggersBulkImport } from '../services/workflowRunner.js'
 import {
   enrichLeadPlainWithCustomFields,
@@ -439,8 +440,8 @@ function buildListWhere(query) {
     ]
   }
   const stages = parseCsvList(query.stage).filter(Boolean)
-  if (stages.length === 1) where.opportunityStatus = stages[0]
-  else if (stages.length > 1) where.opportunityStatus = { [Op.in]: stages }
+  if (stages.length === 1) where.pipelineStatus = stages[0]
+  else if (stages.length > 1) where.pipelineStatus = { [Op.in]: stages }
 
   const iso = String(query.isOpportunity ?? '').toLowerCase()
   if (iso === 'true' || iso === '1') where.isOpportunity = true
@@ -866,7 +867,7 @@ export async function list(req, res, next) {
     const include = [
       { model: User, as: 'assignee', attributes: ['id', 'name', 'email'], required: false },
       { model: Tag, as: 'tags', attributes: ['id', 'name', 'color'], through: { attributes: [] }, required: false },
-      { model: OpportunityStatus, as: 'oppStatus', attributes: ['id', 'name'], required: false },
+      { model: PipelineStatus, as: 'pipelineStatusInfo', attributes: ['id', 'name'], required: false },
     ]
     if (await hasLeadAssignmentsTable()) {
       include.push({ model: User, as: 'assignedUsers', attributes: ['id', 'name', 'email'], through: { attributes: [] }, required: false })
@@ -959,7 +960,7 @@ export async function getOne(req, res, next) {
     })
     if (!lead) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Lead not found' } })
     const [openTasks, completedTasks, lastContactAt] = await Promise.all([
-      LeadTask.count({ where: { leadId: lead.id, companyId: req.user.companyId, status: 'open' } }),
+      LeadTask.count({ where: { leadId: lead.id, companyId: req.user.companyId, status: { [Op.in]: ['pending', 'in_progress'] } } }),
       LeadTask.count({ where: { leadId: lead.id, companyId: req.user.companyId, status: 'completed' } }),
       Activity.max('createdAt', {
         where: {
@@ -1129,7 +1130,15 @@ export async function update(req, res, next) {
       return res.status(400).json({ success: false, error: { code: 'VALIDATION', message } })
     }
 
-    const dupes = await findDuplicates(lead.workspaceId, { email: value.email, phone: value.phone }, lead.id)
+    const emailChanged =
+      Object.prototype.hasOwnProperty.call(value, 'email') &&
+      String(value.email || '').trim().toLowerCase() !== String(lead.email || '').trim().toLowerCase()
+    const phoneChanged =
+      Object.prototype.hasOwnProperty.call(value, 'phone') &&
+      String(value.phone || '').trim() !== String(lead.phone || '').trim()
+    const dupes = (emailChanged || phoneChanged)
+      ? await findDuplicates(lead.workspaceId, { email: value.email, phone: value.phone }, lead.id)
+      : []
     if (dupes.length) {
       return res.status(409).json({
         success: false,
@@ -1289,10 +1298,10 @@ export async function update(req, res, next) {
 export async function formMeta(req, res, next) {
   try {
     const workspaceId = req.headers['x-workspace-id']
-    const [sourceCount, dealStatusCount, oppStatusCount] = await Promise.all([
+    const [sourceCount, dealStatusCount, pipelineStatusCount] = await Promise.all([
       LeadSource.count({ where: { workspaceId, companyId: req.user.companyId } }),
       DealStatus.count({ where: { workspaceId, companyId: req.user.companyId } }),
-      OpportunityStatus.count({ where: { workspaceId, companyId: req.user.companyId } }),
+      PipelineStatus.count({ where: { workspaceId, companyId: req.user.companyId } }),
     ])
     if (sourceCount === 0) {
       await LeadSource.bulkCreate([
@@ -1311,8 +1320,8 @@ export async function formMeta(req, res, next) {
         { name: 'lost', isDealCompleteStatus: false, isInitial: false, sortOrder: 5, workspaceId, companyId: req.user.companyId },
       ])
     }
-    if (oppStatusCount === 0) {
-      await OpportunityStatus.bulkCreate([
+    if (pipelineStatusCount === 0) {
+      await PipelineStatus.bulkCreate([
         { name: 'New', isInitial: true, sortOrder: 0, workspaceId, companyId: req.user.companyId },
         { name: 'Qualified', isInitial: false, sortOrder: 1, workspaceId, companyId: req.user.companyId },
         { name: 'Proposal Sent', isInitial: false, sortOrder: 2, workspaceId, companyId: req.user.companyId },
@@ -1352,7 +1361,7 @@ export async function formMeta(req, res, next) {
       }
     }
 
-    const [sources, users, phoneCodes, dealStatuses, tags, customFields, opportunityStatuses] = await Promise.all([
+    const [sources, users, phoneCodes, dealStatuses, tags, customFields, pipelineStatuses] = await Promise.all([
       LeadSource.findAll({ where: { workspaceId, companyId: req.user.companyId, isActive: true }, order: [['name', 'ASC']] }),
       User.findAll({ where: { companyId: req.user.companyId, isActive: true }, attributes: ['id', 'name', 'email'], order: [['name', 'ASC']] }),
       CountryPhoneCode.findAll({ where: { isActive: true }, order: [['isDefault', 'DESC'], ['countryName', 'ASC']] }),
@@ -1365,14 +1374,14 @@ export async function formMeta(req, res, next) {
         where: { workspaceId, companyId: req.user.companyId },
         order: [['order', 'ASC'], ['createdAt', 'ASC']],
       }),
-      OpportunityStatus.findAll({
+      PipelineStatus.findAll({
         where: { workspaceId, companyId: req.user.companyId },
         order: [['sortOrder', 'ASC'], ['createdAt', 'ASC']],
       }),
     ])
     return res.json({
       success: true,
-      data: { sources, users, phoneCodes, dealStatuses, tags, customFields, opportunityStatuses },
+      data: { sources, users, phoneCodes, dealStatuses, tags, customFields, pipelineStatuses },
       meta: {},
     })
   } catch (e) {
@@ -1400,7 +1409,24 @@ export async function patchStatus(req, res, next) {
       leadId: lead.id,
       userId: req.user.id,
       actorName,
+      skipFields: ['status'],
     })
+    if (before.status !== status) {
+      await Activity.create({
+        type: 'status_change',
+        body: `Lead status changed from ${humanizeEnumLabel(before.status)} to ${humanizeEnumLabel(status)} by ${actorName}`,
+        metadata: {
+          action: 'lead_status_changed',
+          leadId: lead.id,
+          from: before.status || null,
+          to: status,
+          actorUserId: req.user.id,
+          actorName,
+        },
+        leadId: lead.id,
+        userId: req.user.id,
+      })
+    }
     await clearLeadListCache(lead.workspaceId)
     return res.json({ success: true, data: lead, meta: {} })
   } catch (e) {
@@ -1575,6 +1601,7 @@ export async function bulk(req, res, next) {
     const leads = await Lead.findAll({ where: { ...accessWhere, id: { [Op.in]: ids }, isDeleted: false } })
     if (!leads.length) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'No leads found' } })
 
+    let revertSkippedCount = 0
     const needsFieldHistory = action === 'assign' || action === 'status'
     const beforePlainById = needsFieldHistory ? new Map(leads.map((l) => [String(l.id), l.get({ plain: true })])) : null
 
@@ -1608,7 +1635,7 @@ export async function bulk(req, res, next) {
       await Lead.destroy({ where: { id: { [Op.in]: ids } } })
     }
     if (action === 'update') {
-      const ALLOWED = ['status', 'opportunityStatus', 'sourceId', 'value', 'country', 'city', 'state']
+      const ALLOWED = ['status', 'pipelineStatus', 'sourceId', 'value', 'country', 'city', 'state']
       const patch = {}
       for (const key of ALLOWED) {
         if (Object.prototype.hasOwnProperty.call(payload, key) && payload[key] !== undefined && payload[key] !== '') {
@@ -1617,25 +1644,41 @@ export async function bulk(req, res, next) {
       }
       if (payload.isOpportunity === true) {
         await Lead.update({ isOpportunity: true }, { where: { id: { [Op.in]: ids }, isOpportunity: false } })
-        if (!Object.prototype.hasOwnProperty.call(patch, 'opportunityStatus')) {
+        if (!Object.prototype.hasOwnProperty.call(patch, 'pipelineStatus')) {
           const workspaceId = req.headers['x-workspace-id'] || req.body.workspaceId
-          const initialStatus = await OpportunityStatus.findOne({
+          const initialStatus = await PipelineStatus.findOne({
             where: { workspaceId, companyId: req.user.companyId, isInitial: true },
           })
           if (initialStatus) {
             await Lead.update(
-              { opportunityStatus: initialStatus.id },
-              { where: { id: { [Op.in]: ids }, isOpportunity: true, opportunityStatus: null } },
+              { pipelineStatus: initialStatus.id },
+              { where: { id: { [Op.in]: ids }, isOpportunity: true, pipelineStatus: null } },
             )
           }
         }
       }
-      if (Object.prototype.hasOwnProperty.call(patch, 'opportunityStatus')) {
+      if (payload.isOpportunity === false) {
+        const linkedDeals = await Deal.findAll({
+          where: { opportunityLeadId: { [Op.in]: ids }, isDeleted: false },
+          attributes: ['opportunityLeadId'],
+          raw: true,
+        })
+        const blockedIds = new Set(linkedDeals.map((d) => String(d.opportunityLeadId)))
+        const revertIds = ids.filter((leadId) => !blockedIds.has(String(leadId)))
+        revertSkippedCount = blockedIds.size
+        if (revertIds.length) {
+          await Lead.update(
+            { isOpportunity: false, pipelineStatus: null },
+            { where: { id: { [Op.in]: revertIds }, isOpportunity: true } },
+          )
+        }
+      }
+      if (Object.prototype.hasOwnProperty.call(patch, 'pipelineStatus')) {
         await Lead.update(
-          { opportunityStatus: patch.opportunityStatus },
+          { pipelineStatus: patch.pipelineStatus },
           { where: { id: { [Op.in]: ids }, isOpportunity: true } },
         )
-        delete patch.opportunityStatus
+        delete patch.pipelineStatus
       }
       if (Object.prototype.hasOwnProperty.call(patch, 'status')) {
         await Lead.update({ status: patch.status }, { where: { id: { [Op.in]: ids }, isOpportunity: false } })
@@ -1643,6 +1686,17 @@ export async function bulk(req, res, next) {
       }
       if (Object.keys(patch).length) {
         await Lead.update(patch, { where: { id: { [Op.in]: ids } } })
+      }
+      if (payload.customFields && typeof payload.customFields === 'object' && Object.keys(payload.customFields).length) {
+        for (const lead of leads) {
+          await upsertLeadCustomFields({
+            leadId: lead.id,
+            workspaceId: lead.workspaceId,
+            companyId: lead.companyId,
+            customFields: payload.customFields,
+            validateRequired: false,
+          })
+        }
       }
     }
     if (action === 'tag') {
@@ -1718,7 +1772,11 @@ export async function bulk(req, res, next) {
     }
 
     await clearLeadListCache(leads[0].workspaceId)
-    return res.json({ success: true, data: { updated: leads.length }, meta: {} })
+    return res.json({
+      success: true,
+      data: { updated: leads.length - revertSkippedCount },
+      meta: revertSkippedCount ? { skippedHasDeals: revertSkippedCount } : {},
+    })
   } catch (e) {
     return next(e)
   }
@@ -2248,11 +2306,12 @@ export async function listLeadEmailThreads(req, res, next) {
     for (const row of filteredRows) {
       const threadKey = row.threadId || `single:${row.id}`
       if (!threadsMap.has(threadKey)) {
-        threadsMap.set(threadKey, { threadId: row.threadId || null, subject: row.subject || '(No subject)', lastMessageAt: row.sentAt || row.createdAt, lastFromEmail: row.fromEmail || null, lastDirection: row.direction, count: 0, preview: row.bodyText || row.bodyHtml || '', status: row.status, messages: [] })
+        threadsMap.set(threadKey, { threadId: row.threadId || null, subject: row.subject || '(No subject)', lastMessageAt: row.sentAt || row.createdAt, lastFromEmail: row.fromEmail || null, lastDirection: row.direction, count: 0, preview: row.bodyText || row.bodyHtml || '', status: row.status, hasInbound: false, messages: [] })
       }
       const current = threadsMap.get(threadKey)
       current.count += 1
       current.messages.push(row)
+      if (row.direction === 'inbound') current.hasInbound = true
       if (new Date(row.sentAt || row.createdAt).getTime() > new Date(current.lastMessageAt).getTime()) {
         current.lastMessageAt = row.sentAt || row.createdAt
         current.lastFromEmail = row.fromEmail || null
@@ -2847,6 +2906,14 @@ export async function createTask(req, res, next) {
     const title = String(req.body?.title || '').trim()
     if (!title) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Task title is required' } })
 
+    if (!req.body?.startAt) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Start date is required' } })
+    if (!req.body?.dueAt) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'End date is required' } })
+    const startAt = new Date(req.body.startAt)
+    const dueAt = new Date(req.body.dueAt)
+    if (Number.isNaN(startAt.getTime())) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Invalid start date' } })
+    if (Number.isNaN(dueAt.getTime())) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Invalid end date' } })
+    if (dueAt < startAt) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'End date must be on or after the start date' } })
+
     const status = normalizeLeadTaskStatus(req.body?.status) || 'pending'
     const priority = normalizeLeadTaskPriority(req.body?.priority) || 'medium'
     const recurrenceRule = sanitizeRecurrenceRule(req.body?.recurrenceRule)
@@ -2859,8 +2926,8 @@ export async function createTask(req, res, next) {
       title,
       taskType: normalizeLeadTaskType(req.body?.taskType),
       description: req.body?.description || null,
-      startAt: req.body?.startAt ? new Date(req.body.startAt) : null,
-      dueAt: req.body?.dueAt ? new Date(req.body.dueAt) : null,
+      startAt,
+      dueAt,
       priority,
       status,
       completedAt: status === 'completed' ? new Date() : null,
@@ -2936,8 +3003,25 @@ export async function patchTask(req, res, next) {
     }
     if ('taskType' in req.body) payload.taskType = normalizeLeadTaskType(req.body.taskType)
     if ('description' in req.body) payload.description = req.body.description || null
-    if ('startAt' in req.body) payload.startAt = req.body.startAt ? new Date(req.body.startAt) : null
-    if ('dueAt' in req.body) payload.dueAt = req.body.dueAt ? new Date(req.body.dueAt) : null
+    if ('startAt' in req.body) {
+      if (!req.body.startAt) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Start date is required' } })
+      const startAt = new Date(req.body.startAt)
+      if (Number.isNaN(startAt.getTime())) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Invalid start date' } })
+      payload.startAt = startAt
+    }
+    if ('dueAt' in req.body) {
+      if (!req.body.dueAt) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'End date is required' } })
+      const dueAt = new Date(req.body.dueAt)
+      if (Number.isNaN(dueAt.getTime())) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Invalid end date' } })
+      payload.dueAt = dueAt
+    }
+    {
+      const effectiveStart = payload.startAt ?? row.startAt
+      const effectiveDue = payload.dueAt ?? row.dueAt
+      if (effectiveStart && effectiveDue && new Date(effectiveDue) < new Date(effectiveStart)) {
+        return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'End date must be on or after the start date' } })
+      }
+    }
     if ('priority' in req.body) {
       const p = normalizeLeadTaskPriority(req.body.priority)
       if (p) payload.priority = p
@@ -3182,6 +3266,51 @@ export async function deleteFollowup(req, res, next) {
     if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Follow-up not found' } })
     await row.destroy()
     return res.json({ success: true, data: { ok: true }, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function listAllFollowups(req, res, next) {
+  try {
+    const workspaceIds = await scopedWorkspaceIdsForRequest(req)
+    if (!workspaceIds.length) return res.json({ success: true, data: [], meta: {} })
+
+    const where = {
+      companyId: req.user.companyId,
+      workspaceId: { [Op.in]: workspaceIds },
+    }
+
+    const roleKind = req.user.userRoleKind
+    const isSales = !req.user.isCompanyAdmin && roleKind !== 'workspace_admin' && roleKind !== 'manager'
+    if (isSales) {
+      where.createdBy = req.user.id
+    } else {
+      const userIdParam = req.query.userId ? String(req.query.userId).trim() : ''
+      if (/^[0-9a-fA-F-]{36}$/.test(userIdParam)) where.createdBy = userIdParam
+    }
+
+    const statusParam = String(req.query.status || '').trim().toLowerCase()
+    if (['pending', 'done', 'cancelled'].includes(statusParam)) where.status = statusParam
+
+    const rowsRaw = await LeadFollowup.findAll({
+      where,
+      include: [
+        { model: Lead, as: 'lead', attributes: ['id', 'title', 'contactName'], required: true },
+        { model: User, as: 'creator', attributes: ['id', 'name', 'email'], required: false },
+      ],
+      order: [['scheduledAt', 'ASC']],
+      limit: 1000,
+    })
+
+    const statusRank = { pending: 0, done: 1, cancelled: 2 }
+    const rows = [...rowsRaw].sort((a, b) => {
+      const d = (statusRank[a.status] ?? 9) - (statusRank[b.status] ?? 9)
+      if (d !== 0) return d
+      return new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime()
+    })
+
+    return res.json({ success: true, data: rows, meta: {} })
   } catch (e) {
     return next(e)
   }
@@ -3617,9 +3746,9 @@ export async function exportRows(req, res, next) {
 export async function getLeadSetup(req, res, next) {
   try {
     const workspaceId = req.headers['x-workspace-id']
-    const [dealStatusCount, oppStatusCount] = await Promise.all([
+    const [dealStatusCount, pipelineStatusCount] = await Promise.all([
       DealStatus.count({ where: { workspaceId, companyId: req.user.companyId } }),
-      OpportunityStatus.count({ where: { workspaceId, companyId: req.user.companyId } }),
+      PipelineStatus.count({ where: { workspaceId, companyId: req.user.companyId } }),
     ])
     if (dealStatusCount === 0) {
       await DealStatus.bulkCreate([
@@ -3631,8 +3760,8 @@ export async function getLeadSetup(req, res, next) {
         { name: 'lost', isDealCompleteStatus: false, isInitial: false, sortOrder: 5, workspaceId, companyId: req.user.companyId },
       ])
     }
-    if (oppStatusCount === 0) {
-      await OpportunityStatus.bulkCreate([
+    if (pipelineStatusCount === 0) {
+      await PipelineStatus.bulkCreate([
         { name: 'New', isInitial: true, sortOrder: 0, workspaceId, companyId: req.user.companyId },
         { name: 'Qualified', isInitial: false, sortOrder: 1, workspaceId, companyId: req.user.companyId },
         { name: 'Proposal Sent', isInitial: false, sortOrder: 2, workspaceId, companyId: req.user.companyId },
@@ -3641,19 +3770,19 @@ export async function getLeadSetup(req, res, next) {
         { name: 'Lost', isInitial: false, sortOrder: 5, workspaceId, companyId: req.user.companyId },
       ])
     }
-    const [sources, tags, dealStatuses, opportunityStatuses] = await Promise.all([
+    const [sources, tags, dealStatuses, pipelineStatuses] = await Promise.all([
       LeadSource.findAll({ where: { workspaceId, companyId: req.user.companyId }, order: [['createdAt', 'ASC']] }),
       Tag.findAll({ where: { companyId: req.user.companyId }, order: [['name', 'ASC'], ['createdAt', 'ASC']] }),
       DealStatus.findAll({
         where: { workspaceId, companyId: req.user.companyId },
         order: [['sortOrder', 'ASC'], ['createdAt', 'ASC']],
       }),
-      OpportunityStatus.findAll({
+      PipelineStatus.findAll({
         where: { workspaceId, companyId: req.user.companyId },
         order: [['sortOrder', 'ASC'], ['createdAt', 'ASC']],
       }),
     ])
-    return res.json({ success: true, data: { sources, tags, dealStatuses, opportunityStatuses }, meta: {} })
+    return res.json({ success: true, data: { sources, tags, dealStatuses, pipelineStatuses }, meta: {} })
   } catch (e) {
     return next(e)
   }
@@ -3836,10 +3965,10 @@ export async function deleteLeadTag(req, res, next) {
   }
 }
 
-// ─── Opportunity Status CRUD ──────────────────────────────────────────────────
+// ─── Pipeline Status CRUD ──────────────────────────────────────────────────
 
-async function normalizeOpportunityStatusOrder(workspaceId, companyId, transaction) {
-  const rows = await OpportunityStatus.findAll({
+async function normalizePipelineStatusOrder(workspaceId, companyId, transaction) {
+  const rows = await PipelineStatus.findAll({
     where: { workspaceId, companyId },
     order: [['sortOrder', 'ASC'], ['createdAt', 'ASC']],
     transaction,
@@ -3856,25 +3985,25 @@ async function normalizeOpportunityStatusOrder(workspaceId, companyId, transacti
   }
 }
 
-export async function createOpportunityStatus(req, res, next) {
+export async function createPipelineStatus(req, res, next) {
   try {
     const workspaceId = req.headers['x-workspace-id']
     const name = String(req.body?.name || '').trim()
     if (!name) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Name is required' } })
     const row = await sequelize.transaction(async (t) => {
-      const maxOrder = await OpportunityStatus.max('sortOrder', { where: { workspaceId, companyId: req.user.companyId }, transaction: t })
+      const maxOrder = await PipelineStatus.max('sortOrder', { where: { workspaceId, companyId: req.user.companyId }, transaction: t })
       const sortOrder = Number.isFinite(Number(maxOrder)) ? Number(maxOrder) + 1 : 0
-      return OpportunityStatus.create({ name, isInitial: false, sortOrder, workspaceId, companyId: req.user.companyId }, { transaction: t })
+      return PipelineStatus.create({ name, isInitial: false, sortOrder, workspaceId, companyId: req.user.companyId }, { transaction: t })
     })
     return res.status(201).json({ success: true, data: row, meta: {} })
   } catch (e) { return next(e) }
 }
 
-export async function updateOpportunityStatus(req, res, next) {
+export async function updatePipelineStatus(req, res, next) {
   try {
     const workspaceId = req.headers['x-workspace-id']
-    const row = await OpportunityStatus.findOne({ where: { id: req.params.id, workspaceId, companyId: req.user.companyId } })
-    if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Opportunity status not found' } })
+    const row = await PipelineStatus.findOne({ where: { id: req.params.id, workspaceId, companyId: req.user.companyId } })
+    if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Pipeline status not found' } })
     const name = String(req.body?.name ?? row.name).trim()
     if (!name) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Name is required' } })
     await row.update({ name })
@@ -3882,25 +4011,25 @@ export async function updateOpportunityStatus(req, res, next) {
   } catch (e) { return next(e) }
 }
 
-export async function deleteOpportunityStatus(req, res, next) {
+export async function deletePipelineStatus(req, res, next) {
   try {
     const workspaceId = req.headers['x-workspace-id']
-    const row = await OpportunityStatus.findOne({ where: { id: req.params.id, workspaceId, companyId: req.user.companyId } })
-    if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Opportunity status not found' } })
+    const row = await PipelineStatus.findOne({ where: { id: req.params.id, workspaceId, companyId: req.user.companyId } })
+    if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Pipeline status not found' } })
     await row.destroy()
-    await sequelize.transaction(async (t) => normalizeOpportunityStatusOrder(workspaceId, req.user.companyId, t))
+    await sequelize.transaction(async (t) => normalizePipelineStatusOrder(workspaceId, req.user.companyId, t))
     return res.json({ success: true, data: {}, meta: {} })
   } catch (e) { return next(e) }
 }
 
-export async function reorderOpportunityStatuses(req, res, next) {
+export async function reorderPipelineStatuses(req, res, next) {
   try {
     const workspaceId = req.headers['x-workspace-id']
     const { ids } = req.body || {}
     if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'ids required' } })
     await sequelize.transaction(async (t) => {
       for (let i = 0; i < ids.length; i++) {
-        await OpportunityStatus.update(
+        await PipelineStatus.update(
           { sortOrder: i, isInitial: i === 0 },
           { where: { id: ids[i], workspaceId, companyId: req.user.companyId }, transaction: t },
         )

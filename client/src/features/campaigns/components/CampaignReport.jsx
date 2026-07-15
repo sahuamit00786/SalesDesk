@@ -18,7 +18,7 @@ import {
   UserMinus,
   Users,
   XCircle,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import { ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts'
 import { useGetCampaignReportQuery, useGetCampaignLeadsQuery } from '@/features/campaigns/campaignsApi'
 import { formatDealMoney } from '@/features/deals/dealCurrencies'

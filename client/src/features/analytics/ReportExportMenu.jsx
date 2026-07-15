@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import toast from 'react-hot-toast'
-import { ChevronDown, Download, FileSpreadsheet, FileText, Printer } from 'lucide-react'
+import { ChevronDown, Download, FileSpreadsheet, FileText, Printer } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 import { Button } from '@/components/ui/Button'
 

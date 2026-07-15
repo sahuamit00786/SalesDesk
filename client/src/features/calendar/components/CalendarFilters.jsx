@@ -1,5 +1,5 @@
 import { CALENDAR_FILTERS } from '../eventColors'
-import { Video, CheckSquare, Phone, TrendingUp, Bell } from 'lucide-react'
+import { Video, CheckSquare, Phone, TrendingUp, Bell } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 
 const iconMap = {

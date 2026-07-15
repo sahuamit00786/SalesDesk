@@ -1,4 +1,4 @@
-import { Plus, Globe, Link2 } from 'lucide-react'
+import { Plus, Globe, Link2 } from '@/components/ui/icons'
 import { Input } from '@/components/ui/Input'
 import { ChoiceCard } from '@/features/onboarding/components/ChoiceCard'
 import { CountryPicker } from '@/features/onboarding/components/CountryPicker'

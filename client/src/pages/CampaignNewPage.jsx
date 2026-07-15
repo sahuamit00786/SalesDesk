@@ -93,8 +93,8 @@ export function CampaignNewPage() {
   const leads = useMemo(() => data?.data || [], [data?.data])
   const total = data?.meta?.total ?? 0
   const formUsers = formMetaData?.data?.users || []
-  const opportunityStatuses = formMetaData?.data?.opportunityStatuses || []
-  const stageOptions = opportunityStatuses.map((s) => ({
+  const pipelineStatuses = formMetaData?.data?.pipelineStatuses || []
+  const stageOptions = pipelineStatuses.map((s) => ({
     value: s.id,
     label: s.name || 'Status',
   }))

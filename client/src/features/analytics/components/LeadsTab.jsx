@@ -1,4 +1,4 @@
-import { Users, UserPlus, Trophy, ThumbsDown, AlertTriangle, TrendingUp, UserX, UserCheck } from 'lucide-react'
+import { Users, UserPlus, Trophy, ThumbsDown, AlertTriangle, TrendingUp, UserX, UserCheck } from '@/components/ui/icons'
 import {
   ResponsiveContainer, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,

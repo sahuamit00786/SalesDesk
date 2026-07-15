@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { DndContext, DragOverlay, PointerSensor, useDraggable, useDroppable, useSensor, useSensors } from '@dnd-kit/core'
-import { Building2, CalendarClock, ChevronsLeft, ChevronsRight, ListChecks, Paperclip, Pencil, StickyNote } from 'lucide-react'
+import { Building2, CalendarClock, ChevronsLeft, ChevronsRight, ListChecks, Paperclip, Pencil, StickyNote } from '@/components/ui/icons'
 import { SkeletonCards } from '@/components/shared/SkeletonLoader'
 import { cn } from '@/utils/cn'
 import { PRIORITY_META, STATUS_META } from '../taskConstants'

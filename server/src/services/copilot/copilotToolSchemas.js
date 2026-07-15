@@ -10,7 +10,9 @@ Structured tools first: prefer getLeads / getLeadDetail / getDeals / getCampaign
 
 Be concise, structured, and actionable in your final answers. When numeric/tabular data is involved (lists of records, comparisons, analytics), prefer returning it as a table or chart block rather than prose.
 
-When summarizing a single record — "tell me about <person/lead>" — resolve the name first, then call the matching detail tool: getUserDetail for a user (kind "user"), getLeadDetail for a lead (kind "lead"). Both render a profile card with the key metrics automatically, so your text should be a short colleague-style briefing, NOT a field-by-field data dump and NOT a re-listing of every number already on the card. 1-3 natural sentences covering only what's noteworthy: who they are, their status/stage, who owns them, and anything that stands out (recent activity, no activity yet, overdue tasks, strong/weak pipeline). Do not print raw ids or timestamps ("**Lead ID**:", "**Created At**:") unless the user is taking an action that needs them or explicitly asks. Skip empty/zero/default fields rather than reporting their absence.`
+When asked about a single record — "tell me about <person/lead>" — resolve the name first, then call the matching detail tool: getUserDetail for a user (kind "user"), getLeadDetail for a lead (kind "lead"). The frontend renders the result as a self-contained profile card carrying every field, metric, task and recent activity, and that card IS the answer — it is shown to the user on its own, with no text from you underneath. So do not write a prose summary, briefing, or field list for these turns; never restate what the card already shows.
+
+If a question about one record needs analysis the card cannot show (a comparison, a trend, a recommendation), answer it with the analytical tools instead, and keep the prose to only the part the card doesn't cover.`
 
 export const COPILOT_TOOLS = [
   {

@@ -3,7 +3,7 @@ import {
   DealStatus,
   LeadSource,
   OpportunityStage,
-  OpportunityStatus,
+  PipelineStatus,
   Workspace,
 } from '../models/index.js'
 import {
@@ -130,15 +130,15 @@ export async function provisionWorkspace(workspace, company, opts = {}) {
     }
     await normalizeDealStatusOrder(workspaceId, companyId, transaction)
 
-    const oppStatusCount = await OpportunityStatus.count({ where: { workspaceId, companyId }, transaction })
-    if (oppStatusCount === 0) {
-      await OpportunityStatus.bulkCreate(
+    const pipelineStatusCount = await PipelineStatus.count({ where: { workspaceId, companyId }, transaction })
+    if (pipelineStatusCount === 0) {
+      await PipelineStatus.bulkCreate(
         DEFAULT_OPPORTUNITY_STATUSES.map((s) => ({ ...s, workspaceId, companyId })),
         { transaction },
       )
-      steps.push({ id: 'opportunities', label: 'Opportunity statuses created', count: DEFAULT_OPPORTUNITY_STATUSES.length })
+      steps.push({ id: 'opportunities', label: 'Pipeline statuses created', count: DEFAULT_OPPORTUNITY_STATUSES.length })
     } else {
-      steps.push({ id: 'opportunities', label: 'Opportunity statuses ready', skipped: true })
+      steps.push({ id: 'opportunities', label: 'Pipeline statuses ready', skipped: true })
     }
 
     steps.push({ id: 'finalize', label: 'Finalizing workspace' })

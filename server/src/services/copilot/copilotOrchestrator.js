@@ -92,6 +92,60 @@ const fmtMoney = (n) => {
   return `$${v.toLocaleString('en-US')}`
 }
 const titleCase = (s) => (s ? String(s).charAt(0).toUpperCase() + String(s).slice(1) : s)
+const humanize = (s) => (s ? titleCase(String(s).replace(/_/g, ' ')) : null)
+
+const fmtDate = (d) => {
+  if (!d) return null
+  const dt = new Date(d)
+  return Number.isNaN(dt.getTime()) ? null : dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+const MAX_CARD_TASKS = 5
+const MAX_CARD_ACTIVITIES = 6
+const MAX_ACTIVITY_BODY = 140
+
+const TASK_STATUS_TONE = { pending: 'amber', in_progress: 'brand', completed: 'green', cancelled: 'gray' }
+
+const truncate = (s, max) => {
+  const text = String(s || '').replace(/\s+/g, ' ').trim()
+  return text.length > max ? `${text.slice(0, max).trimEnd()}…` : text
+}
+
+/** Tasks + recent activity as list sections on the card, so the answer needs no prose retelling. */
+function leadSections(lead) {
+  const sections = []
+
+  const tasks = Array.isArray(lead.tasks) ? lead.tasks : []
+  if (tasks.length) {
+    sections.push({
+      title: 'Tasks',
+      items: tasks.slice(0, MAX_CARD_TASKS).map((t) => ({
+        label: t.title,
+        meta: [t.dueAt ? `Due ${fmtDate(t.dueAt)}` : null, t.assignee?.name].filter(Boolean).join(' · '),
+        badges: [
+          { label: humanize(t.status), tone: TASK_STATUS_TONE[t.status] || 'gray' },
+          { label: humanize(t.priority), tone: 'gray' },
+        ].filter((b) => b.label),
+      })),
+      more: Math.max(0, tasks.length - MAX_CARD_TASKS),
+    })
+  }
+
+  const activities = Array.isArray(lead.activities) ? lead.activities : []
+  if (activities.length) {
+    sections.push({
+      title: 'Recent activity',
+      items: activities.slice(0, MAX_CARD_ACTIVITIES).map((a) => ({
+        label: truncate(a.body, MAX_ACTIVITY_BODY) || humanize(a.type),
+        meta: [a.user?.name, fmtDate(a.createdAt)].filter(Boolean).join(' · '),
+        badges: [{ label: humanize(a.type), tone: 'gray' }],
+      })),
+      more: Math.max(0, activities.length - MAX_CARD_ACTIVITIES),
+    })
+  }
+
+  return sections
+}
 
 /**
  * Turns a single-record detail tool result into a `profile` block the frontend
@@ -127,6 +181,7 @@ function buildProfileBlock(toolName, payload) {
     if (toolName === 'getLeadDetail' && payload?.data?.id) {
       const l = payload.data
       const s = payload.meta?.summary || {}
+      const location = [l.city, l.state, l.country].filter(Boolean).join(', ')
       return {
         type: 'profile',
         kind: 'lead',
@@ -139,21 +194,46 @@ function buildProfileBlock(toolName, payload) {
           { label: 'Company', value: l.company },
           { label: 'Email', value: l.email },
           { label: 'Phone', value: l.phone },
+          { label: 'Location', value: location },
           { label: 'Owner', value: l.assignee?.name },
-          { label: 'Source', value: l.source ? titleCase(String(l.source).replace(/_/g, ' ')) : null },
+          { label: 'Source', value: humanize(l.source) },
+          { label: 'Last contact', value: fmtDate(s.lastContactAt) },
+          { label: 'Created', value: fmtDate(l.createdAt) },
         ].filter((f) => f.value),
         stats: [
-          l.value ? { label: 'Value', value: fmtMoney(l.value) } : null,
+          { label: 'Value', value: fmtMoney(l.value) },
+          { label: 'Score', value: l.score ?? 0 },
           { label: 'Open Tasks', value: s.openTasks ?? 0 },
           { label: 'Completed Tasks', value: s.completedTasks ?? 0 },
           { label: 'Activities', value: Array.isArray(l.activities) ? l.activities.length : 0 },
-        ].filter(Boolean),
+        ],
+        sections: leadSections(l),
       }
     }
   } catch {
     // best-effort — never let card building break the answer
   }
   return null
+}
+
+// A turn that only looked one record up is fully answered by the profile card
+// itself — the follow-up completion would just retell the card in prose, which
+// is the duplication users see under the card. When every tool the turn used is
+// one of these, we stop after the tool round and ship the card alone.
+const CARD_ONLY_TOOLS = new Set(['getLeadDetail', 'getUserDetail', 'resolveAmbiguousEntity'])
+
+/** Plain-text stand-in persisted as the turn's content so later turns still know what was shown. */
+function describeProfileBlocks(blocks) {
+  return blocks
+    .map((p) => {
+      const facts = [
+        ...(p.badges || []).map((b) => b.label),
+        ...(p.fields || []).map((f) => `${f.label}: ${f.value}`),
+        ...(p.stats || []).map((s) => `${s.label}: ${s.value}`),
+      ].join(', ')
+      return `Showed a ${p.kind} profile card for ${p.name} — ${facts}`
+    })
+    .join('\n')
 }
 
 function dedupeEntityLinks(list) {
@@ -232,6 +312,7 @@ export async function runCopilotTurn({ session, userMessageText, systemAside, re
     let pendingDisambiguation = null
     let touchedEntities = []
     let profileBlocks = []
+    let cardOnly = false
 
     // eslint-disable-next-line no-constant-condition
     while (true) {
@@ -253,6 +334,7 @@ export async function runCopilotTurn({ session, userMessageText, systemAside, re
       })
 
       let disambiguationHit = false
+      const cardOnlyRound = toolCalls.every((c) => CARD_ONLY_TOOLS.has(c.name))
       for (const call of toolCalls) {
         const impl = COPILOT_TOOL_IMPLEMENTATIONS[call.name]
         let resultPayload
@@ -300,6 +382,10 @@ export async function runCopilotTurn({ session, userMessageText, systemAside, re
       }
 
       roundtrips += 1
+      if (cardOnlyRound && profileBlocks.length && !disambiguationHit) {
+        cardOnly = true
+        break
+      }
       if (disambiguationHit || roundtrips >= MAX_TOOL_ROUNDTRIPS) break
     }
 
@@ -342,7 +428,7 @@ export async function runCopilotTurn({ session, userMessageText, systemAside, re
 
     const blocks = [
       ...dedupedProfiles,
-      { type: 'text', markdown: finalText },
+      ...(cardOnly ? [] : [{ type: 'text', markdown: finalText }]),
       ...(dedupedEntities.length ? [{ type: 'entities', items: dedupedEntities }] : []),
     ]
     // Emit the structured blocks live (text already streamed token-by-token).
@@ -353,7 +439,7 @@ export async function runCopilotTurn({ session, userMessageText, systemAside, re
       companyId: ctx.companyId,
       workspaceId: ctx.workspaceId,
       role: 'assistant',
-      content: finalText,
+      content: cardOnly ? describeProfileBlocks(dedupedProfiles) : finalText,
       blocks,
     })
     emitDone(sessionId, { pendingDisambiguation: false })

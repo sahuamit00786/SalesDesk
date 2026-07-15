@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { format, isSameDay } from 'date-fns'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 import { buildMonthGridCells, shiftMonth, WEEKDAY_LABELS_MON } from '@/features/calendar/utils/monthGrid'
 

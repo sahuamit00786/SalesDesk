@@ -89,6 +89,8 @@ const baseQueryWithReauth = async (args, api, extraOptions) => {
             accessToken: d.data.accessToken,
             refreshToken: d.data.refreshToken,
             user: d.data.user,
+            // Token rotation, not a new sign-in: must not re-trigger the workspace picker.
+            silent: true,
           }),
         )
       } else {

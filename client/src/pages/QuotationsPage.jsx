@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { Download, Plus, RefreshCw, SlidersHorizontal } from 'lucide-react'
+import { Download, Plus, RefreshCw, SlidersHorizontal } from '@/components/ui/icons'
 import toast from 'react-hot-toast'
 import { PageShell } from '@/components/layout/PageShell'
 import { PageStack } from '@/components/layout/PageStack'
@@ -31,8 +31,8 @@ export function QuotationsPage() {
 
   const { data: formMetaData } = useGetLeadFormMetaQuery()
   const rawDealStatuses = formMetaData?.data?.dealStatuses || []
-  const opportunityStatuses = formMetaData?.data?.opportunityStatuses || []
-  const dealStatuses = rawDealStatuses.length ? rawDealStatuses : opportunityStatuses
+  const pipelineStatuses = formMetaData?.data?.pipelineStatuses || []
+  const dealStatuses = rawDealStatuses.length ? rawDealStatuses : pipelineStatuses
   const users = formMetaData?.data?.users || []
 
   const { data: leadsRes } = useGetLeadsQuery({ page: 1, limit: 400, search: '' })
@@ -171,7 +171,7 @@ export function QuotationsPage() {
           <div className="ml-auto flex gap-2">
             <Link
               to={leadIdFilter ? `/quotations/new?leadId=${encodeURIComponent(leadIdFilter)}` : '/quotations/new'}
-              className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-medium text-white hover:bg-brand-700"
+              className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-medium cx-icon-inherit text-white hover:bg-brand-700"
             >
               <Plus className="h-4 w-4" />
               New quotation
@@ -257,7 +257,7 @@ export function QuotationsPage() {
         open={Boolean(selectedDeal)}
         onClose={() => setSelectedDeal(null)}
         opp={selectedDeal}
-        opportunityStatuses={dealStatuses}
+        pipelineStatuses={dealStatuses}
       />
     </PageShell>
   )

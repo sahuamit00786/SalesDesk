@@ -1,5 +1,5 @@
 import { format, isSameDay, isPast } from 'date-fns'
-import { Video, CheckSquare, Phone, TrendingUp, Bell, Clock, User, CalendarClock } from 'lucide-react'
+import { Video, CheckSquare, Phone, TrendingUp, Bell, Clock, User, CalendarClock } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 import { getKindBgClass } from '../eventColors'
 

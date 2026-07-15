@@ -1,4 +1,4 @@
-import { CheckSquare, AlertTriangle, Percent, UserX, CalendarClock, ListTodo } from 'lucide-react'
+import { CheckSquare, AlertTriangle, Percent, UserX, CalendarClock, ListTodo } from '@/components/ui/icons'
 import {
   ResponsiveContainer, LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,

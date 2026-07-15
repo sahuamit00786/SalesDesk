@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { Search, X } from 'lucide-react'
+import { Search, X } from '@/components/ui/icons'
 import { PageShell } from '@/components/layout/PageShell'
 import { Select } from '@/components/ui/Select'
 import { IconInput } from '@/components/ui/IconInput'

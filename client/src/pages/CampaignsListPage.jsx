@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { BarChart3, CalendarDays, LineChart, ListChecks, Megaphone, MoreHorizontal, RefreshCw, ShoppingBag, Users } from 'lucide-react'
+import { BarChart3, CalendarDays, LineChart, ListChecks, Megaphone, MoreHorizontal, RefreshCw, ShoppingBag, Users } from '@/components/ui/icons'
 import { SkeletonCards } from '@/components/shared/SkeletonLoader'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { PageShell } from '@/components/layout/PageShell'

@@ -11,6 +11,17 @@ export default {
         display: ['Space Grotesk', 'Plus Jakarta Sans', 'sans-serif'],
       },
       colors: {
+        // LeadNest landing (Attio-style monochrome + violet accent)
+        ln: {
+          bg: '#FFFFFF',
+          bg2: '#FAFAFB',
+          ink: '#111111',
+          mut: '#6B7280',
+          line: '#ECECEC',
+          btn: '#111111',
+          btnh: '#2B2B2B',
+          accent: '#7C3AED',
+        },
         lf: {
           ink: '#0b1120',
           muted: '#475569',
@@ -63,7 +74,26 @@ export default {
         danger: '#dc2626',
         info: '#5B21B6',
       },
+      borderRadius: {
+        card: '20px',
+        btn: '14px',
+        frame: '24px',
+        field: '16px',
+      },
+      boxShadow: {
+        soft: '0 10px 40px rgba(0,0,0,0.05)',
+        'soft-lg': '0 20px 60px rgba(0,0,0,0.07)',
+        lift: '0 18px 50px rgba(0,0,0,0.08)',
+      },
       keyframes: {
+        'ln-float': {
+          '0%, 100%': { transform: 'translateY(0px)' },
+          '50%': { transform: 'translateY(-12px)' },
+        },
+        'ln-marquee': {
+          '0%': { transform: 'translateX(0)' },
+          '100%': { transform: 'translateX(-50%)' },
+        },
         'lf-marquee': {
           '0%': { transform: 'translateX(0)' },
           '100%': { transform: 'translateX(-50%)' },
@@ -98,6 +128,9 @@ export default {
         },
       },
       animation: {
+        'ln-float': 'ln-float 7s ease-in-out infinite',
+        'ln-float-slow': 'ln-float 10s ease-in-out infinite',
+        'ln-marquee': 'ln-marquee 40s linear infinite',
         'lf-marquee': 'lf-marquee 45s linear infinite',
         'lf-float': 'lf-float 5s ease-in-out infinite',
         'lf-shimmer': 'lf-shimmer 3s linear infinite',

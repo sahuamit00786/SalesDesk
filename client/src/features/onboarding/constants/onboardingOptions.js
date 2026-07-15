@@ -16,7 +16,7 @@ import {
   ShoppingCart,
   GraduationCap,
   Truck,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import { findCountryByCode, getAllCountries } from '@/constants/geo'
 
 export const ONBOARDING_STEPS = [

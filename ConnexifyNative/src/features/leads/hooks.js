@@ -88,8 +88,8 @@ export function useLeadMutations() {
       mutationFn: ({ id, body }) => opportunitiesApi.update(id, body),
       ...opts(),
     }),
-    patchOpportunityStatus: useMutation({
-      mutationFn: ({ id, opportunityStatusId }) => opportunitiesApi.patchStatus(id, opportunityStatusId),
+    patchPipelineStatus: useMutation({
+      mutationFn: ({ id, pipelineStatusId }) => opportunitiesApi.patchStatus(id, pipelineStatusId),
       ...opts(),
     }),
   };

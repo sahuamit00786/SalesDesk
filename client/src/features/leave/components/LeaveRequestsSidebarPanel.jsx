@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { ArrowRight, ScrollText } from 'lucide-react'
+import { ArrowRight, ScrollText } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 import { HrStatusPill } from '@/features/hr/components/HrStatusPill'
 import { getLeaveTypeStyle } from '@/features/leave/constants/leaveTypeStyles'

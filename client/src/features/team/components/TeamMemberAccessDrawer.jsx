@@ -11,7 +11,7 @@ import {
   ShieldCheck,
   Upload,
   User,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import { RightDrawer } from '@/components/ui/RightDrawer'
 import { PhoneField } from '@/components/ui/PhoneField'
 import { useWorkspacesQuery } from '@/features/workspace/workspaceApi'

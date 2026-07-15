@@ -1,4 +1,4 @@
-import { ChevronRight, User, Users } from 'lucide-react'
+import { ChevronRight, User, Users } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 
 export function DisambiguationChips({ block, onSelect, disabled }) {

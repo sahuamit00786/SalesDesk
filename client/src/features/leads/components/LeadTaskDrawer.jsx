@@ -18,7 +18,7 @@ import {
   Repeat,
   Trash2,
   X,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import { RightDrawer } from '@/components/ui/RightDrawer'
 import { AttachmentPickerModal } from '@/features/templates/components/AttachmentPickerModal'
 import { DocumentPreviewDialog } from '@/features/documents/components/DocumentPreviewDialog'
@@ -337,8 +337,20 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
       toast.error('Add a task title.')
       return
     }
+    if (!startLocal) {
+      toast.error('Start date is required.')
+      return
+    }
+    if (!dueLocal) {
+      toast.error('End date is required.')
+      return
+    }
     const dueAt = datetimeLocalToIso(dueLocal)
     const startAt = dateInputToIso(startLocal)
+    if (new Date(dueAt) < new Date(startAt)) {
+      toast.error('End date must be on or after the start date.')
+      return
+    }
     const base = {
       title: title.trim(),
       description: description.trim() || null,
@@ -553,18 +565,27 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
         <SectionCard icon={Calendar} title="Schedule">
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-muted">Start date</label>
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-muted">
+                Start date <span className="text-danger">*</span>
+              </label>
               <input
                 type="date"
+                required
+                aria-required="true"
                 className="h-11 w-full rounded-xl border border-surface-border px-3 text-sm outline-none ring-brand-500/20 focus:border-brand-400 focus:ring-2"
                 value={startLocal}
                 onChange={(e) => setStartLocal(e.target.value)}
               />
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-muted">Due date &amp; time</label>
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-muted">
+                End date &amp; time <span className="text-danger">*</span>
+              </label>
               <input
                 type="datetime-local"
+                required
+                aria-required="true"
+                min={startLocal ? `${startLocal}T00:00` : undefined}
                 className="h-11 w-full rounded-xl border border-surface-border px-3 text-sm outline-none ring-brand-500/20 focus:border-brand-400 focus:ring-2"
                 value={dueLocal}
                 onChange={(e) => setDueLocal(e.target.value)}
@@ -572,7 +593,7 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] font-medium text-ink-muted">Due:</span>
+            <span className="text-[11px] font-medium text-ink-muted">End date presets:</span>
             {[
               { label: 'Today', days: 0 },
               { label: 'Tomorrow', days: 1 },
@@ -587,15 +608,6 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
                 {p.label}
               </button>
             ))}
-            {dueLocal ? (
-              <button
-                type="button"
-                onClick={() => setDueLocal('')}
-                className="rounded-full border border-surface-border bg-white px-2.5 py-1 text-[11px] font-semibold text-ink-faint transition hover:border-red-200 hover:text-red-600"
-              >
-                Clear
-              </button>
-            ) : null}
           </div>
         </SectionCard>
 

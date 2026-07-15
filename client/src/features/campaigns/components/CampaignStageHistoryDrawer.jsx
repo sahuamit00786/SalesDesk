@@ -1,4 +1,4 @@
-import { History } from 'lucide-react'
+import { History } from '@/components/ui/icons'
 import { RightDrawer } from '@/components/ui/RightDrawer'
 import { useGetCampaignLeadStageHistoryQuery } from '@/features/campaigns/campaignsApi'
 

@@ -1,7 +1,7 @@
 import { useMemo, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { format } from 'date-fns'
-import { Video, Clock3, ExternalLink, MapPin, Users, Briefcase, Copy, Calendar } from 'lucide-react'
+import { Video, Clock3, ExternalLink, MapPin, Users, Briefcase, Copy, Calendar } from '@/components/ui/icons'
 import toast from 'react-hot-toast'
 import { cn } from '@/utils/cn'
 import { computeCalendarPopoverPosition } from '@/utils/calendarPopoverPosition'

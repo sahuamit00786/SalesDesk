@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Paperclip, Search, UserRound } from 'lucide-react'
+import { Paperclip, Search, UserRound } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 import { IconInput } from '@/components/ui/IconInput'
 import { SkeletonEmailList } from '@/components/shared/SkeletonLoader'

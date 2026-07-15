@@ -1,5 +1,5 @@
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft } from '@/components/ui/icons'
 import { useGetCampaignQuery } from '@/features/campaigns/campaignsApi'
 import { CampaignReport } from '@/features/campaigns/components/CampaignReport'
 import { PageShell } from '@/components/layout/PageShell'

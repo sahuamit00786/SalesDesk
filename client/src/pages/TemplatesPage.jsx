@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Download, Eye, Paperclip, Pencil, Search, Sparkles, Trash2, X } from 'lucide-react'
+import { Download, Eye, Paperclip, Pencil, Search, Sparkles, Trash2, X } from '@/components/ui/icons'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
 import { PageShell } from '@/components/layout/PageShell'
@@ -565,7 +565,7 @@ export default function TemplatesPage() {
                     type="button"
                     onClick={handleGenerateTemplate}
                     disabled={generateState.isLoading}
-                    className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border-2 border-brand-600 bg-purple-700 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-purple-800 disabled:opacity-60"
+                    className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border-2 border-brand-600 bg-purple-700 px-3 py-2 text-sm font-semibold cx-icon-inherit text-white transition-colors hover:bg-purple-800 disabled:opacity-60"
                   >
                     <Sparkles className="h-4 w-4" />
                     {generateState.isLoading ? 'Generating...' : 'Generate Template'}
@@ -585,7 +585,7 @@ export default function TemplatesPage() {
               <button
                 type="button"
                 onClick={() => setExtendedTab('ai')}
-                className="inline-flex items-center gap-1.5 rounded-md border-2 border-brand-600 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 transition-colors duration-150 hover:bg-purple-700 hover:text-white"
+                className="cx-icon-inherit inline-flex items-center gap-1.5 rounded-md border-2 border-brand-600 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 transition-colors duration-150 hover:bg-purple-700 hover:text-white"
               >
                 <Sparkles className="h-3.5 w-3.5" />
                 Ask AI
@@ -741,7 +741,7 @@ export default function TemplatesPage() {
                     setExtendedTab('preview')
                     setDrawerMode('edit')
                   }}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand-primary)] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[var(--brand-primary-dark)]"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand-primary)] px-3 py-1.5 text-xs font-semibold cx-icon-inherit text-white hover:bg-[var(--brand-primary-dark)]"
                 >
                   <Pencil className="h-3.5 w-3.5" />
                   Edit template

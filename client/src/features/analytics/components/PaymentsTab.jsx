@@ -1,4 +1,4 @@
-import { CreditCard, DollarSign, Briefcase, Receipt } from 'lucide-react'
+import { CreditCard, DollarSign, Briefcase, Receipt } from '@/components/ui/icons'
 import { ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts'
 import { DashboardChartCard } from '@/features/dashboard/components/DashboardChartCard'
 import { CHART_COLORS } from '@/features/dashboard/dummyDashboardData'

@@ -1,4 +1,4 @@
-import { CalendarCheck, AlertTriangle, CheckCircle, Percent } from 'lucide-react'
+import { CalendarCheck, AlertTriangle, CheckCircle, Percent } from '@/components/ui/icons'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
 import { DashboardChartCard } from '@/features/dashboard/components/DashboardChartCard'
 import { CHART_COLORS } from '@/features/dashboard/dummyDashboardData'

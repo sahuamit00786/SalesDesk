@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { ArrowLeft, Lock, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, Lock, ShieldCheck } from '@/components/ui/icons'
 import { PageShell } from '@/components/layout/PageShell'
 import { MenuPermissionPicker } from '@/features/team/components/MenuPermissionPicker'
 import {
@@ -121,7 +121,7 @@ export function TeamMemberPermissionsPage() {
               type="button"
               disabled={!dirty || saving}
               onClick={handleSave}
-              className="h-10 shrink-0 rounded-xl bg-slate-800 px-5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+              className="h-10 shrink-0 rounded-xl bg-slate-800 px-5 text-sm font-medium cx-icon-inherit text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               {saving ? 'Saving…' : 'Save permissions'}
             </button>

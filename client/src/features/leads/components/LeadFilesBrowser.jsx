@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import toast from 'react-hot-toast'
 import {
   ChevronRight, File, Folder, FolderOpen, FolderPlus, Grid3X3, Plus, Search, Upload, X,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 import {
   useGetDocumentsQuery,
@@ -354,7 +354,7 @@ export function LeadFilesPanel({ leadId, leadName = 'This lead', onClose, classN
                   placeholder="Folder name"
                   className="h-7 min-w-0 flex-1 rounded-lg border border-brand-300 px-2 text-xs outline-none focus:border-brand-500"
                 />
-                <button type="button" onClick={handleCreateFolder} disabled={creatingFolder} className="h-7 shrink-0 rounded-lg bg-brand-700 px-2 text-xs text-white disabled:opacity-60">
+                <button type="button" onClick={handleCreateFolder} disabled={creatingFolder} className="h-7 shrink-0 rounded-lg bg-brand-700 px-2 text-xs cx-icon-inherit text-white disabled:opacity-60">
                   {creatingFolder ? '…' : <Plus size={12} />}
                 </button>
               </div>
@@ -485,7 +485,7 @@ export function LeadFilesPanel({ leadId, leadName = 'This lead', onClose, classN
           <div className={cn('scrollbar-subtle relative flex-1 overflow-y-auto p-4', osDragOver && 'ring-2 ring-inset ring-brand-400 bg-brand-50/30')}>
             {osDragOver && (
               <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
-                <span className="rounded-xl bg-brand-700/90 px-4 py-2 text-sm font-semibold text-white shadow-lg">Drop to upload</span>
+                <span className="rounded-xl bg-brand-700/90 px-4 py-2 text-sm font-semibold cx-icon-inherit text-white shadow-lg">Drop to upload</span>
               </div>
             )}
 

@@ -1,5 +1,6 @@
 import {
   BarChart2,
+  BellRing,
   BookOpen,
   Briefcase,
   Building2,
@@ -16,6 +17,7 @@ import {
   ListTodo,
   Mail,
   MailOpen,
+  Map,
   Megaphone,
   Phone,
   PhoneCall,
@@ -29,7 +31,7 @@ import {
   Umbrella,
   Users,
   Workflow,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 
 /** Route → header title + subtitle (module overview copy). */
 export const ROUTE_META = {
@@ -96,6 +98,10 @@ export const ROUTE_META = {
   '/calendar': {
     title: 'Calendar & Reminders',
     sub: 'Unified view of meetings, tasks, follow-ups, and reminders — your complete schedule in one place',
+  },
+  '/followups': {
+    title: 'Follow-ups',
+    sub: 'Every follow-up scheduled across your leads — admins can filter by employee',
   },
   '/email': {
     title: 'Email',
@@ -189,6 +195,10 @@ export const ROUTE_META = {
     title: 'AI Copilot',
     sub: 'Ask about leads, campaigns, deals, team performance, and reports for this workspace',
   },
+  '/systemworkflow': {
+    title: 'System Workflow',
+    sub: 'Click a node to see its user flow and where its data comes from and goes',
+  },
 }
 
 const DEFAULT_META = {
@@ -243,6 +253,7 @@ export const NAV_SECTIONS = [
       { to: '/activities', label: 'Activities', icon: CheckSquare },
       { to: '/tasks', label: 'Tasks', icon: ListTodo },
       { to: '/calendar', label: 'Calendar & Reminders', icon: CalendarDays },
+      { to: '/followups', label: 'Follow-ups', icon: BellRing },
       { to: '/meetings', label: 'Meetings', icon: Phone },
       { to: '/calls', label: 'Calls', icon: PhoneCall },
       { to: '/email', label: 'Email', icon: Mail },
@@ -286,6 +297,7 @@ export const NAV_SECTIONS = [
     label: 'Knowledge',
     items: [
       { to: '/knowledge-base', label: 'Knowledge Base', icon: BookOpen },
+      { to: '/systemworkflow', label: 'System Workflow', icon: Map },
     ],
   },
 ]

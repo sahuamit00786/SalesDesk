@@ -1,4 +1,4 @@
-import { CheckCircle } from 'lucide-react'
+import { CheckCircle } from '@/components/ui/icons'
 import { ONBOARDING_STEPS } from '@/features/onboarding/constants/onboardingOptions'
 import { cn } from '@/utils/cn'
 import { LeadNestLogo } from '@/components/shared/LeadNestLogo'
@@ -47,7 +47,7 @@ export function OnboardingSidebar({ activeStep, furthestStep, onSelectStep, prog
               <span
                 className={cn(
                   'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
-                  completed && 'border-emerald-500 bg-emerald-500 text-white',
+                  completed && 'border-emerald-500 bg-emerald-500 cx-icon-inherit text-white',
                   current && !completed && 'border-brand-600 bg-white text-brand-700 ring-4 ring-brand-500/15',
                   !completed && !current && 'border-surface-border bg-white text-ink-muted',
                 )}

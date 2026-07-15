@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Download, User, Users } from 'lucide-react'
+import { Download, User, Users } from '@/components/ui/icons'
 import { PageShell } from '@/components/layout/PageShell'
 import { Select } from '@/components/ui/Select'
 import { Button } from '@/components/ui/Button'

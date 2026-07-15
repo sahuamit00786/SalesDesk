@@ -11,7 +11,7 @@ import {
   Timer,
   Trash2,
   X,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import toast from 'react-hot-toast'
 import { RightDrawer } from '@/components/ui/RightDrawer'
 import {
@@ -117,8 +117,32 @@ export function LeadFollowupsTab({ leadId }) {
   const editScheduleBaselineMsRef = useRef(null)
   const editScheduleBaselineCapturedRef = useRef(false)
 
+  const [statusFilter, setStatusFilter] = useState('all') // 'all' | 'done' | 'expired' | 'custom'
+  const [rangeStart, setRangeStart] = useState('')
+  const [rangeEnd, setRangeEnd] = useState('')
+
   const followups = useMemo(() => data?.data || [], [data])
   const hasPendingFollowup = useMemo(() => followups.some((f) => f.status === 'pending'), [followups])
+
+  const filteredFollowups = useMemo(() => {
+    if (statusFilter === 'done') return followups.filter((f) => f.status === 'done')
+    if (statusFilter === 'expired') {
+      return followups.filter((f) => f.status === 'pending' && new Date(f.scheduledAt).getTime() < clockMs)
+    }
+    if (statusFilter === 'custom') {
+      if (!rangeStart && !rangeEnd) return followups
+      const startMs = rangeStart ? parseLocalDateAndTime(rangeStart, '00:00')?.getTime() : null
+      const endMs = rangeEnd ? parseLocalDateAndTime(rangeEnd, '23:59')?.getTime() : null
+      return followups.filter((f) => {
+        const t = new Date(f.scheduledAt).getTime()
+        if (Number.isNaN(t)) return false
+        if (startMs != null && t < startMs) return false
+        if (endMs != null && t > endMs) return false
+        return true
+      })
+    }
+    return followups
+  }, [followups, statusFilter, clockMs, rangeStart, rangeEnd])
 
   useEffect(() => {
     const ms = drawerOpen || hasPendingFollowup ? 1_000 : 5_000
@@ -288,11 +312,54 @@ export function LeadFollowupsTab({ leadId }) {
     <button
       type="button"
       onClick={openDrawer}
-      className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand-primary)] px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[var(--brand-primary-dark)]"
+      className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand-primary)] px-2.5 py-1.5 text-xs font-semibold cx-icon-inherit text-white shadow-sm transition hover:bg-[var(--brand-primary-dark)]"
     >
       <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
       Add follow-up
     </button>
+  )
+
+  const filterControl = (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <select
+        aria-label="Filter follow-ups"
+        value={statusFilter}
+        onChange={(e) => {
+          setStatusFilter(e.target.value)
+          if (e.target.value !== 'custom') {
+            setRangeStart('')
+            setRangeEnd('')
+          }
+        }}
+        className="h-8 rounded-lg border border-surface-border bg-white px-2 text-xs font-medium text-ink shadow-sm outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
+      >
+        <option value="all">All</option>
+        <option value="done">Completed</option>
+        <option value="expired">Expired</option>
+        <option value="custom">Custom range</option>
+      </select>
+      {statusFilter === 'custom' ? (
+        <>
+          <input
+            type="date"
+            aria-label="Start date"
+            value={rangeStart}
+            max={rangeEnd || undefined}
+            onChange={(e) => setRangeStart(e.target.value)}
+            className="h-8 rounded-lg border border-surface-border bg-white px-2 text-xs text-ink shadow-sm outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
+          />
+          <span className="text-xs text-ink-muted">to</span>
+          <input
+            type="date"
+            aria-label="End date"
+            value={rangeEnd}
+            min={rangeStart || undefined}
+            onChange={(e) => setRangeEnd(e.target.value)}
+            className="h-8 rounded-lg border border-surface-border bg-white px-2 text-xs text-ink shadow-sm outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
+          />
+        </>
+      ) : null}
+    </div>
   )
 
   return (
@@ -300,7 +367,12 @@ export function LeadFollowupsTab({ leadId }) {
       <LeadTabSectionHeader
         title="Follow-ups"
         description="Remind yourself when to reach out again."
-        action={addFollowUpButton}
+        action={
+          <>
+            {filterControl}
+            {addFollowUpButton}
+          </>
+        }
       />
 
       {isLoading ? (
@@ -312,9 +384,15 @@ export function LeadFollowupsTab({ leadId }) {
           description="Schedule the next touchpoint so nothing slips. Everyone on the team sees the same list once reminders are added."
           action={addFollowUpButton}
         />
+      ) : filteredFollowups.length === 0 ? (
+        <LeadTabEmptyState
+          icon={BellRing}
+          title="No follow-ups match this filter"
+          description="Try a different status or widen the date range."
+        />
       ) : (
         <ul className="grid w-full grid-cols-1 gap-2.5">
-          {followups.map((fu) => {
+          {filteredFollowups.map((fu) => {
             const at = new Date(fu.scheduledAt)
             const tMs = at.getTime()
             const expired = fu.status === 'pending' && tMs < clockMs
@@ -366,8 +444,6 @@ export function LeadFollowupsTab({ leadId }) {
 
             const pendingLive = fu.status === 'pending'
             const secDown = pendingLive && upcoming ? Math.max(0, (tMs - clockMs) / 1000) : 0
-            const secUp = pendingLive && expired ? Math.max(0, (clockMs - tMs) / 1000) : 0
-            const timerLabel = expired ? 'Elapsed' : 'Remaining'
 
             return (
               <li
@@ -465,25 +541,29 @@ export function LeadFollowupsTab({ leadId }) {
                         </p>
                       ) : null}
                     </div>
-                    {pendingLive ? (
+                    {pendingLive && expired ? (
                       <div
                         className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2 py-1 ${toneClass.timerWrap}`}
-                        title={expired ? 'Time since scheduled' : 'Time until follow-up'}
+                        title="Follow-up time has passed"
+                      >
+                        <AlertCircle className="h-3.5 w-3.5 shrink-0 text-red-600/70" aria-hidden />
+                        <span className="text-[11px] font-semibold uppercase tracking-wide">Expired</span>
+                      </div>
+                    ) : pendingLive ? (
+                      <div
+                        className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2 py-1 ${toneClass.timerWrap}`}
+                        title="Time until follow-up"
                       >
                         <Timer className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
                         <div className="flex flex-col items-end leading-none">
                           <span className="font-mono text-[12px] font-semibold tabular-nums tracking-tight">
-                            {formatLiveHms(expired ? secUp : secDown)}
+                            {formatLiveHms(secDown)}
                           </span>
                           <span className="mt-0.5 text-[9px] font-medium uppercase tracking-wide text-slate-500">
-                            {timerLabel}
+                            Remaining
                           </span>
                         </div>
-                        {expired ? (
-                          <AlertCircle className="h-3.5 w-3.5 shrink-0 text-red-600/70" aria-hidden />
-                        ) : (
-                          <Hourglass className="h-3.5 w-3.5 shrink-0 text-amber-700/60" aria-hidden />
-                        )}
+                        <Hourglass className="h-3.5 w-3.5 shrink-0 text-amber-700/60" aria-hidden />
                       </div>
                     ) : null}
                   </div>

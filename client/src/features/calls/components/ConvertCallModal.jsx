@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { UserPlus, Briefcase } from 'lucide-react'
+import { UserPlus, Briefcase } from '@/components/ui/icons'
 import toast from 'react-hot-toast'
 import { Modal } from '@/components/ui/Modal'
 import { useConvertCallMutation } from '../callsApi'

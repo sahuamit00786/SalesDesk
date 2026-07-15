@@ -3,7 +3,7 @@ import toast from 'react-hot-toast'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { HrEmptyState } from '@/features/hr/components/HrEmptyState'
-import { PartyPopper } from 'lucide-react'
+import { PartyPopper } from '@/components/ui/icons'
 import {
   useCreateHolidayMutation,
   useDeleteHolidayMutation,

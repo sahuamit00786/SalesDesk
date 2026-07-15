@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import { Link } from 'react-router-dom'
-import { CalendarDays, ScrollText } from 'lucide-react'
+import { CalendarDays, ScrollText } from '@/components/ui/icons'
 import { PageShell } from '@/components/layout/PageShell'
 import { Select } from '@/components/ui/Select'
 import { LeaveRequestTable } from '@/features/leave/components/LeaveRequestTable'

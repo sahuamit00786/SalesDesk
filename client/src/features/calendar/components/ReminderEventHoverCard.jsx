@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { format } from 'date-fns'
-import { Bell, Clock3, Calendar, StickyNote, User, Briefcase, TrendingUp, Video, CheckSquare, ExternalLink } from 'lucide-react'
+import { Bell, Clock3, Calendar, StickyNote, User, Briefcase, TrendingUp, Video, CheckSquare, ExternalLink } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 import { computeCalendarPopoverPosition } from '@/utils/calendarPopoverPosition'
 

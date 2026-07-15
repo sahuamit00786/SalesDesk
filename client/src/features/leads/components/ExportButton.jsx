@@ -1,4 +1,4 @@
-import { Download } from 'lucide-react'
+import { Download } from '@/components/ui/icons'
 
 export function ExportButton({ onExportCurrent, onExportSelected, onExportAll, selectedCount = 0 }) {
   return (

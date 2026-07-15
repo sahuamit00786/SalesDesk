@@ -1,8 +1,10 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { RequireAuth } from '@/components/auth/RequireAuth'
 import { RequireOnboarded } from '@/components/auth/RequireOnboarded'
+import { RequireWorkspace } from '@/components/auth/RequireWorkspace'
 import { SessionSync } from '@/components/auth/SessionSync'
 import { LoginPage } from '@/pages/LoginPage'
+import { SelectWorkspacePage } from '@/pages/SelectWorkspacePage'
 import { WorkspacePage } from '@/pages/WorkspacePage'
 import { OnboardingPage } from '@/pages/OnboardingPage'
 import { RegisterPage } from '@/pages/RegisterPage'
@@ -19,6 +21,7 @@ import { LeadDetailPage } from '@/features/leads/pages/LeadDetailPage'
 import { DocumentsPage } from '@/pages/DocumentsPage'
 import { ActivitiesPage } from '@/pages/ActivitiesPage'
 import { TasksPage } from '@/pages/TasksPage'
+import { FollowupsPage } from '@/pages/FollowupsPage'
 import { EmailPage } from '@/pages/EmailPage'
 import { CopilotPage } from '@/pages/CopilotPage'
 import { OpportunitiesPage } from '@/pages/OpportunitiesPage'
@@ -50,6 +53,8 @@ import { WorkflowEditorPage } from '@/pages/WorkflowEditorPage'
 import { LeadFlowLandingPage } from '@/pages/LeadFlowLandingPage'
 import { PrivacyPolicyPage } from '@/pages/PrivacyPolicyPage'
 import { TermsOfServicePage } from '@/pages/TermsOfServicePage'
+import { AboutPage } from '@/pages/AboutPage'
+import { ContactPage } from '@/pages/ContactPage'
 // HR modules disabled
 // import { AttendancePage } from '@/pages/AttendancePage'
 // import { LeavePage } from '@/pages/LeavePage'
@@ -61,6 +66,7 @@ import { AnalyticsPage } from '@/pages/AnalyticsPage'
 import { ReportDetailPage } from '@/pages/ReportDetailPage'
 import { DealPaymentsPage } from '@/pages/DealPaymentsPage'
 import { KnowledgeBasePage } from '@/features/knowledge/pages/KnowledgeBasePage'
+import { SystemWorkflowPage } from '@/pages/SystemWorkflowPage'
 
 export default function App() {
   return (
@@ -72,10 +78,17 @@ export default function App() {
       <Route path="/accept-invite" element={<AcceptInvitePage />} />
       <Route path="/privacy" element={<PrivacyPolicyPage />} />
       <Route path="/terms" element={<TermsOfServicePage />} />
+      <Route path="/about" element={<AboutPage />} />
+      <Route path="/contact" element={<ContactPage />} />
+      <Route path="/systemworkflow" element={<SystemWorkflowPage />} />
       <Route element={<RequireAuth />}>
         <Route element={<SessionSync />}>
         <Route path="/onboarding" element={<OnboardingPage />} />
+        {/* Outside RequireOnboarded: that guard bounces non-admins off any path
+            missing from allowedMenus, and the picker is not a menu. */}
+        <Route path="/select-workspace" element={<SelectWorkspacePage />} />
         <Route element={<RequireOnboarded />}>
+          <Route element={<RequireWorkspace />}>
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/workspace" element={<WorkspacePage />} />
             <Route path="/leads" element={<LeadsPage />} />
@@ -98,6 +111,7 @@ export default function App() {
             <Route path="/leads/:id" element={<LeadDetailPage />} />
             <Route path="/activities" element={<ActivitiesPage />} />
             <Route path="/tasks" element={<TasksPage />} />
+            <Route path="/followups" element={<FollowupsPage />} />
             <Route path="/email" element={<EmailPage />} />
             <Route path="/copilot" element={<CopilotPage />} />
             <Route path="/templates" element={<TemplatesPage />} />
@@ -137,6 +151,7 @@ export default function App() {
             <Route path="/companies" element={<Navigate to="/leads" replace />} />
             <Route path="/whatsapp" element={<Navigate to="/email" replace />} />
             <Route path="/calls" element={<CallsPage />} />
+          </Route>
         </Route>
         </Route>
       </Route>

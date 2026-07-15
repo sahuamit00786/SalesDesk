@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2 } from '@/components/ui/icons'
 import { RightDrawer } from '@/components/ui/RightDrawer'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'

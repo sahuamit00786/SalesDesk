@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight } from '@/components/ui/icons'
 import { useAppSelector } from '@/app/hooks'
 import { Button } from '@/components/ui/Button'
 import { OnboardingProvisioningOverlay } from '@/features/onboarding/components/OnboardingProvisioningOverlay'

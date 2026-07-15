@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
-import { CalendarClock, Presentation, Search, Users, X } from 'lucide-react'
+import { CalendarClock, Presentation, Search, Users, X } from '@/components/ui/icons'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Textarea } from '@/components/ui/Textarea'

@@ -43,7 +43,7 @@ import { WebFormField } from './WebFormField.js'
 import { WebFormSubmission } from './WebFormSubmission.js'
 import { WebFormEmailTemplate } from './WebFormEmailTemplate.js'
 import { OpportunityStage } from './OpportunityStage.js'
-import { OpportunityStatus } from './OpportunityStatus.js'
+import { PipelineStatus } from './PipelineStatus.js'
 import { DealStatus } from './DealStatus.js'
 import { Meeting } from './Meeting.js'
 import { CallLog } from './CallLog.js'
@@ -143,8 +143,8 @@ Lead.belongsTo(User, { foreignKey: 'ownerUserId', as: 'owner' })
 Lead.belongsTo(User, { foreignKey: 'assignedTo', as: 'assignee' })
 Lead.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
 Lead.belongsTo(LeadSource, { foreignKey: 'sourceId', as: 'leadSource' })
-Lead.belongsTo(OpportunityStatus, { foreignKey: 'opportunityStatus', as: 'oppStatus' })
-OpportunityStatus.hasMany(Lead, { foreignKey: 'opportunityStatus', as: 'leads' })
+Lead.belongsTo(PipelineStatus, { foreignKey: 'pipelineStatus', as: 'pipelineStatusInfo' })
+PipelineStatus.hasMany(Lead, { foreignKey: 'pipelineStatus', as: 'leads' })
 Company.hasMany(Lead, { foreignKey: 'companyId', as: 'leads' })
 Workspace.hasMany(Lead, { foreignKey: 'workspaceId', as: 'leads' })
 LeadSource.hasMany(Lead, { foreignKey: 'sourceId', as: 'leads' })
@@ -565,7 +565,7 @@ export {
   WebFormSubmission,
   WebFormEmailTemplate,
   OpportunityStage,
-  OpportunityStatus,
+  PipelineStatus,
   DealStatus,
   Meeting,
   MeetingParticipant,

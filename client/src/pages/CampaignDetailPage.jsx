@@ -19,7 +19,7 @@ import {
   UserPlus,
   UserRound,
   Users,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import { formatCampaignEndDate } from '@/features/campaigns/campaignDateUtils'
 import { PageShell } from '@/components/layout/PageShell'
 import { SkeletonDetail } from '@/components/shared/SkeletonLoader'

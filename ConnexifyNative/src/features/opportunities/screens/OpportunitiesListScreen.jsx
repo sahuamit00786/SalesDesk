@@ -44,7 +44,7 @@ function OpportunityCard({ item, currency, onPress }) {
             {item.company || item.email || '—'}
           </AppText>
           <View style={styles.cardMeta}>
-            <Badge label={item.oppStatus?.name || 'No stage'} tone="brand" size="sm" />
+            <Badge label={item.pipelineStatusInfo?.name || 'No stage'} tone="brand" size="sm" />
             {Number(item.value) > 0 ? (
               <AppText variant="captionStrong">
                 {formatMoney(item.value, item.valueCurrency || currency, { compact: true })}
@@ -70,7 +70,7 @@ export default function OpportunitiesListScreen({ navigation }) {
   const sortRef = useRef(null);
 
   const formMeta = useLeadFormMeta();
-  const stages = formMeta.data?.opportunityStatuses || [];
+  const stages = formMeta.data?.pipelineStatuses || [];
 
   const params = useMemo(() => {
     const p = { sort: sort.field, order: sort.order };
@@ -80,9 +80,9 @@ export default function OpportunitiesListScreen({ navigation }) {
 
   const list = useOpportunitiesList(params);
 
-  // Stage filter is client-side: /leads has no oppStatus filter param (web filters via `filters` JSON)
+  // Stage filter is client-side: /leads has no pipelineStatus filter param (web filters via `filters` JSON)
   const items = useMemo(
-    () => (stageId ? list.items.filter((it) => (it.opportunityStatus || it.oppStatus?.id) === stageId) : list.items),
+    () => (stageId ? list.items.filter((it) => (it.pipelineStatus || it.pipelineStatusInfo?.id) === stageId) : list.items),
     [list.items, stageId],
   );
 

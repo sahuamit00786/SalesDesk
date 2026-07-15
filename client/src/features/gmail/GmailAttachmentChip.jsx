@@ -1,4 +1,4 @@
-import { FolderInput, Paperclip } from 'lucide-react'
+import { FolderInput, Paperclip } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 
 export default function GmailAttachmentChip({

@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
-import { Building2, Check, ChevronDown, Settings } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { ArrowLeftRight, Building2, Check, ChevronDown, Settings } from '@/components/ui/icons'
 import { useAppDispatch, useAppSelector } from '@/app/hooks'
 import { baseApi } from '@/features/api/baseApi'
 import { useWorkspacesQuery } from '@/features/workspace/workspaceApi'
@@ -19,6 +20,7 @@ export function WorkspaceSwitcher({ onWorkspaceSettingsClick }) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef(null)
   const dispatch = useAppDispatch()
+  const navigate = useNavigate()
   const fallbackWorkspaces = useAppSelector(selectWorkspaceList)
   const persistedActiveId = useAppSelector((s) => s.workspace.activeWorkspaceId)
   const fallbackActive = useAppSelector(selectActiveWorkspace) ?? { id: '', name: 'Workspace' }
@@ -91,8 +93,19 @@ export function WorkspaceSwitcher({ onWorkspaceSettingsClick }) {
               ))
             )}
           </div>
-          {isCompanyAdmin && (
-            <div className="border-t border-surface-border px-1 py-1">
+          <div className="border-t border-surface-border px-1 py-1">
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false)
+                navigate('/select-workspace')
+              }}
+              className="flex h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm text-ink-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
+            >
+              <ArrowLeftRight className="h-4 w-4 shrink-0" aria-hidden />
+              <span>Switch workspace</span>
+            </button>
+            {isCompanyAdmin && (
               <button
                 type="button"
                 onClick={() => {
@@ -104,8 +117,8 @@ export function WorkspaceSwitcher({ onWorkspaceSettingsClick }) {
                 <Settings className="h-4 w-4 shrink-0" aria-hidden />
                 <span>Workspace settings</span>
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       ) : null}
     </div>

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ShieldCheck, Copy, Check, AlertCircle } from 'lucide-react'
+import { ShieldCheck, Copy, Check, AlertCircle } from '@/components/ui/icons'
 import { baseApi } from '@/features/api/baseApi'
 import { useDispatch } from 'react-redux'
 import toast from 'react-hot-toast'

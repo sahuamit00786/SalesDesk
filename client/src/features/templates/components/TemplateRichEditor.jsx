@@ -11,7 +11,7 @@ import {
   ListOrdered,
   Underline,
   AtSign,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 
 const TOOLBAR_BUTTON =
   'flex h-8 w-8 items-center justify-center rounded-md text-ink-muted transition-colors duration-150 hover:bg-brand-50 hover:text-brand-700'

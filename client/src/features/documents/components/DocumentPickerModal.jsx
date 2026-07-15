@@ -10,7 +10,7 @@ import {
   Link2,
   Search,
   X,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import { Button } from '@/components/ui/Button'
 import { useGetDocumentFolderTreeQuery, useGetDocumentsQuery } from '@/features/documents/documentsApi'
 import { getFileUrl } from '@/features/documents/documentUtils'

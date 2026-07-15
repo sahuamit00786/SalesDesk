@@ -331,7 +331,7 @@ export default function DashboardScreen({ navigation }) {
         />
         <DonutChartCard
           title="Opportunity stages"
-          items={(c.oppStatusDist || []).slice(0, 6).map((r, i) => ({ label: r.name, value: r.value, color: cat[i % cat.length] }))}
+          items={(c.pipelineStatusDist || []).slice(0, 6).map((r, i) => ({ label: r.name, value: r.value, color: cat[i % cat.length] }))}
         />
         <BarChartCard
           title="Pipeline value by stage"

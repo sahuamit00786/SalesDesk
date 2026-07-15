@@ -48,7 +48,7 @@ function MultiselectInput({ field, fieldValue, onChange }) {
   )
 }
 
-function CustomFieldInput({ field, fieldValue, onChange, compact }) {
+export function CustomFieldInput({ field, fieldValue, onChange, compact }) {
   const controlClass = compact ? 'h-8 text-xs' : 'h-10 text-sm'
 
   switch (field.type) {

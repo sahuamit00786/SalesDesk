@@ -12,10 +12,10 @@ export function DealDetailPage() {
   const deal = data?.data
   const { data: formMetaData } = useGetLeadFormMetaQuery()
   const rawDealStatuses = formMetaData?.data?.dealStatuses || []
-  const opportunityStatuses = formMetaData?.data?.opportunityStatuses || []
+  const pipelineStatuses = formMetaData?.data?.pipelineStatuses || []
   const dealStatuses = rawDealStatuses.length
     ? [...rawDealStatuses].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
-    : opportunityStatuses
+    : pipelineStatuses
 
   if (!id) {
     return (
@@ -36,7 +36,7 @@ export function DealDetailPage() {
           open
           onClose={() => navigate('/deals')}
           opp={deal}
-          opportunityStatuses={dealStatuses}
+          pipelineStatuses={dealStatuses}
         />
       ) : null}
     </PageShell>

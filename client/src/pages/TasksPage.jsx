@@ -9,7 +9,7 @@ import {
   Search,
   SquareKanban,
   X,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import toast from 'react-hot-toast'
 import { PageShell } from '@/components/layout/PageShell'
 import { CalendarWorkspace } from '@/features/calendar/components/CalendarWorkspace'
@@ -304,7 +304,7 @@ export function TasksPage() {
               <button
                 type="button"
                 onClick={() => setCreateOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand-primary)] px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[var(--brand-primary-dark)]"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand-primary)] px-3 py-1.5 text-xs font-semibold cx-icon-inherit text-white shadow-sm transition hover:bg-[var(--brand-primary-dark)]"
               >
                 <Plus className="h-3.5 w-3.5" />
                 New Task

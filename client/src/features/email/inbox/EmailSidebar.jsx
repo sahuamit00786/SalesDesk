@@ -1,4 +1,4 @@
-import { Inbox, Paperclip, Pencil, Send, X } from 'lucide-react'
+import { Inbox, Paperclip, Pencil, Send, X } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 import { Select } from '@/components/ui/Select'
 
@@ -39,7 +39,7 @@ function SidebarBody({
           type="button"
           onClick={onCompose}
           disabled={composeDisabled}
-          className="inline-flex h-11 items-center gap-2.5 rounded-2xl bg-brand-700 px-5 text-sm font-semibold text-white shadow-md transition hover:bg-brand-800 disabled:opacity-50"
+          className="inline-flex h-11 items-center gap-2.5 rounded-2xl bg-brand-700 px-5 text-sm font-semibold cx-icon-inherit text-white shadow-md transition hover:bg-brand-800 disabled:opacity-50"
         >
           <Pencil size={15} />
           Compose

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Pencil, Plus } from 'lucide-react'
+import { Pencil, Plus } from '@/components/ui/icons'
 import { RightDrawer } from '@/components/ui/RightDrawer'
 import { useGetLeadQuery, useGetLeadsQuery } from '@/features/leads/leadsApi'
 import { useGetDealsQuery, useCreateDealMutation, usePatchDealMutation } from '@/features/deals/dealsApi'
@@ -364,7 +364,7 @@ export function AddDealDrawer({
           type="button"
           disabled={saving || (!isEditing && !effectiveOppId)}
           onClick={submit}
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[var(--brand-primary)] px-4 text-sm font-semibold text-white shadow-sm hover:bg-[var(--brand-primary-dark)] disabled:opacity-50"
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[var(--brand-primary)] px-4 text-sm font-semibold cx-icon-inherit text-white shadow-sm hover:bg-[var(--brand-primary-dark)] disabled:opacity-50"
         >
           {isEditing ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
           {isEditing ? 'Save changes' : 'Create deal'}

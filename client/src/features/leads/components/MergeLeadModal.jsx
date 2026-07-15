@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { GitMerge } from 'lucide-react'
+import { GitMerge } from '@/components/ui/icons'
 import toast from 'react-hot-toast'
 import { useMergeDuplicateLeadMutation } from '@/features/leads/duplicateLeadsApi'
 

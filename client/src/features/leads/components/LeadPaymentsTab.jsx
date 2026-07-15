@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { Banknote, Bitcoin, CreditCard, FileText, HelpCircle, Landmark, Receipt, Smartphone } from 'lucide-react'
+import { Banknote, Bitcoin, CreditCard, FileText, HelpCircle, Landmark, Receipt, Smartphone } from '@/components/ui/icons'
 import { useGetInvoicesQuery } from '@/features/sales-docs/invoicesApi'
 import { formatDocMoney as fmtMoney } from '@/features/sales-docs/components/SalesDocListCells'
 

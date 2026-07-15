@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useDispatch } from 'react-redux'
-import { ArrowUp, BarChart3, CalendarClock, PanelLeftOpen, Sparkles, TrendingUp, Users } from 'lucide-react'
+import { ArrowUp, BarChart3, CalendarClock, PanelLeftOpen, Sparkles, TrendingUp, Users } from '@/components/ui/icons'
 import { copilotApi, useGetCopilotSessionMessagesQuery, useSendCopilotMessageMutation } from '@/features/copilot/copilotApi'
 import { useCopilotSocket } from '@/features/copilot/useCopilotSocket'
 import { MessageBubble } from './MessageBubble'

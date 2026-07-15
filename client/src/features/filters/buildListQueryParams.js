@@ -25,6 +25,8 @@ export function buildLeadsListQueryParams({ filters, sort, pagination, isOpportu
   if (filters.valueMin != null) params.valueMin = filters.valueMin
   if (filters.valueMax != null) params.valueMax = filters.valueMax
   if (filters.stage?.length) params.stage = filters.stage.join(',')
+  if (filters.createdFrom) params.createdFrom = filters.createdFrom
+  if (filters.createdTo) params.createdTo = filters.createdTo
 
   const filtersJson = serializeFilterTree(filters.filterTree)
   if (filtersJson) params.filters = filtersJson

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Paperclip } from 'lucide-react'
+import { Paperclip } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 import { DocumentPreviewDialog } from '@/features/documents/components/DocumentPreviewDialog'
 import { getDocCardPreviewMeta, getTaskPreviewDocuments } from '@/features/documents/documentUtils'

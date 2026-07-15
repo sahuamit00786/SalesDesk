@@ -1,4 +1,4 @@
-import { LayoutList, Pencil, Trash2 } from 'lucide-react'
+import { LayoutList, Pencil, Trash2 } from '@/components/ui/icons'
 import { ReorderableSetupTable } from '@/components/shared/ReorderableSetupTable'
 import { formatCustomFieldTypeLabel } from '@/features/leads/customFieldTypes'
 import { cn } from '@/utils/cn'

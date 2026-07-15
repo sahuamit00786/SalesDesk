@@ -10,7 +10,7 @@ import {
   Users,
   Workflow,
   X,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import { PageShell } from '@/components/layout/PageShell'
 import { cn } from '@/utils/cn'
 import { KB_SECTIONS } from '@/features/knowledge/kbData'

@@ -5,6 +5,7 @@ import { recalculateScore } from './leadScoringService.js'
 import { createLeadSystemActivity } from './leadSystemActivity.js'
 import { autoAssignLead } from './assignmentRulesService.js'
 import { notifyLeadAssignedBatch } from './notification/teamNotificationService.js'
+import { upsertLeadCustomFields } from './customFieldService.js'
 
 const LEAD_STATUS = ['new', 'contacted', 'qualified', 'proposal', 'won', 'lost', 'junk']
 
@@ -116,6 +117,12 @@ export async function importLeads(workspaceId, companyId, userId, rows) {
       }
       const payload = buildLeadRowPayload(row, defaultPipeline, userId, companyId, workspaceId)
       const lead = await Lead.create(payload)
+      await upsertLeadCustomFields({
+        leadId: lead.id,
+        workspaceId,
+        companyId,
+        customFields: row.customFields || {},
+      })
       await recalculateScore(lead.id)
       results.createdLeadIds.push(lead.id)
 

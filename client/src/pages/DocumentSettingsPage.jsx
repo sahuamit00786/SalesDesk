@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { AlertTriangle, FileText, Receipt } from 'lucide-react'
+import { AlertTriangle, FileText, Receipt } from '@/components/ui/icons'
 import { PageShell } from '@/components/layout/PageShell'
 import { PageStack } from '@/components/layout/PageStack'
 import { Button } from '@/components/ui/Button'

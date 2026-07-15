@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Bell, CalendarCheck, CheckCircle2, XCircle } from 'lucide-react'
+import { Bell, CalendarCheck, CheckCircle2, XCircle } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useSelector } from 'react-redux'
 import toast from 'react-hot-toast'
-import { Clock, Mail } from 'lucide-react'
+import { Clock, Mail } from '@/components/ui/icons'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'

@@ -34,5 +34,5 @@ export const opportunitiesApi = {
   list: (params) => get('/leads', { ...params, isOpportunity: true }),
   create: (body) => post('/opportunities', body),
   update: (id, body) => put(`/opportunities/${id}`, body),
-  patchStatus: (id, opportunityStatusId) => patch(`/opportunities/${id}/status`, { opportunityStatusId }),
+  patchStatus: (id, pipelineStatusId) => patch(`/opportunities/${id}/status`, { pipelineStatusId }),
 };

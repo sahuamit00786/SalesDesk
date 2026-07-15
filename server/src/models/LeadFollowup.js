@@ -14,6 +14,7 @@ export const LeadFollowup = sequelize.define(
     status: { type: DataTypes.ENUM('pending', 'done', 'cancelled'), allowNull: false, defaultValue: 'pending' },
     completedAt: { type: DataTypes.DATE, allowNull: true, field: 'completed_at' },
     createdBy: { type: DataTypes.UUID, allowNull: false, field: 'created_by' },
+    notifiedAt: { type: DataTypes.DATE, allowNull: true, field: 'notified_at' },
   },
   { tableName: 'lead_followups', timestamps: true },
 )

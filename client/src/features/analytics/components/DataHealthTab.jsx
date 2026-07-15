@@ -1,4 +1,4 @@
-import { AlertTriangle, UserX, Mail, Copy } from 'lucide-react'
+import { AlertTriangle, UserX, Mail, Copy } from '@/components/ui/icons'
 import { DataGrid } from '@/components/shared/DataGrid'
 import { ReportKpiCard } from './ReportKpiCard'
 import { KpiSkeleton } from './ChartSkeleton'

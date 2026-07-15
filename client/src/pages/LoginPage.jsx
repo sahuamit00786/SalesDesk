@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { BarChart3, Kanban, ShieldCheck } from 'lucide-react'
+import { BarChart3, Kanban, ShieldCheck } from '@/components/ui/icons'
 import { useLoginMutation } from '@/features/auth/authApi'
 import { useAppSelector } from '@/app/hooks'
 import { AuthScreenShell, authLinkClassName } from '@/components/auth/AuthScreenShell'

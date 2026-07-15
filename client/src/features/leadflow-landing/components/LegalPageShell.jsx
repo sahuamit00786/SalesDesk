@@ -30,32 +30,32 @@ export function LegalPageShell({ title, updated, description, children }) {
   }, [title, description])
 
   return (
-    <div className="leadflow-landing min-h-screen bg-white text-[#0a0714]">
-      <header className="sticky top-0 z-50 border-b border-violet-100/80 bg-white/90 backdrop-blur-xl">
+    <div className="leadflow-landing min-h-screen bg-white text-ln-ink">
+      <header className="sticky top-0 z-50 border-b border-ln-line bg-white/70 backdrop-blur-[5px]">
         <div className="mx-auto flex max-w-4xl items-center justify-between gap-4 px-4 py-3.5 sm:px-6 lg:px-8">
-          <Link to="/" className="flex items-center">
-            <LeadNestLogo className="h-11 w-auto max-w-[13rem] sm:h-12 sm:max-w-[15rem]" />
+          <Link to="/" className="flex items-center" aria-label="LeadNest home">
+            <LeadNestLogo className="h-9 w-auto max-w-[11rem]" />
           </Link>
           <Link
             to="/"
-            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-zinc-500 transition hover:bg-violet-50 hover:text-violet-700"
+            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-ln-mut transition-colors hover:bg-ln-bg2 hover:text-ln-ink"
           >
-            <ArrowLeft size={15} aria-hidden />
+            <ArrowLeft size={15} strokeWidth={1.75} aria-hidden />
             Back to home
           </Link>
         </div>
       </header>
 
       <main className="mx-auto max-w-4xl px-4 py-14 sm:px-6 sm:py-20 lg:px-8">
-        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-violet-600">Legal</p>
-        <h1 className="mt-3 font-display text-3xl font-bold tracking-tight text-[#0a0714] sm:text-4xl">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ln-accent">Legal</p>
+        <h1 className="mt-3 text-3xl font-semibold tracking-[-0.02em] text-ln-ink sm:text-4xl">
           {title}
         </h1>
         {updated ? (
-          <p className="mt-3 text-sm text-zinc-400">Last updated: {updated}</p>
+          <p className="mt-3 text-sm text-neutral-400">Last updated: {updated}</p>
         ) : null}
 
-        <div className="legal-prose mt-10 space-y-8 text-[15px] leading-relaxed text-zinc-600">
+        <div className="legal-prose mt-10 space-y-8 text-[15px] leading-relaxed text-ln-mut">
           {children}
         </div>
       </main>
@@ -69,7 +69,7 @@ export function LegalPageShell({ title, updated, description, children }) {
 export function LegalSection({ heading, children }) {
   return (
     <section className="space-y-3">
-      <h2 className="font-display text-xl font-bold tracking-tight text-[#0a0714]">{heading}</h2>
+      <h2 className="text-xl font-semibold tracking-tight text-ln-ink">{heading}</h2>
       {children}
     </section>
   )

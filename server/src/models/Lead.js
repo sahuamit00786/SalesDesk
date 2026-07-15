@@ -173,10 +173,10 @@ export const Lead = sequelize.define(
       allowNull: true,
       field: 'opportunity_stage',
     },
-    opportunityStatus: {
+    pipelineStatus: {
       type: DataTypes.UUID,
       allowNull: true,
-      field: 'opportunity_status_id',
+      field: 'pipeline_status_id',
     },
   },
   {

@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { format } from 'date-fns'
-import { TrendingUp, Calendar, Clock3, Briefcase, ExternalLink, User, DollarSign } from 'lucide-react'
+import { TrendingUp, Calendar, Clock3, Briefcase, ExternalLink, User, DollarSign } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 import { computeCalendarPopoverPosition } from '@/utils/calendarPopoverPosition'
 import { useOpportunityPanel } from '@/features/calendar/components/OpportunityPanelContext'

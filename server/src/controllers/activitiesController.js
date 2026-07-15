@@ -22,7 +22,16 @@ const DEFAULT_ACTIVITY_TYPES = [
   { key: 'discovery', name: 'Discovery', icon: 'Search', color: '#475569', description: 'Discovery call or meeting' },
   { key: 'follow_up', name: 'Follow-up', icon: 'ArrowRightCircle', color: '#be123c', description: 'Follow-up interaction' },
   { key: 'in_person_visit', name: 'In-person visit', icon: 'MapPin', color: '#1f2937', description: 'Face-to-face visit' },
+  { key: 'task', name: 'Task', icon: 'ClipboardCheck', color: '#0ea5e9', description: 'Task created on the lead' },
+  { key: 'status_change', name: 'Status change', icon: 'GitBranch', color: '#a855f7', description: 'Lead or pipeline status moved' },
+  { key: 'assignment', name: 'Assignment', icon: 'UserRoundCheck', color: '#10b981', description: 'Lead ownership changed' },
+  { key: 'document', name: 'Document', icon: 'FileText', color: '#06b6d4', description: 'Document linked or removed' },
+  { key: 'tag', name: 'Tag', icon: 'Tag', color: '#f59e0b', description: 'Tags added or removed' },
+  { key: 'system', name: 'System', icon: 'Settings2', color: '#6366f1', description: 'Automatic system entry' },
 ]
+
+/** Values the `activities.type` ENUM column can hold. */
+const DB_ENUM_TYPES = ['note', 'call', 'email', 'meeting', 'task', 'status_change', 'assignment', 'system']
 
 const createActivitySchema = Joi.object({
   leadId: Joi.string().uuid().required(),
@@ -62,6 +71,14 @@ function normalizeDateRange(from, to) {
 function activityTypeDbValue(key) {
   if (['note', 'call', 'email', 'meeting'].includes(key)) return key
   return 'meeting'
+}
+
+/**
+ * The type a row should be shown and filtered as. `activities.type` is a coarse ENUM — custom
+ * types are stored as 'meeting' — so metadata.activityTypeKey is authoritative when it exists.
+ */
+function effectiveTypeKey(row) {
+  return row?.metadata?.activityTypeKey || row?.type
 }
 
 async function findAccessibleLead(req, leadId) {
@@ -125,21 +142,12 @@ export async function listActivities(req, res, next) {
     if (createdAtRange) activityWhere.createdAt = createdAtRange
     if (authorUserIds.length) activityWhere.userId = { [Op.in]: authorUserIds }
     if (typeKeys.length) {
-      const base = typeKeys.filter((x) => ['note', 'call', 'email', 'meeting'].includes(x))
-      const custom = typeKeys.filter((x) => !base.includes(x))
-      activityWhere[Op.and] = []
-      if (base.length && custom.length) {
-        activityWhere[Op.and].push({
-          [Op.or]: [
-            { type: { [Op.in]: base } },
-            { 'metadata.activityTypeKey': { [Op.in]: custom } },
-          ],
-        })
-      } else if (base.length) {
-        activityWhere[Op.and].push({ type: { [Op.in]: base } })
-      } else {
-        activityWhere[Op.and].push({ 'metadata.activityTypeKey': { [Op.in]: custom } })
-      }
+      // Narrow to a superset here (a row matches on either the ENUM column or the metadata key);
+      // `effectiveTypeKey` below decides exactly, since metadata.activityTypeKey wins when present.
+      const enumKeys = typeKeys.filter((x) => DB_ENUM_TYPES.includes(x))
+      const or = [{ 'metadata.activityTypeKey': { [Op.in]: typeKeys } }]
+      if (enumKeys.length) or.push({ type: { [Op.in]: enumKeys } })
+      activityWhere[Op.and] = [{ [Op.or]: or }]
     }
 
     const activityRows = await Activity.findAll({
@@ -207,7 +215,10 @@ export async function listActivities(req, res, next) {
       sourceTable: 'lead_tasks',
     }))
 
-    const merged = [...normalizedActivities, ...normalizedTasks]
+    const merged = [...normalizedActivities, ...normalizedTasks].map((row) => ({
+      ...row,
+      typeKey: effectiveTypeKey(row),
+    }))
 
     const fromMs = createdAtRange?.[Op.gte]?.getTime() ?? null
     const toMs = createdAtRange?.[Op.lte]?.getTime() ?? null
@@ -217,8 +228,7 @@ export async function listActivities(req, res, next) {
       if (fromMs !== null && rowMs < fromMs) return false
       if (toMs !== null && rowMs > toMs) return false
       const meta = row.metadata || {}
-      const typeKey = meta.activityTypeKey || row.type
-      if (typeKeys.length && !typeKeys.includes(typeKey) && !typeKeys.includes(row.type)) return false
+      if (typeKeys.length && !typeKeys.includes(row.typeKey)) return false
       if (outcome && String(meta.outcome || '') !== outcome) return false
       if (attendeeIds.length) {
         const ids = Array.isArray(meta.attendeeIds) ? meta.attendeeIds : []

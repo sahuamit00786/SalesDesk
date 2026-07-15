@@ -1,4 +1,4 @@
-import { ArrowLeft, UserRound } from 'lucide-react'
+import { ArrowLeft, UserRound } from '@/components/ui/icons'
 import { Link } from 'react-router-dom'
 import { SkeletonEmailList } from '@/components/shared/SkeletonLoader'
 import InboxMessageCard, { ThreadTimelineRow } from '@/features/email/inbox/InboxMessageCard'

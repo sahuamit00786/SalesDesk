@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { format } from 'date-fns'
-import { Video, CheckSquare, Phone, TrendingUp, Bell, Paperclip } from 'lucide-react'
+import { Video, CheckSquare, Phone, TrendingUp, Bell, Paperclip } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 import { TaskEventHoverCard } from '@/features/calendar/components/TaskEventHoverCard'
 import { MeetingEventHoverCard } from '@/features/calendar/components/MeetingEventHoverCard'

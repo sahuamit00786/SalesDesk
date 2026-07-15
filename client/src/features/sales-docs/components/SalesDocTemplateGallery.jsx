@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { createSearchParams, useNavigate } from 'react-router-dom'
-import { Pencil, Trash2 } from 'lucide-react'
+import { Pencil, Trash2 } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 import { normalizeTemplateId } from '@/utils/docTemplateQuery'
 import { PageFilterBar } from '@/components/layout/PageFilterBar'

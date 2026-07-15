@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Search, X } from 'lucide-react'
+import { Search, X } from '@/components/ui/icons'
 import { useGetLeadsQuery } from '@/features/leads/leadsApi'
 
 /**

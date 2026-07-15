@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Search, Upload } from 'lucide-react'
+import { Search, Upload } from '@/components/ui/icons'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { RightDrawer } from '@/components/ui/RightDrawer'

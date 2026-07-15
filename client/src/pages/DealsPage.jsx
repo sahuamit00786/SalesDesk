@@ -10,7 +10,7 @@ import {
   List,
   Plus,
   Search,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { PageShell } from '@/components/layout/PageShell'
@@ -25,6 +25,7 @@ import { TablePaginationBar } from '@/components/ui/TablePaginationBar'
 import { inputFieldClassName } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { DataGrid } from '@/components/shared/DataGrid'
+import { MixedMoneyValue } from '@/components/shared/MixedMoneyValue'
 import { formatAggregatedDealAmount, formatDealMoney } from '@/features/deals/dealCurrencies'
 
 const SORT_OPTIONS = [
@@ -125,9 +126,9 @@ export function DealsPage() {
   const total = data?.meta?.total || 0
   const totalPages = Math.max(1, Math.ceil(total / (mode === 'pipeline' ? listQuery.limit : limit)))
   const users = formMetaData?.data?.users || []
-  const opportunityStatuses = useMemo(
-    () => [...(formMetaData?.data?.opportunityStatuses || [])].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)),
-    [formMetaData?.data?.opportunityStatuses],
+  const pipelineStatuses = useMemo(
+    () => [...(formMetaData?.data?.pipelineStatuses || [])].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)),
+    [formMetaData?.data?.pipelineStatuses],
   )
   const dealStatuses = useMemo(
     () => [...(formMetaData?.data?.dealStatuses || [])].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)),
@@ -136,8 +137,8 @@ export function DealsPage() {
 
   const stageFilterOptions = useMemo(() => {
     if (dealStatuses.length) return dealStatuses.map((s) => s.name).filter(Boolean)
-    return opportunityStatuses.map((s) => s.name).filter(Boolean)
-  }, [dealStatuses, opportunityStatuses])
+    return pipelineStatuses.map((s) => s.name).filter(Boolean)
+  }, [dealStatuses, pipelineStatuses])
 
   const dealStageName = useMemo(
     () => dealStatuses.find((s) => s.isDealCompleteStatus)?.name || '',
@@ -447,7 +448,7 @@ export function DealsPage() {
                     onClick={() => setMode('pipeline')}
                     className={cn(
                       'inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold',
-                      mode === 'pipeline' ? 'bg-[var(--brand-primary)] text-white' : 'text-ink-muted hover:bg-surface-subtle',
+                      mode === 'pipeline' ? 'bg-[var(--brand-primary)] cx-icon-inherit text-white' : 'text-ink-muted hover:bg-surface-subtle',
                     )}
                     aria-pressed={mode === 'pipeline'}
                   >
@@ -473,7 +474,7 @@ export function DealsPage() {
                   </span>
                   <span>
                     Revenue:{' '}
-                    <span className="font-semibold text-ink">{formatAggregatedDealAmount(rows, revenueSum)}</span>
+                    <MixedMoneyValue rows={rows} mode="sum" className="font-semibold text-ink" />
                   </span>
                   {isFetching ? <span className="text-[10px] font-medium">Updating…</span> : null}
                 </div>
@@ -535,7 +536,7 @@ export function DealsPage() {
                             <span
                               className={cn(
                                 'ml-2 flex h-4 w-4 shrink-0 items-center justify-center rounded border',
-                                checked ? 'border-brand-600 bg-[var(--brand-primary)] text-white' : 'border-neutral-300',
+                                checked ? 'border-brand-600 bg-[var(--brand-primary)] cx-icon-inherit text-white' : 'border-neutral-300',
                               )}
                             >
                               {checked ? <Check className="h-3 w-3" /> : null}
@@ -613,7 +614,7 @@ export function DealsPage() {
               <button
                 type="button"
                 onClick={() => setOpenAddDealDrawer(true)}
-                className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[var(--brand-primary)] px-3 text-xs font-semibold text-white shadow-sm hover:bg-[var(--brand-primary-dark)]"
+                className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[var(--brand-primary)] px-3 text-xs font-semibold cx-icon-inherit text-white shadow-sm hover:bg-[var(--brand-primary-dark)]"
               >
                 <Plus className="h-3.5 w-3.5" />
                 New deal
@@ -632,7 +633,7 @@ export function DealsPage() {
             <div className="flex h-full min-h-0 flex-col p-3 sm:p-4">
               <DealsPipelineKanban
                 opportunities={rows}
-                opportunityStatuses={dealStatuses.length ? dealStatuses : opportunityStatuses}
+                pipelineStatuses={dealStatuses.length ? dealStatuses : pipelineStatuses}
                 isLoading={isLoading}
                 dealStageName={dealStageName}
                 onOpenDeal={(dealId) => setEditingOpp(rows.find((r) => r.id === dealId) ?? { id: dealId })}
@@ -713,7 +714,7 @@ export function DealsPage() {
         open={Boolean(editingOpp)}
         onClose={() => setEditingOpp(null)}
         opp={editingOpp}
-        opportunityStatuses={dealStatuses.length ? dealStatuses : opportunityStatuses}
+        pipelineStatuses={dealStatuses.length ? dealStatuses : pipelineStatuses}
       />
     </PageShell>
   )

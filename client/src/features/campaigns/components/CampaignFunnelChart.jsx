@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 
 /** Horizontal funnel ribbon + stage headers, with stage-to-stage drop-off %. */

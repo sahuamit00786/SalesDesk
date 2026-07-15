@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import DOMPurify from 'dompurify'
 import { useSelector } from 'react-redux'
-import { File as FileIcon, FileText, Image as ImageIcon, Paperclip, Star } from 'lucide-react'
+import { File as FileIcon, FileText, Image as ImageIcon, Paperclip, Star } from '@/components/ui/icons'
 import { fillMergeTags } from '@/features/templates/mergeTags'
 
 function formatSize(bytes) {

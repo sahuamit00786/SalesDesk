@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2 } from '@/components/ui/icons'
 import { RightDrawer } from '@/components/ui/RightDrawer'
 import { cn } from '@/utils/cn'
 import { useCreateInvoiceMutation } from '@/features/sales-docs/invoicesApi'

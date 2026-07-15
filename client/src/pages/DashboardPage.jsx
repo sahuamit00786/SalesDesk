@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useSelector } from 'react-redux'
-import { Phone, FileText, Mail, Video, CheckSquare2, TrendingUp, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Phone, FileText, Mail, Video, CheckSquare2, TrendingUp, ChevronLeft, ChevronRight } from '@/components/ui/icons'
 import { useGetCalendarEventsQuery } from '@/features/calendar/calendarApi'
 import {
   Bar,
@@ -317,7 +317,7 @@ export function DashboardPage() {
   const activityFrom = useMemo(() => new Date(EPOCH_DATE).toISOString(), [])
   const activityTo = useMemo(() => new Date().toISOString(), [])
 
-  const { data: leadsTotalData, isLoading: leadsTotalLoading, isError: leadsTotalError } = useGetLeadsQuery({ page: 1, limit: 1 })
+  const { data: leadsTotalData, isLoading: leadsTotalLoading, isError: leadsTotalError } = useGetLeadsQuery({ page: 1, limit: 1, isOpportunity: false })
   const { data: oppsData, isLoading: oppsLoading, isError: oppsError } = useGetLeadsQuery({ page: 1, limit: 1, isOpportunity: true })
   const { data: tasksData, isLoading: tasksLoading, isError: tasksError } = useGetTasksQuery({})
 
@@ -513,7 +513,7 @@ export function DashboardPage() {
 
           <div className="space-y-6">
 
-            {/* Row 1: Lead status + Opportunity status */}
+            {/* Row 1: Lead status + Pipeline status */}
             <div className="grid gap-6 lg:grid-cols-2">
               <DashboardChartCard title="Lead status breakdown" subtitle="All leads by current status">
                 {chartsLoading ? <ChartSkeleton /> : (() => {
@@ -542,13 +542,13 @@ export function DashboardPage() {
                 })()}
               </DashboardChartCard>
 
-              <DashboardChartCard title="Opportunity status breakdown" subtitle="Opportunities by configurable status">
+              <DashboardChartCard title="Pipeline status breakdown" subtitle="Opportunities by configurable status">
                 {chartsLoading ? <ChartSkeleton /> : (
-                  charts.oppStatusDist?.length ? (
+                  charts.pipelineStatusDist?.length ? (
                     <ResponsiveContainer width="100%" height={260}>
                       <PieChart>
                         <Pie
-                          data={charts.oppStatusDist}
+                          data={charts.pipelineStatusDist}
                           dataKey="value"
                           nameKey="name"
                           cx="50%"
@@ -557,7 +557,7 @@ export function DashboardPage() {
                           outerRadius={88}
                           paddingAngle={2}
                         >
-                          {charts.oppStatusDist.map((_, i) => (
+                          {charts.pipelineStatusDist.map((_, i) => (
                             <Cell key={i} fill={CHART_COLORS.slices[i % CHART_COLORS.slices.length]} />
                           ))}
                         </Pie>
@@ -567,7 +567,7 @@ export function DashboardPage() {
                     </ResponsiveContainer>
                   ) : (
                     <div className="flex h-[260px] flex-col items-center justify-center gap-2 text-center">
-                      <p className="text-sm text-ink-muted">No opportunity statuses configured</p>
+                      <p className="text-sm text-ink-muted">No pipeline statuses configured</p>
                       <Link to="/lead-configuration" className="text-xs font-semibold text-brand-600 hover:underline">Configure statuses →</Link>
                     </div>
                   )

@@ -14,7 +14,7 @@ import {
   Paperclip,
   Underline,
   X,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import { Button } from '@/components/ui/Button'
 import { IconInput } from '@/components/ui/IconInput'
 import { Select } from '@/components/ui/Select'

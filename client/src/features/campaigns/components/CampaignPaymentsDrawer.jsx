@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { DollarSign, Plus, Trash2, X } from 'lucide-react'
+import { DollarSign, Plus, Trash2, X } from '@/components/ui/icons'
 import { RightDrawer } from '@/components/ui/RightDrawer'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/utils/cn'

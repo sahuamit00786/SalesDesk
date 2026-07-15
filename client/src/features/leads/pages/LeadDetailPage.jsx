@@ -42,7 +42,7 @@ import {
   UserCircle2,
   X,
   Zap,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import { PageShell } from '@/components/layout/PageShell'
 import { SkeletonDetail } from '@/components/shared/SkeletonLoader'
 import { Select } from '@/components/ui/Select'
@@ -64,6 +64,7 @@ import {
 import { LeadScorePill } from '@/features/leads/components/LeadScorePill'
 import { LeadSourceTag } from '@/features/leads/components/LeadSourceTag'
 import { LeadTagsInput } from '@/features/leads/components/LeadTagsInput'
+import { AssigneeCell } from '@/features/leads/components/AssigneeCell'
 import { CustomFieldsDisplay } from '@/features/leads/components/CustomFieldsDisplay'
 import { mapCustomFieldValuesFromLead } from '@/features/leads/customFieldTypes'
 import { getFileUrl } from '@/features/documents/documentUtils'
@@ -86,16 +87,18 @@ import {
   useGetLeadTasksQuery,
   useGetLeadFormMetaQuery,
   usePatchLeadNoteMutation,
+  usePatchLeadStatusMutation,
   usePatchLeadTaskMutation,
   useSyncLeadEmailsMutation,
   useUpdateLeadMutation,
   leadsApi,
 } from '@/features/leads/leadsApi'
+import { STATUS_OPTIONS } from '@/features/leads/constants'
 import GmailThreadList from '@/features/gmail/GmailThreadList'
 import GmailThreadView from '@/features/gmail/GmailThreadView'
 import { parseStoredThread } from '@/features/gmail/gmailParserUtils'
 import { formatStageLabel as formatPipelineStageLabel } from '@/features/opportunities/components/OpportunitiesKanban'
-import { useCreateOpportunityMutation, usePatchOpportunityStatusMutation } from '@/features/opportunities/opportunitiesApi'
+import { useCreateOpportunityMutation, usePatchPipelineStatusMutation, useRevertOpportunityToLeadMutation } from '@/features/opportunities/opportunitiesApi'
 import { AddDealDrawer } from '@/features/deals/components/AddDealDrawer'
 import { DealDetailPanel } from '@/features/deals/components/DealDetailPanel'
 import { DealQuotationsPanel, DealInvoicesPanel } from '@/features/deals/components/DealSalesDocsTabs'
@@ -116,6 +119,12 @@ import { CreateMeetingModal } from '@/features/meetings/components/CreateMeeting
 const NOTE_HTML = {
   ALLOWED_TAGS: ['b', 'strong', 'i', 'em', 'u', 'br', 'p', 'div', 'span', 'ul', 'ol', 'li', 'a', 'img'],
   ALLOWED_ATTR: ['href', 'target', 'rel', 'src', 'alt'],
+}
+
+function formatStatusLabel(value) {
+  const text = String(value || '').trim()
+  if (!text) return ''
+  return text.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
 function sanitizeNoteBody(html) {
@@ -316,6 +325,13 @@ const ACTIVITY_STYLE = {
     chip: 'border-blue-200 bg-blue-50 text-blue-700',
     card: 'bg-blue-50/70',
   },
+  status_change: {
+    label: 'Status changed',
+    Icon: RefreshCw,
+    iconWrap: 'bg-amber-100 text-amber-600',
+    chip: 'border-amber-200 bg-amber-50 text-amber-700',
+    card: 'bg-amber-50/70',
+  },
   document: {
     label: 'Document',
     Icon: FileText,
@@ -362,7 +378,8 @@ function inferStyleKeyFromSystemAction(action) {
   if (a === 'converted_to_opportunity') return 'converted'
   if (a === 'owner_reassigned' || a === 'workflow_assign_owner') return 'assigned'
   if (a.startsWith('workflow_triggers_') || a === 'workflow_create_task' || a === 'workflow_create_followup' || a === 'workflow_send_email') return 'automation'
-  if (a === 'lead_field_changed' || a === 'lead_collaborators_changed' || a === 'deal_stage_changed' || a === 'opportunity_status_changed') return 'updated'
+  if (a === 'lead_status_changed') return 'status_change'
+  if (a === 'lead_field_changed' || a === 'lead_collaborators_changed' || a === 'deal_stage_changed' || a === 'pipeline_status_changed' || a === 'opportunity_status_changed') return 'updated'
   if (a === 'quotation_created' || a === 'invoice_created') return 'document'
   if (a === 'document_uploaded' || a === 'document_moved' || a === 'document_deleted') return 'document'
   if (a === 'lead_imported_csv' || a === 'duplicate_merged') return 'duplicate'
@@ -589,6 +606,7 @@ export function LeadDetailPage() {
   const [noteTitle, setNoteTitle] = useState('')
   const [isComposeOpen, setIsComposeOpen] = useState(false)
   const [selectedThreadId, setSelectedThreadId] = useState(null)
+  const [mailboxView, setMailboxView] = useState('inbox')
   const [editingNoteId, setEditingNoteId] = useState(null)
   const [noteEditorVersion, setNoteEditorVersion] = useState(0)
   const [lostReason, setLostReason] = useState('')
@@ -652,7 +670,11 @@ export function LeadDetailPage() {
   const [updateLead] = useUpdateLeadMutation()
   const [createLeadTag] = useCreateLeadTagMutation()
   const [createOpportunity] = useCreateOpportunityMutation()
-  const [patchOpportunityStatus] = usePatchOpportunityStatusMutation()
+  const [patchPipelineStatus] = usePatchPipelineStatusMutation()
+  const [revertOpportunityToLead, { isLoading: revertingToLead }] = useRevertOpportunityToLeadMutation()
+  const [revertConfirmOpen, setRevertConfirmOpen] = useState(false)
+  const [patchLeadStatus] = usePatchLeadStatusMutation()
+  const [leadStatusSaving, setLeadStatusSaving] = useState(false)
 
   const lead = data?.data
   const summary = data?.meta?.summary || {}
@@ -760,6 +782,9 @@ export function LeadDetailPage() {
       }),
     [emailThreads],
   )
+  const inboxThreads = useMemo(() => parsedThreads.filter((t) => t.hasInbound), [parsedThreads])
+  const outboxThreads = useMemo(() => parsedThreads.filter((t) => !t.hasInbound), [parsedThreads])
+  const visibleThreads = mailboxView === 'inbox' ? inboxThreads : outboxThreads
   const parsedSelectedThread = useMemo(() => parseStoredThread(selectedThread), [selectedThread])
   const activeThread = selectedThreadId ? parsedSelectedThread : null
   const drawerTask = useMemo(
@@ -767,8 +792,8 @@ export function LeadDetailPage() {
     [taskDrawerTaskId, tasks],
   )
 
-  const opportunityStatuses = useMemo(() => {
-    const rows = formMetaData?.data?.opportunityStatuses || []
+  const pipelineStatuses = useMemo(() => {
+    const rows = formMetaData?.data?.pipelineStatuses || []
     return [...rows].sort((a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0))
   }, [formMetaData])
 
@@ -865,8 +890,6 @@ export function LeadDetailPage() {
     return whatsappRaw.replace(/\D/g, '')
   }, [whatsappE164, whatsappRaw])
   const formattedValue = formatDealMoney(lead?.value, lead?.valueCurrency || lead?.value_currency || 'USD')
-  const leadOwnerName =
-    (lead?.assignedUsers || []).map((user) => user?.name).filter(Boolean).join(', ') || lead?.assignee?.name || lead?.owner?.name || '-'
   const addressLine = [lead?.street, lead?.city, lead?.state, lead?.country, lead?.postalCode].filter(Boolean).join(', ') || '-'
 
   useEffect(() => {
@@ -1012,6 +1035,38 @@ export function LeadDetailPage() {
     }
   }
 
+  async function handleRevertToLead() {
+    try {
+      await revertOpportunityToLead({ id }).unwrap()
+      toast.success('Reverted to lead')
+      setRevertConfirmOpen(false)
+    } catch (err) {
+      const code = err?.data?.error?.code
+      if (code === 'HAS_DEALS') {
+        toast.error(err?.data?.error?.message || 'Remove linked deals before reverting to lead.')
+      } else {
+        toast.error(err?.data?.error?.message || err?.error || 'Could not revert to lead')
+      }
+    }
+  }
+
+  async function handleLeadStatusChange(nextStatus) {
+    if (!nextStatus || nextStatus === lead.status) return
+    let reason
+    if (nextStatus === 'lost' || nextStatus === 'junk') {
+      reason = window.prompt(`Reason for marking this lead as ${formatStatusLabel(nextStatus)}:`)
+      if (!reason || !reason.trim()) return
+    }
+    setLeadStatusSaving(true)
+    try {
+      await patchLeadStatus({ id, status: nextStatus, lostReason: reason }).unwrap()
+    } catch (err) {
+      toast.error(err?.data?.error?.message || err?.error || 'Could not update lead status')
+    } finally {
+      setLeadStatusSaving(false)
+    }
+  }
+
   async function submitLeadEdit(payload) {
     try {
       await updateLead({ id, ...payload }).unwrap()
@@ -1078,41 +1133,71 @@ export function LeadDetailPage() {
                 </div>
               ) : null}
 
-              <div className="mt-2 rounded-lg border border-surface-border bg-surface-subtle/60 p-1.5">
-                <div className="flex items-center justify-between gap-2 px-0.5">
-                  <p className="text-left text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Lead status (pipeline)</p>
-                  <span className="rounded-full border border-surface-border bg-white px-1.5 py-0.5 text-[10px] font-medium text-ink">
-                    {lead.oppStatus?.name || 'Not set'}
-                  </span>
+              {lead.isOpportunity ? (
+                <div className="mt-2 rounded-lg border border-surface-border bg-surface-subtle/60 p-1.5">
+                  <div className="flex items-center justify-between gap-2 px-0.5">
+                    <p className="text-left text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Pipeline stage</p>
+                    <span className="rounded-full border border-surface-border bg-white px-1.5 py-0.5 text-[10px] font-medium text-ink">
+                      {lead.pipelineStatusInfo?.name || 'Not set'}
+                    </span>
+                  </div>
+                  <Select
+                    className="mt-1.5 h-8 rounded-lg bg-white text-[13px]"
+                    value={lead.pipelineStatus || ''}
+                    disabled={pipelineSaving}
+                    onChange={async (e) => {
+                      const nextId = e.target.value
+                      if (!nextId || nextId === lead.pipelineStatus) return
+                      setPipelineSaving(true)
+                      try {
+                        await patchPipelineStatus({ id, pipelineStatusId: nextId }).unwrap()
+                      } catch (err) {
+                        toast.error(err?.data?.error?.message || err?.error || 'Could not update pipeline stage')
+                      } finally {
+                        setPipelineSaving(false)
+                      }
+                    }}
+                  >
+                    {pipelineStatuses.length === 0 ? (
+                      <option value="">{lead.pipelineStatusInfo?.name || '—'}</option>
+                    ) : (
+                      pipelineStatuses.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))
+                    )}
+                  </Select>
+                  <button
+                    type="button"
+                    onClick={() => setRevertConfirmOpen(true)}
+                    className="mt-1.5 h-7 w-full rounded-lg border border-surface-border bg-white text-[11px] font-semibold text-ink-muted hover:bg-surface-subtle hover:text-ink"
+                  >
+                    Revert to lead
+                  </button>
                 </div>
-                <Select
-                  className="mt-1.5 h-8 rounded-lg bg-white text-[13px]"
-                  value={lead.opportunityStatus || ''}
-                  disabled={pipelineSaving}
-                  onChange={async (e) => {
-                    const nextId = e.target.value
-                    if (!nextId || nextId === lead.opportunityStatus) return
-                    setPipelineSaving(true)
-                    try {
-                      await patchOpportunityStatus({ id, opportunityStatusId: nextId }).unwrap()
-                    } catch (err) {
-                      toast.error(err?.data?.error?.message || err?.error || 'Could not update lead status')
-                    } finally {
-                      setPipelineSaving(false)
-                    }
-                  }}
-                >
-                  {opportunityStatuses.length === 0 ? (
-                    <option value="">{lead.oppStatus?.name || '—'}</option>
-                  ) : (
-                    opportunityStatuses.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
+              ) : (
+                <div className="mt-2 rounded-lg border border-surface-border bg-surface-subtle/60 p-1.5">
+                  <div className="flex items-center justify-between gap-2 px-0.5">
+                    <p className="text-left text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Lead status</p>
+                    <span className="rounded-full border border-surface-border bg-white px-1.5 py-0.5 text-[10px] font-medium text-ink">
+                      {formatStatusLabel(lead.status) || 'Not set'}
+                    </span>
+                  </div>
+                  <Select
+                    className="mt-1.5 h-8 rounded-lg bg-white text-[13px]"
+                    value={lead.status || ''}
+                    disabled={leadStatusSaving}
+                    onChange={(e) => handleLeadStatusChange(e.target.value)}
+                  >
+                    {STATUS_OPTIONS.map((status) => (
+                      <option key={status} value={status}>
+                        {formatStatusLabel(status)}
                       </option>
-                    ))
-                  )}
-                </Select>
-              </div>
+                    ))}
+                  </Select>
+                </div>
+              )}
 
             </div>
 
@@ -1144,7 +1229,7 @@ export function LeadDetailPage() {
                       value={formattedWhatsApp}
                       href={whatsappDigits ? `https://wa.me/${whatsappDigits}` : undefined}
                     />
-                    <LeadInfoItem Icon={User} label="Lead owner" value={leadOwnerName} />
+                    <LeadInfoItem Icon={User} label="Lead owner" value={<AssigneeCell lead={lead} />} />
                     <LeadInfoItem Icon={UserCircle2} label="Job title" value={lead.designation || '-'} />
                     <LeadInfoItem Icon={BadgeIndianRupee} label="Annual revenue" value={formattedValue} />
                     <div className="flex items-start gap-2.5 py-1.5">
@@ -1253,7 +1338,7 @@ export function LeadDetailPage() {
                       </button>
                       <button
                         type="button"
-                        className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-slate-800 px-4 text-sm font-semibold text-white shadow-sm hover:bg-slate-800"
+                        className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-slate-800 px-4 text-sm font-semibold cx-icon-inherit text-white shadow-sm hover:bg-slate-800"
                         onClick={() => setIsComposeOpen(true)}
                       >
                         <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -1264,11 +1349,37 @@ export function LeadDetailPage() {
                 />
                 <div className="grid flex-1 gap-4 lg:min-h-[420px] lg:grid-cols-[340px_1fr]">
                 <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-surface-border bg-white">
+                  <div className="flex shrink-0 gap-1 border-b border-surface-border p-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setMailboxView('inbox')}
+                      className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold transition-colors ${
+                        mailboxView === 'inbox' ? 'bg-slate-800 text-white' : 'text-ink-muted hover:bg-surface-muted'
+                      }`}
+                    >
+                      Inbox ({inboxThreads.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMailboxView('outbox')}
+                      className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold transition-colors ${
+                        mailboxView === 'outbox' ? 'bg-slate-800 text-white' : 'text-ink-muted hover:bg-surface-muted'
+                      }`}
+                    >
+                      Outbox ({outboxThreads.length})
+                    </button>
+                  </div>
                   <div className="min-h-0 flex-1 overflow-y-auto">
                     <GmailThreadList
-                      threads={parsedThreads}
+                      threads={visibleThreads}
                       selectedId={selectedThreadId}
                       onSelect={setSelectedThreadId}
+                      listTitle={mailboxView === 'inbox' ? 'Inbox' : 'Outbox'}
+                      emptyHint={
+                        mailboxView === 'inbox'
+                          ? 'No replies yet. Sent emails without a reply show under Outbox.'
+                          : 'No sent-only threads. Emails move to Inbox once the lead replies.'
+                      }
                     />
                   </div>
                 </section>
@@ -1318,7 +1429,7 @@ export function LeadDetailPage() {
                 action={
                   <button
                     type="button"
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs font-semibold cx-icon-inherit text-white shadow-sm transition hover:bg-slate-800"
                     onClick={() => {
                       setTaskDrawerTaskId(null)
                       setTaskDrawerOpen(true)
@@ -1570,7 +1681,7 @@ export function LeadDetailPage() {
                   action={
                     <button
                       type="button"
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs font-semibold cx-icon-inherit text-white shadow-sm transition hover:bg-slate-800"
                       onClick={() => {
                         setTaskDrawerTaskId(null)
                         setTaskDrawerOpen(true)
@@ -1597,7 +1708,7 @@ export function LeadDetailPage() {
             setEditingMeeting(null)
             setCreateMeetingModalOpen(true)
           }}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs font-semibold cx-icon-inherit text-white shadow-sm transition hover:bg-slate-800"
         >
           <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
           Create meeting
@@ -1616,7 +1727,7 @@ export function LeadDetailPage() {
               setEditingMeeting(null)
               setCreateMeetingModalOpen(true)
             }}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs font-semibold cx-icon-inherit text-white shadow-sm transition hover:bg-slate-800"
           >
             <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
             Create meeting
@@ -1702,7 +1813,7 @@ export function LeadDetailPage() {
                     href={meeting.googleMeetLink}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
+                    className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold cx-icon-inherit text-white hover:bg-green-700"
                   >
                     <Presentation className="h-4 w-4" />
                     Join Meeting
@@ -1769,7 +1880,7 @@ export function LeadDetailPage() {
                   <button
                     type="button"
                     onClick={startCreateNote}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs font-semibold cx-icon-inherit text-white shadow-sm transition hover:bg-slate-800"
                   >
                     <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
                     Create note
@@ -1888,7 +1999,7 @@ export function LeadDetailPage() {
                   <button
                     type="button"
                     onClick={() => setAddDocumentOpen(true)}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-slate-800 px-3 text-xs font-semibold text-white shadow-sm hover:bg-slate-900"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-slate-800 px-3 text-xs font-semibold cx-icon-inherit text-white shadow-sm hover:bg-slate-900"
                   >
                     <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
                     Add document
@@ -1909,7 +2020,7 @@ export function LeadDetailPage() {
                   <button
                     type="button"
                     onClick={() => setAddDealDrawerOpen(true)}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-slate-800 px-3 text-xs font-semibold text-white shadow-sm hover:bg-slate-800"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-slate-800 px-3 text-xs font-semibold cx-icon-inherit text-white shadow-sm hover:bg-slate-800"
                   >
                     <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
                     Add deal
@@ -1963,7 +2074,7 @@ export function LeadDetailPage() {
                         <div className="flex items-start justify-between gap-2 px-4 pb-2.5 pt-3.5">
                           <div className="flex min-w-0 flex-1 items-center gap-2.5">
                             <div
-                              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-600 to-brand-700 text-[11px] font-bold text-white ring-2 ring-white"
+                              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-600 to-brand-700 text-[11px] font-bold cx-icon-inherit text-white ring-2 ring-white"
                               aria-hidden
                             >
                               {dealCardInitials(title)}
@@ -2091,7 +2202,7 @@ export function LeadDetailPage() {
                     <button
                       type="button"
                       onClick={() => setAddDealDrawerOpen(true)}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs font-semibold cx-icon-inherit text-white shadow-sm transition hover:bg-slate-800"
                     >
                       <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
                       Add deal
@@ -2110,7 +2221,7 @@ export function LeadDetailPage() {
                       setCallLogBody('')
                       setCallLogModalOpen(true)
                     }}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs font-semibold cx-icon-inherit text-white shadow-sm transition hover:bg-slate-800"
                   >
                     <PhoneCall className="h-3.5 w-3.5 shrink-0" aria-hidden />
                     Log call
@@ -2321,7 +2432,7 @@ export function LeadDetailPage() {
                           setCallLogBody('')
                           setCallLogModalOpen(true)
                         }}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800"
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs font-semibold cx-icon-inherit text-white shadow-sm transition hover:bg-slate-800"
                       >
                         <PhoneCall className="h-3.5 w-3.5 shrink-0" aria-hidden />
                         Log call
@@ -2430,7 +2541,7 @@ export function LeadDetailPage() {
             <DealDetailPanel
               open
               opp={dealPanelOpp}
-              opportunityStatuses={opportunityStatuses}
+              pipelineStatuses={pipelineStatuses}
               onClose={() => setDealPanelOpp(null)}
             />
           ) : null}
@@ -2446,6 +2557,15 @@ export function LeadDetailPage() {
             onCreated={() => {
               refetchChildDeals()
             }}
+          />
+          <ConfirmDialog
+            open={revertConfirmOpen}
+            onClose={() => setRevertConfirmOpen(false)}
+            onConfirm={handleRevertToLead}
+            loading={revertingToLead}
+            variant="danger"
+            title="Revert to lead?"
+            description="This opportunity moves back to Leads and its pipeline stage is cleared. Blocked if it has linked deals."
           />
           <ConfirmDialog
             open={Boolean(deleteDealConfirm)}

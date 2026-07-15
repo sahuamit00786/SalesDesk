@@ -6,7 +6,7 @@ const variants = {
     'inline-flex items-center justify-center gap-2 px-5 text-white text-sm font-semibold shadow-sm',
     controlHeight,
     controlRadius,
-    'cx-btn-primary transition-colors duration-150',
+    'cx-btn-primary cx-icon-inherit transition-colors duration-150',
   ),
   secondary: cn(
     'inline-flex items-center justify-center gap-2 px-5 text-ink text-sm font-medium',
@@ -24,7 +24,7 @@ const variants = {
     'inline-flex items-center justify-center gap-2 px-5 text-white text-sm font-semibold',
     controlHeight,
     controlRadius,
-    'bg-danger hover:bg-red-700 transition-colors duration-150',
+    'bg-danger hover:bg-red-700 cx-icon-inherit transition-colors duration-150',
   ),
   icon: cn(
     'inline-flex items-center justify-center h-9 w-9 rounded-xl text-ink-muted hover:bg-brand-50 hover:text-brand-700 transition-colors duration-150',

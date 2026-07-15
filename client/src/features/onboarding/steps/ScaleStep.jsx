@@ -1,4 +1,4 @@
-import { BarChart2, Users } from 'lucide-react'
+import { BarChart2, Users } from '@/components/ui/icons'
 import { ChoiceCard } from '@/features/onboarding/components/ChoiceCard'
 import { OnboardingFieldSection } from '@/features/onboarding/components/OnboardingFieldSection'
 import { OnboardingStepHeader } from '@/features/onboarding/components/OnboardingStepHeader'

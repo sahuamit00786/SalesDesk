@@ -1,4 +1,4 @@
-import { DollarSign, TrendingUp, Trophy, Percent, BadgeDollarSign, Briefcase } from 'lucide-react'
+import { DollarSign, TrendingUp, Trophy, Percent, BadgeDollarSign, Briefcase } from '@/components/ui/icons'
 import { ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts'
 import { DashboardChartCard } from '@/features/dashboard/components/DashboardChartCard'
 import { CHART_COLORS } from '@/features/dashboard/dummyDashboardData'

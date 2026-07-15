@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect, useRef } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { GitBranch, MoreHorizontal, Play, Plus, Trash2, Zap, Layers, CheckCircle2, XCircle, Clock, CalendarDays, Loader2, Search } from 'lucide-react'
+import { GitBranch, MoreHorizontal, Play, Plus, Trash2, Zap, Layers, CheckCircle2, XCircle, Clock, CalendarDays, Loader2, Search } from '@/components/ui/icons'
 import { SkeletonCards } from '@/components/shared/SkeletonLoader'
 import { formatDistanceToNow, format } from 'date-fns'
 import { PageShell } from '@/components/layout/PageShell'
@@ -136,7 +136,7 @@ function TestRunDrawer({ workflow, open, onClose }) {
         <button
           type="submit"
           disabled={isLoading || !selectedId}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-800 py-2.5 text-sm font-semibold text-white hover:bg-slate-900 disabled:opacity-60"
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-800 py-2.5 text-sm font-semibold cx-icon-inherit text-white hover:bg-slate-900 disabled:opacity-60"
         >
           {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
           Run test
@@ -246,7 +246,7 @@ export function WorkflowsListPage() {
           <button
             type="button"
             onClick={openCreateModal}
-            className="ml-auto inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-[var(--brand-primary)] px-4 text-sm font-semibold text-white shadow-sm hover:bg-[var(--brand-primary-dark)]"
+            className="ml-auto inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-[var(--brand-primary)] px-4 text-sm font-semibold cx-icon-inherit text-white shadow-sm hover:bg-[var(--brand-primary-dark)]"
           >
             <Plus className="h-4 w-4" />
             New workflow

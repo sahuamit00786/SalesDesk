@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, RefreshCw } from 'lucide-react'
+import { ArrowLeft, RefreshCw } from '@/components/ui/icons'
 import { Button } from '@/components/ui/Button'
 import { PageShell } from '@/components/layout/PageShell'
 import { PageStack } from '@/components/layout/PageStack'
@@ -81,19 +81,19 @@ export function ReportDetailPage() {
 
   const { data: formMetaData } = useGetLeadFormMetaQuery()
   const dealStatuses = useMemo(() => formMetaData?.data?.dealStatuses || [], [formMetaData])
-  const opportunityStatuses = useMemo(() => formMetaData?.data?.opportunityStatuses || [], [formMetaData])
+  const pipelineStatuses = useMemo(() => formMetaData?.data?.pipelineStatuses || [], [formMetaData])
 
   const stageOptions = useMemo(() => {
-    // Deal.stage stores the stage name directly; Lead.opportunityStatus is a FK id.
+    // Deal.stage stores the stage name directly; Lead.pipelineStatus is a FK id.
     if (type === 'deals') {
-      const source = dealStatuses.length ? dealStatuses : opportunityStatuses
+      const source = dealStatuses.length ? dealStatuses : pipelineStatuses
       return source.map((s) => s.name).filter(Boolean).map((name) => ({ value: name, label: name }))
     }
     if (type === 'opportunities') {
-      return opportunityStatuses.filter((s) => s.id && s.name).map((s) => ({ value: s.id, label: s.name }))
+      return pipelineStatuses.filter((s) => s.id && s.name).map((s) => ({ value: s.id, label: s.name }))
     }
     return []
-  }, [type, dealStatuses, opportunityStatuses])
+  }, [type, dealStatuses, pipelineStatuses])
 
   const statusOptions = useMemo(() => {
     if (type === 'leads' || type === 'opportunities') {

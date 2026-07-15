@@ -9,7 +9,7 @@ import {
   LineChart,
   Sparkles,
   UsersRound,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import { useRegisterMutation, useResendVerificationMutation, useVerifyEmailMutation } from '@/features/auth/authApi'
 import { useAppSelector } from '@/app/hooks'
 import { AuthScreenShell, authLinkClassName } from '@/components/auth/AuthScreenShell'

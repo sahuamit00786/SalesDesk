@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Bold, Italic, Link2, List, ListOrdered, Trash2 } from 'lucide-react'
+import { Bold, Italic, Link2, List, ListOrdered, Trash2 } from '@/components/ui/icons'
 import { RightDrawer } from '@/components/ui/RightDrawer'
 
 const TEMPLATE_VARIABLES = ['{{name}}', '{{email}}', '{{form_name}}', '{{submission_date}}']

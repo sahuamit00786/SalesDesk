@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ShieldCheck, AlertCircle } from 'lucide-react'
+import { ShieldCheck, AlertCircle } from '@/components/ui/icons'
 import { baseApi } from '@/features/api/baseApi'
 import { useDispatch } from 'react-redux'
 import { setCredentials } from '@/features/auth/authSlice'

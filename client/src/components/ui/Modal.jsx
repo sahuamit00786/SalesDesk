@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { X } from 'lucide-react'
+import { X } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 import { Button } from '@/components/ui/Button'
 

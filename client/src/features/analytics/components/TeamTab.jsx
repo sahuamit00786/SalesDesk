@@ -1,4 +1,4 @@
-import { Users, UserCheck, Shield, TrendingUp } from 'lucide-react'
+import { Users, UserCheck, Shield, TrendingUp } from '@/components/ui/icons'
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts'

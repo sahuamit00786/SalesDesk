@@ -1,6 +1,6 @@
 import { PageShell } from '@/components/layout/PageShell'
 import { EmptyState } from '@/components/shared/EmptyState'
-import { Sparkles } from 'lucide-react'
+import { Sparkles } from '@/components/ui/icons'
 
 export function PlaceholderPage({ title, description }) {
   return (

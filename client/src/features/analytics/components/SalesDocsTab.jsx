@@ -1,4 +1,4 @@
-import { FileText, Receipt, DollarSign, Percent, AlertCircle } from 'lucide-react'
+import { FileText, Receipt, DollarSign, Percent, AlertCircle } from '@/components/ui/icons'
 import { ResponsiveContainer, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
 import { DashboardChartCard } from '@/features/dashboard/components/DashboardChartCard'
 import { CHART_COLORS } from '@/features/dashboard/dummyDashboardData'

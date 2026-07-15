@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { Pencil, Printer, Receipt, Trash2 } from 'lucide-react'
+import { Pencil, Printer, Receipt, Trash2 } from '@/components/ui/icons'
 import {
   SalesDocActionIcon,
   SalesDocClientCell,

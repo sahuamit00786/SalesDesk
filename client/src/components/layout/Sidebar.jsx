@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { NavLink } from 'react-router-dom'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 import { NAV_SECTIONS } from '@/components/layout/navConfig'
 import { useAppSelector } from '@/app/hooks'
@@ -28,7 +28,9 @@ const navLinkClass = ({ isActive }, narrow) =>
     'hover:text-white',
     narrow ? 'justify-center px-0' : 'pl-4 pr-2',
     isActive && cn(SIDEBAR_ACTIVE_BG, 'font-medium text-white', ACTIVE_BORDER),
-    '[&[aria-current=page]_svg]:text-white [&[aria-current=page]_svg]:opacity-100',
+    // Active item keeps its module tone and just burns brighter — the white pill
+    // and border already carry the "selected" signal.
+    '[&[aria-current=page]_svg]:opacity-100',
   )
 
 const sidebarChromeBtn =
@@ -236,7 +238,10 @@ export function Sidebar({ className, collapsed = false, onToggleCollapse, isMobi
         )}
       </div>
 
-      <nav ref={navScrollRef} className="scrollbar-none min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain py-1">
+      <nav
+        ref={navScrollRef}
+        className="cx-icon-tone-dark scrollbar-none min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain py-1"
+      >
         {navSections.map((section) => (
           <div key={section.label} className="pb-1 pt-2.5">
             {!narrow ? (
@@ -269,7 +274,7 @@ export function Sidebar({ className, collapsed = false, onToggleCollapse, isMobi
                       onClick={() => isMobile && onNavigate?.()}
                       className={({ isActive }) => navLinkClass({ isActive }, true)}
                     >
-                      <Icon className="h-4 w-4 shrink-0 opacity-75 transition-opacity" aria-hidden />
+                      <Icon className="h-4 w-4 shrink-0 opacity-90 transition-opacity" aria-hidden />
                     </NavLink>
                   </div>
                 ) : (
@@ -280,7 +285,7 @@ export function Sidebar({ className, collapsed = false, onToggleCollapse, isMobi
                     onClick={() => isMobile && onNavigate?.()}
                     className={({ isActive }) => navLinkClass({ isActive }, false)}
                   >
-                    <Icon className="h-4 w-4 shrink-0 opacity-75 transition-opacity" aria-hidden />
+                    <Icon className="h-4 w-4 shrink-0 opacity-90 transition-opacity" aria-hidden />
                     <span className="min-w-0 truncate">{label}</span>
                     <NavBadge variant={resolvedVariant} collapsed={false}>
                       {resolvedBadge}

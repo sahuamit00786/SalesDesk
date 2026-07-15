@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   BarChart2, CalendarCheck, CheckCircle2,
   ClipboardList, Clock, ScrollText, SlidersHorizontal, Umbrella,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import { PageShell } from '@/components/layout/PageShell'
 import { useGetAttendanceTodayQuery, useGetMyAttendanceQuery } from '@/features/attendance/attendanceApi'
 import { useGetMyLeaveBalanceQuery, useGetAllLeavesQuery } from '@/features/leave/leaveApi'

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Check, ChevronDown } from 'lucide-react'
+import { Check, ChevronDown } from '@/components/ui/icons'
 import { useOutsideClick } from '@/hooks/useOutsideClick'
 import { cn } from '@/utils/cn'
 import { STATUS_META } from '../taskConstants'

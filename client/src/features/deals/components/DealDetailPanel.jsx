@@ -24,7 +24,7 @@ import {
   Tag,
   Trash2,
   UserCircle2,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import DOMPurify from 'dompurify'
 import toast from 'react-hot-toast'
 import { cn } from '@/utils/cn'
@@ -49,7 +49,7 @@ import {
   taskTypeLabel,
 } from '@/features/leads/components/LeadTaskDrawer'
 import { TaskAttachmentIcons } from '@/features/leads/components/TaskAttachmentIcons'
-import { usePatchOpportunityStatusMutation } from '@/features/opportunities/opportunitiesApi'
+import { usePatchPipelineStatusMutation } from '@/features/opportunities/opportunitiesApi'
 import { useGetDealQuery, usePatchDealStageMutation, useGetDealActivitiesQuery, useCreateDealActivityMutation } from '@/features/deals/dealsApi'
 import { formatStageLabel } from '@/features/opportunities/components/OpportunitiesKanban'
 import { useGetDocumentsQuery, useUploadDocumentMutation } from '@/features/documents/documentsApi'
@@ -342,7 +342,7 @@ function ContactRow({ Icon, label, value, href, tone = 'violet', compact = false
   )
 }
 
-export function DealDetailPanel({ open, onClose, opp, opportunityStatuses = [], defaultTab = 'activity' }) {
+export function DealDetailPanel({ open, onClose, opp, pipelineStatuses = [], defaultTab = 'activity' }) {
   const navigate = useNavigate()
   const [tab, setTab] = useState(defaultTab)
   const [stageMenuOpen, setStageMenuOpen] = useState(false)
@@ -388,7 +388,7 @@ export function DealDetailPanel({ open, onClose, opp, opportunityStatuses = [], 
   const [deleteNote] = useDeleteLeadNoteMutation()
   const [patchTask] = usePatchLeadTaskMutation()
   const [deleteTask] = useDeleteLeadTaskMutation()
-  const [patchOpportunityStatus, { isLoading: changingOppStage }] = usePatchOpportunityStatusMutation()
+  const [patchPipelineStatus, { isLoading: changingOppStage }] = usePatchPipelineStatusMutation()
   const [patchDealStage, { isLoading: changingDealStage }] = usePatchDealStageMutation()
   const [createDealActivity, { isLoading: loggingDealActivity }] = useCreateDealActivityMutation()
   const changingStage = changingOppStage || changingDealStage
@@ -402,13 +402,13 @@ export function DealDetailPanel({ open, onClose, opp, opportunityStatuses = [], 
   const invoices = invoicesData?.data || []
 
   const stagesOrdered = useMemo(
-    () => [...opportunityStatuses].sort((a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0)),
-    [opportunityStatuses],
+    () => [...pipelineStatuses].sort((a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0)),
+    [pipelineStatuses],
   )
 
   const currentStage = isDealEntity
     ? (card?.currentStage || '')
-    : (lead?.oppStatus?.name || card?.currentStage || '')
+    : (lead?.pipelineStatusInfo?.name || card?.currentStage || '')
   const currentStageLabel = formatStageLabel(currentStage || '')
 
   const visibleActivities = useMemo(() => {
@@ -495,9 +495,9 @@ export function DealDetailPanel({ open, onClose, opp, opportunityStatuses = [], 
       if (dealId) {
         await patchDealStage({ id: dealId, currentStage: nextStage }).unwrap()
       } else {
-        const status = opportunityStatuses.find((s) => s.name === nextStage)
+        const status = pipelineStatuses.find((s) => s.name === nextStage)
         if (!status) return
-        await patchOpportunityStatus({ id: leadApiId, opportunityStatusId: status.id }).unwrap()
+        await patchPipelineStatus({ id: leadApiId, pipelineStatusId: status.id }).unwrap()
       }
       toast.success(`Moved to ${formatStageLabel(nextStage)}`)
       setStageMenuOpen(false)
@@ -971,7 +971,7 @@ function ActivityComposer({ onSubmit, submitting }) {
         <button
           type="submit"
           disabled={submitting || !body.trim()}
-          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-neutral-900 bg-neutral-900 px-4 text-xs font-semibold text-white shadow-sm hover:bg-neutral-800 disabled:opacity-50"
+          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-neutral-900 bg-neutral-900 px-4 text-xs font-semibold cx-icon-inherit text-white shadow-sm hover:bg-neutral-800 disabled:opacity-50"
         >
           <Plus className="h-3.5 w-3.5" />
           {submitting ? 'Saving…' : 'Log'}
@@ -1114,7 +1114,7 @@ function NotesTab({ notes, noteTitle, onNoteTitleChange, noteBody, onNoteBodyCha
           <button
             type="button"
             onClick={() => setShowComposer(true)}
-            className="inline-flex items-center gap-1.5 rounded-md border border-neutral-900 bg-neutral-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-neutral-800"
+            className="inline-flex items-center gap-1.5 rounded-md border border-neutral-900 bg-neutral-900 px-3 py-1.5 text-xs font-semibold cx-icon-inherit text-white shadow-sm hover:bg-neutral-800"
           >
             <Plus className="h-3.5 w-3.5" />
             Add note
@@ -1150,7 +1150,7 @@ function NotesTab({ notes, noteTitle, onNoteTitleChange, noteBody, onNoteBodyCha
               type="button"
               onClick={handleSubmit}
               disabled={submitting || !noteBody.trim()}
-              className="inline-flex h-9 items-center gap-1.5 rounded-md border border-neutral-900 bg-neutral-900 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-neutral-800 disabled:opacity-50"
+              className="inline-flex h-9 items-center gap-1.5 rounded-md border border-neutral-900 bg-neutral-900 px-4 text-sm font-semibold cx-icon-inherit text-white shadow-sm transition hover:bg-neutral-800 disabled:opacity-50"
             >
               <Plus className="h-3.5 w-3.5" />
               {submitting ? 'Saving…' : 'Add note'}
@@ -1220,7 +1220,7 @@ function TasksTab({ tasks, onCreate, onEdit, onComplete, onDelete, onChangeStatu
         <button
           type="button"
           onClick={onCreate}
-          className="inline-flex items-center gap-1.5 rounded-md border border-neutral-900 bg-neutral-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-neutral-800"
+          className="inline-flex items-center gap-1.5 rounded-md border border-neutral-900 bg-neutral-900 px-3 py-1.5 text-xs font-semibold cx-icon-inherit text-white shadow-sm hover:bg-neutral-800"
         >
           <Plus className="h-3.5 w-3.5" />
           Add task

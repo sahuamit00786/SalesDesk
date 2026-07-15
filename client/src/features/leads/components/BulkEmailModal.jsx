@@ -8,7 +8,7 @@ import {
   Mail,
   Send,
   User,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { EmailPreviewCard } from '@/features/templates/components/EmailPreviewCard'

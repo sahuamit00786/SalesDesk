@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { ChevronLeft, ChevronRight, MailOpen, Menu, RefreshCcw } from 'lucide-react'
+import { ChevronLeft, ChevronRight, MailOpen, Menu, RefreshCcw } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 
 export default function EmailListToolbar({

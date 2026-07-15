@@ -24,7 +24,7 @@ const ALLOWED_COLUMNS = {
     'id', 'company_id', 'workspace_id', 'owner_user_id', 'assigned_to', 'title', 'contact_name',
     'company', 'designation', 'email', 'phone', 'value', 'value_currency', 'status', 'source',
     'score', 'closing_date', 'is_deleted', 'is_opportunity', 'opportunity_stage',
-    'opportunity_status_id', 'street', 'city', 'state', 'country', 'postal_code',
+    'pipeline_status_id', 'street', 'city', 'state', 'country', 'postal_code',
     'created_at', 'updated_at',
   ]),
   deals: new Set([

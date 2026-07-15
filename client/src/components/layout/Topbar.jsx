@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Menu } from 'lucide-react'
+import { Menu } from '@/components/ui/icons'
 import { useLocation } from 'react-router-dom'
 import { useAppSelector } from '@/app/hooks'
 import { Button } from '@/components/ui/Button'

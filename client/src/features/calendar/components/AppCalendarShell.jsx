@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
-import { ChevronLeft, ChevronRight, Search, MoreHorizontal, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Search, MoreHorizontal, X } from '@/components/ui/icons'
 import { format, addDays, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isSameDay, isAfter, isBefore, startOfDay } from 'date-fns'
 import { Calendar } from 'react-big-calendar'
 import 'react-big-calendar/lib/css/react-big-calendar.css'

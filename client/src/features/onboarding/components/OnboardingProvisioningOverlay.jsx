@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CheckCircle } from 'lucide-react'
+import { CheckCircle } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 
 const DEFAULT_STEPS = [
@@ -69,7 +69,7 @@ export function OnboardingProvisioningOverlay({ open, serverSteps }) {
                 <span
                   className={cn(
                     'flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 text-xs font-bold',
-                    done && 'border-emerald-500 bg-emerald-500 text-white',
+                    done && 'border-emerald-500 bg-emerald-500 cx-icon-inherit text-white',
                     current && 'border-brand-600 bg-white text-brand-700',
                     !done && !current && 'border-surface-border bg-white text-ink-faint',
                   )}

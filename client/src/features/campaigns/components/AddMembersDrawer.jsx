@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Search, UserPlus } from 'lucide-react'
+import { Search, UserPlus } from '@/components/ui/icons'
 import toast from 'react-hot-toast'
 import { RightDrawer } from '@/components/ui/RightDrawer'
 import { Button } from '@/components/ui/Button'

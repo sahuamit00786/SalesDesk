@@ -1,4 +1,4 @@
-import { Users, TrendingUp, DollarSign, Trophy, Percent, Megaphone, CheckSquare, AlertTriangle, ListTodo, BadgeDollarSign } from 'lucide-react'
+import { Users, TrendingUp, DollarSign, Trophy, Percent, Megaphone, CheckSquare, AlertTriangle, ListTodo, BadgeDollarSign } from '@/components/ui/icons'
 import {
   ResponsiveContainer, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,

@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { Handle, Position, useReactFlow } from '@xyflow/react'
-import { Plus, Trash2, X } from 'lucide-react'
+import { Plus, Trash2, X } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 import {
   WORKFLOW_NODE_TYPES,
@@ -104,7 +104,7 @@ const WATCHABLE_FIELDS = [
   { value: 'status', label: 'Lifecycle status' },
   { value: 'source', label: 'Source channel' },
   { value: 'sourceId', label: 'Workspace source' },
-  { value: 'opportunityStatus', label: 'Pipeline status' },
+  { value: 'pipelineStatus', label: 'Pipeline status' },
   { value: 'assignedTo', label: 'Assigned to' },
   { value: 'email', label: 'Email' },
   { value: 'phone', label: 'Phone' },
@@ -213,7 +213,7 @@ const CONDITION_FIELD_GROUPS = [
   },
   {
     label: 'Pipeline',
-    options: [{ value: 'opportunityStatus', label: 'Pipeline / opportunity status' }],
+    options: [{ value: 'pipelineStatus', label: 'Pipeline status' }],
   },
   {
     label: 'Contact & account',
@@ -245,7 +245,7 @@ function formatStatusLabel(key) {
 
 function ConditionValueControl({ field, value, operator, updateNodeData, id, leadSetup }) {
   const sources = Array.isArray(leadSetup?.sources) ? leadSetup.sources : []
-  const stages = Array.isArray(leadSetup?.opportunityStatuses) ? leadSetup.opportunityStatuses : []
+  const stages = Array.isArray(leadSetup?.pipelineStatuses) ? leadSetup.pipelineStatuses : []
 
   if (operator === 'is_empty' || operator === 'is_not_empty') {
     return null
@@ -320,7 +320,7 @@ function ConditionValueControl({ field, value, operator, updateNodeData, id, lea
     )
   }
 
-  if (field === 'opportunityStatus') {
+  if (field === 'pipelineStatus') {
     return (
       <label className="block text-[11px] font-medium text-ink-muted">
         Pipeline status
@@ -337,7 +337,7 @@ function ConditionValueControl({ field, value, operator, updateNodeData, id, lea
           ))}
         </select>
         {stages.length === 0 ? (
-          <p className="mt-1 text-[10px] text-amber-700">Add opportunity statuses under Lead configuration.</p>
+          <p className="mt-1 text-[10px] text-amber-700">Add pipeline statuses under Lead configuration.</p>
         ) : null}
       </label>
     )
@@ -380,8 +380,8 @@ function ConditionFieldNode({ id, data, selected, updateNodeData, leadSetup }) {
     const f = e.target.value
     let v = defaultConditionValueForField(f)
     const sources = Array.isArray(leadSetup?.sources) ? leadSetup.sources : []
-    const stages = Array.isArray(leadSetup?.opportunityStatuses) ? leadSetup.opportunityStatuses : []
-    if (f === 'opportunityStatus' && stages[0]?.id) v = String(stages[0].id)
+    const stages = Array.isArray(leadSetup?.pipelineStatuses) ? leadSetup.pipelineStatuses : []
+    if (f === 'pipelineStatus' && stages[0]?.id) v = String(stages[0].id)
     if (f === 'sourceId' && sources[0]?.id) v = String(sources[0].id)
     updateNodeData(id, { field: f, value: v })
   }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { GripVertical, Plus, Trash2 } from 'lucide-react'
+import { GripVertical, Plus, Trash2 } from '@/components/ui/icons'
 import { RightDrawer } from '@/components/ui/RightDrawer'
 import { Button } from '@/components/ui/Button'
 import { usePatchCampaignStagesMutation } from '@/features/campaigns/campaignsApi'

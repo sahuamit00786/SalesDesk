@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { Download, Layers, Plus, ChevronDown } from "lucide-react";
+import { Download, Layers, Plus, ChevronDown } from '@/components/ui/icons';
 import toast from "react-hot-toast";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { PageShell } from "@/components/layout/PageShell";
@@ -54,7 +54,7 @@ import {
 } from "@/features/leads/leadsSelectors";
 import { STATUS_OPTIONS } from "@/features/leads/constants";
 import { CreateOpportunityModal } from "@/features/opportunities/components/CreateOpportunityModal";
-import { useCreateOpportunityMutation, usePatchOpportunityStatusMutation } from "@/features/opportunities/opportunitiesApi";
+import { useCreateOpportunityMutation, usePatchPipelineStatusMutation } from "@/features/opportunities/opportunitiesApi";
 import {
   ListSearchToolbar,
   buildLeadsListQueryParams,
@@ -103,6 +103,8 @@ function filtersToParams(filters) {
   if (filters.assignedTo?.length) params.assignedTo = filters.assignedTo.join(',')
   if (filters.source?.length) params.source = filters.source.join(',')
   if (filters.workspaceId) params.workspaceId = filters.workspaceId
+  if (filters.createdFrom) params.createdFrom = filters.createdFrom
+  if (filters.createdTo) params.createdTo = filters.createdTo
   return params
 }
 
@@ -115,12 +117,16 @@ function paramsToFilters(searchParams) {
   const assignedTo = searchParams.get('assignedTo')
   const source = searchParams.get('source')
   const workspaceId = searchParams.get('workspaceId')
+  const createdFrom = searchParams.get('createdFrom')
+  const createdTo = searchParams.get('createdTo')
   if (search) filters.search = search
   if (status) filters.status = status.split(',').filter(Boolean)
   if (stage) filters.stage = stage.split(',').filter(Boolean)
   if (assignedTo) filters.assignedTo = assignedTo.split(',').filter(Boolean)
   if (source) filters.source = source.split(',').filter(Boolean)
   if (workspaceId) filters.workspaceId = workspaceId
+  if (createdFrom) filters.createdFrom = createdFrom
+  if (createdTo) filters.createdTo = createdTo
   return filters
 }
 
@@ -177,7 +183,7 @@ export function LeadsListPage({ variant = "leads" }) {
   const [bulkLeads] = useBulkLeadsMutation();
   const [resolveLeadsByIds] = useResolveLeadsByIdsMutation();
   const [patchLeadStatus] = usePatchLeadStatusMutation();
-  const [patchOpportunityStatus] = usePatchOpportunityStatusMutation();
+  const [patchPipelineStatus] = usePatchPipelineStatusMutation();
   const [importLeads] = useImportLeadsMutation();
   const [exportLeads] = useExportLeadsMutation();
   const [createOpportunity, { isLoading: creatingOpp }] = useCreateOpportunityMutation();
@@ -186,8 +192,8 @@ export function LeadsListPage({ variant = "leads" }) {
   const total = data?.meta?.total || 0;
   const pages = Math.max(1, Math.ceil(total / pagination.limit));
   const users = formMetaData?.data?.users || [];
-  const opportunityStatuses = formMetaData?.data?.opportunityStatuses || [];
-  const stageOptions = opportunityStatuses.map((s) => ({
+  const pipelineStatuses = formMetaData?.data?.pipelineStatuses || [];
+  const stageOptions = pipelineStatuses.map((s) => ({
     value: s.id,
     label: s.name || "Status",
   }));
@@ -204,7 +210,7 @@ export function LeadsListPage({ variant = "leads" }) {
 
   /** Fresh list each time user opens Leads or Opportunities (not when returning from same route). */
   useEffect(() => {
-    dispatch(resetListSession());
+    dispatch(resetListSession({ variant }));
     setFilterOpen(false);
     // Hydrate filters from URL on mount
     const fromUrl = paramsToFilters(searchParams)
@@ -283,8 +289,13 @@ export function LeadsListPage({ variant = "leads" }) {
   async function submitBulkEdit(patch) {
     setBulkEditing(true);
     try {
-      await bulkLeads({ ids: selected, action: 'update', payload: patch }).unwrap();
-      toast.success(`Updated ${selected.length} ${isOpportunities ? (selected.length === 1 ? 'opportunity' : 'opportunities') : selected.length === 1 ? 'lead' : 'leads'}`);
+      const res = await bulkLeads({ ids: selected, action: 'update', payload: patch }).unwrap();
+      const updatedCount = res?.data?.updated ?? selected.length;
+      toast.success(`Updated ${updatedCount} ${isOpportunities ? (updatedCount === 1 ? 'opportunity' : 'opportunities') : updatedCount === 1 ? 'lead' : 'leads'}`);
+      const skipped = res?.meta?.skippedHasDeals;
+      if (skipped) {
+        toast.error(`${skipped} skipped — linked deals must be removed before reverting to lead.`);
+      }
       setBulkEditOpen(false);
       dispatch(clearSelected());
       refetch();
@@ -356,10 +367,10 @@ export function LeadsListPage({ variant = "leads" }) {
     }
   }
 
-  async function handleStageChange(lead, opportunityStatusId) {
-    if (!opportunityStatusId) return;
+  async function handleStageChange(lead, pipelineStatusId) {
+    if (!pipelineStatusId) return;
     try {
-      await patchOpportunityStatus({ id: lead.id, opportunityStatusId }).unwrap();
+      await patchPipelineStatus({ id: lead.id, pipelineStatusId }).unwrap();
       toast.success("Status updated");
     } catch (err) {
       toast.error(err?.data?.error?.message || "Could not update status");
@@ -464,6 +475,7 @@ export function LeadsListPage({ variant = "leads" }) {
                 setSearchParams({})
               }}
               onDraftApply={(tree) => dispatch(setFilters({ filterTree: tree }))}
+              onApply={() => setFilterOpen(false)}
             />
           }
           onClearAll={() => dispatch(resetFilters())}
@@ -533,7 +545,7 @@ export function LeadsListPage({ variant = "leads" }) {
                       const val = e.target.value;
                       const delta = {
                         stage: val ? [val] : [],
-                        filterTree: upsertTreeRule(filters.filterTree, 'opportunityStatus', 'is_any_of', val),
+                        filterTree: upsertTreeRule(filters.filterTree, 'pipelineStatus', 'is_any_of', val),
                       }
                       dispatch(setFilters(delta));
                       setSearchParams(filtersToParams({ ...filters, ...delta }))
@@ -542,7 +554,7 @@ export function LeadsListPage({ variant = "leads" }) {
                     className="h-9 appearance-none rounded-xl border border-surface-border bg-white pl-3 pr-8 text-xs font-medium text-ink outline-none focus:border-brand-400"
                   >
                     <option value="">All statuses</option>
-                    {opportunityStatuses.map((s) => (
+                    {pipelineStatuses.map((s) => (
                       <option key={s.id} value={s.id}>{s.name}</option>
                     ))}
                   </select>
@@ -655,7 +667,7 @@ export function LeadsListPage({ variant = "leads" }) {
               variant={variant}
               rows={rows}
               selected={selected}
-              opportunityStatuses={opportunityStatuses}
+              pipelineStatuses={pipelineStatuses}
               onStatusChange={handleStatusChange}
               onStageChange={handleStageChange}
               onToggleRow={(id) => dispatch(toggleSelected(id))}
@@ -752,7 +764,8 @@ export function LeadsListPage({ variant = "leads" }) {
         onClose={() => setBulkEditOpen(false)}
         count={selected.length}
         sources={formMetaData?.data?.sources || []}
-        opportunityStatuses={opportunityStatuses}
+        pipelineStatuses={pipelineStatuses}
+        customFields={formMetaData?.data?.customFields || []}
         isOpportunities={isOpportunities}
         onSubmit={submitBulkEdit}
         submitting={bulkEditing}
@@ -822,7 +835,7 @@ export function LeadsListPage({ variant = "leads" }) {
         open={createOppOpen}
         onClose={() => setCreateOppOpen(false)}
         users={users}
-        opportunityStatuses={opportunityStatuses}
+        pipelineStatuses={pipelineStatuses}
         saving={creatingOpp}
         onSave={async (payload) => {
           const result = await createOpportunity(payload).unwrap();

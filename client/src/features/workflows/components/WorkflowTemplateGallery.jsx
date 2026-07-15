@@ -13,7 +13,7 @@ import {
   Workflow,
   X,
   Zap,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import { baseApi } from '@/features/api/baseApi'
 import toast from 'react-hot-toast'
 import { cn } from '@/utils/cn'

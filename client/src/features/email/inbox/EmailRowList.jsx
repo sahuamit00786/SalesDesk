@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { MailOpen, Paperclip, UserRound } from 'lucide-react'
+import { MailOpen, Paperclip, UserRound } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 import { SkeletonEmailList } from '@/components/shared/SkeletonLoader'
 import { formatEmailDateTime } from '@/features/gmail/gmailParserUtils'

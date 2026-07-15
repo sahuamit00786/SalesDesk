@@ -1,4 +1,4 @@
-import { Clock, FileText, Folder, HardDrive } from 'lucide-react'
+import { Clock, FileText, Folder, HardDrive } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 
 const CONNECTOR_CLASS =

@@ -6,7 +6,7 @@ import toast from 'react-hot-toast'
 function selectIsCompanyAdmin(state) {
   return state.auth.user?.isCompanyAdmin ?? false
 }
-import { Archive, ArchiveRestore, AlignLeft, Building2, CheckCircle2, Pencil, Plus, Trash2, Users, Settings } from 'lucide-react'
+import { Archive, ArchiveRestore, AlignLeft, Building2, CheckCircle2, Pencil, Plus, Trash2, Users, Settings } from '@/components/ui/icons'
 import { Modal } from '@/components/ui/Modal'
 import { RightDrawer } from '@/components/ui/RightDrawer'
 import { IconInput, IconTextarea } from '@/components/ui/IconInput'

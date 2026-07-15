@@ -1,31 +1,34 @@
 import { useEffect } from 'react'
 import { Navigate } from 'react-router-dom'
+import { MotionConfig } from 'framer-motion'
 import { useAppSelector } from '@/app/hooks'
-import { SmoothScrollProvider } from '@/features/leadflow-landing/SmoothScrollProvider'
-import { usePrefersReducedMotion } from '@/features/leadflow-landing/hooks/usePrefersReducedMotion'
 import { LandingNav } from '@/features/leadflow-landing/components/LandingNav'
 import { HeroSection } from '@/features/leadflow-landing/sections/HeroSection'
-import { StatsStripSection } from '@/features/leadflow-landing/sections/StatsStripSection'
-import { ScreenshotShowcaseSection } from '@/features/leadflow-landing/sections/ScreenshotShowcaseSection'
-import { FeaturesSection } from '@/features/leadflow-landing/sections/FeaturesSection'
+import { TrustedStripSection } from '@/features/leadflow-landing/sections/TrustedStripSection'
+import { ProductPreviewSection } from '@/features/leadflow-landing/sections/ProductPreviewSection'
+import { CrmFeaturesSection } from '@/features/leadflow-landing/sections/CrmFeaturesSection'
+import { AiFeaturesSection } from '@/features/leadflow-landing/sections/AiFeaturesSection'
+import { PipelineSection } from '@/features/leadflow-landing/sections/PipelineSection'
 import { AutomationSection } from '@/features/leadflow-landing/sections/AutomationSection'
-import { ModulesMarquee } from '@/features/leadflow-landing/sections/ModulesMarquee'
+import { CollaborationSection } from '@/features/leadflow-landing/sections/CollaborationSection'
+import { MobileAppSection } from '@/features/leadflow-landing/sections/MobileAppSection'
+import { AnalyticsSection } from '@/features/leadflow-landing/sections/AnalyticsSection'
+import { TestimonialsSection } from '@/features/leadflow-landing/sections/TestimonialsSection'
 import { FaqSection } from '@/features/leadflow-landing/sections/FaqSection'
-import { ContactCtaSection } from '@/features/leadflow-landing/sections/ContactCtaSection'
+import { FinalCtaSection } from '@/features/leadflow-landing/sections/FinalCtaSection'
 import { FooterSection } from '@/features/leadflow-landing/sections/FooterSection'
 
 export function LeadFlowLandingPage() {
   const token = useAppSelector((s) => s.auth.accessToken)
-  const reduced = usePrefersReducedMotion()
 
   useEffect(() => {
     if (token) return undefined
     const prev = document.title
-    document.title = 'Connexify — Lead management, pipeline, and team workspace'
+    document.title = 'LeadNest — AI-powered CRM for modern sales teams'
     let meta = document.querySelector('meta[name="description"]')
     let created = false
     const desc =
-      'Connexify CRM: full lifecycle lead management with pipeline, email inbox, workflow automation, campaigns, quotations, invoices, HR, and team roles.'
+      'LeadNest CRM: lead management, visual pipeline, built-in email, call intelligence, WhatsApp conversations, no-code automation, and analytics — in one workspace.'
     if (!meta) {
       meta = document.createElement('meta')
       meta.setAttribute('name', 'description')
@@ -40,28 +43,33 @@ export function LeadFlowLandingPage() {
       else if (prevDesc != null) meta.setAttribute('content', prevDesc)
       else meta.removeAttribute('content')
     }
-  }, [])
+  }, [token])
 
   if (token) {
     return <Navigate to="/dashboard" replace />
   }
 
   return (
-    <SmoothScrollProvider disabled={reduced}>
-      <div className="leadflow-landing min-h-screen bg-white text-[#0a0714]">
+    <MotionConfig reducedMotion="user">
+      <div className="leadflow-landing min-h-screen">
         <LandingNav />
         <main>
           <HeroSection />
-          <StatsStripSection />
-          <ScreenshotShowcaseSection />
-          <FeaturesSection />
+          <TrustedStripSection />
+          <ProductPreviewSection />
+          <CrmFeaturesSection />
+          <AiFeaturesSection />
+          <PipelineSection />
           <AutomationSection />
-          <ModulesMarquee />
+          <CollaborationSection />
+          <MobileAppSection />
+          <AnalyticsSection />
+          <TestimonialsSection />
           <FaqSection />
-          <ContactCtaSection />
+          <FinalCtaSection />
         </main>
         <FooterSection />
       </div>
-    </SmoothScrollProvider>
+    </MotionConfig>
   )
 }

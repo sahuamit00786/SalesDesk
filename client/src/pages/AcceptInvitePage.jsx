@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, Navigate, useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { Building2, Check, ShieldCheck, Users } from 'lucide-react'
+import { Building2, Check, ShieldCheck, Users } from '@/components/ui/icons'
 import { useAppSelector } from '@/app/hooks'
 import { AuthScreenShell, authLinkClassName } from '@/components/auth/AuthScreenShell'
 import { Input } from '@/components/ui/Input'

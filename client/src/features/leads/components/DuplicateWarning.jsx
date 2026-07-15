@@ -1,4 +1,4 @@
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle } from '@/components/ui/icons'
 import { Modal } from '@/components/ui/Modal'
 import { LeadStatusBadge } from '@/features/leads/components/LeadStatusBadge'
 import { LeadScorePill } from '@/features/leads/components/LeadScorePill'
@@ -21,7 +21,7 @@ export function DuplicateWarning({ open, duplicates = [], attemptedPhone = '', o
         <>
           <button type="button" onClick={onCancel} className="h-10 rounded-xl border border-surface-border px-4 text-sm">Cancel</button>
           {top ? (
-            <button type="button" onClick={() => onViewLead?.(top)} className="h-10 rounded-xl bg-[var(--brand-primary)] px-4 text-sm font-semibold text-white">
+            <button type="button" onClick={() => onViewLead?.(top)} className="h-10 rounded-xl bg-[var(--brand-primary)] px-4 text-sm font-semibold cx-icon-inherit text-white">
               View lead information
             </button>
           ) : null}

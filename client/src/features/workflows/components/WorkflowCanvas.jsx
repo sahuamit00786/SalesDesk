@@ -13,7 +13,7 @@ import {
   ConnectionLineType,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { Redo2, Undo2, GitBranch, Plus, Unlink2 } from 'lucide-react'
+import { Redo2, Undo2, GitBranch, Plus, Unlink2 } from '@/components/ui/icons'
 import { defaultNodeData, WORKFLOW_NODE_PALETTE } from '@/features/workflows/workflowDefinition'
 import { createWorkflowNodeTypes } from '@/features/workflows/components/WorkflowNodes'
 import WorkflowDeletableEdge from '@/features/workflows/components/WorkflowDeletableEdge'

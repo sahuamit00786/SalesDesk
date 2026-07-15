@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { X, ZoomIn, ZoomOut, RotateCcw, FileText, Download, Loader2 } from 'lucide-react'
+import { X, ZoomIn, ZoomOut, RotateCcw, FileText, Download, Loader2 } from '@/components/ui/icons'
 import { formatSize, getFileUrl, getPreviewMode } from '@/features/documents/documentUtils'
 
 /**

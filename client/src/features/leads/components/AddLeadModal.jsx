@@ -15,7 +15,7 @@ import {
   Tag,
   Upload,
   User,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import toast from 'react-hot-toast'
 import * as XLSX from 'xlsx'
 import { RightDrawer } from '@/components/ui/RightDrawer'
@@ -329,13 +329,17 @@ export function AddLeadModal({
   const users = formMeta.users || []
   const availableTags = useMemo(() => formMeta.tags || [], [formMeta.tags])
   const customFieldDefs = useMemo(() => formMeta.customFields || [], [formMeta.customFields])
-  const bulkImportFieldTargets = useMemo(() => BULK_IMPORT_FIELD_TARGETS, [])
+  const bulkImportFieldTargets = useMemo(() => {
+    const customTargets = customFieldDefs.map((f) => ({ value: `cf:${f.key}`, label: `Custom: ${f.label}` }))
+    return [...BULK_IMPORT_FIELD_TARGETS, ...customTargets]
+  }, [customFieldDefs])
   const [form, setForm] = useState(initialForm)
   const [asOpportunity, setAsOpportunity] = useState(false)
   const [busy, setBusy] = useState(false)
   const [activeTab, setActiveTab] = useState('single')
   const [parsed, setParsed] = useState({ columns: [], rows: [] })
   const [bulkFileName, setBulkFileName] = useState('')
+  const [bulkDragOver, setBulkDragOver] = useState(false)
   const [importWorkbook, setImportWorkbook] = useState(null)
   const [importSheetNames, setImportSheetNames] = useState([])
   const [importActiveSheet, setImportActiveSheet] = useState('')
@@ -507,9 +511,7 @@ export function AddLeadModal({
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
-  async function handleBulkFile(ev) {
-    const file = ev.target.files?.[0]
-    if (fileInputRef.current) fileInputRef.current.value = ''
+  async function processImportFile(file) {
     if (!file) return
     setBulkFileName(file.name)
     const lower = file.name.toLowerCase()
@@ -547,6 +549,19 @@ export function AddLeadModal({
     }
   }
 
+  async function handleBulkFile(ev) {
+    const file = ev.target.files?.[0]
+    if (fileInputRef.current) fileInputRef.current.value = ''
+    await processImportFile(file)
+  }
+
+  async function handleBulkDrop(ev) {
+    ev.preventDefault()
+    setBulkDragOver(false)
+    const file = ev.dataTransfer.files?.[0]
+    await processImportFile(file)
+  }
+
   async function submitBulk() {
     if (!parsed.rows.length) return toast.error('Upload a .csv or .xlsx file with a header row and at least one data row')
     if (!bulkImportSourceId) return toast.error('Select a lead source for this import')
@@ -561,6 +576,11 @@ export function AddLeadModal({
         if (targetField === 'valueCurrency') {
           const cur = String(raw).trim().toUpperCase().slice(0, 3)
           if (cur) out.valueCurrency = cur
+          continue
+        }
+        if (targetField.startsWith('cf:')) {
+          out.customFields = out.customFields || {}
+          out.customFields[targetField.slice(3)] = raw
           continue
         }
         out[targetField] = raw
@@ -930,42 +950,51 @@ export function AddLeadModal({
           />
 
           <div className="rounded-2xl border border-surface-border p-4">
-            <p className="text-sm font-semibold text-ink">Template & file</p>
-            <p className="mt-1 text-xs text-ink-muted">
-              Download a CSV with the same kinds of fields as <span className="font-medium text-ink">Add single lead</span> (contact, phones, address, value, notes, etc.), or use your own .xlsx. Row 1 = headers; map each column below. Assignees and opportunity type are set for the whole file, not per row.
-            </p>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-ink">Template & file</p>
               <button
                 type="button"
                 onClick={downloadBulkTemplate}
-                className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-ink shadow-sm hover:border-slate-400"
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white text-ink-muted shadow-sm hover:border-slate-400 hover:text-ink"
+                title="Download CSV template"
+                aria-label="Download CSV template"
               >
-                <Download className="h-4 w-4 shrink-0 text-ink-muted" aria-hidden />
-                Download CSV template
+                <Download className="h-4 w-4" aria-hidden />
               </button>
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="inline-flex h-10 items-center gap-2 rounded-xl bg-[var(--brand-primary)] px-4 text-sm font-semibold text-white shadow-sm hover:bg-[var(--brand-primary-dark)]"
-              >
-                <Upload className="h-4 w-4 shrink-0" aria-hidden />
-                Choose file
-              </button>
-              {(bulkFileName || parsed.columns.length > 0) ? (
-                <button
-                  type="button"
-                  onClick={clearBulkImport}
-                  className="h-10 rounded-xl border border-surface-border px-4 text-sm text-ink-muted hover:text-ink"
-                >
+            </div>
+
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => fileInputRef.current?.click()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') fileInputRef.current?.click()
+              }}
+              onDragOver={(e) => {
+                e.preventDefault()
+                setBulkDragOver(true)
+              }}
+              onDragLeave={() => setBulkDragOver(false)}
+              onDrop={handleBulkDrop}
+              className={cn(
+                'mt-3 flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed px-4 py-8 text-center transition-colors',
+                bulkDragOver ? 'border-[var(--brand-primary)] bg-[var(--brand-primary)]/5' : 'border-slate-300 hover:border-slate-400',
+              )}
+            >
+              <Upload className="h-5 w-5 text-ink-muted" aria-hidden />
+              <p className="text-sm font-medium text-ink">Drop .csv or .xlsx here, or click to browse</p>
+            </div>
+
+            {bulkFileName ? (
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <p className="flex min-w-0 items-center gap-1.5 text-xs text-ink-muted">
+                  <FileSpreadsheet className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  <span className="truncate font-medium text-ink">{bulkFileName}</span>
+                </p>
+                <button type="button" onClick={clearBulkImport} className="shrink-0 text-xs text-ink-muted hover:text-ink">
                   Clear
                 </button>
-              ) : null}
-            </div>
-            {bulkFileName ? (
-              <p className="mt-2 flex items-center gap-1.5 text-xs text-ink-muted">
-                <FileSpreadsheet className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                <span className="truncate font-medium text-ink">{bulkFileName}</span>
-              </p>
+              </div>
             ) : null}
             {importSheetNames.length > 1 ? (
               <div className="mt-3">
@@ -986,19 +1015,7 @@ export function AddLeadModal({
           </div>
 
           <div className="rounded-2xl border border-surface-border p-4">
-            <p className="text-sm font-semibold text-ink">Import defaults</p>
-            <p className="mt-1 text-xs text-ink-muted">
-              {defaultIsOpportunity
-                ? 'Imported opportunities use your workspace default pipeline stage unless you map a stage column. Status is not used for opportunities.'
-                : 'All imported leads start with status New. Pipeline stages apply to opportunities only and are not available in this import.'}
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-surface-border p-4">
             <p className="text-sm font-semibold text-ink">Lead source</p>
-            <p className="mt-1 text-xs text-ink-muted">
-              One source for every row (defaults when unchanged: Web Form, Manual, Referral). Leads keep channel <span className="font-medium text-ink">CSV import</span>. You cannot map source from the file.
-            </p>
             <Select
               className="mt-3 h-10 rounded-lg text-sm"
               value={bulkImportSourceId}
@@ -1019,9 +1036,6 @@ export function AddLeadModal({
 
           <div className="rounded-2xl border border-surface-border p-4">
             <p className="text-sm font-semibold text-ink">Assign to (round-robin)</p>
-            <p className="mt-1 text-xs text-ink-muted">
-              Select one or more sales team members. Leads will be distributed evenly across them in order. Leave empty to assign to yourself.
-            </p>
             <div className="relative mt-3">
               <button
                 type="button"
@@ -1080,46 +1094,40 @@ export function AddLeadModal({
             </div>
           </div>
 
-          <div className="rounded-2xl border border-surface-border p-4">
-            <p className="text-sm font-semibold text-ink">Map columns → lead fields</p>
-            {!parsed.columns.length ? (
-              <p className="mt-2 text-xs text-ink-muted">Choose a .csv or .xlsx file above to load columns and map them.</p>
-            ) : (
-              <div className="mt-3 space-y-2">
-                <p className="text-xs text-ink-muted">
-                  {parsed.columns.filter((c) => !isDeprecatedColumn(c)).length} column{parsed.columns.filter((c) => !isDeprecatedColumn(c)).length === 1 ? '' : 's'} detected · {parsed.rows.length} data row
-                  {parsed.rows.length === 1 ? '' : 's'}
-                </p>
-                <div className="max-h-[min(420px,50vh)] space-y-2 overflow-y-auto pr-1">
-                  {parsed.columns.filter((col) => !isDeprecatedColumn(col)).map((col) => (
-                    <div key={col.key} className="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-semibold text-ink">{col.label}</p>
-                          {parsed.rows[0] ? (
-                            <p className="mt-0.5 truncate text-[11px] text-ink-muted" title={parsed.rows[0][col.key]}>
-                              Sample: {parsed.rows[0][col.key] || '—'}
-                            </p>
-                          ) : null}
-                        </div>
-                        <Select
-                          className="h-10 shrink-0 rounded-lg text-sm sm:w-[min(100%,280px)]"
-                          value={mapping[col.key] || 'skip'}
-                          onChange={(e) => setMapping((m) => ({ ...m, [col.key]: e.target.value }))}
-                        >
-                          {bulkImportFieldTargets.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </option>
-                          ))}
-                        </Select>
+          {parsed.columns.filter((c) => !isDeprecatedColumn(c)).length ? (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink-faint">
+                Map columns → lead fields · {parsed.rows.length} row{parsed.rows.length === 1 ? '' : 's'}
+              </p>
+              <div className="max-h-[min(420px,50vh)] space-y-2 overflow-y-auto pr-1">
+                {parsed.columns.filter((col) => !isDeprecatedColumn(col)).map((col) => (
+                  <div key={col.key} className="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-semibold text-ink">{col.label}</p>
+                        {parsed.rows[0] ? (
+                          <p className="mt-0.5 truncate text-[11px] text-ink-muted" title={parsed.rows[0][col.key]}>
+                            Sample: {parsed.rows[0][col.key] || '—'}
+                          </p>
+                        ) : null}
                       </div>
+                      <Select
+                        className="h-10 shrink-0 rounded-lg text-sm sm:w-[min(100%,280px)]"
+                        value={mapping[col.key] || 'skip'}
+                        onChange={(e) => setMapping((m) => ({ ...m, [col.key]: e.target.value }))}
+                      >
+                        {bulkImportFieldTargets.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </Select>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))}
               </div>
-            )}
-          </div>
+            </div>
+          ) : null}
 
           {parsed.rows.length ? (
             <div className="rounded-2xl border border-surface-border p-4">

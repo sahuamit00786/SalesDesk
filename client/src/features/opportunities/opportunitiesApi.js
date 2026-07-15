@@ -6,7 +6,7 @@ export const opportunitiesApi = baseApi.injectEndpoints({
     createOpportunity: build.mutation({
       query: (body) => ({ url: '/opportunities', method: 'POST', body }),
       invalidatesTags: (result, _e, arg) => {
-        const tags = [{ type: 'Lead', id: 'LIST' }]
+        const tags = [{ type: 'Lead', id: 'LIST' }, { type: 'Analytics', id: 'NAV_BADGES' }]
         const newId = result?.data?.id
         const leadId = arg?.leadId ?? result?.data?.leadId
         if (newId) tags.push({ type: 'Lead', id: newId })
@@ -25,8 +25,8 @@ export const opportunitiesApi = baseApi.injectEndpoints({
         return tags
       },
     }),
-    patchOpportunityStatus: build.mutation({
-      query: ({ id, opportunityStatusId }) => ({ url: `/opportunities/${id}/status`, method: 'PATCH', body: { opportunityStatusId } }),
+    patchPipelineStatus: build.mutation({
+      query: ({ id, pipelineStatusId }) => ({ url: `/opportunities/${id}/status`, method: 'PATCH', body: { pipelineStatusId } }),
       invalidatesTags: (result, _e, arg) => {
         const tags = [{ type: 'Lead', id: 'LIST' }, { type: 'Lead', id: arg.id }]
         const leadId = result?.data?.leadId
@@ -34,8 +34,21 @@ export const opportunitiesApi = baseApi.injectEndpoints({
         return tags
       },
     }),
+    revertOpportunityToLead: build.mutation({
+      query: ({ id }) => ({ url: `/opportunities/${id}/revert-to-lead`, method: 'PATCH' }),
+      invalidatesTags: (result, _e, arg) => {
+        const tags = [{ type: 'Lead', id: 'LIST' }, { type: 'Lead', id: arg.id }, { type: 'Analytics', id: 'NAV_BADGES' }]
+        const leadId = result?.data?.leadId
+        if (leadId) tags.push({ type: 'Lead', id: `${leadId}-activities` })
+        return tags
+      },
+    }),
   }),
 })
 
-export const { useCreateOpportunityMutation, useUpdateOpportunityMutation, usePatchOpportunityStatusMutation } =
-  opportunitiesApi
+export const {
+  useCreateOpportunityMutation,
+  useUpdateOpportunityMutation,
+  usePatchPipelineStatusMutation,
+  useRevertOpportunityToLeadMutation,
+} = opportunitiesApi

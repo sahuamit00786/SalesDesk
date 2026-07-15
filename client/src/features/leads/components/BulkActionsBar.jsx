@@ -1,4 +1,4 @@
-import { Download, Mail, Pencil, Trash2, UserCog } from 'lucide-react'
+import { Download, Mail, Pencil, Trash2, UserCog } from '@/components/ui/icons'
 
 export function BulkActionsBar({
   count,
@@ -33,7 +33,7 @@ export function BulkActionsBar({
         <button
           type="button"
           onClick={onBulkEmail}
-          className="inline-flex h-8 items-center gap-1 rounded-xl bg-[var(--brand-primary)] px-3 text-xs font-semibold text-white hover:bg-[var(--brand-primary-dark)]"
+          className="inline-flex h-8 items-center gap-1 rounded-xl bg-[var(--brand-primary)] px-3 text-xs font-semibold cx-icon-inherit text-white hover:bg-[var(--brand-primary-dark)]"
         >
           <Mail className="h-3.5 w-3.5" />
           Bulk email

@@ -43,6 +43,56 @@
     background-color: var(--brand-primary-dark);
   }
 
+  /* Semantic icon tones (see @/utils/iconTones + @/components/ui/icons).
+     Wrapped in :where() so every rule below carries ZERO specificity. That is
+     deliberate and load-bearing: a tone must lose to anything more intentional —
+     a caller's text-* utility (0,1,0), a .cx-icon-inherit surface (0,1,1), or the
+     sidebar's active-state override. Tones are a default, never a decision. */
+  :where(.icon-tone-people)     { color: theme('colors.sky.500'); }
+  :where(.icon-tone-money)      { color: theme('colors.emerald.600'); }
+  :where(.icon-tone-mail)       { color: theme('colors.blue.500'); }
+  :where(.icon-tone-call)       { color: theme('colors.teal.500'); }
+  :where(.icon-tone-time)       { color: theme('colors.rose.500'); }
+  :where(.icon-tone-doc)        { color: theme('colors.indigo.500'); }
+  :where(.icon-tone-ai)         { color: theme('colors.fuchsia.500'); }
+  :where(.icon-tone-analytics)  { color: theme('colors.violet.500'); }
+  :where(.icon-tone-campaign)   { color: theme('colors.orange.500'); }
+  :where(.icon-tone-automation) { color: theme('colors.cyan.500'); }
+  :where(.icon-tone-success)    { color: theme('colors.emerald.500'); }
+  :where(.icon-tone-warning)    { color: theme('colors.amber.500'); }
+  :where(.icon-tone-danger)     { color: theme('colors.rose.500'); }
+  :where(.icon-tone-edit)       { color: theme('colors.amber.500'); }
+  :where(.icon-tone-security)   { color: theme('colors.indigo.500'); }
+  :where(.icon-tone-media)      { color: theme('colors.pink.500'); }
+  :where(.icon-tone-place)      { color: theme('colors.orange.500'); }
+  :where(.icon-tone-hr)         { color: theme('colors.teal.500'); }
+
+  /* Same tones lightened for the dark brand-purple sidebar. Still zero specificity. */
+  :where(.cx-icon-tone-dark .icon-tone-people)     { color: theme('colors.sky.300'); }
+  :where(.cx-icon-tone-dark .icon-tone-money)      { color: theme('colors.emerald.300'); }
+  :where(.cx-icon-tone-dark .icon-tone-mail)       { color: theme('colors.blue.300'); }
+  :where(.cx-icon-tone-dark .icon-tone-call)       { color: theme('colors.teal.300'); }
+  :where(.cx-icon-tone-dark .icon-tone-time)       { color: theme('colors.rose.300'); }
+  :where(.cx-icon-tone-dark .icon-tone-doc)        { color: theme('colors.indigo.300'); }
+  :where(.cx-icon-tone-dark .icon-tone-ai)         { color: theme('colors.fuchsia.300'); }
+  :where(.cx-icon-tone-dark .icon-tone-analytics)  { color: theme('colors.violet.300'); }
+  :where(.cx-icon-tone-dark .icon-tone-campaign)   { color: theme('colors.orange.300'); }
+  :where(.cx-icon-tone-dark .icon-tone-automation) { color: theme('colors.cyan.300'); }
+  :where(.cx-icon-tone-dark .icon-tone-success)    { color: theme('colors.emerald.300'); }
+  :where(.cx-icon-tone-dark .icon-tone-warning)    { color: theme('colors.amber.300'); }
+  :where(.cx-icon-tone-dark .icon-tone-danger)     { color: theme('colors.rose.300'); }
+  :where(.cx-icon-tone-dark .icon-tone-edit)       { color: theme('colors.amber.300'); }
+  :where(.cx-icon-tone-dark .icon-tone-security)   { color: theme('colors.indigo.300'); }
+  :where(.cx-icon-tone-dark .icon-tone-media)      { color: theme('colors.pink.300'); }
+  :where(.cx-icon-tone-dark .icon-tone-place)      { color: theme('colors.orange.300'); }
+  :where(.cx-icon-tone-dark .icon-tone-hr)         { color: theme('colors.teal.300'); }
+
+  /* Surfaces that own their icon colour (primary/danger buttons, coloured chips):
+     opt every tone back out to currentColor. */
+  .cx-icon-inherit svg {
+    color: inherit;
+  }
+
   /* Sidebar text — override Tailwind text-white* with workspace sidebar text color */
   .cx-sidebar .text-white { color: var(--sidebar-text) !important; }
   .cx-sidebar .text-white\/90 { color: color-mix(in srgb, var(--sidebar-text) 90%, transparent) !important; }
@@ -54,20 +104,38 @@
     background-color: var(--surface-page);
     @apply bg-surface-muted font-sans text-ink antialiased;
   }
+
+  /* Fixed-width digits so figures stay column-aligned in grids and money fields */
+  table,
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
 }
 
-/* LeadFlow CRM marketing (public landing) — white premium theme */
+/* LeadNest marketing (public landing) — Attio-style monochrome premium theme */
 .leadflow-landing {
-  --lf-accent: #7c3aed;
-  --lf-accent-light: rgba(124, 58, 237, 0.1);
+  --ln-accent: #7c3aed;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-feature-settings: 'cv02', 'cv03', 'cv11';
+  -webkit-font-smoothing: antialiased;
   background-color: #ffffff;
-  color: #0a0714;
+  color: #111111;
 }
 
-/* Keyframe: floating bob for hero chips */
-@keyframes lf-bob {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-10px); }
+.leadflow-landing [id] {
+  scroll-margin-top: 96px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .leadflow-landing,
+  .leadflow-landing *,
+  .leadflow-landing *::before,
+  .leadflow-landing *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* 3D floating bg element keyframes */
@@ -96,28 +164,6 @@
   40%  { transform: perspective(900px) rotateX(10deg)  rotateY(-4deg)   translateZ(22px) translate(18px, -14px);  }
   80%  { transform: perspective(900px) rotateX(-4deg)  rotateY(12deg)   translateZ(8px)  translate(-8px, -26px);  }
   100% { transform: perspective(900px) rotateX(0deg)   rotateY(8deg)    translateZ(0px)  translate(0px, 0px);     }
-}
-
-/* Gradient border utility for landing cards */
-.lf-card-glow {
-  position: relative;
-}
-.lf-card-glow::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background: linear-gradient(135deg, rgba(139,92,246,0.35), rgba(255,255,255,0.04), rgba(34,211,238,0.15));
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  pointer-events: none;
-}
-
-.leadflow-mask-x {
-  mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
 }
 
 @layer utilities {

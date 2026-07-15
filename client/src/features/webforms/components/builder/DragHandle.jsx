@@ -1,4 +1,4 @@
-import { GripVertical } from 'lucide-react'
+import { GripVertical } from '@/components/ui/icons'
 
 export function DragHandle(props) {
   return (

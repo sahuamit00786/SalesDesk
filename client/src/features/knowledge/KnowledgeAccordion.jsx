@@ -1,4 +1,4 @@
-import { ChevronDown, Plus } from 'lucide-react'
+import { ChevronDown, Plus } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 import { KnowledgeMarkdown } from '@/features/knowledge/KnowledgeMarkdown'
 

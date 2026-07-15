@@ -6,12 +6,13 @@ import {
   ArrowUp,
   Check,
   ChevronDown,
+  Info,
   Phone,
   Search,
   Shuffle,
   Users,
   X,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import toast from 'react-hot-toast'
 import { PageShell } from '@/components/layout/PageShell'
 import { PageStack } from '@/components/layout/PageStack'
@@ -21,12 +22,70 @@ import { DataGrid } from '@/components/shared/DataGrid'
 import { cn } from '@/utils/cn'
 import { STATUS_STYLES } from '@/features/leads/constants'
 import { LeadStatusBadge } from '@/features/leads/components/LeadStatusBadge'
+import { LeadScorePill } from '@/features/leads/components/LeadScorePill'
+import { LeadSourceTag } from '@/features/leads/components/LeadSourceTag'
+import { LeadEngagementPopover } from '@/features/leads/components/LeadEngagementPopover'
+import { AssigneeCell } from '@/features/leads/components/AssigneeCell'
+import { formatDealMoney } from '@/features/deals/dealCurrencies'
 import {
   useDistributeLeadsRoundRobinMutation,
   useGetLeadFormMetaQuery,
   useGetLeadsQuery,
   useLazyGetLeadsQuery,
 } from '@/features/leads/leadsApi'
+
+function formatLeadValue(lead) {
+  return formatDealMoney(lead?.value, lead?.valueCurrency ?? lead?.value_currency)
+}
+
+function fromNow(dateValue) {
+  if (!dateValue) return '—'
+  const delta = Date.now() - new Date(dateValue).getTime()
+  const hours = Math.floor(delta / 3600000)
+  if (hours < 1) return 'Just now'
+  if (hours < 24) return `${hours} hrs ago`
+  const days = Math.floor(hours / 24)
+  if (days === 1) return 'Yesterday'
+  return `${days} days ago`
+}
+
+function EmailSentBadge({ sent }) {
+  if (sent) {
+    return (
+      <span className="inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800">
+        Sent
+      </span>
+    )
+  }
+  return <span className="text-[10px] text-ink-faint">—</span>
+}
+
+function ContactedCell({ lead, onHoverInfo }) {
+  const contacted = Boolean(lead.contacted)
+  return (
+    <div className="flex items-center gap-1">
+      <span
+        className={cn(
+          'inline-flex rounded-md px-1.5 py-0.5 text-[10px] font-semibold',
+          contacted ? 'bg-sky-50 text-sky-800 border border-sky-200' : 'text-ink-faint',
+        )}
+      >
+        {contacted ? 'Yes' : 'No'}
+      </span>
+      <button
+        type="button"
+        className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-transparent text-ink-muted hover:border-surface-border hover:bg-white hover:text-brand-700"
+        aria-label="Engagement breakdown"
+        onMouseEnter={(e) => onHoverInfo(lead, e)}
+        onMouseLeave={() => onHoverInfo(null, null)}
+        onFocus={(e) => onHoverInfo(lead, e)}
+        onBlur={() => onHoverInfo(null, null)}
+      >
+        <Info className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  )
+}
 
 const DISTRIBUTE_MAX_LEADS = 500
 const SELECT_ALL_PAGE_SIZE = 100
@@ -94,6 +153,8 @@ export function LeadDistributionPage() {
   const [selectingAll, setSelectingAll] = useState(false)
   const [assignModalOpen, setAssignModalOpen] = useState(false)
   const [callerOrder, setCallerOrder] = useState([])
+  const [hoverLead, setHoverLead] = useState(null)
+  const [hoverAnchor, setHoverAnchor] = useState(null)
   const { data: formMeta } = useGetLeadFormMetaQuery()
   const users = formMeta?.data?.users || []
 
@@ -288,22 +349,36 @@ export function LeadDistributionPage() {
   const assignDisabled = selectionCount === 0
   const selectAllCap = Math.min(total, DISTRIBUTE_MAX_LEADS)
 
+  function handleHoverInfo(lead, event) {
+    if (!lead || !event) {
+      setHoverLead(null)
+      setHoverAnchor(null)
+      return
+    }
+    const rect = event.currentTarget.getBoundingClientRect()
+    setHoverLead(lead)
+    setHoverAnchor({ x: rect.right, y: rect.bottom })
+  }
+
   const leadDistColumns = useMemo(
     () => [
       {
         field: 'title',
         headerName: 'Lead',
         flex: 1,
-        minWidth: 160,
+        minWidth: 180,
         renderCell: ({ row }) => {
           const detailPath = row.isOpportunity ? `/opportunities/${row.id}` : `/leads/${row.id}`
           return (
             <button
               type="button"
               onClick={() => navigate(detailPath)}
-              className="block min-w-0 max-w-full truncate text-left font-semibold text-ink hover:text-brand-700"
+              className="block min-w-0 max-w-full truncate text-left"
             >
-              {row.title}
+              <span className="block truncate font-semibold text-ink hover:text-brand-700">
+                {row.contactName || row.title}
+              </span>
+              <span className="block truncate text-[11px] text-ink-muted">{row.company || '—'}</span>
             </button>
           )
         },
@@ -311,7 +386,7 @@ export function LeadDistributionPage() {
       {
         field: 'type',
         headerName: 'Type',
-        width: 110,
+        width: 100,
         renderCell: ({ row }) =>
           row.isOpportunity ? (
             <span className="inline-flex rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900">
@@ -324,28 +399,50 @@ export function LeadDistributionPage() {
       {
         field: 'status',
         headerName: 'Status',
-        width: 120,
+        width: 110,
         renderCell: ({ row }) => <LeadStatusBadge status={row.status} />,
       },
       {
-        field: 'company',
-        headerName: 'Company',
-        flex: 1,
-        minWidth: 120,
-        valueGetter: (_v, row) => row.company || '—',
+        field: 'score',
+        headerName: 'Score',
+        width: 100,
+        renderCell: ({ row }) => <LeadScorePill score={row.score || 0} />,
       },
       {
-        field: 'email',
-        headerName: 'Email',
-        width: 160,
-        valueGetter: (_v, row) => row.email || '—',
+        field: 'source',
+        headerName: 'Source',
+        width: 130,
+        renderCell: ({ row }) => <LeadSourceTag source={row.source} />,
       },
       {
-        field: 'createdAt',
-        headerName: 'Created',
+        field: 'value',
+        headerName: 'Value',
+        width: 120,
+        renderCell: ({ row }) => <span className="font-semibold text-ink">{formatLeadValue(row)}</span>,
+      },
+      {
+        field: 'owner',
+        headerName: 'Owner',
+        width: 130,
+        renderCell: ({ row }) => <AssigneeCell lead={row} />,
+      },
+      {
+        field: 'updatedAt',
+        headerName: 'Last Activity',
+        width: 120,
+        valueGetter: (_v, row) => fromNow(row.updatedAt),
+      },
+      {
+        field: 'emailSent',
+        headerName: 'Email sent',
+        width: 100,
+        renderCell: ({ row }) => <EmailSentBadge sent={row.emailSent} />,
+      },
+      {
+        field: 'contacted',
+        headerName: 'Contacted',
         width: 110,
-        valueGetter: (_v, row) =>
-          row.createdAt ? new Date(row.createdAt).toLocaleDateString() : '—',
+        renderCell: ({ row }) => <ContactedCell lead={row} onHoverInfo={handleHoverInfo} />,
       },
     ],
     [navigate],
@@ -493,7 +590,7 @@ export function LeadDistributionPage() {
                 type="button"
                 disabled={assignDisabled}
                 onClick={() => setAssignModalOpen(true)}
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--brand-primary)] px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[var(--brand-primary-dark)] disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--brand-primary)] px-3 py-2 text-xs font-bold cx-icon-inherit text-white shadow-sm transition hover:bg-[var(--brand-primary-dark)] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Users className="h-3.5 w-3.5" />
                 Assign leads
@@ -599,7 +696,7 @@ export function LeadDistributionPage() {
                           <span
                             className={cn(
                               'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[11px] font-bold',
-                              on ? 'bg-[var(--brand-primary)] text-white' : 'bg-surface-muted text-ink-muted',
+                              on ? 'bg-[var(--brand-primary)] cx-icon-inherit text-white' : 'bg-surface-muted text-ink-muted',
                             )}
                           >
                             {initials(u.name || u.email)}
@@ -676,7 +773,7 @@ export function LeadDistributionPage() {
                     type="button"
                     disabled={distributing || !callerOrder.length || !selectionCount}
                     onClick={runDistribute}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-[var(--brand-primary-dark)] disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-sm font-bold cx-icon-inherit text-white shadow-sm hover:bg-[var(--brand-primary-dark)] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <Shuffle className="h-4 w-4" />
                     {distributing ? 'Assigning…' : 'Confirm assignment'}
@@ -687,6 +784,16 @@ export function LeadDistributionPage() {
             document.body,
           )
         : null}
+
+      <LeadEngagementPopover
+        open={Boolean(hoverLead && hoverAnchor)}
+        anchor={hoverAnchor}
+        lead={hoverLead}
+        onClose={() => {
+          setHoverLead(null)
+          setHoverAnchor(null)
+        }}
+      />
     </PageShell>
   )
 }

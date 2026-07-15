@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { ClipboardList } from 'lucide-react'
+import { ClipboardList } from '@/components/ui/icons'
 import { Button } from '@/components/ui/Button'
 import { DataGrid } from '@/components/shared/DataGrid'
 import { HrCard } from '@/features/hr/components/HrCard'

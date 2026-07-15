@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
-import { FormInput, GitBranch, Pencil, Plus, Tag, Trash2, Waypoints } from 'lucide-react'
+import { FormInput, GitBranch, Pencil, Plus, Tag, Trash2, Waypoints } from '@/components/ui/icons'
 import { PageShell } from '@/components/layout/PageShell'
 import { PageFilterBar } from '@/components/layout/PageFilterBar'
 import { PageContentPanel } from '@/components/layout/PageContentPanel'
@@ -11,11 +11,11 @@ import {
   useCreateLeadSourceMutation,
   useCreateLeadTagMutation,
   useCreateDealStatusMutation,
-  useCreateOpportunityStatusMutation,
+  useCreatePipelineStatusMutation,
   useDeleteDealStatusMutation,
   useDeleteLeadSourceMutation,
   useDeleteLeadTagMutation,
-  useDeleteOpportunityStatusMutation,
+  useDeletePipelineStatusMutation,
   useGetLeadSetupQuery,
   useGetCustomFieldsQuery,
   useCreateCustomFieldMutation,
@@ -23,11 +23,11 @@ import {
   useDeleteCustomFieldMutation,
   useReorderCustomFieldsMutation,
   useReorderDealStatusesMutation,
-  useReorderOpportunityStatusesMutation,
+  useReorderPipelineStatusesMutation,
   useUpdateDealStatusMutation,
   useUpdateLeadSourceMutation,
   useUpdateLeadTagMutation,
-  useUpdateOpportunityStatusMutation,
+  useUpdatePipelineStatusMutation,
 } from '@/features/leads/leadsApi'
 import { CustomFieldEditorDrawer } from '@/features/leads/components/CustomFieldEditorDrawer'
 import { CustomFieldsSetupTable } from '@/features/leads/components/CustomFieldsSetupTable'
@@ -37,7 +37,7 @@ const TABS = [
   { id: 'source', label: 'Source', icon: Waypoints },
   { id: 'tags', label: 'Tags', icon: Tag },
   { id: 'custom-fields', label: 'Custom fields', icon: FormInput },
-  { id: 'opportunity-statuses', label: 'Opportunity status', icon: GitBranch },
+  { id: 'pipeline-statuses', label: 'Pipeline status', icon: GitBranch },
   { id: 'deal-statuses', label: 'Deal status name', icon: GitBranch },
 ]
 
@@ -85,10 +85,10 @@ export function LeadConfigurationPage() {
   const [createTag, { isLoading: creatingTag }] = useCreateLeadTagMutation()
   const [updateTag, { isLoading: updatingTag }] = useUpdateLeadTagMutation()
   const [deleteTag] = useDeleteLeadTagMutation()
-  const [createOpportunityStatus, { isLoading: creatingOppStatus }] = useCreateOpportunityStatusMutation()
-  const [updateOpportunityStatus, { isLoading: updatingOppStatus }] = useUpdateOpportunityStatusMutation()
-  const [deleteOpportunityStatus] = useDeleteOpportunityStatusMutation()
-  const [reorderOpportunityStatuses, { isLoading: reorderingOppStatuses }] = useReorderOpportunityStatusesMutation()
+  const [createPipelineStatus, { isLoading: creatingPipelineStatus }] = useCreatePipelineStatusMutation()
+  const [updatePipelineStatus, { isLoading: updatingPipelineStatus }] = useUpdatePipelineStatusMutation()
+  const [deletePipelineStatus] = useDeletePipelineStatusMutation()
+  const [reorderPipelineStatuses, { isLoading: reorderingPipelineStatuses }] = useReorderPipelineStatusesMutation()
   const [createDealStatus, { isLoading: creatingDealStatus }] = useCreateDealStatusMutation()
   const [updateDealStatus, { isLoading: updatingDealStatus }] = useUpdateDealStatusMutation()
   const [deleteDealStatus] = useDeleteDealStatusMutation()
@@ -107,7 +107,7 @@ export function LeadConfigurationPage() {
   const [deleteDialog, setDeleteDialog] = useState({ open: false, type: '', id: null, name: '' })
 
   const setup = useMemo(
-    () => data?.data || { sources: [], tags: [], opportunityStatuses: [], dealStatuses: [] },
+    () => data?.data || { sources: [], tags: [], pipelineStatuses: [], dealStatuses: [] },
     [data],
   )
   const customFieldRows = useMemo(() => customFieldsData?.data || [], [customFieldsData])
@@ -116,7 +116,7 @@ export function LeadConfigurationPage() {
     if (type === 'source') return 'Source'
     if (type === 'tags') return 'Tag'
     if (type === 'customFields') return 'Custom field'
-    if (type === 'opportunityStatuses') return 'Opportunity status'
+    if (type === 'pipelineStatuses') return 'Pipeline status'
     if (type === 'dealStatuses') return 'Deal status'
     return 'Item'
   }
@@ -125,7 +125,7 @@ export function LeadConfigurationPage() {
     if (activeTab === 'source') return 'source'
     if (activeTab === 'tags') return 'tags'
     if (activeTab === 'custom-fields') return 'customFields'
-    if (activeTab === 'opportunity-statuses') return 'opportunityStatuses'
+    if (activeTab === 'pipeline-statuses') return 'pipelineStatuses'
     if (activeTab === 'deal-statuses') return 'dealStatuses'
     return 'source'
   }
@@ -188,13 +188,13 @@ export function LeadConfigurationPage() {
           toast.success('Tag created')
         }
       }
-      if (editor.type === 'opportunityStatuses') {
+      if (editor.type === 'pipelineStatuses') {
         if (editor.mode === 'edit') {
-          await updateOpportunityStatus({ id: editor.id, name }).unwrap()
-          toast.success('Opportunity status updated')
+          await updatePipelineStatus({ id: editor.id, name }).unwrap()
+          toast.success('Pipeline status updated')
         } else {
-          await createOpportunityStatus({ name }).unwrap()
-          toast.success('Opportunity status created')
+          await createPipelineStatus({ name }).unwrap()
+          toast.success('Pipeline status created')
         }
       }
       if (editor.type === 'dealStatuses') {
@@ -226,9 +226,9 @@ export function LeadConfigurationPage() {
         await deleteTag(deleteDialog.id).unwrap()
         toast.success('Tag deleted')
       }
-      if (deleteDialog.type === 'opportunityStatuses') {
-        await deleteOpportunityStatus(deleteDialog.id).unwrap()
-        toast.success('Opportunity status deleted')
+      if (deleteDialog.type === 'pipelineStatuses') {
+        await deletePipelineStatus(deleteDialog.id).unwrap()
+        toast.success('Pipeline status deleted')
       }
       if (deleteDialog.type === 'dealStatuses') {
         await deleteDealStatus(deleteDialog.id).unwrap()
@@ -249,8 +249,8 @@ export function LeadConfigurationPage() {
     updatingSource ||
     creatingTag ||
     updatingTag ||
-    creatingOppStatus ||
-    updatingOppStatus ||
+    creatingPipelineStatus ||
+    updatingPipelineStatus ||
     creatingDealStatus ||
     updatingDealStatus
   const activeAddLabel = `Add ${getEntityLabel(getActiveTabType()).toLowerCase()}`
@@ -273,10 +273,10 @@ export function LeadConfigurationPage() {
   }
 
   const onReorderDealStatusesByIds = (ids) => persistReorder(reorderDealStatuses, ids)
-  const onReorderOpportunityStatusesByIds = (ids) => persistReorder(reorderOpportunityStatuses, ids)
+  const onReorderPipelineStatusesByIds = (ids) => persistReorder(reorderPipelineStatuses, ids)
   const onReorderCustomFieldsByIds = (ids) => persistReorder(reorderCustomFields, ids)
 
-  const opportunityStatusRows = setup.opportunityStatuses || []
+  const pipelineStatusRows = setup.pipelineStatuses || []
   const dealStatusRows = setup.dealStatuses || []
 
   function SetupRowActions({ row, type }) {
@@ -352,13 +352,13 @@ export function LeadConfigurationPage() {
           emptyTitle: 'No tags found',
           emptyDescription: 'Add a tag to organize leads.',
         }
-      case 'opportunity-statuses':
+      case 'pipeline-statuses':
         return {
-          rows: opportunityStatusRows,
+          rows: pipelineStatusRows,
           sortable: true,
           loading: isLoading,
-          disabled: updatingOppStatus || reorderingOppStatuses,
-          onReorder: onReorderOpportunityStatusesByIds,
+          disabled: updatingPipelineStatus || reorderingPipelineStatuses,
+          onReorder: onReorderPipelineStatusesByIds,
           getDragLabel: (row) => `Drag to reorder ${formatStatusName(row.name)}`,
           columns: [
             {
@@ -378,9 +378,9 @@ export function LeadConfigurationPage() {
               width: 120,
               cell: (row) => formatDate(row.createdAt),
             },
-            actionsColumn('opportunityStatuses'),
+            actionsColumn('pipelineStatuses'),
           ],
-          emptyTitle: 'No opportunity statuses found',
+          emptyTitle: 'No pipeline statuses found',
           emptyDescription: 'Add statuses for your opportunity pipeline.',
         }
       case 'deal-statuses':
@@ -463,11 +463,11 @@ export function LeadConfigurationPage() {
     activeTab,
     setup.sources,
     setup.tags,
-    opportunityStatusRows,
+    pipelineStatusRows,
     dealStatusRows,
     isLoading,
-    updatingOppStatus,
-    reorderingOppStatuses,
+    updatingPipelineStatus,
+    reorderingPipelineStatuses,
     updatingDealStatus,
     reorderingDealStatuses,
   ])
@@ -501,7 +501,7 @@ export function LeadConfigurationPage() {
           <button
             type="button"
             onClick={openCreateModal}
-            className="ml-auto inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-[var(--brand-primary)] px-3 text-xs font-semibold text-white hover:bg-[var(--brand-primary-dark)]"
+            className="ml-auto inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-[var(--brand-primary)] px-3 text-xs font-semibold cx-icon-inherit text-white hover:bg-[var(--brand-primary-dark)]"
           >
             <Plus className="h-3 w-3" />
             {activeAddLabel}

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight, Search, AlertTriangle, CheckSquare, CalendarCheck, Users, DollarSign, ListTodo, Percent } from 'lucide-react'
+import { ArrowRight, Search, AlertTriangle, CheckSquare, CalendarCheck, Users, DollarSign, ListTodo, Percent } from '@/components/ui/icons'
 import { PageShell } from '@/components/layout/PageShell'
 import { PageStack } from '@/components/layout/PageStack'
 import { PageContentPanel } from '@/components/layout/PageContentPanel'

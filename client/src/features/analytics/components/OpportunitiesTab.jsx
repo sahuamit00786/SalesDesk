@@ -1,4 +1,4 @@
-import { Target, DollarSign, Percent, Calendar } from 'lucide-react'
+import { Target, DollarSign, Percent, Calendar } from '@/components/ui/icons'
 import { ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts'
 import { DashboardChartCard } from '@/features/dashboard/components/DashboardChartCard'
 import { CHART_COLORS } from '@/features/dashboard/dummyDashboardData'

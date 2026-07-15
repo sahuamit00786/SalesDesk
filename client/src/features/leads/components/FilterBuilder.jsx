@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useRef } from 'react'
-import { ChevronDown, ChevronRight, Search, Bookmark, BookmarkCheck, Trash2, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, Search, Bookmark, BookmarkCheck, Trash2, X } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 import { STATUS_OPTIONS, SOURCE_OPTIONS, SOURCE_LABELS } from '@/features/leads/constants'
 import {
@@ -84,7 +84,7 @@ const FIELD_GROUPS = [
     fields: [
       { id: 'value', label: 'Deal Value', type: 'number' },
       { id: 'score', label: 'Health Score', type: 'number' },
-      { id: 'opportunityStatus', label: 'Status', type: 'text', oppOnly: true },
+      { id: 'pipelineStatus', label: 'Status', type: 'text', oppOnly: true },
     ],
   },
   {
@@ -461,7 +461,7 @@ function SectionGroup({ group, draft, onChange, users, search }) {
 
 /* ── Simple mode row ─────────────────────────────── */
 
-function SimpleFilterRow({ filters, onChange, onReset, users, stageOptions, isOpportunities }) {
+function SimpleFilterRow({ filters, onChange, onReset, onApply, users, stageOptions, isOpportunities }) {
   return (
     <div className="space-y-3">
       {/* Search */}
@@ -555,7 +555,7 @@ function SimpleFilterRow({ filters, onChange, onReset, users, stageOptions, isOp
         </button>
         <button
           type="button"
-          onClick={() => onChange({})}
+          onClick={() => onApply?.()}
           className="rounded-xl bg-brand-600 px-5 py-2 text-sm font-medium text-white hover:bg-brand-700"
         >
           Apply
@@ -576,6 +576,7 @@ export function FilterBuilder({
   stageOptions = [],
   isOpportunities = false,
   onDraftApply,
+  onApply,
 }) {
   const [filterMode, setFilterMode] = useState('simple') // 'simple' | 'advanced'
   const [fieldSearch, setFieldSearch] = useState('')
@@ -631,12 +632,13 @@ export function FilterBuilder({
     const source = draft.source?.on
       ? (draft.source.val || '').split(',').map((v) => v.trim()).filter(Boolean)
       : []
-    const stage = draft.opportunityStatus?.on && draft.opportunityStatus.val
-      ? [draft.opportunityStatus.val]
+    const stage = draft.pipelineStatus?.on && draft.pipelineStatus.val
+      ? [draft.pipelineStatus.val]
       : []
     const valueMin = draft.value?.on && draft.value.op !== 'between' ? (Number(draft.value.val) || undefined) : undefined
     const valueMax = draft.value?.on && draft.value.op === 'between' ? (Number(draft.value.val2) || undefined) : undefined
     onChange({ filterTree: tree, status, assignedTo, source, stage, valueMin, valueMax })
+    onApply?.()
   }
 
   function handleReset() {
@@ -782,6 +784,7 @@ export function FilterBuilder({
           filters={filters}
           onChange={onChange}
           onReset={onReset}
+          onApply={onApply}
           users={users}
           stageOptions={stageOptions}
           isOpportunities={isOpportunities}

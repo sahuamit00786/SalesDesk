@@ -1,13 +1,16 @@
 ﻿import { useMemo, useState } from 'react'
 import { RightDrawer } from '@/components/ui/RightDrawer'
 import { STATUS_OPTIONS } from '@/features/leads/constants'
+import { CustomFieldInput } from '@/features/leads/components/CustomFieldsForm'
+
+const CUSTOM_FIELD_KEY_PREFIX = 'cf:'
 
 function capitalize(s) {
   return String(s || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
 
-function getFieldDefs(isOpportunities) {
+function getFieldDefs(isOpportunities, customFields) {
   const shared = [
     { key: 'sourceId', label: 'Source', type: 'source' },
     { key: 'value', label: 'Deal value', type: 'number' },
@@ -15,23 +18,32 @@ function getFieldDefs(isOpportunities) {
     { key: 'city', label: 'City', type: 'text' },
     { key: 'state', label: 'State / region', type: 'text' },
   ]
+  const customFieldDefs = (customFields || []).map((field) => ({
+    key: `${CUSTOM_FIELD_KEY_PREFIX}${field.key}`,
+    label: field.label,
+    type: 'customField',
+    field,
+  }))
   if (isOpportunities) {
     return [
-      { key: 'opportunityStatus', label: 'Opportunity status', type: 'oppStatus' },
+      { key: 'pipelineStatus', label: 'Pipeline status', type: 'pipelineStatus' },
       ...shared,
+      { key: 'revertToLead', label: 'Revert to lead', type: 'revert' },
+      ...customFieldDefs,
     ]
   }
   return [
     { key: 'status', label: 'Lead status', type: 'select' },
     ...shared,
     { key: 'isOpportunity', label: 'Convert to opportunity', type: 'convert' },
+    ...customFieldDefs,
   ]
 }
 
-export function BulkEditModal({ open, onClose, count, sources, opportunityStatuses, onSubmit, submitting, isOpportunities }) {
+export function BulkEditModal({ open, onClose, count, sources, pipelineStatuses, customFields, onSubmit, submitting, isOpportunities }) {
   const [enabled, setEnabled] = useState({})
   const [values, setValues] = useState({})
-  const fields = useMemo(() => getFieldDefs(isOpportunities), [isOpportunities])
+  const fields = useMemo(() => getFieldDefs(isOpportunities, customFields), [isOpportunities, customFields])
   const entitySingle = isOpportunities ? 'opportunity' : 'lead'
   const entityPlural = isOpportunities ? 'opportunities' : 'leads'
 
@@ -46,14 +58,22 @@ export function BulkEditModal({ open, onClose, count, sources, opportunityStatus
 
   function handleSubmit() {
     const patch = {}
+    const customFieldsPatch = {}
     for (const key of Object.keys(enabled)) {
       if (!enabled[key]) continue
       if (key === 'isOpportunity') {
         patch.isOpportunity = true
+      } else if (key === 'revertToLead') {
+        patch.isOpportunity = false
+      } else if (key.startsWith(CUSTOM_FIELD_KEY_PREFIX)) {
+        if (values[key] !== undefined && values[key] !== '') {
+          customFieldsPatch[key.slice(CUSTOM_FIELD_KEY_PREFIX.length)] = values[key]
+        }
       } else if (values[key] !== undefined && values[key] !== '') {
         patch[key] = key === 'value' ? Number(values[key]) : values[key]
       }
     }
+    if (Object.keys(customFieldsPatch).length) patch.customFields = customFieldsPatch
     if (!Object.keys(patch).length) return
     onSubmit(patch)
   }
@@ -94,10 +114,10 @@ export function BulkEditModal({ open, onClose, count, sources, opportunityStatus
                     {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{capitalize(s)}</option>)}
                   </select>
                 )}
-                {field.type === 'oppStatus' && (
+                {field.type === 'pipelineStatus' && (
                   <select className={selectCls} value={values[field.key] || ''} onChange={(e) => set(field.key, e.target.value)}>
-                    <option value="">-- choose opportunity status --</option>
-                    {(opportunityStatuses || []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    <option value="">-- choose pipeline status --</option>
+                    {(pipelineStatuses || []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 )}
                 {field.type === 'source' && (
@@ -116,6 +136,19 @@ export function BulkEditModal({ open, onClose, count, sources, opportunityStatus
                   <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2 border border-amber-200">
                     All {count} selected lead{count === 1 ? '' : 's'} will be marked as opportunities. This cannot be undone in bulk.
                   </p>
+                )}
+                {field.type === 'revert' && (
+                  <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2 border border-amber-200">
+                    All {count} selected opportunit{count === 1 ? 'y' : 'ies'} will be reverted back to leads (pipeline stage cleared). Opportunities with linked deals are skipped.
+                  </p>
+                )}
+                {field.type === 'customField' && (
+                  <CustomFieldInput
+                    field={field.field}
+                    fieldValue={values[field.key]}
+                    compact
+                    onChange={(next) => set(field.key, next)}
+                  />
                 )}
               </div>
             ) : null}

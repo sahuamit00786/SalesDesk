@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { Printer } from 'lucide-react'
+import { Printer } from '@/components/ui/icons'
 import { PageShell } from '@/components/layout/PageShell'
 import { SalesDocumentPreview } from '@/features/sales-docs/components/SalesDocumentPreview'
 import { ScaledA4PreviewViewport } from '@/features/sales-docs/components/ScaledA4PreviewViewport'

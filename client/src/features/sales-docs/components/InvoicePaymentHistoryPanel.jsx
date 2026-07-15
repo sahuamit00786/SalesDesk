@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Trash2 } from 'lucide-react'
+import { Trash2 } from '@/components/ui/icons'
 import toast from 'react-hot-toast'
 import { cn } from '@/utils/cn'
 import { RightDrawer } from '@/components/ui/RightDrawer'

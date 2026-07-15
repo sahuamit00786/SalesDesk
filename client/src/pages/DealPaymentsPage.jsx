@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { BadgeDollarSign, CheckCircle2, Clock, Filter, X, XCircle } from 'lucide-react'
+import { BadgeDollarSign, CheckCircle2, Clock, Filter, X, XCircle } from '@/components/ui/icons'
 import { PageShell } from '@/components/layout/PageShell'
 import { PageStack } from '@/components/layout/PageStack'
 import { DataGrid } from '@/components/shared/DataGrid'
@@ -68,10 +68,10 @@ export function DealPaymentsPage() {
   const { data: formMetaData } = useGetLeadFormMetaQuery()
   const users = formMetaData?.data?.users || []
   const rawDealStatuses = formMetaData?.data?.dealStatuses || []
-  const opportunityStatuses = formMetaData?.data?.opportunityStatuses || []
+  const pipelineStatuses = formMetaData?.data?.pipelineStatuses || []
   const dealStatuses = rawDealStatuses.length
     ? [...rawDealStatuses].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
-    : opportunityStatuses
+    : pipelineStatuses
 
   const rows = useMemo(() => (Array.isArray(data?.data) ? data.data : []), [data?.data])
   const total = data?.meta?.total ?? 0
@@ -385,7 +385,7 @@ export function DealPaymentsPage() {
                 <button
                   type="button"
                   onClick={() => refetch()}
-                  className="mt-3 rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-xs font-semibold text-white"
+                  className="mt-3 rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-xs font-semibold cx-icon-inherit text-white"
                 >
                   Retry
                 </button>
@@ -471,7 +471,7 @@ export function DealPaymentsPage() {
         open={Boolean(selectedDeal)}
         onClose={() => setSelectedDeal(null)}
         opp={selectedDeal}
-        opportunityStatuses={dealStatuses}
+        pipelineStatuses={dealStatuses}
         defaultTab="payments"
       />
     </PageShell>

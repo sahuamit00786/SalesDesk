@@ -1,4 +1,4 @@
-import { Download } from 'lucide-react'
+import { Download } from '@/components/ui/icons'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { coerceToLeadArray, formatLeadAssignees, leadListLabel } from '@/features/leads/utils/leadAssignee'

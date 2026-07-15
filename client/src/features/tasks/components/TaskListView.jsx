@@ -7,7 +7,7 @@ import {
   Flag,
   LayoutGrid,
   XCircle,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import { SkeletonList } from '@/components/shared/SkeletonLoader'
 import { cn } from '@/utils/cn'
 import { PRIORITY_META, SECTION_PAGE_SIZE, STATUS_META } from '../taskConstants'

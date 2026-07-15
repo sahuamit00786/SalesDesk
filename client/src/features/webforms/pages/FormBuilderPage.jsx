@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { DndContext, DragOverlay, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Check, Pencil } from 'lucide-react'
+import { Check, Pencil } from '@/components/ui/icons'
 import toast from 'react-hot-toast'
 import { PageShell } from '@/components/layout/PageShell'
 import { SkeletonForm } from '@/components/shared/SkeletonLoader'

@@ -2,7 +2,7 @@ import { Op, fn, col, literal } from 'sequelize'
 import {
   Lead, LeadFollowup, LeadTask, Activity, Meeting, Deal, DealPayment,
   User, UserWorkspace, Invoice, Quotation, InvoicePayment, LeaveRequest, LeaveType,
-  DuplicateLead, Campaign, CampaignLead, OpportunityStatus,
+  DuplicateLead, Campaign, CampaignLead, PipelineStatus,
 } from '../models/index.js'
 
 function parseRange(q) {
@@ -35,7 +35,7 @@ function applyLeadFilters(scope, query) {
   }
   if (query.status) out.status = query.status
   if (query.source) out.source = query.source
-  if (query.stage) out.opportunityStatus = query.stage
+  if (query.stage) out.pipelineStatus = query.stage
   return out
 }
 
@@ -47,19 +47,19 @@ function capitalize(s) {
 // (zero-count stages included so charts show the full pipeline, not just populated ones)
 async function getStageDist(scope, ctx) {
   const [statuses, counts] = await Promise.all([
-    OpportunityStatus.findAll({
+    PipelineStatus.findAll({
       where: { workspaceId: ctx.workspaceId, companyId: ctx.companyId },
       order: [['sortOrder', 'ASC']],
       raw: true,
     }),
     Lead.findAll({
-      where: { ...scope, opportunityStatus: { [Op.ne]: null } },
-      attributes: ['opportunityStatus', [fn('COUNT', col('id')), 'count'], [fn('COALESCE', fn('SUM', col('value')), 0), 'totalValue']],
-      group: ['opportunityStatus'],
+      where: { ...scope, pipelineStatus: { [Op.ne]: null } },
+      attributes: ['pipelineStatus', [fn('COUNT', col('id')), 'count'], [fn('COALESCE', fn('SUM', col('value')), 0), 'totalValue']],
+      group: ['pipelineStatus'],
       raw: true,
     }),
   ])
-  const countMap = Object.fromEntries(counts.map((r) => [r.opportunityStatus, r]))
+  const countMap = Object.fromEntries(counts.map((r) => [r.pipelineStatus, r]))
   return statuses.map((s) => ({
     name: s.name,
     count: Number(countMap[s.id]?.count || 0),
@@ -106,7 +106,7 @@ export async function opportunitiesReport(req, res, next) {
         include: [
           { model: User, as: 'owner', attributes: ['name'], required: false },
           { model: User, as: 'assignee', attributes: ['name'], required: false },
-          { model: OpportunityStatus, as: 'oppStatus', attributes: ['name'], required: false },
+          { model: PipelineStatus, as: 'pipelineStatusInfo', attributes: ['name'], required: false },
         ],
         order: [['value', 'DESC']],
         limit: 200,
@@ -115,7 +115,7 @@ export async function opportunitiesReport(req, res, next) {
         where: { ...scope, value: { [Op.ne]: null, [Op.gt]: 0 } },
         include: [
           { model: User, as: 'owner', attributes: ['name'], required: false },
-          { model: OpportunityStatus, as: 'oppStatus', attributes: ['name'], required: false },
+          { model: PipelineStatus, as: 'pipelineStatusInfo', attributes: ['name'], required: false },
         ],
         order: [['value', 'DESC']],
         limit: 10,
@@ -158,7 +158,7 @@ export async function opportunitiesReport(req, res, next) {
             id: l.id,
             title: l.title,
             company: l.company,
-            stage: capitalize(l.oppStatus?.name || 'Uncategorised'),
+            stage: capitalize(l.pipelineStatusInfo?.name || 'Uncategorised'),
             status: l.status,
             value: l.value,
             valueCurrency: l.valueCurrency,
@@ -170,7 +170,7 @@ export async function opportunitiesReport(req, res, next) {
             id: l.id,
             title: l.title,
             company: l.company,
-            stage: capitalize(l.oppStatus?.name || ''),
+            stage: capitalize(l.pipelineStatusInfo?.name || ''),
             value: l.value,
             owner: l.owner?.name || '—',
           })),

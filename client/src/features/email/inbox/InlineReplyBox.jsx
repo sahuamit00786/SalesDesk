@@ -3,7 +3,7 @@ import toast from 'react-hot-toast'
 import {
   Bold, ChevronDown, ChevronUp, Ellipsis, Forward, Italic, Link2, List, ListOrdered,
   Paperclip, Reply, ReplyAll, Underline, X,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 import { Select } from '@/components/ui/Select'
 import { useSendEmailForLeadMutation, useUploadEmailAttachmentsMutation } from '@/features/email/emailApi'

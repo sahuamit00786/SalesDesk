@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   ClipboardCheck,
   FileText,
+  GitBranch,
   Mail,
   MapPin,
   MessageSquare,
@@ -16,9 +17,11 @@ import {
   PhoneCall,
   Presentation,
   Search,
+  Settings2,
   Sparkles,
+  Tag,
   UserRoundCheck,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import { PageShell } from '@/components/layout/PageShell'
 import {
   useGetActivitiesFeedQuery,
@@ -69,7 +72,12 @@ const FALLBACK_TYPE_META = {
   discovery: { icon: Search, color: '#475569', label: 'Discovery' },
   follow_up: { icon: Bell, color: '#0ea5e9', label: 'Follow-up' },
   in_person_visit: { icon: MapPin, color: '#1f2937', label: 'In-person visit' },
-  task: { icon: Bell, color: '#0ea5e9', label: 'Task' },
+  task: { icon: ClipboardCheck, color: '#0ea5e9', label: 'Task' },
+  status_change: { icon: GitBranch, color: '#a855f7', label: 'Status change' },
+  assignment: { icon: UserRoundCheck, color: '#10b981', label: 'Assignment' },
+  document: { icon: FileText, color: '#06b6d4', label: 'Document' },
+  tag: { icon: Tag, color: '#f59e0b', label: 'Tag' },
+  system: { icon: Settings2, color: '#6366f1', label: 'System' },
 }
 
 const ICON_BY_NAME = {
@@ -79,6 +87,7 @@ const ICON_BY_NAME = {
   CheckCircle2,
   ClipboardCheck,
   FileText,
+  GitBranch,
   Mail,
   MapPin,
   MessageSquare,
@@ -86,8 +95,26 @@ const ICON_BY_NAME = {
   PhoneCall,
   Presentation,
   Search,
+  Settings2,
   Sparkles,
+  Tag,
   UserRoundCheck,
+}
+
+function humanizeTypeKey(key) {
+  const str = String(key || '').replace(/_/g, ' ').trim()
+  if (!str) return 'Activity'
+  return str.charAt(0).toUpperCase() + str.slice(1)
+}
+
+/** Never let an unmapped key inherit Note's look — it reads as a real note in the timeline. */
+function genericTypeMeta(key) {
+  const uniqueIdx = uniqueIndexFromKey(key)
+  return {
+    icon: UNIQUE_TYPE_ICONS[uniqueIdx % UNIQUE_TYPE_ICONS.length],
+    color: UNIQUE_TYPE_COLORS[uniqueIdx % UNIQUE_TYPE_COLORS.length],
+    label: humanizeTypeKey(key),
+  }
 }
 
 const UNIQUE_TYPE_COLORS = ['#0f766e', '#1d4ed8', '#7c3aed', '#b45309', '#0e7490', '#be123c', '#166534', '#374151', '#0891b2', '#7e22ce']
@@ -171,21 +198,20 @@ function rangeFromPreset(preset) {
 }
 
 function ActivityTimelineItem({ activity, typeMeta, nowMs }) {
-  const key = activity.metadata?.activityTypeKey || activity.type
-  const meta = typeMeta[key] || FALLBACK_TYPE_META[key] || FALLBACK_TYPE_META.note
+  const key = activity.typeKey || activity.metadata?.activityTypeKey || activity.type
+  const meta = typeMeta[key] || FALLBACK_TYPE_META[key] || genericTypeMeta(key)
   const Icon = meta.icon || Sparkles
   const detailRaw = (activity.metadata?.description || activity.body || '').trim()
-  const renderNoteHtml = activity.type === 'note' && Boolean(detailRaw)
+  const isNoteRow = key === 'note'
+  const renderNoteHtml = isNoteRow && Boolean(detailRaw)
   const headline =
     activity.metadata?.title?.trim() ||
-    (activity.type === 'note' && activity.body ? plainTextFromHtml(activity.body).slice(0, 120) : '') ||
-    (activity.type === 'note' ? meta.label : activity.body) ||
+    (isNoteRow && activity.body ? plainTextFromHtml(activity.body).slice(0, 120) : '') ||
+    (isNoteRow ? meta.label : activity.body) ||
     meta.label
   const actorName = activity.user?.name || 'System'
-  const followUpText = `${headline} ${detailRaw}`.toLowerCase()
-  const looksLikeFollowUp = followUpText.includes('follow-up') || followUpText.includes('follow up') || followUpText.includes('reminder')
-  const isFollowUp = key === 'follow_up' || key === 'task' || looksLikeFollowUp
-  const isNote = !isFollowUp && key === 'note'
+  const isFollowUp = key === 'follow_up' || key === 'task'
+  const isNote = !isFollowUp && isNoteRow
   const followUpAt = isFollowUp ? parseFollowUpTime(activity, headline, detailRaw) : null
   const displayHeadline = isFollowUp && followUpAt
     ? headline.replace(

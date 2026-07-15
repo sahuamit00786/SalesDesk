@@ -1,4 +1,4 @@
-import { Hash } from 'lucide-react'
+import { Hash } from '@/components/ui/icons'
 import { formatCustomFieldDisplayValue } from '@/features/leads/customFieldTypes'
 
 function DisplayRow({ label, value, href }) {

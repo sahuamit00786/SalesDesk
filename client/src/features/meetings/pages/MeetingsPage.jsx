@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowDownWideNarrow, ArrowUpNarrowWide, Plus, Search } from 'lucide-react'
+import { ArrowDownWideNarrow, ArrowUpNarrowWide, Plus, Search } from '@/components/ui/icons'
 import { PageShell } from '@/components/layout/PageShell'
 import { CreateMeetingModal } from '@/features/meetings/components/CreateMeetingModal'
 import { MeetingsListPanel } from '@/features/meetings/components/MeetingsListPanel'
@@ -139,7 +139,7 @@ export function MeetingsPage() {
             <button
               type="button"
               onClick={() => setCreatingMeeting(true)}
-              className="inline-flex items-center justify-center gap-1.5 self-stretch rounded-lg bg-[var(--brand-primary)] px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--brand-primary-dark)] sm:self-auto"
+              className="inline-flex items-center justify-center gap-1.5 self-stretch rounded-lg bg-[var(--brand-primary)] px-3 py-2 text-sm font-semibold cx-icon-inherit text-white shadow-sm transition hover:bg-[var(--brand-primary-dark)] sm:self-auto"
             >
               <Plus className="h-4 w-4" aria-hidden />
               New meeting

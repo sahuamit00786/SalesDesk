@@ -1,4 +1,4 @@
-import { Megaphone, Phone, Mail, Video, FileText, Bell, Percent } from 'lucide-react'
+import { Megaphone, Phone, Mail, Video, FileText, Bell, Percent } from '@/components/ui/icons'
 import {
   ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,

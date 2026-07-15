@@ -1,4 +1,4 @@
-import { FileText, Trash2 } from 'lucide-react'
+import { FileText, Trash2 } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 import { formatSize, getDocCardPreviewMeta, getFileUrl } from '@/features/documents/documentUtils'
 

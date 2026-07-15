@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, BarChart2, Building2, CalendarCheck, CalendarDays,
   ChevronDown, Download, TrendingDown, TrendingUp, Umbrella, Users,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import {
   Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis,

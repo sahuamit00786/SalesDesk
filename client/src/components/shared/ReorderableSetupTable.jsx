@@ -14,7 +14,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, LayoutList } from 'lucide-react'
+import { GripVertical, LayoutList } from '@/components/ui/icons'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Loader } from '@/components/shared/Loader'
 import { cn } from '@/utils/cn'

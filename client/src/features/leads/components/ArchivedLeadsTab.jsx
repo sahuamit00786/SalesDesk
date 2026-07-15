@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Archive, RotateCcw, Trash2 } from 'lucide-react'
+import { Archive, RotateCcw, Trash2 } from '@/components/ui/icons'
 import toast from 'react-hot-toast'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { useGetArchivedLeadsQuery, useBulkArchivedLeadsMutation } from '@/features/leads/leadsApi'

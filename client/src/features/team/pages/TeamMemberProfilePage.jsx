@@ -24,7 +24,7 @@ import {
   Sparkles,
   Users,
   Video,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import { PageShell } from '@/components/layout/PageShell'
 import { TeamMemberAccessDrawer } from '@/features/team/components/TeamMemberAccessDrawer'
 import { useGetTeamUserQuery } from '@/features/team/teamApi'
@@ -537,7 +537,7 @@ function MeetingRow({ row, nowMs }) {
               href={row.googleMeetLink}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
+              className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold cx-icon-inherit text-white hover:bg-green-700"
             >
               <Presentation className="h-4 w-4" />
               Join Meeting

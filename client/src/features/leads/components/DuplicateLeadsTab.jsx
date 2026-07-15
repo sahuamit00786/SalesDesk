@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { AlertTriangle, Trash2, GitMerge, Plus, ExternalLink } from 'lucide-react'
+import { AlertTriangle, Trash2, GitMerge, Plus, ExternalLink } from '@/components/ui/icons'
 import toast from 'react-hot-toast'
 import {
   useGetDuplicateLeadsQuery,
@@ -180,7 +180,7 @@ export function DuplicateLeadsTab() {
                       type="button"
                       onClick={() => setMergeRecord(record)}
                       disabled={!record.matchedLeadId}
-                      className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[var(--brand-primary)] px-3 text-xs font-semibold text-white disabled:opacity-40"
+                      className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[var(--brand-primary)] px-3 text-xs font-semibold cx-icon-inherit text-white disabled:opacity-40"
                     >
                       <GitMerge className="h-3 w-3" />
                       Merge
@@ -190,7 +190,7 @@ export function DuplicateLeadsTab() {
                     {isCreating ? (
                       <div className="flex gap-1.5">
                         <button type="button" onClick={() => setPendingCreate(null)} className="h-8 rounded-lg border border-surface-border px-3 text-xs text-ink-muted">Cancel</button>
-                        <button type="button" onClick={() => handleCreate(record)} className="h-8 rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white">Confirm create</button>
+                        <button type="button" onClick={() => handleCreate(record)} className="h-8 rounded-lg bg-emerald-600 px-3 text-xs font-semibold cx-icon-inherit text-white">Confirm create</button>
                       </div>
                     ) : (
                       <button
@@ -207,7 +207,7 @@ export function DuplicateLeadsTab() {
                     {isDeleting ? (
                       <div className="flex gap-1.5">
                         <button type="button" onClick={() => setPendingDelete(null)} className="h-8 rounded-lg border border-surface-border px-3 text-xs text-ink-muted">Cancel</button>
-                        <button type="button" onClick={() => handleDelete(record)} disabled={deleting} className="h-8 rounded-lg bg-red-500 px-3 text-xs font-semibold text-white disabled:opacity-60">Confirm delete</button>
+                        <button type="button" onClick={() => handleDelete(record)} disabled={deleting} className="h-8 rounded-lg bg-red-500 px-3 text-xs font-semibold cx-icon-inherit text-white disabled:opacity-60">Confirm delete</button>
                       </div>
                     ) : (
                       <button

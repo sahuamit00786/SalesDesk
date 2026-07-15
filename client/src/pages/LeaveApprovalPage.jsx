@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { Search } from 'lucide-react'
+import { Search } from '@/components/ui/icons'
 import { useIsHrManagerOrAdmin } from '@/features/hr/useHrRole'
 import { PageShell } from '@/components/layout/PageShell'
 import { Modal } from '@/components/ui/Modal'

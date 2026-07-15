@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Phone, PhoneIncoming, PhoneMissed, PhoneOutgoing, UserPlus } from 'lucide-react'
+import { Phone, PhoneIncoming, PhoneMissed, PhoneOutgoing, UserPlus } from '@/components/ui/icons'
 import { PageShell } from '@/components/layout/PageShell'
 import { PageStack } from '@/components/layout/PageStack'
 import { DataGrid } from '@/components/shared/DataGrid'

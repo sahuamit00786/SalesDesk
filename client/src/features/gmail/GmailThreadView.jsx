@@ -1,4 +1,4 @@
-import { ArrowLeft, Reply, ReplyAll, UserRound } from 'lucide-react'
+import { ArrowLeft, Reply, ReplyAll, UserRound } from '@/components/ui/icons'
 import { Link } from 'react-router-dom'
 import GmailMessageCard from '@/features/gmail/GmailMessageCard'
 
@@ -68,7 +68,7 @@ export default function GmailThreadView({
           {showReplyButton && onReply ? (
             <button
               type="button"
-              className="inline-flex h-8 items-center rounded-lg bg-[var(--brand-primary)] px-3 text-xs font-semibold text-white hover:bg-[var(--brand-primary-dark)]"
+              className="inline-flex h-8 items-center rounded-lg bg-[var(--brand-primary)] px-3 text-xs font-semibold cx-icon-inherit text-white hover:bg-[var(--brand-primary-dark)]"
               onClick={() => onReply(thread)}
             >
               <Reply size={13} className="mr-1" />

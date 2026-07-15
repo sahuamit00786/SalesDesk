@@ -13,7 +13,7 @@ import {
   Paperclip,
   RemoveFormatting,
   Underline,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import { getFileUrl } from '@/features/documents/documentUtils'
 
 const AUTO_SAVE_DELAY = 1500 // 1.5 seconds after last keystroke

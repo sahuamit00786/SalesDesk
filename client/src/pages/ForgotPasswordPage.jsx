@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { KeyRound, Mail } from 'lucide-react'
+import { KeyRound, Mail } from '@/components/ui/icons'
 import { AuthScreenShell, authLinkClassName } from '@/components/auth/AuthScreenShell'
 import { LeadNestLogo } from '@/components/shared/LeadNestLogo'
 import { Button } from '@/components/ui/Button'
@@ -13,7 +13,7 @@ import {
   passwordPolicyRules,
   passwordPolicySummary,
 } from '@/utils/passwordPolicy'
-import { Check } from 'lucide-react'
+import { Check } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 
 function ForgotVisual() {

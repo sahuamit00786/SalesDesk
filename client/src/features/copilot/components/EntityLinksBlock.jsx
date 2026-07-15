@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { Briefcase, ExternalLink, Megaphone, User, Users } from 'lucide-react'
+import { Briefcase, ExternalLink, Megaphone, User, Users } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 
 const ENTITY_ROUTES = {

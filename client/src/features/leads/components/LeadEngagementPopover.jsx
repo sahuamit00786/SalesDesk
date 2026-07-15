@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom'
-import { Activity, Calendar, CheckSquare, Mail, Phone, StickyNote } from 'lucide-react'
+import { Activity, Calendar, CheckSquare, Mail, Phone, StickyNote } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 
 const STAT_ROWS = [

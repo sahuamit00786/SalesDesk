@@ -21,7 +21,7 @@ import {
   Users,
   X,
   Clock,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import { COMPANY_USER_ROLE_KIND_ALL_OPTIONS, labelCompanyUserRoleKind } from '@/constants/companyUserRoleKind'
 import { Modal } from '@/components/ui/Modal'
 import { RightDrawer } from '@/components/ui/RightDrawer'

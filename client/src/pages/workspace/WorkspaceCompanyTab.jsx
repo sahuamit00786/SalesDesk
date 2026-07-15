@@ -12,7 +12,7 @@ import {
   Save,
   Trash2,
   Wallet,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import { useGetBillingProfileQuery, usePatchBillingProfileMutation } from '@/features/sales-docs/billingProfileApi'
 import { useUploadDocumentMutation } from '@/features/documents/documentsApi'
 import { useAppSelector } from '@/app/hooks'

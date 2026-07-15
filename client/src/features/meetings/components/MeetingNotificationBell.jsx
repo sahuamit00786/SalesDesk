@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Bell, Video } from "lucide-react";
+import { Bell, Video } from '@/components/ui/icons';
 import { Button } from "@/components/ui/Button";
 import { useGetMeetingsQuery } from "../meetingsApi";
 
@@ -115,7 +115,7 @@ export function MeetingNotificationBell() {
                       }}
                       className={`inline-flex items-center gap-1 px-3 py-2 rounded-lg text-xs ${
                         hasLink
-                          ? "bg-[var(--brand-primary)] text-white"
+                          ? "bg-[var(--brand-primary)] cx-icon-inherit text-white"
                           : "bg-gray-300 text-gray-500 cursor-not-allowed"
                       }`}
                     >

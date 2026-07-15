@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
-import { ExternalLink, FileText, Loader2, Plus, Printer, Receipt, Upload, X } from 'lucide-react'
+import { ExternalLink, FileText, Loader2, Plus, Printer, Receipt, Upload, X } from '@/components/ui/icons'
 import { useGetQuotationsQuery, useGetQuotationQuery } from '@/features/sales-docs/quotationsApi'
 import { useGetInvoiceQuery, useGetInvoicesQuery } from '@/features/sales-docs/invoicesApi'
 import { useGetBillingProfileQuery } from '@/features/sales-docs/billingProfileApi'

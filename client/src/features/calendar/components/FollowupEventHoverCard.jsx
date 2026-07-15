@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { format } from 'date-fns'
-import { Phone, Clock3, Calendar, Briefcase, ExternalLink, MessageSquare } from 'lucide-react'
+import { Phone, Clock3, Calendar, Briefcase, ExternalLink, MessageSquare } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 import { computeCalendarPopoverPosition } from '@/utils/calendarPopoverPosition'
 

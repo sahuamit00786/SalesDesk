@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { DndContext, DragOverlay, PointerSensor, useDraggable, useDroppable, useSensor, useSensors } from '@dnd-kit/core'
-import { Building2, Inbox, MoreHorizontal } from 'lucide-react'
+import { Building2, Inbox, MoreHorizontal } from '@/components/ui/icons'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { cn } from '@/utils/cn'
@@ -281,7 +281,7 @@ function DealOtherColumn({ displayLabel, opportunities, onOpen, onOpenClient, on
 
 export function DealsPipelineKanban({
   opportunities = [],
-  opportunityStatuses = [],
+  pipelineStatuses = [],
   isLoading,
   dealStageName = '',
   onOpenDeal,
@@ -320,9 +320,9 @@ export function DealsPipelineKanban({
   )
 
   const stageOrder = useMemo(() => {
-    const ordered = [...opportunityStatuses].sort((a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0))
+    const ordered = [...pipelineStatuses].sort((a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0))
     return ordered.map((s) => s.name).filter(Boolean)
-  }, [opportunityStatuses])
+  }, [pipelineStatuses])
 
   // Use local optimistic state if present, else server data
   const effectiveOpportunities = localOpportunities ?? opportunities

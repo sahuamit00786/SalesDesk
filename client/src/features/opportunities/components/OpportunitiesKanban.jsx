@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
 import { DndContext, DragOverlay, PointerSensor, useDraggable, useDroppable, useSensor, useSensors } from '@dnd-kit/core'
-import { Building2, CalendarClock, GripVertical, Inbox, User } from 'lucide-react'
+import { Building2, CalendarClock, GripVertical, Inbox, User } from '@/components/ui/icons'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { cn } from '@/utils/cn'
-import { usePatchOpportunityStatusMutation } from '@/features/opportunities/opportunitiesApi'
+import { usePatchPipelineStatusMutation } from '@/features/opportunities/opportunitiesApi'
 import { formatDealMoney } from '@/features/deals/dealCurrencies'
 
 export function formatStageLabel(value) {
@@ -263,9 +263,9 @@ function groupByStage(opportunities, stageOrder) {
   return { byStage, other }
 }
 
-export function OpportunitiesKanban({ opportunities = [], opportunityStatuses = [], isLoading, onCreateDeal }) {
+export function OpportunitiesKanban({ opportunities = [], pipelineStatuses = [], isLoading, onCreateDeal }) {
   const navigate = useNavigate()
-  const [patchOpportunityStatus] = usePatchOpportunityStatusMutation()
+  const [patchPipelineStatus] = usePatchPipelineStatusMutation()
   const [activeId, setActiveId] = useState(null)
   // Optimistic local state: null means use the server-side `opportunities` prop
   const [localOpportunities, setLocalOpportunities] = useState(null)
@@ -277,9 +277,9 @@ export function OpportunitiesKanban({ opportunities = [], opportunityStatuses = 
   )
 
   const stageOrder = useMemo(() => {
-    const ordered = [...opportunityStatuses].sort((a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0))
+    const ordered = [...pipelineStatuses].sort((a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0))
     return ordered.map((s) => s.name).filter(Boolean)
-  }, [opportunityStatuses])
+  }, [pipelineStatuses])
 
   // Use local optimistic state if present, else server data
   const effectiveOpportunities = localOpportunities ?? opportunities
@@ -303,7 +303,7 @@ export function OpportunitiesKanban({ opportunities = [], opportunityStatuses = 
     const oppId = String(active.id)
     const opp = effectiveOpportunities.find((o) => o.id === oppId)
     if (!opp || opp.currentStage === newStageName) return
-    const status = opportunityStatuses.find((s) => s.name === newStageName)
+    const status = pipelineStatuses.find((s) => s.name === newStageName)
     if (!status) return
 
     // Save original state for rollback
@@ -317,7 +317,7 @@ export function OpportunitiesKanban({ opportunities = [], opportunityStatuses = 
     )
 
     try {
-      await patchOpportunityStatus({ id: oppId, opportunityStatusId: status.id }).unwrap()
+      await patchPipelineStatus({ id: oppId, pipelineStatusId: status.id }).unwrap()
       toast.success(`Moved to ${formatStageLabel(newStageName)}`)
       // Clear local override so server data takes over
       setLocalOpportunities(null)
@@ -343,8 +343,8 @@ export function OpportunitiesKanban({ opportunities = [], opportunityStatuses = 
   if (!stageOrder.length) {
     return (
       <div className="rounded-2xl border border-dashed border-surface-border bg-white px-6 py-14 text-center">
-        <p className="text-sm font-medium text-ink">No opportunity statuses configured</p>
-        <p className="mt-1 text-xs text-ink-muted">Add statuses under Lead configuration → Opportunity status.</p>
+        <p className="text-sm font-medium text-ink">No pipeline statuses configured</p>
+        <p className="mt-1 text-xs text-ink-muted">Add statuses under Lead configuration → Pipeline status.</p>
       </div>
     )
   }

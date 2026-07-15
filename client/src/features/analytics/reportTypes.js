@@ -2,7 +2,7 @@ import {
   Activity, AlertTriangle, BarChart2, Briefcase, CalendarCheck, CheckSquare,
   CreditCard, FileText, Mail, Megaphone, Receipt, Target, TrendingUp,
   Umbrella, UserCircle, Users, Video,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 
 export const REPORT_CATEGORIES = [
   {

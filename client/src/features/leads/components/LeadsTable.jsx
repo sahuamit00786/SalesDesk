@@ -1,15 +1,17 @@
 import { useState } from 'react'
-import { Pencil, Trash2, Info } from 'lucide-react'
+import { Pencil, Trash2, Info } from '@/components/ui/icons'
 import { Link } from 'react-router-dom'
 import { LeadScorePill } from '@/features/leads/components/LeadScorePill'
 import { LeadSourceTag } from '@/features/leads/components/LeadSourceTag'
 import { LeadEngagementPopover } from '@/features/leads/components/LeadEngagementPopover'
+import { AssigneeCell } from '@/features/leads/components/AssigneeCell'
 import { formatStageLabel } from '@/features/opportunities/components/OpportunitiesKanban'
 import { STATUS_OPTIONS, STATUS_STYLES } from '@/features/leads/constants'
+import { formatDealMoney } from '@/features/deals/dealCurrencies'
 import { cn } from '@/utils/cn'
 
-function formatINR(value) {
-  return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(Number(value || 0))
+function formatLeadValue(lead) {
+  return formatDealMoney(lead?.value, lead?.valueCurrency ?? lead?.value_currency)
 }
 
 function fromNow(dateValue) {
@@ -86,8 +88,8 @@ function LeadStatusSelect({ lead, onStatusChange }) {
   )
 }
 
-function OpportunityStageSelect({ lead, opportunityStatuses, onStageChange }) {
-  const currentId = lead.oppStatus?.id || lead.opportunityStatus || ''
+function OpportunityStageSelect({ lead, pipelineStatuses, onStageChange }) {
+  const currentId = lead.pipelineStatusInfo?.id || lead.pipelineStatus || ''
   return (
     <select
       value={currentId}
@@ -97,7 +99,7 @@ function OpportunityStageSelect({ lead, opportunityStatuses, onStageChange }) {
       className="w-full cursor-pointer rounded-md border border-surface-border bg-surface-subtle px-1.5 py-1 text-[10px] font-semibold text-ink outline-none"
     >
       {!currentId ? <option value="">Select status</option> : null}
-      {opportunityStatuses.map((s) => (
+      {pipelineStatuses.map((s) => (
         <option key={s.id} value={s.id}>{formatStageLabel(s.name)}</option>
       ))}
     </select>
@@ -115,7 +117,7 @@ export function LeadsTable({
   sort,
   onSort,
   variant = 'leads',
-  opportunityStatuses = [],
+  pipelineStatuses = [],
   onStatusChange,
   onStageChange,
 }) {
@@ -232,7 +234,7 @@ export function LeadsTable({
                           <td>
                             <OpportunityStageSelect
                               lead={lead}
-                              opportunityStatuses={opportunityStatuses}
+                              pipelineStatuses={pipelineStatuses}
                               onStageChange={onStageChange}
                             />
                           </td>
@@ -242,8 +244,10 @@ export function LeadsTable({
                           <td>
                             <LeadSourceTag source={lead.source} />
                           </td>
-                          <td className="font-semibold text-ink">{formatINR(lead.value)}</td>
-                          <td className="text-ink-muted">{lead.assignee?.name || '-'}</td>
+                          <td className="font-semibold text-ink">{formatLeadValue(lead)}</td>
+                          <td className="text-ink-muted">
+                            <AssigneeCell lead={lead} />
+                          </td>
                           <td className="text-ink-muted">{fromNow(lead.updatedAt)}</td>
                         </>
                       ) : (
@@ -263,8 +267,10 @@ export function LeadsTable({
                           <td>
                             <LeadSourceTag source={lead.source} />
                           </td>
-                          <td className="font-semibold text-ink">{formatINR(lead.value)}</td>
-                          <td className="text-ink-muted">{lead.assignee?.name || '-'}</td>
+                          <td className="font-semibold text-ink">{formatLeadValue(lead)}</td>
+                          <td className="text-ink-muted">
+                            <AssigneeCell lead={lead} />
+                          </td>
                           <td className="text-ink-muted">{fromNow(lead.updatedAt)}</td>
                         </>
                       )}

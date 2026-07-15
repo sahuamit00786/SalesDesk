@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { CalendarDays, Clock, ListTree, Pencil, Scale, X } from 'lucide-react'
+import { CalendarDays, Clock, ListTree, Pencil, Scale, X } from '@/components/ui/icons'
 import { useHrRole } from '@/features/hr/useHrRole'
 import { PageShell } from '@/components/layout/PageShell'
 import { Modal } from '@/components/ui/Modal'

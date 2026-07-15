@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { ClipboardCheck } from 'lucide-react'
+import { ClipboardCheck } from '@/components/ui/icons'
 import { useGetAllLeavesQuery } from '@/features/leave/leaveApi'
 import { useIsHrManagerOrAdmin } from '@/features/hr/useHrRole'
 

@@ -1,4 +1,4 @@
-import { Video, CheckCircle, XCircle, AlertCircle, Clock, Mic, Phone, Percent } from 'lucide-react'
+import { Video, CheckCircle, XCircle, AlertCircle, Clock, Mic, Phone, Percent } from '@/components/ui/icons'
 import {
   ResponsiveContainer, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,

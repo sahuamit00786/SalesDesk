@@ -22,7 +22,7 @@ export function LeadSetupModal({ open, onClose }) {
   const [createSource] = useCreateLeadSourceMutation()
   const [sourceName, setSourceName] = useState('')
 
-  const setup = data?.data || { sources: [], opportunityStatuses: [] }
+  const setup = data?.data || { sources: [], pipelineStatuses: [] }
 
   async function submitCreateSource() {
     try {
@@ -75,10 +75,10 @@ export function LeadSetupModal({ open, onClose }) {
           <p className="text-sm font-semibold">Lead status (pipeline)</p>
           <p className="text-xs text-ink-muted">Preview only — edit order and names under Lead configuration.</p>
           <div className="flex flex-wrap gap-2">
-            {(setup.opportunityStatuses || []).length === 0 ? (
+            {(setup.pipelineStatuses || []).length === 0 ? (
               <span className="text-xs text-ink-muted">None yet — add in Lead configuration.</span>
             ) : (
-              setup.opportunityStatuses.map((x) => (
+              setup.pipelineStatuses.map((x) => (
                 <span key={x.id} className="rounded-lg border border-surface-border px-2.5 py-0.5 text-xs">
                   {x.name}
                 </span>

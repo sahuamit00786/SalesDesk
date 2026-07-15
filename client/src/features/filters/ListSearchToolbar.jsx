@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import { Filter, Search, X } from 'lucide-react'
+import { Filter, Search, X } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 import { inputFieldClassName } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'

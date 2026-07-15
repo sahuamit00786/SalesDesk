@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Download, ExternalLink, Eye, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { Download, ExternalLink, Eye, Pencil, Plus, RefreshCw, Trash2 } from '@/components/ui/icons'
 import { useNavigate } from 'react-router-dom'
 import { Modal } from '@/components/ui/Modal'
 import { PageShell } from '@/components/layout/PageShell'

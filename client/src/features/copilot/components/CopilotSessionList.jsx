@@ -1,4 +1,4 @@
-import { MessageSquare, PanelLeftClose, Plus, Sparkles, Trash2 } from 'lucide-react'
+import { MessageSquare, PanelLeftClose, Plus, Sparkles, Trash2 } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 
 function startOfDay(d) {

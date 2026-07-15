@@ -7,7 +7,7 @@ import {
   Clock,
   Flag,
   User,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 
 export const DASHBOARD_EXPIRING_TASK_LIMIT = 6

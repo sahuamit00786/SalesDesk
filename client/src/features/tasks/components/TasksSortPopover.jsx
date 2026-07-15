@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
+import { ArrowDown, ArrowUp, ArrowUpDown } from '@/components/ui/icons'
 import { useOutsideClick } from '@/hooks/useOutsideClick'
 import { cn } from '@/utils/cn'
 import { SORT_OPTIONS } from '../taskConstants'

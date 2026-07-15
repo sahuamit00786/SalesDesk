@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CheckCircle2, XCircle, Calendar, User } from 'lucide-react'
+import { CheckCircle2, XCircle, Calendar, User } from '@/components/ui/icons'
 import {
   useGetAllLeavesQuery,
   useApproveLeaveMutation,
@@ -157,7 +157,7 @@ export function LeaveApprovalList() {
                         type="button"
                         disabled={isProcessing}
                         onClick={() => handleApprove(row.id)}
-                        className="inline-flex items-center gap-1 h-8 rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                        className="inline-flex items-center gap-1 h-8 rounded-lg bg-emerald-600 px-3 text-xs font-semibold cx-icon-inherit text-white hover:bg-emerald-700 disabled:opacity-50"
                       >
                         <CheckCircle2 className="h-3.5 w-3.5" />
                         Approve

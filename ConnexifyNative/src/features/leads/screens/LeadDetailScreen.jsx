@@ -72,7 +72,7 @@ export default function LeadDetailScreen({ navigation, route }) {
   const followups = useLeadSub(leadId, 'followups');
   const files = useLeadSub(leadId, 'files');
 
-  const { patchStatus, remove, convertToOpportunity, patchOpportunityStatus } = useLeadMutations();
+  const { patchStatus, remove, convertToOpportunity, patchPipelineStatus } = useLeadMutations();
   const sub = useLeadSubMutations(leadId);
   const formMeta = useLeadFormMeta();
 
@@ -101,11 +101,11 @@ export default function LeadDetailScreen({ navigation, route }) {
   const openStageSheet = () =>
     statusRef.current?.open({
       title: 'Move to stage',
-      value: lead?.opportunityStatus || lead?.oppStatus?.id,
-      options: (formMeta.data?.opportunityStatuses || []).map((st) => ({ value: st.id, label: st.name })),
-      onChange: (opportunityStatusId, option) =>
-        patchOpportunityStatus.mutate(
-          { id: leadId, opportunityStatusId },
+      value: lead?.pipelineStatus || lead?.pipelineStatusInfo?.id,
+      options: (formMeta.data?.pipelineStatuses || []).map((st) => ({ value: st.id, label: st.name })),
+      onChange: (pipelineStatusId, option) =>
+        patchPipelineStatus.mutate(
+          { id: leadId, pipelineStatusId },
           { onSuccess: () => Toast.show({ type: 'success', text1: `Moved to ${option?.label || 'stage'}` }) },
         ),
     });
@@ -202,7 +202,7 @@ export default function LeadDetailScreen({ navigation, route }) {
             </Pressable>
             {lead.isOpportunity ? (
               <Pressable onPress={openStageSheet} accessibilityRole="button" accessibilityLabel="Move stage" style={styles.statusTap}>
-                <Badge label={lead.oppStatus?.name || 'Pipeline'} tone="brand" />
+                <Badge label={lead.pipelineStatusInfo?.name || 'Pipeline'} tone="brand" />
                 <ChevronDown size={14} color={theme.colors.inkFaint} strokeWidth={2.4} />
               </Pressable>
             ) : null}

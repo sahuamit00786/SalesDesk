@@ -1,5 +1,5 @@
 import React from 'react'
-import { AlertCircle, RefreshCw } from 'lucide-react'
+import { AlertCircle, RefreshCw } from '@/components/ui/icons'
 
 class ErrorBoundary extends React.Component {
   constructor(props) {

@@ -1,4 +1,4 @@
-import { Copy, Trash2 } from 'lucide-react'
+import { Copy, Trash2 } from '@/components/ui/icons'
 import { DragHandle } from './DragHandle'
 
 export function FieldBlock({ field, selected, onSelect, onDelete, onDuplicate, dragListeners, dragAttributes }) {

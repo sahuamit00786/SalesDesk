@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { X } from 'lucide-react'
+import { X } from '@/components/ui/icons'
 import { Modal } from '@/components/ui/Modal'
 
 function normalizeHexColor(value) {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ChevronDown, LogOut, Settings, User } from 'lucide-react'
+import { ChevronDown, LogOut, Settings, User } from '@/components/ui/icons'
 import { useAppDispatch, useAppSelector } from '@/app/hooks'
 import { logout } from '@/features/auth/authSlice'
 import { useLogoutMutation } from '@/features/auth/authApi'

@@ -2,7 +2,7 @@ import { Op, fn, col, literal } from 'sequelize'
 import { getRedis } from '../config/redis.js'
 import {
   Lead, LeadFollowup, Meeting, Reminder, Campaign, UserWorkspace,
-  Activity, LeadTask, User, LeadSource, OpportunityStatus,
+  Activity, LeadTask, User, LeadSource, PipelineStatus,
   Deal, DealPayment, DealActivity,
 } from '../models/index.js'
 
@@ -47,19 +47,19 @@ function capitalize(s) {
 // (zero-count stages included so charts show the full pipeline, not just populated ones)
 async function getStageDist(scope, ctx) {
   const [statuses, counts] = await Promise.all([
-    OpportunityStatus.findAll({
+    PipelineStatus.findAll({
       where: { workspaceId: ctx.workspaceId, companyId: ctx.companyId },
       order: [['sortOrder', 'ASC']],
       raw: true,
     }),
     Lead.findAll({
-      where: { ...scope, opportunityStatus: { [Op.ne]: null } },
-      attributes: ['opportunityStatus', [fn('COUNT', col('id')), 'count'], [fn('COALESCE', fn('SUM', col('value')), 0), 'totalValue']],
-      group: ['opportunityStatus'],
+      where: { ...scope, pipelineStatus: { [Op.ne]: null } },
+      attributes: ['pipelineStatus', [fn('COUNT', col('id')), 'count'], [fn('COALESCE', fn('SUM', col('value')), 0), 'totalValue']],
+      group: ['pipelineStatus'],
       raw: true,
     }),
   ])
-  const countMap = Object.fromEntries(counts.map((r) => [r.opportunityStatus, r]))
+  const countMap = Object.fromEntries(counts.map((r) => [r.pipelineStatus, r]))
   return statuses.map((s) => ({
     name: s.name,
     count: Number(countMap[s.id]?.count || 0),
@@ -263,15 +263,11 @@ export async function navBadges(req, res, next) {
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
     const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
 
-    const assignedLeadWhere = isSales
-      ? leadWhere
-      : { ...leadBase, assignedTo: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] } }
-
     const [
       leadsCount, opportunitiesCount, unassignedCount,
       followupsToday, remindersToday, meetingsToday, activeCampaigns, teamCount,
     ] = await Promise.all([
-      Lead.count({ where: { ...assignedLeadWhere, isOpportunity: false } }),
+      Lead.count({ where: { ...leadWhere, isOpportunity: false } }),
       Lead.count({ where: { ...leadWhere, isOpportunity: true } }),
       Lead.count({ where: { companyId, workspaceId, isDeleted: false, assignedTo: { [Op.is]: null } } }),
       LeadFollowup.count({
@@ -478,7 +474,7 @@ export async function pipelineReport(req, res, next) {
           where: { ...scope, value: { [Op.ne]: null, [Op.gt]: 0 } },
           include: [
             { model: User, as: 'owner', attributes: ['name'], required: false },
-            { model: OpportunityStatus, as: 'oppStatus', attributes: ['name'], required: false },
+            { model: PipelineStatus, as: 'pipelineStatusInfo', attributes: ['name'], required: false },
           ],
           order: [['value', 'DESC']],
           limit: 10,
@@ -525,7 +521,7 @@ export async function pipelineReport(req, res, next) {
             id: l.id,
             title: l.title,
             company: l.company,
-            stage: l.oppStatus?.name || '',
+            stage: l.pipelineStatusInfo?.name || '',
             status: l.status,
             value: l.value,
             valueCurrency: l.valueCurrency,
@@ -1396,8 +1392,8 @@ export async function dashboardCharts(req, res, next) {
     // Phase 2 — parallel aggregate queries
     const [
       leadStatusDist,
-      oppStatusDistRaw,
-      oppStatusByLeadStatus,
+      pipelineStatusDistRaw,
+      pipelineStatusByLeadStatus,
       pipelineByStatusRaw,
       pipelineCreatedTrend,
       pipelineWonTrend,
@@ -1420,11 +1416,11 @@ export async function dashboardCharts(req, res, next) {
         raw: true,
       }),
 
-      // Opportunity status (configurable UUID FK)
+      // Pipeline status (configurable UUID FK)
       Lead.findAll({
-        where: { ...leadBase, isOpportunity: true, opportunityStatus: { [Op.ne]: null } },
-        attributes: ['opportunityStatus', [fn('COUNT', col('id')), 'count']],
-        group: ['opportunityStatus'],
+        where: { ...leadBase, isOpportunity: true, pipelineStatus: { [Op.ne]: null } },
+        attributes: ['pipelineStatus', [fn('COUNT', col('id')), 'count']],
+        group: ['pipelineStatus'],
         order: [[literal('count'), 'DESC']],
         raw: true,
       }),
@@ -1442,15 +1438,15 @@ export async function dashboardCharts(req, res, next) {
         raw: true,
       }),
 
-      // Pipeline by opportunity status (configured UUID FK, with value)
+      // Pipeline by pipeline status (configured UUID FK, with value)
       Lead.findAll({
-        where: { ...leadBase, isOpportunity: true, opportunityStatus: { [Op.ne]: null } },
+        where: { ...leadBase, isOpportunity: true, pipelineStatus: { [Op.ne]: null } },
         attributes: [
-          'opportunityStatus',
+          'pipelineStatus',
           [fn('COUNT', col('id')), 'count'],
           [fn('COALESCE', fn('SUM', col('value')), 0), 'totalValue'],
         ],
-        group: ['opportunityStatus'],
+        group: ['pipelineStatus'],
         order: [[literal('count'), 'DESC']],
         raw: true,
       }),
@@ -1542,16 +1538,16 @@ export async function dashboardCharts(req, res, next) {
 
     // Pull the full configured pipeline (same statuses shown on the opportunities kanban board)
     // so the chart reflects every stage, not just the ones with data in this period.
-    const allOppStatuses = await OpportunityStatus.findAll({
+    const allPipelineStatuses = await PipelineStatus.findAll({
       where: { workspaceId, companyId },
       attributes: ['id', 'name', 'sortOrder'],
       order: [['sortOrder', 'ASC']],
       raw: true,
     })
-    const oppStatusNameMap = Object.fromEntries(allOppStatuses.map((s) => [s.id, s.name]))
-    const oppStatusCountMap = Object.fromEntries(oppStatusDistRaw.map((r) => [r.opportunityStatus, Number(r.count)]))
+    const pipelineStatusNameMap = Object.fromEntries(allPipelineStatuses.map((s) => [s.id, s.name]))
+    const pipelineStatusCountMap = Object.fromEntries(pipelineStatusDistRaw.map((r) => [r.pipelineStatus, Number(r.count)]))
     const pipelineByStatusMap = Object.fromEntries(
-      pipelineByStatusRaw.map((r) => [r.opportunityStatus, { count: Number(r.count), value: Number(r.totalValue) }]),
+      pipelineByStatusRaw.map((r) => [r.pipelineStatus, { count: Number(r.count), value: Number(r.totalValue) }]),
     )
 
     // Merge pipeline trend (created + won per month)
@@ -1639,21 +1635,21 @@ export async function dashboardCharts(req, res, next) {
         },
         charts: {
           leadStatusDist: leadStatusDist.map((r) => ({ name: capitalize(r.status), value: Number(r.count) })),
-          oppStatusDist: (() => {
-            if (allOppStatuses.length) {
-              return allOppStatuses.map((s) => ({ name: s.name, value: oppStatusCountMap[s.id] || 0 }))
+          pipelineStatusDist: (() => {
+            if (allPipelineStatuses.length) {
+              return allPipelineStatuses.map((s) => ({ name: s.name, value: pipelineStatusCountMap[s.id] || 0 }))
             }
-            return oppStatusByLeadStatus.map((r) => ({ name: capitalize(r.status || 'new'), value: Number(r.count) }))
+            return pipelineStatusByLeadStatus.map((r) => ({ name: capitalize(r.status || 'new'), value: Number(r.count) }))
           })(),
           pipelineByStage: (() => {
-            if (allOppStatuses.length) {
-              return allOppStatuses.map((s) => ({
+            if (allPipelineStatuses.length) {
+              return allPipelineStatuses.map((s) => ({
                 name: s.name,
                 count: pipelineByStatusMap[s.id]?.count || 0,
                 value: pipelineByStatusMap[s.id]?.value || 0,
               }))
             }
-            return oppStatusByLeadStatus.map((r) => ({ name: capitalize(r.status || 'new'), count: Number(r.count), value: Number(r.totalValue) }))
+            return pipelineStatusByLeadStatus.map((r) => ({ name: capitalize(r.status || 'new'), count: Number(r.count), value: Number(r.totalValue) }))
           })(),
           pipelineTrend,
           activitiesByType: activitiesByType.map((r) => ({ name: capitalize(r.type), value: Number(r.count) })),

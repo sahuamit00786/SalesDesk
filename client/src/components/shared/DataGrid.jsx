@@ -16,7 +16,7 @@ import {
   LayoutList,
   Search,
   SlidersHorizontal,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'

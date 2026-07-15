@@ -102,7 +102,7 @@ function normForCompare(field, v) {
   return s === '' ? null : s
 }
 
-function humanizeEnumLabel(value) {
+export function humanizeEnumLabel(value) {
   if (value === undefined || value === null || value === '') return '—'
   return String(value)
     .split(/[_\s]+/)
@@ -130,9 +130,10 @@ function displayFieldValue(field, raw) {
 
 /**
  * Writes one system activity per changed lead column (pipeline stage excluded — logged separately).
- * @param {{ before: object, after: object, leadId: string, userId: string, actorName: string }} args
+ * @param {{ before: object, after: object, leadId: string, userId: string, actorName: string, skipFields?: string[] }} args
  */
-export async function logLeadFieldChanges({ before, after, leadId, userId, actorName }) {
+export async function logLeadFieldChanges({ before, after, leadId, userId, actorName, skipFields = [] }) {
+  const skip = new Set(skipFields)
   const assigneeIds = new Set()
   for (const id of [before?.assignedTo, after?.assignedTo]) {
     if (id) assigneeIds.add(String(id))
@@ -149,7 +150,7 @@ export async function logLeadFieldChanges({ before, after, leadId, userId, actor
   }
 
   for (const field of Object.keys(FIELD_LABELS)) {
-    if (SKIP_FIELDS.has(field)) continue
+    if (SKIP_FIELDS.has(field) || skip.has(field)) continue
     const prevRaw = before?.[field]
     const nextRaw = after?.[field]
     if (normForCompare(field, prevRaw) === normForCompare(field, nextRaw)) continue

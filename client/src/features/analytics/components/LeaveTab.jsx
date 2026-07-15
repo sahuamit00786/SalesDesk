@@ -1,4 +1,4 @@
-import { Umbrella, CalendarCheck, Clock, XCircle } from 'lucide-react'
+import { Umbrella, CalendarCheck, Clock, XCircle } from '@/components/ui/icons'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
 import { DashboardChartCard } from '@/features/dashboard/components/DashboardChartCard'
 import { DataGrid } from '@/components/shared/DataGrid'

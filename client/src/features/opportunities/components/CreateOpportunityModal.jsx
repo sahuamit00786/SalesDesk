@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Building2, Briefcase, UserCircle2 } from 'lucide-react'
+import { Building2, Briefcase, UserCircle2 } from '@/components/ui/icons'
 import { RightDrawer } from '@/components/ui/RightDrawer'
 import { PhoneField } from '@/components/ui/PhoneField'
 import { DEAL_CURRENCY_OPTIONS, normalizeDealCurrency } from '@/features/deals/dealCurrencies'
@@ -34,27 +34,27 @@ export function CreateOpportunityModal({
   onSave,
   onSaveAndAddAnother,
   users = [],
-  opportunityStatuses = [],
+  pipelineStatuses = [],
   saving = false,
 }) {
   const effectiveCurrency = useEffectiveCurrency()
   const { data: formMetaData } = useGetLeadFormMetaQuery(undefined, { skip: !open })
   const customFieldDefs = useMemo(() => formMetaData?.data?.customFields || [], [formMetaData])
-  const [form, setForm] = useState(() => ({ ...EMPTY_FORM, opportunityStatusId: '' }))
+  const [form, setForm] = useState(() => ({ ...EMPTY_FORM, pipelineStatusId: '' }))
   const [error, setError] = useState('')
   const [customFieldErrors, setCustomFieldErrors] = useState({})
 
   const defaultStatusId = useMemo(() => {
-    const sorted = [...opportunityStatuses].sort((a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0))
+    const sorted = [...pipelineStatuses].sort((a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0))
     const initial = sorted.find((s) => s.isInitial)
     return (initial || sorted[0])?.id || ''
-  }, [opportunityStatuses])
+  }, [pipelineStatuses])
 
   useEffect(() => {
     if (open) {
       setForm((prev) => ({
         ...EMPTY_FORM,
-        opportunityStatusId: defaultStatusId,
+        pipelineStatusId: defaultStatusId,
         ownerUserId: users[0]?.id || prev.ownerUserId || '',
         dealCurrency: effectiveCurrency,
       }))
@@ -106,7 +106,7 @@ export function CreateOpportunityModal({
       await onSaveAndAddAnother(normalizedPayload(), () =>
         setForm({
           ...EMPTY_FORM,
-          opportunityStatusId: defaultStatusId,
+          pipelineStatusId: defaultStatusId,
           ownerUserId: users[0]?.id || '',
           dealCurrency: effectiveCurrency,
         }),
@@ -125,7 +125,7 @@ export function CreateOpportunityModal({
       footer={
         <div className="flex items-center justify-end gap-2">
           <button type="button" className="h-8 min-w-[110px] rounded-md border border-surface-border px-3 text-xs font-semibold text-ink-muted hover:bg-surface-subtle" onClick={onClose}>Cancel</button>
-          <button type="button" disabled={saving} className="h-8 min-w-[130px] rounded-md bg-[var(--brand-primary)] px-3 text-xs font-semibold text-white hover:bg-[var(--brand-primary-dark)] disabled:opacity-60" onClick={() => submit('save')}>Save Opportunity</button>
+          <button type="button" disabled={saving} className="h-8 min-w-[130px] rounded-md bg-[var(--brand-primary)] px-3 text-xs font-semibold cx-icon-inherit text-white hover:bg-[var(--brand-primary-dark)] disabled:opacity-60" onClick={() => submit('save')}>Save Opportunity</button>
           <button type="button" disabled={saving} className="h-8 min-w-[130px] rounded-md bg-slate-100 px-3 text-xs font-semibold text-brand-700 hover:bg-slate-100 disabled:opacity-60" onClick={() => submit('add-another')}>Save & Add Another</button>
         </div>
       }
@@ -245,9 +245,9 @@ export function CreateOpportunityModal({
               </label>
               <label>
                 <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Pipeline status</p>
-                <select className="h-8 w-full rounded-md border border-surface-border px-2 text-xs" value={form.opportunityStatusId} onChange={(e) => patch('opportunityStatusId', e.target.value)}>
+                <select className="h-8 w-full rounded-md border border-surface-border px-2 text-xs" value={form.pipelineStatusId} onChange={(e) => patch('pipelineStatusId', e.target.value)}>
                   <option value="">Select status</option>
-                  {opportunityStatuses.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  {pipelineStatuses.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </label>
               <label>

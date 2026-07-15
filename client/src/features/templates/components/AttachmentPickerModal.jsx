@@ -13,7 +13,7 @@ import {
   Upload,
   User,
   X,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import { useGetDocumentFolderTreeQuery, useGetDocumentsQuery } from '@/features/documents/documentsApi'
 import { useUploadEmailAttachmentsMutation } from '@/features/email/emailApi'
 import { useGetLeadsQuery } from '@/features/leads/leadsApi'

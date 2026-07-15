@@ -13,7 +13,7 @@ import {
   addMonths,
   subMonths,
 } from 'date-fns'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 
 export function MiniMonthPicker({

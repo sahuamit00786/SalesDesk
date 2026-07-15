@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { AlertTriangle, ChevronRight, ExternalLink, PanelRight } from 'lucide-react'
+import { AlertTriangle, ChevronRight, ExternalLink, PanelRight } from '@/components/ui/icons'
 import { TaskAttachmentIcons } from '@/features/leads/components/TaskAttachmentIcons'
 import { cn } from '@/utils/cn'
 import {

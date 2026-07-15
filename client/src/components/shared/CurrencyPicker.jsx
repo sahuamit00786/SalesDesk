@@ -1,4 +1,4 @@
-import { DollarSign } from 'lucide-react'
+import { DollarSign } from '@/components/ui/icons'
 import { PRIMARY_CURRENCY_OPTIONS } from '@/features/deals/dealCurrencies'
 import { cn } from '@/utils/cn'
 

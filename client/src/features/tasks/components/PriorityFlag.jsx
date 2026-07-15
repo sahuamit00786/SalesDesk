@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Check, Flag } from 'lucide-react'
+import { Check, Flag } from '@/components/ui/icons'
 import { useOutsideClick } from '@/hooks/useOutsideClick'
 import { cn } from '@/utils/cn'
 import { PRIORITY_META } from '../taskConstants'

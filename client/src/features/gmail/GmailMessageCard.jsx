@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 import GmailEmailBody from '@/features/gmail/GmailEmailBody'
 import GmailAttachmentChip from '@/features/gmail/GmailAttachmentChip'

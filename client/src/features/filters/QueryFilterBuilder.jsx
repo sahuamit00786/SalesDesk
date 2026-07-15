@@ -1,4 +1,4 @@
-import { ChevronDown, GripVertical, RefreshCw, Trash2 } from 'lucide-react'
+import { ChevronDown, GripVertical, RefreshCw, Trash2 } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 import { FilterValueInput } from './FilterValueInput'
 import {

@@ -7,7 +7,7 @@ const DAY = 24 * 60 * 60 * 1000;
 /**
  * Server contract: GET /analytics/dashboard-charts (analyticsController.dashboardCharts)
  * data.kpis { totalLeads, totalOpps, pipelineValue, wonValue, openTasks, overdueTasks }
- * data.charts { leadStatusDist[{name,value}], oppStatusDist[{name,value}],
+ * data.charts { leadStatusDist[{name,value}], pipelineStatusDist[{name,value}],
  *   pipelineByStage[{name,count,value}], pipelineTrend[{month,created,won,...}],
  *   activitiesByType[{name,value}], tasksThroughput[{date,created,completed}] }
  * data.topMembers [{name, leadsOwned, tasksCompleted, activities, score}]

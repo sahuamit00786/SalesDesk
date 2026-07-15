@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { ExternalLink, Users, User } from 'lucide-react'
+import { ExternalLink, Users, User } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 
 const KIND_ICON = { user: User, lead: Users }
@@ -8,6 +8,20 @@ const BADGE_TONES = {
   green: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
   gray: 'bg-surface-100 text-ink-muted ring-surface-border',
   brand: 'bg-brand-50 text-brand-700 ring-brand-200',
+  amber: 'bg-amber-50 text-amber-700 ring-amber-200',
+}
+
+function Badge({ label, tone }) {
+  return (
+    <span
+      className={cn(
+        'inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset',
+        BADGE_TONES[tone] || BADGE_TONES.gray,
+      )}
+    >
+      {label}
+    </span>
+  )
 }
 
 function initials(name = '') {
@@ -39,15 +53,7 @@ export function ProfileBlock({ block }) {
           <div className="flex items-center gap-2">
             <span className="truncate text-sm font-semibold text-ink">{block.name}</span>
             {block.badges?.map((b, i) => (
-              <span
-                key={i}
-                className={cn(
-                  'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset',
-                  BADGE_TONES[b.tone] || BADGE_TONES.gray,
-                )}
-              >
-                {b.label}
-              </span>
+              <Badge key={i} label={b.label} tone={b.tone} />
             ))}
           </div>
           <span className="flex items-center gap-1.5 text-xs text-ink-faint">
@@ -88,6 +94,34 @@ export function ProfileBlock({ block }) {
           ))}
         </div>
       ) : null}
+
+      {block.sections?.map((section, i) => (
+        <div key={i} className="border-t border-surface-border">
+          <div className="bg-surface-50/60 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
+            {section.title}
+          </div>
+          <ul className="divide-y divide-surface-border/60">
+            {section.items?.map((item, j) => (
+              <li key={j} className="flex items-start gap-2 px-4 py-2">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-xs font-medium text-ink">{item.label}</div>
+                  {item.meta ? <div className="truncate text-[11px] text-ink-faint">{item.meta}</div> : null}
+                </div>
+                {item.badges?.length ? (
+                  <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                    {item.badges.map((b, k) => (
+                      <Badge key={k} label={b.label} tone={b.tone} />
+                    ))}
+                  </div>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+          {section.more > 0 ? (
+            <div className="px-4 pb-2 text-[11px] text-ink-faint">+{section.more} more</div>
+          ) : null}
+        </div>
+      ))}
     </div>
   )
 }
