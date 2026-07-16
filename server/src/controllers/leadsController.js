@@ -40,6 +40,7 @@ import { recalculateScore, recalculateLeadScore } from '../services/leadScoringS
 import { leadAccessWhere } from '../services/leadVisibility.js'
 import { allowedWorkspaceIdsForUser, scopedWorkspaceIdsForRequest } from '../services/userWorkspaceService.js'
 import { resolveListWorkspaceFilterId } from '../utils/resolveListWorkspaceFilter.js'
+import { phoneDigitsKey } from '../utils/phoneDigits.js'
 import { buildAdvancedListWhere, parseFiltersParam } from '../services/listFilterService.js'
 import { LEAD_FILTER_FIELDS } from '../services/filterSchemas/leadFilterSchema.js'
 import {
@@ -64,6 +65,10 @@ import {
   notifyLeadAssignedBatch,
   notifyTaskAssigned,
   notifyLeadEmailReply,
+  notifyLeadStatusChanged,
+  notifyLeadReassignedAway,
+  notifyLeadNoteAdded,
+  notifyTaskCommentAdded,
 } from '../services/notification/teamNotificationService.js'
 import { htmlToText, parseGmailMessage } from '../services/gmail/gmailMessageParse.js'
 import { registerGmailWatchForTokenRow, isGmailPushConfigured } from '../services/gmail/gmailPushService.js'
@@ -497,6 +502,15 @@ async function resolveActorDisplayName(userId, emailFallback) {
   return u?.email?.trim() || emailFallback || 'Someone'
 }
 
+/** Lead's assignee + owner, excluding whoever performed the action. */
+function leadRecipients(lead, actorUserId) {
+  const ids = new Set()
+  if (lead.assignedTo) ids.add(String(lead.assignedTo))
+  if (lead.ownerUserId) ids.add(String(lead.ownerUserId))
+  ids.delete(String(actorUserId || ''))
+  return [...ids]
+}
+
 async function normalizeDealStatusOrder(workspaceId, companyId, transaction) {
   const rows = await DealStatus.findAll({
     where: { workspaceId, companyId },
@@ -861,7 +875,7 @@ export async function list(req, res, next) {
       'company',
     ].includes(req.query.sort)
       ? req.query.sort
-      : 'createdAt'
+      : 'updatedAt'
     const order = String(req.query.order || 'desc').toUpperCase() === 'ASC' ? 'ASC' : 'DESC'
 
     const include = [
@@ -1019,6 +1033,8 @@ export async function create(req, res, next) {
       companyId: req.user.companyId,
       workspaceId,
       isDeleted: false,
+      phoneDigits: phoneDigitsKey(value.phone) || null,
+      altPhoneDigits: phoneDigitsKey(value.altPhone) || null,
     }
     delete payload.customFields
     delete payload.tags
@@ -1119,6 +1135,25 @@ export async function update(req, res, next) {
   try {
     const lead = await findCompanyLead(req, req.params.id)
     if (!lead) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Lead not found' } })
+
+    // Phase 3: optimistic concurrency (opt-in via header). If the client tells us
+    // which version it edited and the row moved on, reject instead of clobbering.
+    const ifUnmodifiedSince = req.headers['if-unmodified-since']
+    if (ifUnmodifiedSince) {
+      const clientSeen = new Date(ifUnmodifiedSince).getTime()
+      const current = new Date(lead.updatedAt).getTime()
+      if (Number.isFinite(clientSeen) && current > clientSeen) {
+        return res.status(409).json({
+          success: false,
+          error: {
+            code: 'STALE_WRITE',
+            message: 'This lead was changed by someone else. Refresh to see the latest, then retry.',
+            details: { currentUpdatedAt: lead.updatedAt },
+          },
+        })
+      }
+    }
+
     const rawBody = { ...(req.body || {}) }
     if (rawBody.company == null && rawBody.companyName != null) rawBody.company = rawBody.companyName
     const { error, value } = leadSchema.fork(['title', 'source'], (x) => x.optional()).validate(rawBody, {
@@ -1174,6 +1209,10 @@ export async function update(req, res, next) {
     if (Object.prototype.hasOwnProperty.call(rawBody, 'company') || Object.prototype.hasOwnProperty.call(rawBody, 'companyName')) {
       payload.company = value.company == null || value.company === '' ? null : String(value.company).trim()
     }
+    const nextPhoneForDigits = Object.prototype.hasOwnProperty.call(payload, 'phone') ? payload.phone : before.phone
+    const nextAltPhoneForDigits = Object.prototype.hasOwnProperty.call(payload, 'altPhone') ? payload.altPhone : before.altPhone
+    payload.phoneDigits = phoneDigitsKey(nextPhoneForDigits) || null
+    payload.altPhoneDigits = phoneDigitsKey(nextAltPhoneForDigits) || null
     await lead.update(payload)
     await lead.reload()
     if (before.phone !== lead.phone || before.altPhone !== lead.altPhone) {
@@ -1247,6 +1286,20 @@ export async function update(req, res, next) {
         leadCount: 1,
         immediate: true,
       }).catch(() => {})
+    }
+    if (beforePrimary && beforePrimary !== afterPrimary && beforePrimary !== String(req.user.id)) {
+      ;(afterPrimary ? resolveActorDisplayName(afterPrimary).catch(() => null) : Promise.resolve(null)).then(
+        (newOwnerName) =>
+          notifyLeadReassignedAway({
+            companyId: req.user.companyId,
+            workspaceId: lead.workspaceId,
+            previousUserId: beforePrimary,
+            actorUserId: req.user.id,
+            leadId: lead.id,
+            leadName: lead.title || lead.contactName,
+            newOwnerName,
+          }),
+      ).catch(() => {})
     }
     if (hasAssignedUserIdsField) {
       const beforeSet = new Set(collaboratorIdsBefore)
@@ -1426,6 +1479,20 @@ export async function patchStatus(req, res, next) {
         leadId: lead.id,
         userId: req.user.id,
       })
+    }
+    // Phase 1: notify owner/assignee (not the actor) that status changed.
+    if (before.status !== status) {
+      for (const uid of leadRecipients(lead, req.user.id)) {
+        notifyLeadStatusChanged({
+          companyId: req.user.companyId,
+          workspaceId: lead.workspaceId,
+          recipientUserId: uid,
+          actorUserId: req.user.id,
+          leadId: lead.id,
+          leadName: lead.title || lead.contactName,
+          status,
+        }).catch(() => {})
+      }
     }
     await clearLeadListCache(lead.workspaceId)
     return res.json({ success: true, data: lead, meta: {} })
@@ -2037,6 +2104,18 @@ export async function createNote(req, res, next) {
       body: 'Note added',
       metadata: { action: 'note_added', activityId: row.id, title: value.title || null },
     })
+    const noteActorName = await resolveActorDisplayName(req.user.id, req.user.email)
+    for (const uid of leadRecipients(lead, req.user.id)) {
+      notifyLeadNoteAdded({
+        companyId: req.user.companyId,
+        workspaceId: lead.workspaceId,
+        recipientUserId: uid,
+        actorUserId: req.user.id,
+        actorName: noteActorName,
+        leadId: lead.id,
+        leadName: lead.title || lead.contactName,
+      }).catch(() => {})
+    }
     return res.status(201).json({ success: true, data: row, meta: {} })
   } catch (e) {
     return next(e)
@@ -3336,6 +3415,21 @@ export async function addTaskComment(req, res, next) {
     const full = await LeadTaskComment.findByPk(row.id, {
       include: [{ model: User, as: 'author', attributes: ['id', 'name', 'email'], required: false }],
     })
+    const commentTargets = new Set()
+    if (task.assignedTo) commentTargets.add(String(task.assignedTo))
+    if (task.createdBy) commentTargets.add(String(task.createdBy))
+    commentTargets.delete(String(req.user.id))
+    for (const uid of commentTargets) {
+      notifyTaskCommentAdded({
+        companyId: req.user.companyId,
+        workspaceId: task.workspaceId,
+        recipientUserId: uid,
+        actorUserId: req.user.id,
+        taskId: task.id,
+        taskTitle: task.title,
+        leadId: task.leadId,
+      }).catch(() => {})
+    }
     return res.status(201).json({ success: true, data: full, meta: {} })
   } catch (e) {
     return next(e)
@@ -3410,6 +3504,21 @@ export async function listFiles(req, res, next) {
 
 export async function createFile(req, res, next) {
   try {
+    const uploaded = Array.isArray(req.files) ? req.files : []
+    if (uploaded.length) {
+      const wsSegment = String(req.workspaceId || 'unscoped').replace(/[^\w-]+/g, '_')
+      const rows = await LeadFile.bulkCreate(
+        uploaded.map((file) => ({
+          leadId: req.params.id,
+          userId: req.user.id,
+          fileName: file.originalname || 'attachment',
+          fileUrl: `/uploads/leads/${wsSegment}/${file.filename}`,
+          mimeType: file.mimetype || null,
+          sizeBytes: file.size || null,
+        })),
+      )
+      return res.status(201).json({ success: true, data: uploaded.length === 1 ? rows[0] : rows, meta: {} })
+    }
     const row = await LeadFile.create({
       leadId: req.params.id,
       userId: req.user.id,

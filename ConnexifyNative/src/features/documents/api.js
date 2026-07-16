@@ -8,10 +8,18 @@ export const documentsApi = {
   folderTree: () => get('/documents/folder-tree'),
   createFolder: (body) => post('/documents/folders', body), // { name, parentFolderId? }
   deleteFolder: (id) => del(`/documents/folders/${id}`),
-  upload: ({ file, name, fileType = 'Other', folderId }, onProgress) =>
+  upload: ({ file, name, fileType = 'Other', folderId, links }, onProgress) =>
     postMultipart(
       '/documents',
-      { fields: { name, fileType, ...(folderId ? { folderId } : {}) }, files: { file } },
+      {
+        fields: {
+          name,
+          fileType,
+          ...(folderId ? { folderId } : {}),
+          ...(links ? { links: JSON.stringify(links) } : {}),
+        },
+        files: { file },
+      },
       { onUploadProgress: onProgress },
     ),
   rename: (id, name) => patch(`/documents/${id}`, { name }),

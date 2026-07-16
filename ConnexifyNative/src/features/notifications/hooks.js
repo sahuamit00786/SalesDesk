@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { keys } from '../../api/queryKeys';
 import { useListQuery, useWorkspaceId } from '../../hooks/useListQuery';
 import { notificationsApi } from './api';
+import { showApiError } from '../../utils/errorMessage';
 
 export function useNotificationsList(unreadOnly) {
   return useListQuery({
@@ -32,10 +33,12 @@ export function useNotificationMutations() {
   const markRead = useMutation({
     mutationFn: (id) => notificationsApi.markRead(id),
     onSuccess: invalidate,
+    onError: (err) => showApiError(err, 'Could not mark as read'),
   });
   const markAllRead = useMutation({
     mutationFn: () => notificationsApi.markAllRead(),
     onSuccess: invalidate,
+    onError: (err) => showApiError(err, 'Could not mark all as read'),
   });
 
   return { markRead, markAllRead };

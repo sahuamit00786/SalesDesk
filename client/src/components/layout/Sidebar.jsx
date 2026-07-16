@@ -114,6 +114,8 @@ export function Sidebar({ className, collapsed = false, onToggleCollapse, isMobi
     '/meetings': fmtBadge(nb.meetings),
     '/campaigns': fmtBadge(nb.campaigns),
     '/team': fmtBadge(nb.team),
+    '/tasks': fmtBadge(nb.tasks),
+    '/followups': fmtBadge(nb.followups),
   }
   const hrRole = useHrRole()
   const allowedRoutes = buildAllowedRouteSet(user?.allowedMenus, {

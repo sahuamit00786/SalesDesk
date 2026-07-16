@@ -14,6 +14,9 @@ export const keys = {
     sub: (ws, id, kind) => [ws, 'leads', id, kind], // activities|notes|tasks|followups|files|emails
     formMeta: (ws) => [ws, 'leads', 'form-meta'],
     setup: (ws) => [ws, 'leads', 'setup'],
+    savedViews: (ws) => [ws, 'leads', 'saved-views'],
+    duplicates: (ws, params) => [ws, 'leads', 'duplicates', params],
+    archived: (ws, params) => [ws, 'leads', 'archived', params],
   },
   opportunities: {
     all: (ws) => [ws, 'opportunities'],
@@ -90,6 +93,13 @@ export const keys = {
     payments: (ws, id) => [ws, 'campaigns', id, 'payments'],
     report: (ws, id) => [ws, 'campaigns', id, 'report'],
   },
+  sales: {
+    quotations: (ws, params) => [ws, 'quotations', params],
+    quotation: (ws, id) => [ws, 'quotations', id],
+    invoices: (ws, params) => [ws, 'invoices', params],
+    invoice: (ws, id) => [ws, 'invoices', id],
+  },
+  search: (ws, q) => [ws, 'search', q],
   team: {
     all: (ws) => [ws, 'team'],
     users: (ws, params) => [ws, 'team', 'users', params],

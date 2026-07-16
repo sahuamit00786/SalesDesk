@@ -162,8 +162,8 @@ export function LeadDistributionPage() {
     const p = {
       search: debouncedSearch || undefined,
       unassignedOnly: 'true',
-      sort: 'createdAt',
-      order: 'asc',
+      sort: 'updatedAt',
+      order: 'desc',
     }
     if (recordType === 'leads') p.isOpportunity = 'false'
     if (recordType === 'opps') p.isOpportunity = 'true'

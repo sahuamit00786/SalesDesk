@@ -3,6 +3,7 @@ import { sequelize, DuplicateLead, Lead, Tag, LeadAssignment } from '../models/i
 import { createLeadSystemActivity } from '../services/leadSystemActivity.js'
 import { recalculateScore } from '../services/leadScoringService.js'
 import { autoAssignLead } from '../services/assignmentRulesService.js'
+import { phoneDigitsKey } from '../utils/phoneDigits.js'
 
 let assignmentsTableCache = null
 async function hasLeadAssignmentsTable() {
@@ -140,6 +141,8 @@ export async function createAsLead(req, res, next) {
       companyId: req.user.companyId,
       workspaceId,
       isDeleted: false,
+      phoneDigits: phoneDigitsKey(data.phone) || null,
+      altPhoneDigits: phoneDigitsKey(data.altPhone) || null,
     }
 
     const lead = await Lead.create(payload)

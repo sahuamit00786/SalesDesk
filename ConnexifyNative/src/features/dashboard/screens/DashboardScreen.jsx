@@ -24,6 +24,7 @@ import HomeSidebarMenu from '../../more/HomeSidebarMenu';
 import {
   Bell,
   Menu,
+  Search,
   Users,
   Briefcase,
   Phone,
@@ -115,6 +116,11 @@ export default function DashboardScreen({ navigation }) {
               {String(user?.name || '').split(' ')[0] || 'there'} 👋
             </AppText>
           </View>
+          <IconButton
+            icon={Search}
+            accessibilityLabel="Search"
+            onPress={() => navigation.navigate(ROUTES.SEARCH)}
+          />
           <IconButton
             icon={Bell}
             accessibilityLabel="Notifications"

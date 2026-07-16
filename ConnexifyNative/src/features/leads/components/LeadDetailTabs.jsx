@@ -1,6 +1,7 @@
 import React from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import Toast from 'react-native-toast-message';
 import Card from '../../../design-system/components/Card';
 import AppText from '../../../design-system/components/AppText';
 import Badge from '../../../design-system/components/Badge';
@@ -16,6 +17,12 @@ import {
   Activity as ActivityIcon,
   CalendarClock,
   File,
+  FileText,
+  FileImage,
+  FileSpreadsheet,
+  FileArchive,
+  FileAudio,
+  FileVideo,
   Trash2,
   Check,
   Circle,
@@ -25,6 +32,7 @@ import {
 import { useTheme } from '../../../design-system/ThemeProvider';
 import { SOURCE_LABELS } from '../constants';
 import { CALL_OUTCOMES } from '../../calls/api';
+import { fileUrl } from '../../documents/api';
 import { formatDate, formatDateTime, formatDurationExact, formatMoney, relativeTime, formatNumber } from '../../../utils/format';
 
 const CALL_OUTCOME_TONES = { connected: 'success', no_answer: 'neutral', voicemail: 'info', followup_needed: 'warning' };
@@ -349,30 +357,85 @@ export function FollowupsTab({ items, loading, onToggle, onDelete }) {
   );
 }
 
-export function FilesTab({ items, loading }) {
+const FILE_TYPE_META = {
+  image: { Icon: FileImage, bg: '#DBEAFE', fg: '#2563EB' },
+  pdf: { Icon: FileText, bg: '#FFE4E6', fg: '#E11D48' },
+  doc: { Icon: FileText, bg: '#E0F2FE', fg: '#0284C7' },
+  sheet: { Icon: FileSpreadsheet, bg: '#DCFCE7', fg: '#16A34A' },
+  slide: { Icon: FileText, bg: '#FFEDD5', fg: '#EA580C' },
+  audio: { Icon: FileAudio, bg: '#EDE9FE', fg: '#7C3AED' },
+  video: { Icon: FileVideo, bg: '#FCE7F3', fg: '#DB2777' },
+  archive: { Icon: FileArchive, bg: '#FEF3C7', fg: '#D97706' },
+};
+
+function fileMetaFor(name) {
+  const ext = String(name || '').split('.').pop().toLowerCase();
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'heic', 'bmp', 'svg'].includes(ext)) return FILE_TYPE_META.image;
+  if (ext === 'pdf') return FILE_TYPE_META.pdf;
+  if (['doc', 'docx', 'rtf', 'txt'].includes(ext)) return FILE_TYPE_META.doc;
+  if (['xls', 'xlsx', 'csv'].includes(ext)) return FILE_TYPE_META.sheet;
+  if (['ppt', 'pptx'].includes(ext)) return FILE_TYPE_META.slide;
+  if (['mp3', 'wav', 'm4a', 'aac', 'flac'].includes(ext)) return FILE_TYPE_META.audio;
+  if (['mp4', 'mov', 'avi', 'webm'].includes(ext)) return FILE_TYPE_META.video;
+  if (['zip', 'rar', '7z'].includes(ext)) return FILE_TYPE_META.archive;
+  return null;
+}
+
+function formatFileSize(bytes) {
+  const n = Number(bytes);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export function FilesTab({ items, loading, onDelete }) {
   const theme = useTheme();
   if (loading) return <TabLoading />;
-  if (!items.length) return <EmptyState compact icon={File} title="No files" message="Files shared with this lead appear here." />;
+  if (!items.length) return <EmptyState compact icon={File} title="No files" message="Files uploaded for this lead appear here." />;
+
+  const openFile = (file) => {
+    const url = fileUrl(file.filePath);
+    if (!url) {
+      Toast.show({ type: 'error', text1: 'File is not available' });
+      return;
+    }
+    Linking.openURL(url).catch(() => Toast.show({ type: 'error', text1: 'Could not open file' }));
+  };
 
   return (
     <View style={styles.pad}>
-      {items.map((file, i) => (
-        <Card key={file.id || i} style={styles.card}>
-          <View style={styles.taskRow}>
-            <View style={[styles.fuIcon, { backgroundColor: theme.brandFaint, borderRadius: theme.radius.md }]}>
-              <File size={16} color={theme.brand} strokeWidth={2.1} />
-            </View>
-            <View style={styles.taskTexts}>
-              <AppText variant="bodyStrong" numberOfLines={1}>
-                {file.name || file.fileName || 'File'}
-              </AppText>
-              <AppText variant="micro" color="inkFaint">
-                {relativeTime(file.createdAt)}
-              </AppText>
-            </View>
-          </View>
-        </Card>
-      ))}
+      {items.map((file, i) => {
+        const meta = fileMetaFor(file.name || file.fileName) || { Icon: File, bg: theme.brandFaint, fg: theme.brand };
+        const Icon = meta.Icon;
+        const size = formatFileSize(file.fileSize ?? file.sizeBytes);
+        return (
+          <Animated.View key={file.id || i} entering={i < 10 ? FadeInDown.duration(260).delay(i * 30) : undefined}>
+            <Card style={styles.card}>
+              <View style={styles.taskRow}>
+                <Pressable onPress={() => openFile(file)} accessibilityRole="button" style={styles.taskRow}>
+                  <View style={[styles.fuIcon, { backgroundColor: meta.bg, borderRadius: theme.radius.md }]}>
+                    <Icon size={17} color={meta.fg} strokeWidth={2} />
+                  </View>
+                  <View style={styles.taskTexts}>
+                    <AppText variant="bodyStrong" numberOfLines={1}>
+                      {file.name || file.fileName || 'File'}
+                    </AppText>
+                    <AppText variant="micro" color="inkFaint">
+                      {[size, file.uploader?.name, relativeTime(file.createdAt)].filter(Boolean).join(' · ')}
+                    </AppText>
+                  </View>
+                </Pressable>
+                {onDelete ? (
+                  <Pressable onPress={() => onDelete(file)} hitSlop={8} accessibilityLabel="Delete file">
+                    <Trash2 size={15} color={theme.colors.inkFaint} strokeWidth={2} />
+                  </Pressable>
+                ) : null}
+              </View>
+            </Card>
+          </Animated.View>
+        );
+      })}
     </View>
   );
 }

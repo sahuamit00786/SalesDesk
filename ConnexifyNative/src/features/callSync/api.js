@@ -59,7 +59,7 @@ function outcomeForDeviceCall(callType, durationSeconds) {
  * (callerName/phoneNumber kept) so it shows up in Calls under "No lead" and
  * can be converted into a Lead/Opportunity later.
  */
-export function syncDeviceCall({ leadId, name, phoneNumber, callType, callDate, callDuration }) {
+export function syncDeviceCall({ leadId, name, phoneNumber, callType, callDate, callDuration, deviceCallKey }) {
   return callsApi.create({
     leadId: leadId || undefined,
     callerName: name || undefined,
@@ -68,6 +68,7 @@ export function syncDeviceCall({ leadId, name, phoneNumber, callType, callDate, 
     outcome: outcomeForDeviceCall(callType, callDuration),
     duration: callDuration || 0,
     source: 'device_sync',
+    deviceCallKey: deviceCallKey || undefined,
     notes: `Synced from device call log · ${new Date(callDate).toLocaleString()}`,
   });
 }

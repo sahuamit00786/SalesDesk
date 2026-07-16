@@ -1,9 +1,11 @@
 import cron from 'node-cron'
 import { Op } from 'sequelize'
 import { Meeting } from '../models/Meeting.js'
-import { Lead, LeadFollowup } from '../models/index.js'
+import { Lead, LeadFollowup, ActivityReminder, Activity, User } from '../models/index.js'
 import { notifyMeetingParticipants } from '../services/notification/meetingNotificationService.js'
 import { notifyFollowupDue, notifyMeetingReminderInternal } from '../services/notification/teamNotificationService.js'
+import { enqueueTeamNotification } from '../queues/notificationEmailQueue.js'
+import { NOTIFICATION_EVENT_TYPES } from '../services/notification/notificationPreferencesService.js'
 
 async function sendReminder(meeting) {
   console.log(`Reminder sent for ${meeting.title}`)
@@ -95,6 +97,69 @@ export function startReminderJob() {
           }).catch(() => {})
         }
         await followup.update({ notifiedAt: now })
+      }
+
+      // --- Call reminders (T-15 min), fire once per reminder ---
+      const in15 = new Date(now.getTime() + 15 * 60 * 1000)
+      const dueCallReminders = await ActivityReminder.findAll({
+        where: {
+          remindAt: { [Op.between]: [now, in15] },
+          sentAt: null,
+        },
+        include: [{ model: Activity, as: 'activity', where: { type: 'call' }, required: true }],
+      })
+      for (const rem of dueCallReminders) {
+        const act = rem.activity
+        let callWorkspaceId = null
+        if (act?.leadId) {
+          const leadRow = await Lead.findByPk(act.leadId, { attributes: ['workspaceId'] })
+          callWorkspaceId = leadRow?.workspaceId || null
+        }
+        await enqueueTeamNotification({
+          eventType: NOTIFICATION_EVENT_TYPES.CALL_REMINDER,
+          companyId: rem.companyId,
+          workspaceId: callWorkspaceId,
+          recipientUserId: act?.userId || rem.createdBy,
+          actorUserId: null,
+          payload: { activityId: act?.id, leadId: act?.leadId, remindAt: rem.remindAt },
+          delayMs: 0,
+        })
+        await rem.update({ sentAt: new Date() })
+      }
+
+      // --- Missed follow-up escalation to the rep's manager, once per day at 18:00 ---
+      if (now.getHours() === 18 && now.getMinutes() === 0) {
+        const cutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+        const overdueFollowups = await LeadFollowup.findAll({
+          where: {
+            status: { [Op.notIn]: ['done', 'cancelled'] },
+            scheduledAt: { [Op.lt]: cutoff },
+          },
+          include: [{ model: Lead, as: 'lead', attributes: ['id', 'assignedTo', 'workspaceId', 'companyId'] }],
+        })
+        const byManager = new Map()
+        for (const f of overdueFollowups) {
+          const repId = f.lead?.assignedTo
+          if (!repId) continue
+          const rep = await User.findByPk(repId, { attributes: ['id', 'managerId'] })
+          if (!rep?.managerId) continue
+          const key = `${rep.managerId}:${f.lead.workspaceId || ''}:${f.lead.companyId}`
+          if (!byManager.has(key)) {
+            byManager.set(key, { count: 0, companyId: f.lead.companyId, workspaceId: f.lead.workspaceId, managerId: rep.managerId })
+          }
+          byManager.get(key).count += 1
+        }
+        for (const { count, companyId, workspaceId, managerId } of byManager.values()) {
+          await enqueueTeamNotification({
+            eventType: NOTIFICATION_EVENT_TYPES.FOLLOWUP_DUE,
+            companyId,
+            workspaceId,
+            recipientUserId: managerId,
+            actorUserId: null,
+            payload: { escalation: true, overdueCount: count },
+            delayMs: 0,
+          })
+        }
       }
 
       // --- Mark COMPLETED ---

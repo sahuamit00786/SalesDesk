@@ -25,17 +25,34 @@ import {
   Plus,
 } from '../../../design-system/icons';
 import { useTheme } from '../../../design-system/ThemeProvider';
-import { useLeadDetail, useLeadSub, useLeadMutations, useLeadSubMutations, useLeadFormMeta } from '../hooks';
+import {
+  useLeadDetail,
+  useLeadSub,
+  useLeadMutations,
+  useLeadSubMutations,
+  useLeadFormMeta,
+  useDuplicates,
+  useDuplicateMutations,
+  useLeadDocuments,
+  useLeadDocumentMutations,
+  useLogLeadCall,
+} from '../hooks';
 import { useLeadCalls } from '../../calls/hooks';
+import { useIsManagerOrAdmin } from '../../../hooks/permissions';
 import { STATUS_LABELS, STATUS_OPTIONS } from '../constants';
-import { OverviewTab, ActivityTab, CallsTab, NotesTab, TasksTab, FollowupsTab, FilesTab } from '../components/LeadDetailTabs';
-import { AddActivitySheet, AddNoteSheet, AddTaskSheet, AddFollowupSheet } from '../components/LeadAddSheets';
+import { OverviewTab, CallsTab, NotesTab, TasksTab, FollowupsTab, FilesTab } from '../components/LeadDetailTabs';
+import { AddActivitySheet, AddCallSheet, AddNoteSheet, AddTaskSheet, AddFollowupSheet } from '../components/LeadAddSheets';
+import LeadTagPicker from '../components/LeadTagPicker';
+import LeadFileUpload from '../components/LeadFileUpload';
+import TimelineTab from '../components/TimelineTab';
+import Card from '../../../design-system/components/Card';
+import Button from '../../../design-system/components/Button';
 import { formatMoney } from '../../../utils/format';
 import { ROUTES } from '../../../navigation/routes';
 
 const TABS = [
   { key: 'overview', label: 'Overview' },
-  { key: 'activity', label: 'Activity' },
+  { key: 'timeline', label: 'Timeline' },
   { key: 'calls', label: 'Calls' },
   { key: 'notes', label: 'Notes' },
   { key: 'tasks', label: 'Tasks' },
@@ -70,15 +87,23 @@ export default function LeadDetailScreen({ navigation, route }) {
   const notes = useLeadSub(leadId, 'notes');
   const tasks = useLeadSub(leadId, 'tasks');
   const followups = useLeadSub(leadId, 'followups');
-  const files = useLeadSub(leadId, 'files');
+  const files = useLeadDocuments(leadId);
 
   const { patchStatus, remove, convertToOpportunity, patchPipelineStatus } = useLeadMutations();
   const sub = useLeadSubMutations(leadId);
+  const docs = useLeadDocumentMutations(leadId);
+  const logCall = useLogLeadCall(leadId);
   const formMeta = useLeadFormMeta();
+
+  const canManage = useIsManagerOrAdmin();
+  const dups = useDuplicates(); // workspace-scoped; filtered to this lead client-side below
+  const { merge, dismiss } = useDuplicateMutations();
+  const dup = (dups.data || []).find((d) => d.matchedLeadId === leadId && d.status === 'pending');
 
   const statusRef = useRef(null);
   const confirmRef = useRef(null);
   const activitySheetRef = useRef(null);
+  const callSheetRef = useRef(null);
   const noteSheetRef = useRef(null);
   const taskSheetRef = useRef(null);
   const followupSheetRef = useRef(null);
@@ -134,7 +159,8 @@ export default function LeadDetailScreen({ navigation, route }) {
     });
 
   const fabForTab = {
-    activity: () => activitySheetRef.current?.open(),
+    timeline: () => activitySheetRef.current?.open(),
+    calls: () => callSheetRef.current?.open(),
     notes: () => noteSheetRef.current?.open(),
     tasks: () => taskSheetRef.current?.open(),
     followups: () => followupSheetRef.current?.open(),
@@ -221,6 +247,23 @@ export default function LeadDetailScreen({ navigation, route }) {
           </View>
         </Animated.View>
 
+        {canManage && dup ? (
+          <Card style={styles.dupCard}>
+            <AppText variant="body" weight="600">Possible duplicate detected</AppText>
+            <AppText variant="caption" color="muted">
+              A new submission matched this lead on {dup.matchField || 'a field'} ({dup.matchedLeadTitle || name}).
+            </AppText>
+            <View style={styles.dupActions}>
+              <Button
+                title="Merge"
+                size="sm"
+                onPress={() => merge.mutate({ dupId: dup.id, body: { fieldSelections: {} } })}
+              />
+              <Button title="Dismiss" size="sm" variant="ghost" onPress={() => dismiss.mutate(dup.id)} />
+            </View>
+          </Card>
+        ) : null}
+
         {/* Sticky tabs */}
         <View style={{ backgroundColor: theme.colors.page }}>
           <UnderlineTabs
@@ -239,8 +282,19 @@ export default function LeadDetailScreen({ navigation, route }) {
         </View>
 
         <View style={styles.tabBody}>
-          {tab === 'overview' ? <OverviewTab lead={lead} currency={theme.currency} /> : null}
-          {tab === 'activity' ? <ActivityTab items={activities.data || []} loading={activities.isPending} /> : null}
+          {tab === 'overview' ? (
+            <>
+              <OverviewTab lead={lead} currency={theme.currency} />
+              <LeadTagPicker lead={lead} availableTags={formMeta.data?.tags || []} />
+            </>
+          ) : null}
+          {tab === 'timeline' ? (
+            <TimelineTab
+              activities={activities.data || []}
+              calls={calls.data || []}
+              loading={activities.isPending || calls.isPending}
+            />
+          ) : null}
           {tab === 'calls' ? <CallsTab items={calls.data || []} loading={calls.isPending} /> : null}
           {tab === 'notes' ? (
             <NotesTab
@@ -288,7 +342,22 @@ export default function LeadDetailScreen({ navigation, route }) {
               }
             />
           ) : null}
-          {tab === 'files' ? <FilesTab items={files.data || []} loading={files.isPending} /> : null}
+          {tab === 'files' ? (
+            <>
+              <LeadFileUpload leadId={lead.id} onUploaded={files.refetch} />
+              <FilesTab
+                items={files.data || []}
+                loading={files.isPending}
+                onDelete={(file) =>
+                  confirmRef.current?.open({
+                    title: `Delete "${file.name || 'this file'}"?`,
+                    destructive: true,
+                    onConfirm: () => docs.remove.mutateAsync(file.id),
+                  })
+                }
+              />
+            </>
+          ) : null}
         </View>
       </ScrollView>
 
@@ -297,6 +366,7 @@ export default function LeadDetailScreen({ navigation, route }) {
       <SelectSheet ref={statusRef} />
       <ConfirmSheet ref={confirmRef} />
       <AddActivitySheet ref={activitySheetRef} mutation={sub.addActivity} />
+      <AddCallSheet ref={callSheetRef} mutation={logCall} />
       <AddNoteSheet ref={noteSheetRef} mutation={sub.addNote} />
       <AddTaskSheet ref={taskSheetRef} mutation={sub.addTask} />
       <AddFollowupSheet ref={followupSheetRef} mutation={sub.addFollowup} />
@@ -314,4 +384,6 @@ const styles = StyleSheet.create({
   quickAction: { alignItems: 'center', gap: 5 },
   quickIcon: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
   tabBody: { minHeight: 320 },
+  dupCard: { marginHorizontal: 16, marginBottom: 12, padding: 12, gap: 8 },
+  dupActions: { flexDirection: 'row', gap: 8 },
 });

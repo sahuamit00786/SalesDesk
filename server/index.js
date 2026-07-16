@@ -7,6 +7,7 @@ import { Server as SocketIOServer } from 'socket.io'
 import { validateEnv } from './src/config/env.js'
 import { allowedOrigins } from './src/config/corsOrigins.js'
 import { registerCopilotSocket } from './src/services/copilot/copilotSocket.js'
+import { registerRealtimeHub } from './src/services/realtime/socketHub.js'
 import {
   isGoogleCalendarConfigured,
   missingGoogleOAuthEnvKeys,
@@ -20,7 +21,9 @@ import { startWorkflowTriggerWorker } from './src/queues/workflowTriggerQueue.js
 import { processWorkflowWakeups } from './src/services/workflowRunner.js'
 import { startReminderJob } from './src/jobs/reminderJob.js'
 import { startCampaignExpiryJob } from './src/jobs/campaignExpiryJob.js'
-import { startTaskDigestNotificationJob } from './src/jobs/taskDigestNotificationJob.js'
+import { startOverdueTaskAlertsJob } from './src/jobs/taskDigestNotificationJob.js'
+import { startDailyDigestJob } from './src/jobs/dailyDigestJob.js'
+import { startPeriodicDigestJob } from './src/jobs/periodicDigestJob.js'
 import { startNotificationEmailWorker } from './src/queues/notificationEmailQueue.js'
 import { startEmailSequenceWorker } from './src/queues/emailSequenceQueue.js'
 import { getRedis } from './src/config/redis.js'
@@ -46,12 +49,18 @@ function runMigrations() {
 
   // In watch mode, rapid restarts can race migrations.
   // Retry once so a transient duplicate-column failure can self-heal.
+  console.warn('[migrate] first pass failed, retrying once — if this repeats, a migration is genuinely broken')
   const second = runOnce()
   if (second.error) throw second.error
   if (second.status !== 0) {
     throw new Error(`sequelize-cli db:migrate exited with code ${second.status}`)
   }
 }
+
+// PROCESS_ROLE lets the same codebase run as 'api' (HTTP + sockets, no
+// background jobs) or 'worker' (jobs/queues, no listener) for future scaling.
+// Default 'all' is today's behavior exactly — nothing changes until this is set.
+const ROLE = process.env.PROCESS_ROLE || 'all'
 
 function maskApiKey(value) {
   if (!value) return null
@@ -73,21 +82,6 @@ async function start() {
       ? `OpenAI key loaded from .env: ${openAiMasked} (model: ${process.env.OPENAI_MODEL || 'gpt-4o-mini'})`
       : 'OpenAI key missing — AI generation will fail until OPENAI_API_KEY is set in .env',
   )
-  const syncIntervalMs = Number(process.env.EMAIL_AUTOSYNC_INTERVAL_MS || 60000)
-  if (syncIntervalMs > 0) {
-    setInterval(() => {
-      runEmailAutoSyncJob().catch(() => {})
-    }, syncIntervalMs)
-  }
-  const gmailWatchRenewMs = Number(process.env.GMAIL_WATCH_RENEW_INTERVAL_MS || 43200000)
-  if (gmailWatchRenewMs > 0) {
-    setTimeout(() => {
-      renewDueGmailWatches().catch(() => {})
-    }, 15000)
-    setInterval(() => {
-      renewDueGmailWatches().catch(() => {})
-    }, gmailWatchRenewMs)
-  }
   const redisUrl = process.env.REDIS_URL
   if (redisUrl) {
     const redis = getRedis()
@@ -112,6 +106,58 @@ async function start() {
     console.warn('Redis: REDIS_URL not set — email/workflow queues run inline only')
   }
 
+  if (ROLE === 'worker' || ROLE === 'all') {
+    startBackgroundJobs()
+  }
+
+  if (ROLE === 'api' || ROLE === 'all') {
+    const server = http.createServer(app)
+    const io = new SocketIOServer(server, {
+      cors: {
+        origin: (origin, callback) => {
+          if (!origin) return callback(null, true)
+          if (allowedOrigins.has(origin)) return callback(null, true)
+          return callback(new Error(`Socket.IO CORS: origin '${origin}' is not allowed`))
+        },
+        credentials: true,
+      },
+    })
+    registerCopilotSocket(io)
+    registerRealtimeHub(io)
+    server.listen(port, () => {
+      // eslint-disable-next-line no-console
+      console.log(`LeadFlow API listening on http://localhost:${port}`)
+      if (isGoogleCalendarConfigured()) {
+        // eslint-disable-next-line no-console
+        console.log('Google Calendar / Meet: enabled')
+      } else {
+        // eslint-disable-next-line no-console
+        console.warn(
+          'Google Calendar / Meet: disabled — missing .env:',
+          missingGoogleOAuthEnvKeys().join(', '),
+        )
+      }
+    })
+  }
+}
+
+function startBackgroundJobs() {
+  const syncIntervalMs = Number(process.env.EMAIL_AUTOSYNC_INTERVAL_MS || 60000)
+  if (syncIntervalMs > 0) {
+    setInterval(() => {
+      runEmailAutoSyncJob().catch(() => {})
+    }, syncIntervalMs)
+  }
+  const gmailWatchRenewMs = Number(process.env.GMAIL_WATCH_RENEW_INTERVAL_MS || 43200000)
+  if (gmailWatchRenewMs > 0) {
+    setTimeout(() => {
+      renewDueGmailWatches().catch(() => {})
+    }, 15000)
+    setInterval(() => {
+      renewDueGmailWatches().catch(() => {})
+    }, gmailWatchRenewMs)
+  }
+
   const bullConn = bullmqConnectionFromEnv()
   startEmailTemplateWorker()
   startNotificationEmailWorker()
@@ -132,33 +178,11 @@ async function start() {
     startReminderJob()
   }
   startCampaignExpiryJob()
-  startTaskDigestNotificationJob()
-  const server = http.createServer(app)
-  const io = new SocketIOServer(server, {
-    cors: {
-      origin: (origin, callback) => {
-        if (!origin) return callback(null, true)
-        if (allowedOrigins.has(origin)) return callback(null, true)
-        return callback(new Error(`Socket.IO CORS: origin '${origin}' is not allowed`))
-      },
-      credentials: true,
-    },
-  })
-  registerCopilotSocket(io)
-  server.listen(port, () => {
-    // eslint-disable-next-line no-console
-    console.log(`LeadFlow API listening on http://localhost:${port}`)
-    if (isGoogleCalendarConfigured()) {
-      // eslint-disable-next-line no-console
-      console.log('Google Calendar / Meet: enabled')
-    } else {
-      // eslint-disable-next-line no-console
-      console.warn(
-        'Google Calendar / Meet: disabled — missing .env:',
-        missingGoogleOAuthEnvKeys().join(', '),
-      )
-    }
-  })
+  // Phase 2: dailyDigestJob supersedes the tasks-only digest — that job's
+  // scheduling is intentionally not started here (file kept for reference).
+  startOverdueTaskAlertsJob()
+  startDailyDigestJob()
+  startPeriodicDigestJob()
 }
 
 start().catch((err) => {

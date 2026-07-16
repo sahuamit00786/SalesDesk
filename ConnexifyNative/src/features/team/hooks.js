@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import Toast from 'react-native-toast-message';
 import { keys } from '../../api/queryKeys';
 import { useWorkspaceId } from '../../hooks/useListQuery';
 import { teamApi } from './api';
+import { showApiError } from '../../utils/errorMessage';
 
 export function useTeamUsers() {
   const ws = useWorkspaceId();
@@ -49,14 +49,13 @@ export function useTeamMutations() {
   const qc = useQueryClient();
   const ws = useWorkspaceId();
   const invalidate = () => qc.invalidateQueries({ queryKey: keys.team.all(ws) });
-  const onError = (err) => Toast.show({ type: 'error', text1: 'Something went wrong', text2: err?.message });
 
   return {
-    invite: useMutation({ mutationFn: (body) => teamApi.invite(body), onSuccess: invalidate, onError }),
-    revokeInvitation: useMutation({ mutationFn: (id) => teamApi.revokeInvitation(id), onSuccess: invalidate, onError }),
-    setRole: useMutation({ mutationFn: ({ id, companyRoleId }) => teamApi.setRole(id, companyRoleId), onSuccess: invalidate, onError }),
-    patchProfile: useMutation({ mutationFn: ({ id, body }) => teamApi.patchProfile(id, body), onSuccess: invalidate, onError }),
-    deactivate: useMutation({ mutationFn: ({ id, body }) => teamApi.deactivate(id, body), onSuccess: invalidate, onError }),
-    reactivate: useMutation({ mutationFn: (id) => teamApi.reactivate(id), onSuccess: invalidate, onError }),
+    invite: useMutation({ mutationFn: (body) => teamApi.invite(body), onSuccess: invalidate, onError: (err) => showApiError(err, 'Could not send invitation') }),
+    revokeInvitation: useMutation({ mutationFn: (id) => teamApi.revokeInvitation(id), onSuccess: invalidate, onError: (err) => showApiError(err, 'Could not revoke invitation') }),
+    setRole: useMutation({ mutationFn: ({ id, companyRoleId }) => teamApi.setRole(id, companyRoleId), onSuccess: invalidate, onError: (err) => showApiError(err, 'Could not update role') }),
+    patchProfile: useMutation({ mutationFn: ({ id, body }) => teamApi.patchProfile(id, body), onSuccess: invalidate, onError: (err) => showApiError(err, 'Could not update profile') }),
+    deactivate: useMutation({ mutationFn: ({ id, body }) => teamApi.deactivate(id, body), onSuccess: invalidate, onError: (err) => showApiError(err, 'Could not deactivate user') }),
+    reactivate: useMutation({ mutationFn: (id) => teamApi.reactivate(id), onSuccess: invalidate, onError: (err) => showApiError(err, 'Could not reactivate user') }),
   };
 }

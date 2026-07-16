@@ -11,7 +11,9 @@ import {
   Deal,
   DealPayment,
   Quotation,
+  User,
 } from '../models/index.js'
+import { notifyInvoicePayment } from '../services/notification/teamNotificationService.js'
 import { aggregateInvoiceTotals } from '../services/salesTotals.js'
 import { allocateInvoiceNumber } from '../services/docNumberFormat.js'
 import { buildCustomerSnapshotFromLead, mergeBillingIntoPaymentSnapshot } from '../services/salesCustomerSnapshot.js'
@@ -402,6 +404,27 @@ export async function createInvoice(req, res, next) {
       dealId: resolvedDealId || null,
     })
 
+    const invoiceAdmins = await User.findAll({
+      where: { companyId: req.user.companyId, isCompanyAdmin: true, isActive: true },
+      attributes: ['id'],
+    })
+    const invoiceRecipients = new Set(invoiceAdmins.map((a) => String(a.id)))
+    if (created.ownerUserId) invoiceRecipients.add(String(created.ownerUserId))
+    invoiceRecipients.delete(String(req.user.id))
+    for (const uid of invoiceRecipients) {
+      notifyInvoicePayment({
+        companyId: req.user.companyId,
+        workspaceId,
+        recipientUserId: uid,
+        actorUserId: req.user.id,
+        invoiceId: created.id,
+        invoiceNumber: created.invoiceNumber,
+        amount: created.grandTotal,
+        currency: created.currency,
+        kind: 'created',
+      }).catch(() => {})
+    }
+
     return res.status(201).json({
       success: true,
       data: serializeInvoice(created, created.items, created.payments),
@@ -665,6 +688,28 @@ export async function recordInvoicePayment(req, res, next) {
         { model: InvoicePayment, as: 'payments' },
       ],
     })
+
+    const paymentAdmins = await User.findAll({
+      where: { companyId: req.user.companyId, isCompanyAdmin: true, isActive: true },
+      attributes: ['id'],
+    })
+    const paymentRecipients = new Set(paymentAdmins.map((a) => String(a.id)))
+    if (full.ownerUserId) paymentRecipients.add(String(full.ownerUserId))
+    paymentRecipients.delete(String(req.user.id))
+    const lastPayment = full.payments?.[full.payments.length - 1]
+    for (const uid of paymentRecipients) {
+      notifyInvoicePayment({
+        companyId: req.user.companyId,
+        workspaceId,
+        recipientUserId: uid,
+        actorUserId: req.user.id,
+        invoiceId: full.id,
+        invoiceNumber: full.invoiceNumber,
+        amount: lastPayment?.amount ?? full.grandTotal,
+        currency: full.currency,
+        kind: 'payment',
+      }).catch(() => {})
+    }
 
     return res.status(201).json({
       success: true,

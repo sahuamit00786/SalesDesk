@@ -178,6 +178,16 @@ export const Lead = sequelize.define(
       allowNull: true,
       field: 'pipeline_status_id',
     },
+    phoneDigits: {
+      type: DataTypes.STRING(10),
+      allowNull: true,
+      field: 'phone_digits',
+    },
+    altPhoneDigits: {
+      type: DataTypes.STRING(10),
+      allowNull: true,
+      field: 'alt_phone_digits',
+    },
   },
   {
     tableName: 'leads',

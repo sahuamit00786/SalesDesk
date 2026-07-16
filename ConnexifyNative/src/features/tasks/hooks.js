@@ -1,8 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import Toast from 'react-native-toast-message';
 import { keys } from '../../api/queryKeys';
 import { useListQuery, useWorkspaceId } from '../../hooks/useListQuery';
 import { tasksApi } from './api';
+import { showApiError } from '../../utils/errorMessage';
 
 export function useTasksList(params) {
   return useListQuery({
@@ -23,7 +23,7 @@ export function useTaskMutations() {
         qc.invalidateQueries({ queryKey: keys.tasks.all(ws) });
         qc.invalidateQueries({ queryKey: [ws, 'dashboard'] });
       },
-      onError: (err) => Toast.show({ type: 'error', text1: 'Update failed', text2: err?.message }),
+      onError: (err) => showApiError(err, 'Could not update task'),
     }),
   };
 }

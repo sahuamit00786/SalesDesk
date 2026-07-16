@@ -41,6 +41,7 @@ export const LeadTask = sequelize.define(
     recurrenceRule: { type: DataTypes.JSON, allowNull: true, field: 'recurrence_rule' },
     recurrenceParentId: { type: DataTypes.CHAR(36), allowNull: true, field: 'recurrence_parent_id' },
     attachments: { type: DataTypes.JSON, allowNull: true },
+    overdueNotifiedAt: { type: DataTypes.DATE, allowNull: true, field: 'overdue_notified_at' },
   },
   { tableName: 'lead_tasks', timestamps: true },
 )

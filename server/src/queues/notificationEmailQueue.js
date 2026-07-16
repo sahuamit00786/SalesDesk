@@ -46,6 +46,30 @@ function buildViewUrl(eventType, payload) {
       return payload.leadId ? `${base}/leads/${payload.leadId}` : `${base}/leads`
     case NOTIFICATION_EVENT_TYPES.MEETING_REMINDER:
       return `${base}/meetings`
+    case NOTIFICATION_EVENT_TYPES.LEAD_STATUS_CHANGED:
+    case NOTIFICATION_EVENT_TYPES.LEAD_NOTE_ADDED:
+      return payload.leadId ? `${base}/leads/${payload.leadId}` : `${base}/leads`
+    case NOTIFICATION_EVENT_TYPES.OPPORTUNITY_STAGE_CHANGED:
+      return payload.leadId ? `${base}/opportunities/${payload.leadId}` : `${base}/opportunities`
+    case NOTIFICATION_EVENT_TYPES.DEAL_STAGE_CHANGED:
+      return payload.dealId ? `${base}/deals/${payload.dealId}` : `${base}/deals`
+    case NOTIFICATION_EVENT_TYPES.TASK_COMMENT_ADDED:
+    case NOTIFICATION_EVENT_TYPES.TASK_DUE_REMINDER:
+      return `${base}/tasks`
+    case NOTIFICATION_EVENT_TYPES.INVOICE_CREATED:
+    case NOTIFICATION_EVENT_TYPES.INVOICE_PAYMENT_RECEIVED:
+      if (payload.invoiceId) return `${base}/invoices/${payload.invoiceId}`
+      if (payload.dealId) return `${base}/deals/${payload.dealId}`
+      return `${base}/invoices`
+    case NOTIFICATION_EVENT_TYPES.DOCUMENT_SHARED:
+      return `${base}/documents`
+    case NOTIFICATION_EVENT_TYPES.SECURITY_PASSWORD_CHANGED:
+    case NOTIFICATION_EVENT_TYPES.SECURITY_EMAIL_CHANGED:
+      return `${base}/settings`
+    case NOTIFICATION_EVENT_TYPES.CALL_REMINDER:
+      return payload.leadId ? `${base}/leads/${payload.leadId}` : `${base}/calls`
+    case NOTIFICATION_EVENT_TYPES.LEAVE_DECIDED:
+      return `${base}/leave`
     default:
       return `${base}/dashboard`
   }
@@ -66,11 +90,51 @@ function inAppMessage(eventType, payload, actorName, workspaceName) {
         ? `${payload.taskCount} task(s) due today in ${workspaceName}`
         : `No tasks due today in ${workspaceName}`
     case NOTIFICATION_EVENT_TYPES.FOLLOWUP_DUE:
-      return `Follow-up with ${payload.leadName || 'a lead'} is due in 15 minutes`
+      return payload.escalation
+        ? `${payload.overdueCount} follow-up${payload.overdueCount === 1 ? '' : 's'} on your team ${payload.overdueCount === 1 ? 'is' : 'are'} over 24h overdue`
+        : `Follow-up with ${payload.leadName || 'a lead'} is due in 15 minutes`
     case NOTIFICATION_EVENT_TYPES.LEAD_EMAIL_REPLY:
       return `${payload.leadName || 'A lead'} replied to your email`
     case NOTIFICATION_EVENT_TYPES.MEETING_REMINDER:
       return `Your meeting "${payload.meetingTitle || 'Meeting'}" starts in 10 minutes`
+    case NOTIFICATION_EVENT_TYPES.LEAD_STATUS_CHANGED:
+      return payload.reassignedAwayTo
+        ? `${payload.leadName || 'A lead'} was reassigned to ${payload.reassignedAwayTo}`
+        : `${payload.leadName || 'A lead'} moved to "${payload.status}"`
+    case NOTIFICATION_EVENT_TYPES.LEAD_NOTE_ADDED:
+      return `${payload.actorName || actorName} added a note on ${payload.leadName || 'a lead'}`
+    case NOTIFICATION_EVENT_TYPES.OPPORTUNITY_STAGE_CHANGED:
+      return payload.created
+        ? `New opportunity "${payload.opportunityName || 'Opportunity'}" created`
+        : `"${payload.opportunityName || 'Opportunity'}" moved to ${payload.stage}`
+    case NOTIFICATION_EVENT_TYPES.DEAL_STAGE_CHANGED:
+      return payload.created
+        ? `New deal "${payload.dealName || 'Deal'}" created`
+        : `"${payload.dealName || 'Deal'}" moved to ${payload.stage}`
+    case NOTIFICATION_EVENT_TYPES.TASK_COMMENT_ADDED:
+      return `New comment on task "${payload.taskTitle || 'Task'}"`
+    case NOTIFICATION_EVENT_TYPES.TASK_DUE_REMINDER:
+      return payload.overdue
+        ? `Task "${payload.taskTitle || 'Task'}" is overdue`
+        : `Task "${payload.taskTitle || 'Task'}" is due soon`
+    case NOTIFICATION_EVENT_TYPES.INVOICE_CREATED:
+      return `Invoice ${payload.invoiceNumber || ''} created`
+    case NOTIFICATION_EVENT_TYPES.INVOICE_PAYMENT_RECEIVED:
+      return payload.invoiceNumber
+        ? `Payment received on invoice ${payload.invoiceNumber}`
+        : `Payment received on deal "${payload.dealName || 'Deal'}"`
+    case NOTIFICATION_EVENT_TYPES.DOCUMENT_SHARED:
+      return `${payload.actorName || actorName} shared "${payload.documentName || 'a document'}" with you`
+    case NOTIFICATION_EVENT_TYPES.SECURITY_PASSWORD_CHANGED:
+      return `Your password was changed. If this wasn't you, secure your account now.`
+    case NOTIFICATION_EVENT_TYPES.SECURITY_EMAIL_CHANGED:
+      return `Your account email was changed. If this wasn't you, contact support.`
+    case NOTIFICATION_EVENT_TYPES.CALL_REMINDER:
+      return 'You have a call scheduled in 15 minutes'
+    case NOTIFICATION_EVENT_TYPES.LEAVE_DECIDED:
+      return payload.status === 'approved'
+        ? `Your leave from ${payload.fromDate} to ${payload.toDate} was approved.`
+        : `Your leave was rejected${payload.reason ? `: ${payload.reason}` : '.'}`
     default:
       return payload.message || 'You have a new notification'
   }
@@ -87,11 +151,36 @@ function inAppTitle(eventType, payload) {
     case NOTIFICATION_EVENT_TYPES.TASKS_DUE_TODAY:
       return 'Tasks due today'
     case NOTIFICATION_EVENT_TYPES.FOLLOWUP_DUE:
-      return 'Follow-up reminder'
+      return payload.escalation ? 'Overdue follow-ups on your team' : 'Follow-up reminder'
     case NOTIFICATION_EVENT_TYPES.LEAD_EMAIL_REPLY:
       return 'New email reply'
     case NOTIFICATION_EVENT_TYPES.MEETING_REMINDER:
       return 'Meeting starting soon'
+    case NOTIFICATION_EVENT_TYPES.LEAD_STATUS_CHANGED:
+      return payload.reassignedAwayTo ? 'Lead reassigned' : 'Lead status changed'
+    case NOTIFICATION_EVENT_TYPES.LEAD_NOTE_ADDED:
+      return 'New note'
+    case NOTIFICATION_EVENT_TYPES.OPPORTUNITY_STAGE_CHANGED:
+      return payload.created ? 'New opportunity' : 'Opportunity updated'
+    case NOTIFICATION_EVENT_TYPES.DEAL_STAGE_CHANGED:
+      return payload.created ? 'New deal' : 'Deal updated'
+    case NOTIFICATION_EVENT_TYPES.TASK_COMMENT_ADDED:
+      return 'New comment'
+    case NOTIFICATION_EVENT_TYPES.TASK_DUE_REMINDER:
+      return payload.overdue ? 'Task overdue' : 'Task due soon'
+    case NOTIFICATION_EVENT_TYPES.INVOICE_CREATED:
+      return 'Invoice created'
+    case NOTIFICATION_EVENT_TYPES.INVOICE_PAYMENT_RECEIVED:
+      return 'Payment received'
+    case NOTIFICATION_EVENT_TYPES.DOCUMENT_SHARED:
+      return 'Document shared'
+    case NOTIFICATION_EVENT_TYPES.SECURITY_PASSWORD_CHANGED:
+    case NOTIFICATION_EVENT_TYPES.SECURITY_EMAIL_CHANGED:
+      return 'Security alert'
+    case NOTIFICATION_EVENT_TYPES.CALL_REMINDER:
+      return 'Call reminder'
+    case NOTIFICATION_EVENT_TYPES.LEAVE_DECIDED:
+      return payload.status === 'approved' ? 'Leave approved' : 'Leave rejected'
     default:
       return 'Notification'
   }

@@ -24,7 +24,8 @@ import {
   setLateThreshold,
   validateLeaveRequest,
 } from '../services/leaveCalculatorService.js'
-import { createNotification, notifyUserEmail } from '../services/notificationService.js'
+import { createNotification } from '../services/notificationService.js'
+import { notifyLeaveDecided } from '../services/notification/teamNotificationService.js'
 import { Notification } from '../models/index.js'
 
 async function notifyLeaveApprovers({ companyId, workspaceId, applicant, leaveType, fromDate, toDate }) {
@@ -459,25 +460,14 @@ export async function approveLeave(req, res, next) {
       return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Request is not pending' } })
     }
     await finalizeLeaveApproval(request, req.user.id)
-    const full = await LeaveRequest.findByPk(request.id, { include: leaveInclude })
-    const employee = request.user || (await User.findByPk(request.userId))
-    const typeName = full?.leaveType?.name || 'Leave'
-    await createNotification({
-      userId: request.userId,
+    await notifyLeaveDecided({
       companyId: req.user.companyId,
       workspaceId: request.workspaceId,
-      title: 'Leave approved',
-      message: `Your ${typeName} from ${request.fromDate} to ${request.toDate} was approved.`,
-      type: 'leave',
-      link: '/leave',
-    })
-    if (employee) {
-      await notifyUserEmail(
-        employee,
-        'Leave request approved',
-        `<p>Your leave from <strong>${request.fromDate}</strong> to <strong>${request.toDate}</strong> has been approved.</p>`,
-      )
-    }
+      recipientUserId: request.userId,
+      status: 'approved',
+      fromDate: request.fromDate,
+      toDate: request.toDate,
+    }).catch(() => {})
     return res.json({
       success: true,
       data: await LeaveRequest.findByPk(request.id, { include: leaveInclude }),
@@ -524,23 +514,15 @@ export async function rejectLeave(req, res, next) {
         await balance.update({ pending: newPending, available: newAvailable }, { transaction: t })
       }
     })
-    const employee = request.user || (await User.findByPk(request.userId))
-    await createNotification({
-      userId: request.userId,
+    await notifyLeaveDecided({
       companyId: req.user.companyId,
       workspaceId: request.workspaceId,
-      title: 'Leave rejected',
-      message: `Your leave was rejected: ${rejectionReason}`,
-      type: 'leave',
-      link: '/leave',
-    })
-    if (employee) {
-      await notifyUserEmail(
-        employee,
-        'Leave request rejected',
-        `<p>Your leave was rejected.</p><p><strong>Reason:</strong> ${rejectionReason}</p>`,
-      )
-    }
+      recipientUserId: request.userId,
+      status: 'rejected',
+      fromDate: request.fromDate,
+      toDate: request.toDate,
+      reason: rejectionReason,
+    }).catch(() => {})
     return res.json({
       success: true,
       data: await LeaveRequest.findByPk(request.id, { include: leaveInclude }),

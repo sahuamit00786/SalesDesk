@@ -31,6 +31,7 @@ import {
   verifyOtp,
 } from '../services/otpService.js'
 import { serializeUser } from '../serializers/userSerializer.js'
+import { notifySecurityChange } from '../services/notification/teamNotificationService.js'
 
 const RESEND_COOLDOWN_MS = 60_000
 
@@ -559,6 +560,12 @@ export async function resetPassword(req, res, next) {
     user.passwordResetOtpExpiresAt = null
     user.refreshTokenVersion = (Number(user.refreshTokenVersion) || 0) + 1
     await user.save()
+
+    notifySecurityChange({
+      companyId: user.companyId,
+      recipientUserId: user.id,
+      kind: 'password',
+    }).catch(() => {})
 
     return res.json({
       success: true,

@@ -6,6 +6,7 @@ import { createLeadSystemActivity } from './leadSystemActivity.js'
 import { autoAssignLead } from './assignmentRulesService.js'
 import { notifyLeadAssignedBatch } from './notification/teamNotificationService.js'
 import { upsertLeadCustomFields } from './customFieldService.js'
+import { phoneDigitsKey } from '../utils/phoneDigits.js'
 
 const LEAD_STATUS = ['new', 'contacted', 'qualified', 'proposal', 'won', 'lost', 'junk']
 
@@ -77,6 +78,8 @@ function buildLeadRowPayload(row, defaultPipeline, userId, companyId, workspaceI
     notes: row.notes || null,
     isOpportunity: Boolean(row.isOpportunity),
     profileMeta: profileMeta && Object.keys(profileMeta).length ? profileMeta : null,
+    phoneDigits: phoneDigitsKey(row.phone) || null,
+    altPhoneDigits: phoneDigitsKey(row.altPhone) || null,
   }
 }
 

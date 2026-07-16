@@ -9,6 +9,7 @@ import { WorkspaceManagementModal } from '@/components/layout/WorkspaceManagemen
 import { HrNotificationBell } from '@/features/leave/components/HrNotificationBell'
 import { ProfileMenuDropdown } from '@/components/layout/ProfileMenuDropdown'
 import { useHrRole } from '@/features/hr/useHrRole'
+import { useNotificationsSocket } from '@/features/notifications/useNotificationsSocket'
 
 function selectIsCompanyAdmin(state) {
   return state.auth.user?.isCompanyAdmin ?? false
@@ -20,6 +21,7 @@ export function Topbar({ onMenu }) {
   const hrRole = useHrRole()
   const isCompanyAdmin = useAppSelector(selectIsCompanyAdmin)
   const [workspaceModalOpen, setWorkspaceModalOpen] = useState(false)
+  useNotificationsSocket()
 
   return (
     <>

@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import Toast from 'react-native-toast-message';
 import { keys } from '../../api/queryKeys';
 import { useWorkspaceId } from '../../hooks/useListQuery';
 import { leaveApi } from './api';
+import { showApiError } from '../../utils/errorMessage';
 
 const arr = (r) => (Array.isArray(r.data) ? r.data : []);
 
@@ -40,12 +40,11 @@ export function useLeaveMutations() {
   const qc = useQueryClient();
   const ws = useWorkspaceId();
   const invalidate = () => qc.invalidateQueries({ queryKey: keys.leave.all(ws) });
-  const onError = (err) => Toast.show({ type: 'error', text1: 'Leave action failed', text2: err?.message });
 
   return {
-    apply: useMutation({ mutationFn: (body) => leaveApi.apply(body), onSuccess: invalidate, onError }),
-    approve: useMutation({ mutationFn: (id) => leaveApi.approve(id), onSuccess: invalidate, onError }),
-    reject: useMutation({ mutationFn: ({ id, reason }) => leaveApi.reject(id, reason), onSuccess: invalidate, onError }),
-    cancel: useMutation({ mutationFn: (id) => leaveApi.cancel(id), onSuccess: invalidate, onError }),
+    apply: useMutation({ mutationFn: (body) => leaveApi.apply(body), onSuccess: invalidate, onError: (err) => showApiError(err, 'Could not submit leave request') }),
+    approve: useMutation({ mutationFn: (id) => leaveApi.approve(id), onSuccess: invalidate, onError: (err) => showApiError(err, 'Could not approve request') }),
+    reject: useMutation({ mutationFn: ({ id, reason }) => leaveApi.reject(id, reason), onSuccess: invalidate, onError: (err) => showApiError(err, 'Could not reject request') }),
+    cancel: useMutation({ mutationFn: (id) => leaveApi.cancel(id), onSuccess: invalidate, onError: (err) => showApiError(err, 'Could not cancel request') }),
   };
 }

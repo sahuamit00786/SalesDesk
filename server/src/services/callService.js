@@ -1,16 +1,17 @@
 import { Op } from 'sequelize'
 import { CallLog, Lead, User } from '../models/index.js'
+import { isElevated } from './recordVisibility.js'
+import { forbidden } from '../utils/httpError.js'
+import { phoneDigitsKey } from '../utils/phoneDigits.js'
 
 const CALL_INCLUDE = [
-  { model: Lead, as: 'lead', attributes: ['id', 'title', 'contactName', 'phone', 'isOpportunity'] },
+  {
+    model: Lead,
+    as: 'lead',
+    attributes: ['id', 'title', 'contactName', 'phone', 'isOpportunity', 'assignedTo', 'ownerUserId'],
+  },
   { model: User, as: 'owner', attributes: ['id', 'name', 'email'] },
 ]
-
-/** Last-10-digit key so "+91 63940-15647" matches a lead stored as "6394015647". */
-function phoneDigitsKey(value) {
-  const digits = String(value || '').replace(/\D/g, '')
-  return digits ? digits.slice(-10) : ''
-}
 
 /**
  * Finds a company lead whose primary phone OR altPhone matches the number,
@@ -19,12 +20,13 @@ function phoneDigitsKey(value) {
 async function findLeadByPhone(user, rawPhone) {
   const key = phoneDigitsKey(rawPhone)
   if (!key) return null
-  const candidates = await Lead.findAll({
-    where: { companyId: user.companyId, isDeleted: false },
-    attributes: ['id', 'phone', 'altPhone', 'workspaceId'],
+  return Lead.findOne({
+    where: {
+      companyId: user.companyId,
+      isDeleted: false,
+      [Op.or]: [{ phoneDigits: key }, { altPhoneDigits: key }],
+    },
   })
-  const hit = candidates.find((l) => phoneDigitsKey(l.phone) === key || phoneDigitsKey(l.altPhone) === key)
-  return hit ? Lead.findByPk(hit.id) : null
 }
 
 /**
@@ -94,6 +96,13 @@ export async function createCall(user, payload, workspaceId) {
     throw err
   }
 
+  if (payload.deviceCallKey) {
+    const existing = await CallLog.findOne({
+      where: { deviceCallKey: payload.deviceCallKey, companyId: user.companyId },
+    })
+    if (existing) return assertCallAccess(user, existing.id) // idempotent re-sync: reinstall / second device
+  }
+
   const call = await CallLog.create({
     leadId: lead?.id || null,
     companyId: user.companyId,
@@ -107,12 +116,57 @@ export async function createCall(user, payload, workspaceId) {
     callerName: payload.callerName || null,
     phoneNumber: payload.phoneNumber || lead?.phone || null,
     source,
+    deviceCallKey: payload.deviceCallKey || null,
   })
   return assertCallAccess(user, call.id)
 }
 
+/**
+ * Idempotent batch ingest from the device call log. Per-row results so one bad
+ * row never fails the batch — the mobile client re-queues only failed rows.
+ */
+export async function bulkSyncCalls(user, rows, workspaceId) {
+  const results = []
+  for (const row of rows) {
+    try {
+      const call = await createCall(user, { ...row, source: 'device_sync' }, workspaceId)
+      results.push({ deviceCallKey: row.deviceCallKey || null, ok: true, id: call.id })
+    } catch (err) {
+      results.push({
+        deviceCallKey: row.deviceCallKey || null,
+        ok: false,
+        error: err.publicMessage || err.message,
+      })
+    }
+  }
+  return {
+    synced: results.filter((r) => r.ok).length,
+    failed: results.filter((r) => !r.ok).length,
+    results,
+  }
+}
+
 export async function getCalls(user, filters = {}) {
   const where = { companyId: user.companyId }
+
+  // Visibility: companyAdmin / workspace_admin / manager see all calls in scope;
+  // everyone else sees only calls they own OR calls on leads assigned/owned by them.
+  if (!isElevated(user)) {
+    const visibleLeadIds = await Lead.findAll({
+      where: {
+        companyId: user.companyId,
+        isDeleted: false,
+        [Op.or]: [{ assignedTo: user.id }, { ownerUserId: user.id }],
+      },
+      attributes: ['id'],
+      raw: true,
+    }).then((rows) => rows.map((r) => r.id))
+
+    where[Op.or] = [
+      { ownerUserId: user.id }, // calls they logged/synced
+      ...(visibleLeadIds.length ? [{ leadId: { [Op.in]: visibleLeadIds } }] : []),
+    ]
+  }
 
   // Lead association
   if (filters.leadId) where.leadId = filters.leadId
@@ -197,7 +251,15 @@ export async function getCalls(user, filters = {}) {
 }
 
 export async function getCallById(user, id) {
-  return assertCallAccess(user, id)
+  const call = await assertCallAccess(user, id)
+  if (
+    !isElevated(user) &&
+    call.ownerUserId !== user.id &&
+    !(call.lead && (call.lead.assignedTo === user.id || call.lead.ownerUserId === user.id))
+  ) {
+    throw forbidden('You do not have access to this call')
+  }
+  return call
 }
 
 export async function updateCall(user, id, payload) {
@@ -247,6 +309,7 @@ export async function convertCall(user, id, workspaceId, payload = {}) {
       source: 'call_log',
       status: 'new',
       isOpportunity,
+      phoneDigits: phoneDigitsKey(phone) || null,
     })
   }
 

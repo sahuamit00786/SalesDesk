@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   Clock,
   Hourglass,
+  Plus,
   Search,
   Trash2,
   Users,
@@ -22,6 +23,7 @@ import { PageStack } from '@/components/layout/PageStack'
 import { PageFilterBar } from '@/components/layout/PageFilterBar'
 import { ReportKpiCard } from '@/features/analytics/components/ReportKpiCard'
 import { LeadTabEmptyState } from '@/features/leads/components/LeadTabSectionHeader'
+import { AddFollowupDrawer } from '@/features/leads/components/AddFollowupDrawer'
 import { SkeletonList } from '@/components/shared/SkeletonLoader'
 import { Select } from '@/components/ui/Select'
 import { cn } from '@/utils/cn'
@@ -103,6 +105,8 @@ export function FollowupsPage() {
   const [employeeId, setEmployeeId] = useState('')
   const [search, setSearch] = useState('')
   const [clockMs, setClockMs] = useState(() => Date.now())
+  const [addOpen, setAddOpen] = useState(false)
+  const [addKey, setAddKey] = useState(0)
 
   useEffect(() => {
     const id = setInterval(() => setClockMs(Date.now()), 30_000)
@@ -287,9 +291,22 @@ export function FollowupsPage() {
             {isFetching && !isLoading ? <span className="text-[10px] text-ink-muted">Updating…</span> : null}
           </div>
 
-          <span className="text-xs text-ink-muted">
-            Showing <span className="font-semibold text-ink">{rows.length}</span>
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-ink-muted">
+              Showing <span className="font-semibold text-ink">{rows.length}</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setAddKey((k) => k + 1)
+                setAddOpen(true)
+              }}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[var(--brand-primary)] px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-[var(--brand-primary-dark)]"
+            >
+              <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              Add follow-up
+            </button>
+          </div>
         </PageFilterBar>
 
         {isLoading ? (
@@ -413,6 +430,8 @@ export function FollowupsPage() {
           </ul>
         )}
       </PageStack>
+
+      <AddFollowupDrawer key={addKey} open={addOpen} onClose={() => setAddOpen(false)} />
     </PageShell>
   )
 }

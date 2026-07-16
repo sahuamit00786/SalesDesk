@@ -6,6 +6,7 @@ import {
   NOTIFICATION_EVENT_TYPES,
 } from '../services/notification/notificationPreferencesService.js'
 import { enqueueTeamNotification } from '../queues/notificationEmailQueue.js'
+import { notifyTaskOverdue } from '../services/notification/teamNotificationService.js'
 
 function isDigestMinute(settings, now) {
   const digest = settings.tasksDueToday
@@ -104,12 +105,58 @@ export async function runTaskDueTodayDigests() {
   }
 }
 
+/** Phase 1 item #9 — one-time alert per task once it's overdue (not completed/cancelled). */
+export async function runOverdueTaskAlerts() {
+  const now = new Date()
+  const overdueTasks = await LeadTask.findAll({
+    where: {
+      assignedTo: { [Op.ne]: null },
+      status: { [Op.notIn]: ['completed', 'cancelled'] },
+      dueAt: { [Op.lt]: now, [Op.ne]: null },
+      overdueNotifiedAt: null,
+    },
+    attributes: ['id', 'title', 'assignedTo', 'workspaceId', 'companyId', 'leadId', 'dueAt'],
+    limit: 500,
+  })
+
+  for (const task of overdueTasks) {
+    try {
+      await notifyTaskOverdue({
+        companyId: task.companyId,
+        workspaceId: task.workspaceId,
+        recipientUserId: task.assignedTo,
+        taskId: task.id,
+        taskTitle: task.title,
+        leadId: task.leadId,
+        dueAt: task.dueAt,
+      })
+    } catch {
+      /* best-effort — still mark as notified so a bad row can't loop forever */
+    }
+    await task.update({ overdueNotifiedAt: now })
+  }
+}
+
 export function startTaskDigestNotificationJob() {
   if (process.env.MEETING_CRON_ENABLED === 'false') return
   cron.schedule('* * * * *', () => {
     runTaskDueTodayDigests().catch((err) => {
       // eslint-disable-next-line no-console
       console.error('[taskDigestNotificationJob]', err.message)
+    })
+  })
+}
+
+/**
+ * Independent of startTaskDigestNotificationJob (which Phase 2 stops scheduling
+ * in favor of dailyDigestJob) — the overdue-task alert keeps running either way.
+ */
+export function startOverdueTaskAlertsJob() {
+  if (process.env.MEETING_CRON_ENABLED === 'false') return
+  cron.schedule('* * * * *', () => {
+    runOverdueTaskAlerts().catch((err) => {
+      // eslint-disable-next-line no-console
+      console.error('[taskDigestNotificationJob][overdue]', err.message)
     })
   })
 }

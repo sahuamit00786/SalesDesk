@@ -266,6 +266,7 @@ export async function navBadges(req, res, next) {
     const [
       leadsCount, opportunitiesCount, unassignedCount,
       followupsToday, remindersToday, meetingsToday, activeCampaigns, teamCount,
+      tasksToday, followupsLeftover,
     ] = await Promise.all([
       Lead.count({ where: { ...leadWhere, isOpportunity: false } }),
       Lead.count({ where: { ...leadWhere, isOpportunity: true } }),
@@ -281,6 +282,20 @@ export async function navBadges(req, res, next) {
       }),
       Campaign.count({ where: { companyId, workspaceId, status: 'active', ...(isSales ? { createdBy: userId } : {}) } }),
       UserWorkspace.count({ where: { workspaceId } }),
+      // Tasks due today (not completed/cancelled) — feeds the Tasks nav badge.
+      LeadTask.count({
+        where: {
+          companyId, workspaceId,
+          status: { [Op.notIn]: ['completed', 'cancelled'] },
+          dueAt: { [Op.gte]: todayStart, [Op.lte]: todayEnd },
+          ...(isSales ? { assignedTo: userId } : {}),
+        },
+      }),
+      // Leftover follow-ups: pending and due now-or-earlier (today's alone already
+      // feeds the combined Calendar badge) — feeds the standalone Follow-ups badge.
+      LeadFollowup.count({
+        where: { companyId, workspaceId, status: 'pending', scheduledAt: { [Op.lte]: now }, ...(isSales ? { createdBy: userId } : {}) },
+      }),
     ])
 
     return res.json({
@@ -289,6 +304,7 @@ export async function navBadges(req, res, next) {
         leads: leadsCount, opportunities: opportunitiesCount, leadDistribution: unassignedCount,
         calendar: followupsToday + remindersToday, meetings: meetingsToday,
         campaigns: activeCampaigns, team: teamCount,
+        tasks: tasksToday, followups: followupsLeftover,
       },
     })
   } catch (e) {

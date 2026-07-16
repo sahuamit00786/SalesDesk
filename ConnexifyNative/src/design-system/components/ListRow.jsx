@@ -14,6 +14,7 @@ export default function ListRow({
   trailing,
   chevron = true,
   destructive = false,
+  accessibilityLabel,
   style,
 }) {
   const theme = useTheme();
@@ -22,6 +23,7 @@ export default function ListRow({
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel || [title, subtitle].filter(Boolean).join(', ')}
       onPress={onPress}
       android_ripple={{ color: theme.brandFaint }}
       style={({ pressed }) => [

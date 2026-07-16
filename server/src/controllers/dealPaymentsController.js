@@ -2,6 +2,7 @@ import Joi from 'joi'
 import { Op } from 'sequelize'
 import { Deal, DealActivity, DealPayment, Activity, User, InvoicePayment, Invoice } from '../models/index.js'
 import { leadAccessWhere } from '../services/leadVisibility.js'
+import { notifyInvoicePayment } from '../services/notification/teamNotificationService.js'
 
 const MODES = ['bank_transfer', 'cash', 'cheque', 'upi', 'card', 'crypto', 'other']
 const STATUSES = ['pending', 'received', 'failed', 'refunded']
@@ -221,6 +222,24 @@ export async function create(req, res, next) {
           userId: req.user.id,
         })
       } catch { /* non-fatal */ }
+    }
+
+    const paymentRecipients = new Set()
+    if (deal.assignedTo) paymentRecipients.add(String(deal.assignedTo))
+    if (deal.ownerUserId) paymentRecipients.add(String(deal.ownerUserId))
+    paymentRecipients.delete(String(req.user.id))
+    for (const uid of paymentRecipients) {
+      notifyInvoicePayment({
+        companyId: req.user.companyId,
+        workspaceId: String(workspaceId),
+        recipientUserId: uid,
+        actorUserId: req.user.id,
+        dealId: deal.id,
+        dealName: deal.name,
+        amount: value.amount,
+        currency: value.currency,
+        kind: 'payment',
+      }).catch(() => {})
     }
 
     return res.status(201).json({ success: true, data: serializePayment(payment) })

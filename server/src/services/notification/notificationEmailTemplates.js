@@ -224,6 +224,84 @@ export function buildMeetingReminderEmailHtml({ recipientName, meetingTitle, sch
   })
 }
 
+export function buildDailyDigestEmailHtml({ recipientName, taskCount, followupCount, meetingCount, taskTitles, meetingTitles, viewUrl }) {
+  const parts = []
+  if (meetingCount) parts.push(`${meetingCount} meeting${meetingCount > 1 ? 's' : ''}`)
+  if (taskCount) parts.push(`${taskCount} task${taskCount > 1 ? 's' : ''} due`)
+  if (followupCount) parts.push(`${followupCount} follow-up${followupCount > 1 ? 's' : ''} due`)
+  const summary = parts.length ? parts.join(' · ') : 'Nothing scheduled'
+  const list = [
+    ...(meetingTitles || []).map((t) => `📅 ${escapeHtml(t)}`),
+    ...(taskTitles || []).map((t) => `✅ ${escapeHtml(t)}`),
+  ]
+  return buildTeamNotificationEmail({
+    title: 'Your day at a glance',
+    greetingName: recipientName,
+    introLines: [`Here's what's on your plate today: <strong>${escapeHtml(summary)}</strong>.`, ...list],
+    stats: [
+      { label: 'Meetings', value: String(meetingCount || 0) },
+      { label: 'Tasks', value: String(taskCount || 0) },
+      { label: 'Follow-ups', value: String(followupCount || 0) },
+    ],
+    ctaHref: viewUrl,
+    ctaLabel: 'Open your day',
+  })
+}
+
+export function buildWeeklySummaryEmailHtml({ recipientName, period, leadsCreated, leadsWon, tasksCompleted, tasksOverdue, viewUrl }) {
+  const label = period === 'month' ? 'This month' : 'This week'
+  return buildTeamNotificationEmail({
+    title: `${label} on your team`,
+    greetingName: recipientName,
+    introLines: [`${label}'s activity across your team:`],
+    stats: [
+      { label: 'Leads created', value: String(leadsCreated || 0) },
+      { label: 'Leads won', value: String(leadsWon || 0) },
+      { label: 'Tasks done', value: String(tasksCompleted || 0) },
+      { label: 'Overdue tasks', value: String(tasksOverdue || 0) },
+    ],
+    ctaHref: viewUrl,
+    ctaLabel: 'View reports',
+  })
+}
+
+export function buildSecurityAlertEmailHtml({ recipientName, kind, viewUrl }) {
+  const what = kind === 'email' ? 'account email' : 'password'
+  return buildTeamNotificationEmail({
+    title: 'Security alert',
+    greetingName: recipientName,
+    introLines: [
+      `Your ${what} was just changed.`,
+      `If this was you, no action is needed. If it wasn't, secure your account immediately and contact your admin.`,
+    ],
+    stats: [],
+    ctaHref: viewUrl,
+    ctaLabel: 'Review account security',
+  })
+}
+
+export function buildDocumentSharedEmailHtml({ recipientName, actorName, documentName, viewUrl }) {
+  return buildTeamNotificationEmail({
+    title: 'A document was shared with you',
+    greetingName: recipientName,
+    introLines: [`${escapeHtml(actorName || 'A teammate')} shared "${escapeHtml(documentName || 'a document')}" with you.`],
+    stats: [],
+    ctaHref: viewUrl,
+    ctaLabel: 'Open document',
+  })
+}
+
+export function buildPaymentReceivedEmailHtml({ recipientName, invoiceNumber, amount, currency, viewUrl }) {
+  return buildTeamNotificationEmail({
+    title: 'Payment received',
+    greetingName: recipientName,
+    introLines: [`A payment of ${escapeHtml(String(currency || ''))} ${escapeHtml(String(amount || ''))} was recorded on invoice ${escapeHtml(invoiceNumber || '')}.`],
+    stats: [],
+    ctaHref: viewUrl,
+    ctaLabel: 'View invoice',
+  })
+}
+
 export function subjectForEvent(eventType, payload) {
   const app = appDisplayName()
   switch (eventType) {
@@ -245,6 +323,33 @@ export function subjectForEvent(eventType, payload) {
       return `${app} — ${payload.leadName || 'A lead'} replied to your email`
     case 'meeting_reminder':
       return `${app} — Meeting "${payload.meetingTitle || 'Meeting'}" starts in 10 minutes`
+    case 'digest_daily':
+      return `${app} — Your day: ${payload.meetingCount || 0} meetings, ${payload.taskCount || 0} tasks`
+    case 'digest_weekly':
+      return `${app} — ${payload.period === 'month' ? 'Monthly' : 'Weekly'} team summary`
+    case 'lead_status_changed':
+      return `${app} — ${payload.leadName || 'A lead'} ${payload.reassignedAwayTo ? 'was reassigned' : 'status changed'}`
+    case 'lead_note_added':
+      return `${app} — New note on ${payload.leadName || 'a lead'}`
+    case 'opportunity_stage_changed':
+      return `${app} — Opportunity ${payload.created ? 'created' : 'updated'}`
+    case 'deal_stage_changed':
+      return `${app} — Deal ${payload.created ? 'created' : 'updated'}`
+    case 'task_comment_added':
+      return `${app} — New comment on "${payload.taskTitle || 'a task'}"`
+    case 'invoice_created':
+      return `${app} — Invoice ${payload.invoiceNumber || ''} created`
+    case 'invoice_payment_received':
+      return `${app} — Payment received on ${payload.invoiceNumber || 'invoice'}`
+    case 'document_shared':
+      return `${app} — A document was shared with you`
+    case 'call_reminder':
+      return `${app} — Call reminder`
+    case 'security_password_changed':
+    case 'security_email_changed':
+      return `${app} — Security alert`
+    case 'leave_decided':
+      return payload.status === 'approved' ? `${app} — Leave approved` : `${app} — Leave rejected`
     default:
       return `${app} — Team notification`
   }
@@ -266,6 +371,17 @@ export function buildHtmlForEvent(eventType, payload) {
       return buildLeadEmailReplyEmailHtml(payload)
     case 'meeting_reminder':
       return buildMeetingReminderEmailHtml(payload)
+    case 'digest_daily':
+      return buildDailyDigestEmailHtml(payload)
+    case 'digest_weekly':
+      return buildWeeklySummaryEmailHtml(payload)
+    case 'document_shared':
+      return buildDocumentSharedEmailHtml(payload)
+    case 'invoice_payment_received':
+      return buildPaymentReceivedEmailHtml(payload)
+    case 'security_password_changed':
+    case 'security_email_changed':
+      return buildSecurityAlertEmailHtml(payload)
     default:
       return buildTeamNotificationEmail({
         title: 'Notification',

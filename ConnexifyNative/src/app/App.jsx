@@ -10,9 +10,12 @@ import { toastConfig } from '../design-system/toastConfig';
 import OfflineBanner from '../design-system/components/OfflineBanner';
 import { bootstrapApp } from './bootstrap';
 import Navigation from '../navigation';
+import RealtimeProvider from '../realtime/RealtimeProvider';
+import { initCrashReporting } from './crashReporting';
 
 export default function App() {
   useEffect(() => {
+    initCrashReporting();
     bootstrapApp();
   }, []);
 
@@ -22,7 +25,9 @@ export default function App() {
         <QueryProvider>
           <ThemeProvider>
             <BottomSheetModalProvider>
-              <Navigation />
+              <RealtimeProvider>
+                <Navigation />
+              </RealtimeProvider>
               <OfflineBanner />
               <Toast config={toastConfig} />
             </BottomSheetModalProvider>

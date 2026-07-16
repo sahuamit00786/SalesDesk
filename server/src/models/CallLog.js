@@ -82,6 +82,11 @@ type:DataTypes.TEXT
 recordingUrl:{
 type:DataTypes.TEXT,
 field:'recording_url'
+},
+
+deviceCallKey:{
+type:DataTypes.STRING(120),
+field:'device_call_key'
 }
 
 },

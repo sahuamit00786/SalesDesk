@@ -6,7 +6,8 @@ export const leadsApi = {
   detail: (id) => get(`/leads/${id}`),
   formMeta: () => get('/leads/form-meta'),
   create: (body) => post('/leads', body),
-  update: (id, body) => put(`/leads/${id}`, body),
+  update: (id, body, updatedAt) =>
+    put(`/leads/${id}`, body, updatedAt ? { headers: { 'If-Unmodified-Since': new Date(updatedAt).toUTCString() } } : undefined),
   patchStatus: (id, body) => patch(`/leads/${id}/status`, body), // { status, lostReason?, notes? }
   remove: (id) => del(`/leads/${id}`),
   bulk: (body) => post('/leads/bulk', body), // { ids, action: assign|update|delete|export, payload }
@@ -22,11 +23,28 @@ export const leadsApi = {
   addTask: (id, body) => post(`/leads/${id}/tasks`, body),
   updateTask: (id, taskId, body) => patch(`/leads/${id}/tasks/${taskId}`, body),
   deleteTask: (id, taskId) => del(`/leads/${id}/tasks/${taskId}`),
+  addTaskComment: (id, taskId, body) => post(`/leads/${id}/tasks/${taskId}/comments`, body),
+  taskTimeline: (id, taskId) => get(`/leads/${id}/tasks/${taskId}/timeline`),
+  // subtasks are updated via the existing task patch: updateTask(id, taskId, { subtasks: [...] })
   followups: (id) => get(`/leads/${id}/followups`),
   addFollowup: (id, body) => post(`/leads/${id}/followups`, body),
   updateFollowup: (id, followupId, body) => patch(`/leads/${id}/followups/${followupId}`, body),
   deleteFollowup: (id, followupId) => del(`/leads/${id}/followups/${followupId}`),
   files: (id) => get(`/leads/${id}/files`),
+
+  // Saved views
+  savedViews: () => get('/leads/saved-views'),
+  createSavedView: (body) => post('/leads/saved-views', body),
+  deleteSavedView: (viewId) => del(`/leads/saved-views/${viewId}`),
+
+  // Duplicates
+  duplicates: (params) => get('/leads/duplicates', params),
+  mergeDuplicate: (dupId, body) => post(`/leads/duplicates/${dupId}/merge`, body),
+  dismissDuplicate: (dupId) => del(`/leads/duplicates/${dupId}`),
+
+  // Archived + restore
+  archived: (params) => get('/leads/archived', params),
+  restore: (id) => post(`/leads/${id}/restore`),
 };
 
 export const opportunitiesApi = {

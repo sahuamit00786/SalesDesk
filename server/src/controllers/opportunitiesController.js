@@ -9,6 +9,8 @@ import { leadAccessWhere } from '../services/leadVisibility.js'
 import { resolveListWorkspaceFilterId } from '../utils/resolveListWorkspaceFilter.js'
 import { findDuplicates, saveDuplicateRecord } from '../services/duplicateDetectionService.js'
 import { logLeadFieldChanges } from '../services/leadFieldChangeActivity.js'
+import { phoneDigitsKey } from '../utils/phoneDigits.js'
+import { notifyOpportunityStageChanged } from '../services/notification/teamNotificationService.js'
 
 function formatStageLabelForMessage(value) {
   const text = String(value || '').trim()
@@ -25,6 +27,15 @@ async function resolveActorDisplayName(userId, emailFallback) {
   const n = u?.name?.trim()
   if (n) return n
   return u?.email?.trim() || emailFallback || 'Someone'
+}
+
+/** Opportunity's assignee + owner, excluding whoever performed the action. */
+function leadRecipients(opportunity, actorUserId) {
+  const ids = new Set()
+  if (opportunity.assignedTo) ids.add(String(opportunity.assignedTo))
+  if (opportunity.ownerUserId) ids.add(String(opportunity.ownerUserId))
+  ids.delete(String(actorUserId || ''))
+  return [...ids]
 }
 
 /** @returns {{ phone: string|null, phoneCountryCode: string|null }} */
@@ -550,6 +561,19 @@ export async function create(req, res, next) {
         userId: req.user.id,
       })
 
+      for (const uid of leadRecipients(leadRow, req.user.id)) {
+        notifyOpportunityStageChanged({
+          companyId: req.user.companyId,
+          workspaceId: leadRow.workspaceId,
+          recipientUserId: uid,
+          actorUserId: req.user.id,
+          leadId: leadRow.id,
+          opportunityName: leadRow.title || leadRow.contactName,
+          stage: leadRow.opportunityStage || leadRow.pipelineStatus,
+          created: true,
+        }).catch(() => {})
+      }
+
       return res.status(201).json({ success: true, data: serializeLeadAsOpportunity(leadRow), meta: {} })
     }
 
@@ -630,6 +654,7 @@ export async function create(req, res, next) {
       isDeleted: false,
       isOpportunity: true,
       pipelineStatus: initialStatus?.id || null,
+      phoneDigits: phoneDigitsKey(newPhone) || null,
     })
 
     if (normalizedTags.length) {
@@ -651,6 +676,18 @@ export async function create(req, res, next) {
     })
 
     await lead.reload({ include: leadPipelineIncludes })
+    for (const uid of leadRecipients(lead, req.user.id)) {
+      notifyOpportunityStageChanged({
+        companyId: req.user.companyId,
+        workspaceId: lead.workspaceId,
+        recipientUserId: uid,
+        actorUserId: req.user.id,
+        leadId: lead.id,
+        opportunityName: lead.title || lead.contactName,
+        stage: lead.opportunityStage || lead.pipelineStatus,
+        created: true,
+      }).catch(() => {})
+    }
     return res.status(201).json({ success: true, data: serializeLeadAsOpportunity(lead), meta: {} })
   } catch (e) {
     if (e?.status === 400) {
@@ -837,6 +874,19 @@ export async function patchStatus(req, res, next) {
       leadId: lead.id,
       userId: req.user.id,
     })
+
+    for (const uid of leadRecipients(lead, req.user.id)) {
+      notifyOpportunityStageChanged({
+        companyId: req.user.companyId,
+        workspaceId: lead.workspaceId,
+        recipientUserId: uid,
+        actorUserId: req.user.id,
+        leadId: lead.id,
+        opportunityName: lead.title || lead.contactName,
+        stage: newStatus.name,
+        created: false,
+      }).catch(() => {})
+    }
 
     return res.json({ success: true, data: serializeLeadAsOpportunity(lead), meta: {} })
   } catch (e) {

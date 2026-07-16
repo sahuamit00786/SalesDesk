@@ -14,12 +14,12 @@ function waNumber(lead) {
   return lead?.profileMeta?.whatsappNumber || lead?.phone || '';
 }
 
-export default function LeadCard({ lead, onPress, onLongPress, selected = false, selectionMode = false }) {
+export default function LeadCard({ lead, onPress, onLongPress, selected = false, selectionMode = false, extraActions = [] }) {
   const theme = useTheme();
   const name = lead.contactName || lead.title || 'Untitled lead';
   const phone = lead.phone ? `${lead.phoneCountryCode || ''}${lead.phone}` : '';
 
-  const actions = [];
+  const actions = [...extraActions];
   if (phone) {
     actions.push({
       key: 'call',

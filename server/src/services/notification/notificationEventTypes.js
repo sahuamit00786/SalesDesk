@@ -13,6 +13,7 @@ export const NOTIFICATION_EVENT_TYPES = {
   // Leads (legacy)
   LEAD_ASSIGNED: 'lead_assigned',
   LEAD_STATUS_CHANGED: 'lead_status_changed',
+  LEAD_NOTE_ADDED: 'lead_note_added',
 
   // Opportunities / Deals
   OPPORTUNITY_CREATED: 'opportunity_created',
@@ -24,11 +25,13 @@ export const NOTIFICATION_EVENT_TYPES = {
   TASK_ASSIGNED: 'task_assigned',
   TASKS_DUE_TODAY: 'tasks_due_today',
   TASK_DUE_REMINDER: 'task_due_reminder',
+  TASK_COMMENT_ADDED: 'task_comment_added',
   FOLLOWUP_DUE: 'followup_due',
 
   // Meetings (legacy + new)
   MEETING_INVITATION: 'meeting_invitation',
   MEETING_REMINDER: 'meeting_reminder',
+  CALL_REMINDER: 'call_reminder',
 
   // Approvals (generic — stopgap until a dedicated approvals module exists)
   APPROVAL_REQUESTED: 'approval_requested',
@@ -73,10 +76,10 @@ export const LEGACY_EVENT_TYPES = new Set([
 
 export const EVENT_MODULE_GROUPS = [
   { module: 'Auth & Security', events: ['welcome', 'email_verification', 'password_reset', 'user_invitation', 'security_new_device_login', 'security_password_changed', 'security_email_changed'] },
-  { module: 'Leads', events: ['lead_assigned', 'lead_status_changed'] },
+  { module: 'Leads', events: ['lead_assigned', 'lead_status_changed', 'lead_note_added'] },
   { module: 'Opportunities & Deals', events: ['opportunity_created', 'opportunity_stage_changed', 'deal_created', 'deal_stage_changed'] },
-  { module: 'Tasks & Follow-ups', events: ['task_assigned', 'tasks_due_today', 'task_due_reminder', 'followup_due'] },
-  { module: 'Meetings', events: ['meeting_invitation', 'meeting_reminder'] },
+  { module: 'Tasks & Follow-ups', events: ['task_assigned', 'task_comment_added', 'tasks_due_today', 'task_due_reminder', 'followup_due'] },
+  { module: 'Meetings', events: ['meeting_invitation', 'meeting_reminder', 'call_reminder'] },
   { module: 'Approvals', events: ['approval_requested', 'approval_decided'] },
   { module: 'Finance', events: ['invoice_created', 'invoice_payment_received'] },
   { module: 'Documents', events: ['document_shared'] },

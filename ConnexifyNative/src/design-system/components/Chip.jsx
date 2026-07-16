@@ -6,12 +6,14 @@ import { X } from '../icons';
 import { useTheme } from '../ThemeProvider';
 
 /** Selectable filter chip. */
-export default function Chip({ label, selected = false, onPress, onRemove, icon: Icon, style }) {
+export default function Chip({ label, selected = false, onPress, onRemove, icon: Icon, accessibilityLabel, style }) {
   const theme = useTheme();
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel || label}
       accessibilityState={{ selected }}
+      hitSlop={4}
       onPress={() => {
         trigger('selection', { enableVibrateFallback: false });
         onPress?.();

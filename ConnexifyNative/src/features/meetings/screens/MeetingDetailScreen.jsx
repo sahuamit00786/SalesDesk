@@ -17,6 +17,7 @@ import { Video, Trash2, CalendarClock, FileText, Sparkles } from '../../../desig
 import { useTheme } from '../../../design-system/ThemeProvider';
 import { useMeetingDetail, useMeetingMutations } from '../hooks';
 import { MEETING_TYPES, MEETING_STATUS_TONES } from '../api';
+import MeetingAiPanel from '../components/MeetingAiPanel';
 import { useAuthStore } from '../../../stores/authStore';
 import { formatDateTime, formatTime } from '../../../utils/format';
 
@@ -191,6 +192,8 @@ export default function MeetingDetailScreen({ navigation, route }) {
             </AppText>
           </Card>
         ) : null}
+
+        <MeetingAiPanel meeting={meeting} />
 
         <Card padded={false} style={styles.card}>
           <View style={styles.kvPad}>

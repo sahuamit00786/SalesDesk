@@ -58,3 +58,25 @@ export async function convertCall(req, res, next) {
     next(err)
   }
 }
+
+export async function bulkSyncCalls(req, res, next) {
+  try {
+    const rows = Array.isArray(req.body?.calls) ? req.body.calls : null
+    if (!rows || !rows.length) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'calls must be a non-empty array' },
+      })
+    }
+    if (rows.length > 200) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'BATCH_TOO_LARGE', message: 'Sync at most 200 calls per request' },
+      })
+    }
+    const result = await callService.bulkSyncCalls(req.user, rows, workspaceIdOf(req))
+    return res.status(201).json({ success: true, data: result })
+  } catch (err) {
+    next(err)
+  }
+}

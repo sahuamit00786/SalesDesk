@@ -19,7 +19,7 @@ const initialState = {
     stage: [],
     unassignedOnly: false,
   },
-  sort: { field: 'createdAt', order: 'desc' },
+  sort: { field: 'updatedAt', order: 'desc' },
   pagination: { page: 1, limit: 20, total: 0 },
   selected: [],
   viewMode: 'table',

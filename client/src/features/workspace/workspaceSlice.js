@@ -1,5 +1,7 @@
-import { createSlice } from '@reduxjs/toolkit'
+import { createSlice, createSelector } from '@reduxjs/toolkit'
 import { setCredentials, updateSessionUser, logout } from '@/features/auth/authSlice'
+
+const EMPTY_WORKSPACES = []
 
 const WORKSPACE_ID_KEY = 'leadflow.workspaceId'
 /** Session-scoped: survives reload, cleared on tab close and on every fresh login. */
@@ -145,40 +147,45 @@ const workspaceSlice = createSlice({
 
 export const { setActiveWorkspace } = workspaceSlice.actions
 
-export const selectWorkspaceList = (state) => {
-  const ws = state.auth.user?.company?.workspaces
-  if (Array.isArray(ws) && ws.length) {
-    return ws
-      .filter((w) => !w.archived)
-      .map((w) => ({
+const selectRawWorkspaces = (state) => state.auth.user?.company?.workspaces
+
+// Memoized: returns the SAME array/object references across calls when the
+// underlying data hasn't changed, so useSelector doesn't see a "new" value on
+// every unrelated store update (was causing rerender cascades / UI jitter).
+export const selectWorkspaceList = createSelector([selectRawWorkspaces], (ws) => {
+  if (!Array.isArray(ws) || !ws.length) return EMPTY_WORKSPACES
+  return ws
+    .filter((w) => !w.archived)
+    .map((w) => ({
       id: w.id,
       name: w.name,
       themeColor: w.themeColor || null,
       sidebarTextColor: w.sidebarTextColor || null,
       defaultCurrency: w.defaultCurrency || null,
     }))
-  }
-  return []
-}
+})
 
 export const selectWorkspaceConfirmed = (state) => state.workspace.workspaceConfirmed
 
-export const selectResolvedActiveWorkspaceId = (state) => {
-  const list = selectWorkspaceList(state)
-  const pref = state.workspace.activeWorkspaceId
-  if (!list.length) {
-    if (pref && state.auth?.accessToken) return pref
-    return null
-  }
-  if (pref && list.some((w) => w.id === pref)) return pref
-  return list[0].id
-}
+const selectPreferredWorkspaceId = (state) => state.workspace.activeWorkspaceId
+const selectAccessToken = (state) => state.auth?.accessToken
 
-export const selectActiveWorkspace = (state) => {
-  const list = selectWorkspaceList(state)
-  const id = selectResolvedActiveWorkspaceId(state)
-  return list.find((w) => w.id === id) ?? list[0] ?? null
-}
+export const selectResolvedActiveWorkspaceId = createSelector(
+  [selectWorkspaceList, selectPreferredWorkspaceId, selectAccessToken],
+  (list, pref, accessToken) => {
+    if (!list.length) {
+      if (pref && accessToken) return pref
+      return null
+    }
+    if (pref && list.some((w) => w.id === pref)) return pref
+    return list[0].id
+  },
+)
+
+export const selectActiveWorkspace = createSelector(
+  [selectWorkspaceList, selectResolvedActiveWorkspaceId],
+  (list, id) => list.find((w) => w.id === id) ?? list[0] ?? null,
+)
 
 export const selectActiveWorkspaceName = (state) => selectActiveWorkspace(state)?.name ?? 'Workspace'
 

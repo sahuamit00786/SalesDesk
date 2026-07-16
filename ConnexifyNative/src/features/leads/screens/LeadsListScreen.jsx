@@ -19,9 +19,11 @@ import SortSheet from '../../../design-system/components/SortSheet';
 import SelectSheet from '../../../design-system/components/SelectSheet';
 import ConfirmSheet from '../../../design-system/components/ConfirmSheet';
 import LeadCard from '../components/LeadCard';
-import { Users, ListFilter, ArrowUpDown, X, UserCheck, Tag, Trash2 } from '../../../design-system/icons';
+import SavedViewsSheet from '../components/SavedViewsSheet';
+import { Users, ListFilter, ArrowUpDown, X, UserCheck, Tag, Trash2, Bookmark, Archive, RefreshCw } from '../../../design-system/icons';
 import { useTheme } from '../../../design-system/ThemeProvider';
-import { useLeadsList, useLeadFormMeta, useLeadMutations } from '../hooks';
+import { useLeadsList, useLeadFormMeta, useLeadMutations, useArchivedLeads, useRestoreLead } from '../hooks';
+import { useIsManagerOrAdmin } from '../../../hooks/permissions';
 import { STATUS_LABELS, STATUS_OPTIONS, SOURCE_LABELS, SOURCE_OPTIONS, LEAD_SORT_OPTIONS } from '../constants';
 import { formatNumber } from '../../../utils/format';
 import { ROUTES } from '../../../navigation/routes';
@@ -29,31 +31,38 @@ import { ROUTES } from '../../../navigation/routes';
 export default function LeadsListScreen({ navigation }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const canManage = useIsManagerOrAdmin();
 
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState({});
   const [sort, setSort] = useState({ field: 'createdAt', order: 'desc' });
   const [selected, setSelected] = useState([]); // bulk selection ids
+  const [showArchived, setShowArchived] = useState(false);
 
   const filterRef = useRef(null);
   const sortRef = useRef(null);
   const selectRef = useRef(null);
   const confirmRef = useRef(null);
+  const savedRef = useRef(null);
 
   const params = useMemo(() => {
     const p = { sort: sort.field, order: sort.order };
     if (search.trim()) p.search = search.trim();
     if (filters.status?.length) p.status = filters.status.join(',');
     if (filters.source?.length) p.source = filters.source.join(',');
+    if (filters.assignedTo?.length) p.assignedTo = filters.assignedTo.join(',');
     return p;
   }, [search, filters, sort]);
 
   const list = useLeadsList(params);
   const formMeta = useLeadFormMeta();
   const { bulk } = useLeadMutations();
+  const archived = useArchivedLeads(showArchived ? { page: 1, limit: 20 } : undefined);
+  const restore = useRestoreLead();
 
-  const activeFilterCount = (filters.status?.length ? 1 : 0) + (filters.source?.length ? 1 : 0);
+  const activeFilterCount =
+    (filters.status?.length ? 1 : 0) + (filters.source?.length ? 1 : 0) + (filters.assignedTo?.length ? 1 : 0);
   const selectionMode = selected.length > 0;
 
   const toggleSelect = (id) =>
@@ -100,6 +109,12 @@ export default function LeadsListScreen({ navigation }) {
       sections: [
         { key: 'status', title: 'Status', multi: true, options: STATUS_OPTIONS.map((v) => ({ value: v, label: STATUS_LABELS[v] })) },
         { key: 'source', title: 'Source', multi: true, options: SOURCE_OPTIONS.map((v) => ({ value: v, label: SOURCE_LABELS[v] })) },
+        {
+          key: 'assignedTo',
+          title: 'Assignee',
+          multi: true,
+          options: (formMeta.data?.users || []).map((u) => ({ value: u.id, label: u.name })),
+        },
       ],
       onApply: setFilters,
     });
@@ -120,6 +135,7 @@ export default function LeadsListScreen({ navigation }) {
             </AppText>
           </View>
           <View style={s.headerActions}>
+            <IconButton icon={Bookmark} accessibilityLabel="Saved views" onPress={() => savedRef.current?.open()} />
             <IconButton icon={ArrowUpDown} accessibilityLabel="Sort" onPress={openSort} />
             <IconButton
               icon={ListFilter}
@@ -137,6 +153,16 @@ export default function LeadsListScreen({ navigation }) {
           placeholder="Search name, company, email…"
           style={s.search}
         />
+        {canManage ? (
+          <View style={s.chipRow}>
+            <Chip
+              label="Show archived"
+              icon={Archive}
+              selected={showArchived}
+              onPress={() => setShowArchived((v) => !v)}
+            />
+          </View>
+        ) : null}
         {activeFilterCount > 0 ? (
           <View style={s.chipRow}>
             {(filters.status || []).map((v) => (
@@ -157,12 +183,47 @@ export default function LeadsListScreen({ navigation }) {
                 onRemove={() => setFilters((f) => ({ ...f, source: f.source.filter((x) => x !== v) }))}
               />
             ))}
+            {(filters.assignedTo || []).map((v) => (
+              <Chip
+                key={`as-${v}`}
+                label={formMeta.data?.users?.find((u) => u.id === v)?.name || 'Assignee'}
+                selected
+                onPress={() => setFilters((f) => ({ ...f, assignedTo: f.assignedTo.filter((x) => x !== v) }))}
+                onRemove={() => setFilters((f) => ({ ...f, assignedTo: f.assignedTo.filter((x) => x !== v) }))}
+              />
+            ))}
             <Chip label="Clear" icon={X} onPress={() => setFilters({})} />
           </View>
         ) : null}
       </View>
 
-      {list.isPending ? (
+      {showArchived ? (
+        archived.isPending ? (
+          <SkeletonList count={7} cardHeight={96} />
+        ) : archived.isError ? (
+          <ErrorState error={archived.error} onRetry={archived.refetch} />
+        ) : !archived.data?.rows?.length ? (
+          <EmptyState icon={Archive} title="No archived leads" message="Deleted leads will appear here." />
+        ) : (
+          <FlashList
+            data={archived.data.rows}
+            keyExtractor={(item) => String(item.id)}
+            estimatedItemSize={104}
+            contentContainerStyle={s.listContent}
+            renderItem={({ item, index }) => (
+              <Animated.View entering={index < 8 ? FadeInDown.duration(280).delay(index * 40) : undefined}>
+                <LeadCard
+                  lead={item}
+                  onPress={() => navigation.navigate(ROUTES.LEAD_DETAIL, { leadId: item.id, id: item.id })}
+                  extraActions={[
+                    { key: 'restore', label: 'Restore', icon: RefreshCw, color: theme.brand, onPress: () => restore.mutate(item.id) },
+                  ]}
+                />
+              </Animated.View>
+            )}
+          />
+        )
+      ) : list.isPending ? (
         <SkeletonList count={7} cardHeight={96} />
       ) : list.isError ? (
         <ErrorState error={list.error} onRetry={list.refetch} />
@@ -252,6 +313,14 @@ export default function LeadsListScreen({ navigation }) {
       <SortSheet ref={sortRef} />
       <SelectSheet ref={selectRef} />
       <ConfirmSheet ref={confirmRef} />
+      <SavedViewsSheet
+        ref={savedRef}
+        currentConfig={{ filters, sort }}
+        onApply={(cfg) => {
+          if (cfg.filters) setFilters(cfg.filters);
+          if (cfg.sort) setSort(cfg.sort);
+        }}
+      />
     </ScreenScaffold>
   );
 }

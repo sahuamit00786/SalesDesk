@@ -128,7 +128,7 @@ export default function LeadFormScreen({ navigation, route }) {
     try {
       setBusy(true);
       if (mode === 'edit') {
-        await update.mutateAsync({ id: leadId, body: payload });
+        await update.mutateAsync({ id: leadId, body: payload, updatedAt: seedLead?.updatedAt });
         Toast.show({ type: 'success', text1: 'Lead updated' });
       } else {
         await create.mutateAsync({ ...payload, isOpportunity: false });

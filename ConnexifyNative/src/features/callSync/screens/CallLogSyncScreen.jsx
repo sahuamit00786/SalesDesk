@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Platform, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { FlashList } from '@shopify/flash-list';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -26,12 +27,14 @@ import {
   RefreshCw,
   Signal,
   ShieldCheck,
+  Upload,
 } from '../../../design-system/icons';
 import { useTheme } from '../../../design-system/ThemeProvider';
 import { useWorkspaceId } from '../../../hooks/useListQuery';
 import { useCallSyncStore } from '../../../stores/callSyncStore';
 import { getSimCards, getCallLogsForSim, hasCallLogPermissions, requestCallLogPermissions, CALL_TYPE } from '../../../native/simCard';
 import { buildLeadPhoneIndex, matchLeadForNumber, callDirection, syncDeviceCall } from '../api';
+import { runSyncPass, pendingRetryCount, getInstallId, deviceCallKey } from '../syncEngine';
 import { formatDuration, formatDateTime } from '../../../utils/format';
 
 const DIRECTION_META = {
@@ -67,6 +70,8 @@ export default function CallLogSyncScreen() {
   const [leadIndex, setLeadIndex] = useState(null);
   const [selected, setSelected] = useState(() => new Set());
   const [syncing, setSyncing] = useState(false);
+  const [engineSyncing, setEngineSyncing] = useState(false);
+  const [pendingRetry, setPendingRetry] = useState(0);
 
   useEffect(() => {
     hydrateSynced();
@@ -157,6 +162,7 @@ export default function CallLogSyncScreen() {
     // Matched numbers sync straight to their lead; unmatched sync as orphan
     // records (caller name/number kept) — convertible into a Lead/Opportunity
     // later from the Calls screen.
+    const installId = await getInstallId();
     const results = await Promise.allSettled(
       items.map((item) => {
         const lead = matchedLeadFor(item);
@@ -167,6 +173,7 @@ export default function CallLogSyncScreen() {
           callType: item.callType,
           callDate: item.callDate,
           callDuration: item.callDuration,
+          deviceCallKey: deviceCallKey(installId, item.id, item.callDate),
         }).then(() => item.id);
       }),
     );
@@ -201,6 +208,39 @@ export default function CallLogSyncScreen() {
     loadCalls(activeSim);
   };
 
+  const refreshPendingRetry = useCallback(() => {
+    pendingRetryCount().then(setPendingRetry).catch(() => {});
+  }, []);
+
+  const syncNow = useCallback(async () => {
+    setEngineSyncing(true);
+    const res = await runSyncPass({ subscriptionId: activeSim });
+    setEngineSyncing(false);
+    refreshPendingRetry();
+    if (res.error) {
+      Toast.show({
+        type: 'error',
+        text1: 'Sync failed',
+        text2: "You're offline or the server is unreachable. Calls are queued and will retry.",
+      });
+    } else {
+      Toast.show({
+        type: 'success',
+        text1: res.synced ? `${res.synced} calls synced` : 'Already up to date',
+        text2: res.failed ? `${res.failed} queued for retry` : undefined,
+      });
+    }
+    loadCalls(activeSim);
+  }, [activeSim, loadCalls, refreshPendingRetry]);
+
+  // Auto-sync on screen focus (catches most calls without any tap).
+  useFocusEffect(
+    useCallback(() => {
+      refreshPendingRetry();
+      if (permission === 'granted' && ws) runSyncPass({ subscriptionId: -1 }).then(refreshPendingRetry).catch(() => {});
+    }, [permission, ws, refreshPendingRetry]),
+  );
+
   if (permission === 'unsupported') {
     return (
       <ScreenScaffold>
@@ -230,7 +270,16 @@ export default function CallLogSyncScreen() {
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View style={styles.titleRow}>
           <AppText variant="title">Call Logs</AppText>
-          <IconButton icon={RefreshCw} accessibilityLabel="Refresh" onPress={onRefresh} />
+          <View style={styles.headerActions}>
+            <IconButton
+              icon={Upload}
+              accessibilityLabel="Sync now"
+              badge={pendingRetry}
+              disabled={engineSyncing}
+              onPress={syncNow}
+            />
+            <IconButton icon={RefreshCw} accessibilityLabel="Refresh" onPress={onRefresh} />
+          </View>
         </View>
 
         {sims.length > 1 ? (
@@ -357,6 +406,7 @@ export default function CallLogSyncScreen() {
 const styles = StyleSheet.create({
   header: { paddingHorizontal: 16, paddingBottom: 10 },
   titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
   search: { marginBottom: 10 },
   selectAllRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },

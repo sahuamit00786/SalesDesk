@@ -3,6 +3,7 @@ import { autoAssignLead } from './assignmentRulesService.js'
 import { mapWebFormTypeToCustomFieldType, slugifyCustomFieldKey, upsertLeadCustomFields } from './customFieldService.js'
 import { recalculateScore } from './leadScoringService.js'
 import { emitLeadWorkflowTriggers } from './workflowRunner.js'
+import { phoneDigitsKey } from '../utils/phoneDigits.js'
 
 const STRUCTURAL_TYPES = new Set(['heading', 'paragraph', 'divider', 'hidden', 'file'])
 
@@ -65,6 +66,9 @@ export async function createLeadFromSubmission(submission, form, workspaceId, co
       }))
     leadData.opportunityStage = first?.name || 'Lead Inbound'
   }
+
+  leadData.phoneDigits = phoneDigitsKey(leadData.phone) || null
+  leadData.altPhoneDigits = phoneDigitsKey(leadData.altPhone) || null
 
   const lead = await Lead.create(leadData)
 

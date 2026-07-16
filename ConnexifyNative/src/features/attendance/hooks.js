@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import Toast from 'react-native-toast-message';
 import { keys } from '../../api/queryKeys';
 import { useWorkspaceId } from '../../hooks/useListQuery';
 import { attendanceApi } from './api';
+import { showApiError } from '../../utils/errorMessage';
 
 export function useAttendanceToday() {
   const ws = useWorkspaceId();
@@ -40,11 +40,7 @@ export function useAttendanceMutations() {
   const ws = useWorkspaceId();
   const invalidate = () => qc.invalidateQueries({ queryKey: keys.attendance.all(ws) });
   const onError = (err) =>
-    Toast.show({
-      type: 'error',
-      text1: err?.code === 'ON_LEAVE' ? 'You are on approved leave today' : 'Attendance failed',
-      text2: err?.message,
-    });
+    showApiError(err, err?.code === 'ON_LEAVE' ? 'You are on approved leave today' : 'Attendance action failed');
 
   return {
     checkIn: useMutation({ mutationFn: (coords) => attendanceApi.checkIn(coords), onSuccess: invalidate, onError }),

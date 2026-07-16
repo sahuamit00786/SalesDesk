@@ -3,6 +3,7 @@ import { Op, fn, col, where as sqlWhere } from 'sequelize'
 import { DealActivity, Deal, DealStatus, Lead, OpportunityStage, User } from '../models/index.js'
 import { allowedWorkspaceIdsForUser } from '../services/userWorkspaceService.js'
 import { leadAccessWhere } from '../services/leadVisibility.js'
+import { notifyDealStageChanged } from '../services/notification/teamNotificationService.js'
 
 const dealIncludes = [
   {
@@ -295,6 +296,23 @@ export async function create(req, res, next) {
       userId: req.user.id,
     })
 
+    const dealRecipients = new Set()
+    if (deal.assignedTo) dealRecipients.add(String(deal.assignedTo))
+    if (deal.ownerUserId) dealRecipients.add(String(deal.ownerUserId))
+    dealRecipients.delete(String(req.user.id))
+    for (const uid of dealRecipients) {
+      notifyDealStageChanged({
+        companyId: req.user.companyId,
+        workspaceId: deal.workspaceId,
+        recipientUserId: uid,
+        actorUserId: req.user.id,
+        dealId: deal.id,
+        dealName: deal.name,
+        stage: deal.stage,
+        created: true,
+      }).catch(() => {})
+    }
+
     return res.status(201).json({ success: true, data: serializeDealForClient(deal), meta: {} })
   } catch (e) {
     return next(e)
@@ -393,6 +411,22 @@ export async function patchStage(req, res, next) {
       dealId: deal.id,
       userId: req.user.id,
     })
+    const dealRecipients = new Set()
+    if (deal.assignedTo) dealRecipients.add(String(deal.assignedTo))
+    if (deal.ownerUserId) dealRecipients.add(String(deal.ownerUserId))
+    dealRecipients.delete(String(req.user.id))
+    for (const uid of dealRecipients) {
+      notifyDealStageChanged({
+        companyId: req.user.companyId,
+        workspaceId: deal.workspaceId,
+        recipientUserId: uid,
+        actorUserId: req.user.id,
+        dealId: deal.id,
+        dealName: deal.name,
+        stage: deal.stage,
+        created: false,
+      }).catch(() => {})
+    }
     return res.json({ success: true, data: serializeDealForClient(deal), meta: {} })
   } catch (e) {
     return next(e)

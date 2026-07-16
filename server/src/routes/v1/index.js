@@ -14,6 +14,8 @@ import * as analyticsController from '../../controllers/analyticsController.js'
 import * as analyticsReportsExtended from '../../controllers/analyticsReportsExtended.js'
 import { requireAnalyticsView, requireAnalyticsAdmin } from '../../middleware/requireAnalyticsView.js'
 import * as leadsController from '../../controllers/leadsController.js'
+import * as searchController from '../../controllers/searchController.js'
+import { serveFile } from '../../controllers/fileAccessController.js'
 import * as activitiesController from '../../controllers/activitiesController.js'
 import * as companyController from '../../controllers/companyController.js'
 import * as workspaceController from '../../controllers/workspaceController.js'
@@ -68,6 +70,27 @@ const leaveUpload = multer({
   limits: { fileSize: 8 * 1024 * 1024, files: 1 },
 })
 
+const leadFileUploadDir = path.resolve(process.cwd(), 'uploads', 'leads')
+mkdirSync(leadFileUploadDir, { recursive: true })
+const leadFileUpload = multer({
+  storage: multer.diskStorage({
+    // Workspace-scoped subdir, matching the documents/leave/webforms convention
+    // (uploads/<scope>/<workspaceId>/<file>) so these files are also servable
+    // through the Phase 6 authenticated /files route.
+    destination: (req, _file, cb) => {
+      const workspaceId = String(req.workspaceId || 'unscoped').replace(/[^\w-]+/g, '_')
+      const dir = path.join(leadFileUploadDir, workspaceId)
+      mkdirSync(dir, { recursive: true })
+      cb(null, dir)
+    },
+    filename: (_req, file, cb) => {
+      const safe = String(file.originalname || 'attachment').replace(/[^\w.\-]+/g, '_')
+      cb(null, `${Date.now()}_${safe}`)
+    },
+  }),
+  limits: { fileSize: 15 * 1024 * 1024, files: 10 },
+})
+
 const authLimiter = rateLimit({ routeKey: 'auth', windowSec: 60, max: 30 })
 const otpLimiter = rateLimit({ routeKey: 'otp', windowSec: 3600, max: 5 })
 const apiLimiter = rateLimit({ routeKey: 'api', windowSec: 60, max: 200 })
@@ -75,6 +98,12 @@ const apiLimiter = rateLimit({ routeKey: 'api', windowSec: 60, max: 200 })
 router.get('/health', (_req, res) => {
   res.json({ success: true, data: { status: 'ok' }, meta: {} })
 })
+
+router.get('/search', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, searchController.globalSearch)
+
+// Phase 6 Stage 1 — authenticated file serving, additive. The static /uploads
+// mount stays live until clients migrate (Stage 2) and it's removed (Stage 3).
+router.get('/files', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, serveFile)
 
 /** Gmail API → Pub/Sub push (OIDC). Configure topic + subscription in GCP; see GMAIL_PUBSUB_* env vars. */
 router.post('/webhooks/gmail-pubsub', (req, res, next) => {
@@ -454,6 +483,7 @@ router.get('/activities', requireAuth, apiLimiter, requireCompany, workspaceCont
 router.post('/activities', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('engage.activities', 'create'), activitiesController.createActivity)
 router.get('/calls', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('engage.meetings', 'view'), callController.getCalls)
 router.post('/calls', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('engage.meetings', 'create'), callController.createCall)
+router.post('/calls/bulk-sync', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('engage.meetings', 'create'), callController.bulkSyncCalls)
 router.get('/calls/:id', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('engage.meetings', 'view'), callController.getCallById)
 router.patch('/calls/:id', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('engage.meetings', 'update'), callController.updateCall)
 router.delete('/calls/:id', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('engage.meetings', 'delete'), callController.deleteCall)
@@ -637,7 +667,7 @@ router.post('/leads/:id/followups', requireAuth, apiLimiter, requireCompany, wor
 router.patch('/leads/:id/followups/:followupId', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('main.leads', 'update'), leadsController.patchFollowup)
 router.delete('/leads/:id/followups/:followupId', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('main.leads', 'update'), leadsController.deleteFollowup)
 router.get('/leads/:id/files', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('main.leads', 'view'), leadsController.listFiles)
-router.post('/leads/:id/files', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('main.leads', 'create'), leadsController.createFile)
+router.post('/leads/:id/files', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('main.leads', 'create'), leadFileUpload.array('files', 10), leadsController.createFile)
 router.use(
   '/documents',
   requireAuth,

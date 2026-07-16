@@ -23,6 +23,7 @@ import { useTheme } from '../../../design-system/ThemeProvider';
 import { useTasksList, useTaskMutations } from '../hooks';
 import { formatDateTime, formatNumber } from '../../../utils/format';
 import { ROUTES } from '../../../navigation/routes';
+import TaskDetailSheet from '../components/TaskDetailSheet';
 
 const SEGMENTS = [
   { key: 'today', label: 'Today' },
@@ -46,7 +47,7 @@ function paramsForSegment(segment) {
   }
 }
 
-function TaskRow({ task, onToggle, onReschedule, onOpenLead, index }) {
+function TaskRow({ task, onToggle, onReschedule, onOpenLead, onOpenDetail, index }) {
   const theme = useTheme();
   const done = task.status === 'completed';
   const overdue = !done && task.dueAt && new Date(task.dueAt).getTime() < Date.now();
@@ -61,6 +62,7 @@ function TaskRow({ task, onToggle, onReschedule, onOpenLead, index }) {
   return (
     <Animated.View entering={index < 8 ? FadeInDown.duration(280).delay(index * 40) : undefined}>
       <SwipeRow actions={actions} style={styles.rowWrap}>
+        <Pressable onPress={() => onOpenDetail(task)} accessibilityRole="button" accessibilityLabel={`Open task ${task.title}`}>
         <Card style={styles.card}>
           <View style={styles.row}>
             <Pressable
@@ -106,6 +108,7 @@ function TaskRow({ task, onToggle, onReschedule, onOpenLead, index }) {
             </View>
           </View>
         </Card>
+        </Pressable>
       </SwipeRow>
     </Animated.View>
   );
@@ -119,6 +122,7 @@ export default function TasksListScreen({ navigation }) {
   const [rescheduleTask, setRescheduleTask] = useState(null);
   const [rescheduleDate, setRescheduleDate] = useState(null);
   const rescheduleRef = useRef(null);
+  const taskSheetRef = useRef(null);
 
   const params = useMemo(() => {
     const p = paramsForSegment(segment);
@@ -197,6 +201,7 @@ export default function TasksListScreen({ navigation }) {
               onToggle={toggle}
               onReschedule={openReschedule}
               onOpenLead={(t) => navigation.navigate(ROUTES.LEAD_DETAIL, { leadId: t.leadId || t.lead?.id, id: t.leadId || t.lead?.id })}
+              onOpenDetail={(t) => taskSheetRef.current?.open(t)}
             />
           )}
           ListFooterComponent={
@@ -213,6 +218,7 @@ export default function TasksListScreen({ navigation }) {
         <DateField label="New due date" mode="datetime" value={rescheduleDate} onChange={setRescheduleDate} style={styles.rescheduleField} />
         <Button title="Save" fullWidth loading={update.isPending} onPress={saveReschedule} />
       </Sheet>
+      <TaskDetailSheet ref={taskSheetRef} />
     </ScreenScaffold>
   );
 }

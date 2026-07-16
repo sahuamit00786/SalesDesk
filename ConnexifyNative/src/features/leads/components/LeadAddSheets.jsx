@@ -7,6 +7,7 @@ import SelectField from '../../../design-system/components/SelectField';
 import DateField from '../../../design-system/components/DateField';
 import Button from '../../../design-system/components/Button';
 import { Phone, Mail, Video, StickyNote, CheckSquare } from '../../../design-system/icons';
+import { CALL_OUTCOMES } from '../../calls/api';
 
 const ACTIVITY_TYPES = [
   { value: 'call', label: 'Call', icon: Phone },
@@ -21,6 +22,11 @@ const PRIORITIES = [
   { value: 'medium', label: 'Medium' },
   { value: 'high', label: 'High' },
   { value: 'urgent', label: 'Urgent' },
+];
+
+const CALL_DIRECTIONS = [
+  { value: 'outbound', label: 'Outgoing' },
+  { value: 'inbound', label: 'Incoming' },
 ];
 
 function useSheetForm(ref, initial) {
@@ -77,6 +83,70 @@ export const AddActivitySheet = forwardRef(function AddActivitySheet({ mutation 
         disabled={!form.body.trim()}
         onPress={() =>
           submit({ mutation, body: { type: form.type, body: form.body.trim() }, setBusy, sheetRef, successMsg: 'Activity logged' })
+        }
+      />
+    </Sheet>
+  );
+});
+
+export const AddCallSheet = forwardRef(function AddCallSheet({ mutation }, ref) {
+  const { sheetRef, form, setForm, busy, setBusy } = useSheetForm(ref, {
+    callType: 'outbound',
+    outcome: 'connected',
+    duration: '',
+    notes: '',
+  });
+  return (
+    <Sheet ref={sheetRef} title="Log call" scrollable>
+      <View style={styles.row}>
+        <SelectField
+          label="Direction"
+          value={form.callType}
+          onChange={(callType) => setForm((f) => ({ ...f, callType }))}
+          options={CALL_DIRECTIONS}
+          style={styles.rowItem}
+        />
+        <SelectField
+          label="Outcome"
+          value={form.outcome}
+          onChange={(outcome) => setForm((f) => ({ ...f, outcome }))}
+          options={CALL_OUTCOMES}
+          style={styles.rowItem}
+        />
+      </View>
+      <TextField
+        label="Duration (seconds)"
+        value={form.duration}
+        onChangeText={(duration) => setForm((f) => ({ ...f, duration: duration.replace(/[^0-9]/g, '') }))}
+        placeholder="Optional"
+        keyboardType="number-pad"
+        style={styles.field}
+      />
+      <TextField
+        label="Notes"
+        value={form.notes}
+        onChangeText={(notes) => setForm((f) => ({ ...f, notes }))}
+        placeholder="What was discussed?"
+        multiline
+        style={styles.field}
+      />
+      <Button
+        title="Log call"
+        fullWidth
+        loading={busy}
+        onPress={() =>
+          submit({
+            mutation,
+            body: {
+              callType: form.callType,
+              outcome: form.outcome,
+              duration: form.duration ? Number(form.duration) : undefined,
+              notes: form.notes.trim() || undefined,
+            },
+            setBusy,
+            sheetRef,
+            successMsg: 'Call logged',
+          })
         }
       />
     </Sheet>

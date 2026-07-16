@@ -307,4 +307,135 @@ export async function notifyMeetingReminderInternal({ companyId, workspaceId, re
   })
 }
 
+function skipActor(recipientUserId, actorUserId) {
+  return !recipientUserId || String(recipientUserId) === String(actorUserId || '')
+}
+
+async function enqueueSimple(eventType, { companyId, workspaceId, recipientUserId, actorUserId, payload }) {
+  const settings = await getCompanyNotificationSettings(companyId)
+  const delayMs = computeSendDelayMs(settings, eventType)
+  return enqueueTeamNotification({
+    eventType,
+    companyId,
+    workspaceId,
+    recipientUserId,
+    actorUserId,
+    payload,
+    delayMs,
+  })
+}
+
+// 1 — Lead status changed (fire on any status change; the queue message names the status)
+export async function notifyLeadStatusChanged({ companyId, workspaceId, recipientUserId, actorUserId, leadId, leadName, status }) {
+  if (skipActor(recipientUserId, actorUserId)) return
+  return enqueueSimple(NOTIFICATION_EVENT_TYPES.LEAD_STATUS_CHANGED, {
+    companyId, workspaceId, recipientUserId, actorUserId,
+    payload: { leadId, leadName, status },
+  })
+}
+
+// 2 — Lead reassigned: tell the PREVIOUS owner their lead moved away
+export async function notifyLeadReassignedAway({ companyId, workspaceId, previousUserId, actorUserId, leadId, leadName, newOwnerName }) {
+  if (skipActor(previousUserId, actorUserId)) return
+  return enqueueSimple(NOTIFICATION_EVENT_TYPES.LEAD_STATUS_CHANGED, {
+    companyId, workspaceId, recipientUserId: previousUserId, actorUserId,
+    // reuse the lead-status event transport but with a reassign-specific payload flag
+    payload: { leadId, leadName, reassignedAwayTo: newOwnerName || 'someone else' },
+  })
+}
+
+// 3 — Opportunity created / stage changed
+export async function notifyOpportunityStageChanged({ companyId, workspaceId, recipientUserId, actorUserId, leadId, opportunityName, stage, created = false }) {
+  if (skipActor(recipientUserId, actorUserId)) return
+  return enqueueSimple(NOTIFICATION_EVENT_TYPES.OPPORTUNITY_STAGE_CHANGED, {
+    companyId, workspaceId, recipientUserId, actorUserId,
+    payload: { leadId, opportunityName, stage, created },
+  })
+}
+
+// 4 — Deal created / stage changed
+export async function notifyDealStageChanged({ companyId, workspaceId, recipientUserId, actorUserId, dealId, dealName, stage, created = false }) {
+  if (skipActor(recipientUserId, actorUserId)) return
+  return enqueueSimple(NOTIFICATION_EVENT_TYPES.DEAL_STAGE_CHANGED, {
+    companyId, workspaceId, recipientUserId, actorUserId,
+    payload: { dealId, dealName, stage, created },
+  })
+}
+
+// 5 — Note added on a lead
+export async function notifyLeadNoteAdded({ companyId, workspaceId, recipientUserId, actorUserId, actorName, leadId, leadName }) {
+  if (skipActor(recipientUserId, actorUserId)) return
+  return enqueueSimple(NOTIFICATION_EVENT_TYPES.LEAD_NOTE_ADDED, {
+    companyId, workspaceId, recipientUserId, actorUserId,
+    payload: { leadId, leadName, actorName },
+  })
+}
+
+// 6 — Task comment added
+export async function notifyTaskCommentAdded({ companyId, workspaceId, recipientUserId, actorUserId, taskId, taskTitle, leadId }) {
+  if (skipActor(recipientUserId, actorUserId)) return
+  return enqueueSimple(NOTIFICATION_EVENT_TYPES.TASK_COMMENT_ADDED, {
+    companyId, workspaceId, recipientUserId, actorUserId,
+    payload: { taskId, taskTitle, leadId },
+  })
+}
+
+// 7 — Invoice created / payment received
+export async function notifyInvoicePayment({
+  companyId, workspaceId, recipientUserId, actorUserId,
+  invoiceId, invoiceNumber, dealId, dealName, amount, currency, kind = 'payment',
+}) {
+  if (!recipientUserId) return
+  const eventType =
+    kind === 'created'
+      ? NOTIFICATION_EVENT_TYPES.INVOICE_CREATED
+      : NOTIFICATION_EVENT_TYPES.INVOICE_PAYMENT_RECEIVED
+  return enqueueSimple(eventType, {
+    companyId, workspaceId, recipientUserId, actorUserId,
+    payload: { invoiceId, invoiceNumber, dealId, dealName, amount, currency },
+  })
+}
+
+// 8 — Document shared
+export async function notifyDocumentShared({ companyId, workspaceId, recipientUserId, actorUserId, actorName, documentId, documentName }) {
+  if (skipActor(recipientUserId, actorUserId)) return
+  return enqueueSimple(NOTIFICATION_EVENT_TYPES.DOCUMENT_SHARED, {
+    companyId, workspaceId, recipientUserId, actorUserId,
+    payload: { documentId, documentName, actorName },
+  })
+}
+
+// 9 — Task overdue (called from the reminder/digest job, no actor)
+export async function notifyTaskOverdue({ companyId, workspaceId, recipientUserId, taskId, taskTitle, leadId, dueAt }) {
+  if (!recipientUserId) return
+  return enqueueSimple(NOTIFICATION_EVENT_TYPES.TASK_DUE_REMINDER, {
+    companyId, workspaceId, recipientUserId, actorUserId: null,
+    payload: { taskId, taskTitle, leadId, dueAt, overdue: true },
+  })
+}
+
+// 10 — Security: password / email changed (MANDATORY — bypasses preferences via mandatoryEvents)
+export async function notifySecurityChange({ companyId, recipientUserId, kind }) {
+  if (!recipientUserId) return
+  const eventType =
+    kind === 'email'
+      ? NOTIFICATION_EVENT_TYPES.SECURITY_EMAIL_CHANGED
+      : NOTIFICATION_EVENT_TYPES.SECURITY_PASSWORD_CHANGED
+  return enqueueSimple(eventType, {
+    companyId, workspaceId: null, recipientUserId, actorUserId: null,
+    payload: { at: new Date().toISOString() },
+  })
+}
+
+// 11 — Leave request approved/rejected (Phase 2: routes leave decisions through
+// the standard pipeline instead of a hardcoded direct email, so preferences/
+// quiet-hours/digestOnly and the realtime socket apply here too).
+export async function notifyLeaveDecided({ companyId, workspaceId, recipientUserId, status, fromDate, toDate, reason }) {
+  if (!recipientUserId) return
+  return enqueueSimple(NOTIFICATION_EVENT_TYPES.LEAVE_DECIDED, {
+    companyId, workspaceId, recipientUserId, actorUserId: null,
+    payload: { status, fromDate, toDate, reason },
+  })
+}
+
 export { NOTIFICATION_EVENT_TYPES }

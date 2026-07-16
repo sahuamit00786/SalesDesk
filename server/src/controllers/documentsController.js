@@ -1,5 +1,6 @@
-import { Document, DocumentFolderLink, DocumentLink, Folder } from '../models/index.js'
+import { Document, DocumentFolderLink, DocumentLink, Folder, User } from '../models/index.js'
 import { Op } from 'sequelize'
+import { notifyDocumentShared } from '../services/notification/teamNotificationService.js'
 import {
   addDocumentFolders,
   addDocumentLinks,
@@ -318,6 +319,26 @@ export async function createDocumentShareLink(req, res, next) {
     if (!recipientEmail) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'recipientEmail is required' } })
     const row = await createDocumentShare({ documentId: req.params.id, workspaceId, recipientEmail })
     if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Document not found' } })
+
+    if (row.recipientEmail) {
+      const target = await User.findOne({
+        where: { companyId: req.user.companyId, email: row.recipientEmail },
+        attributes: ['id'],
+      })
+      if (target) {
+        const doc = await Document.findByPk(row.documentId, { attributes: ['name'] })
+        notifyDocumentShared({
+          companyId: req.user.companyId,
+          workspaceId,
+          recipientUserId: target.id,
+          actorUserId: req.user.id,
+          actorName: req.user.email,
+          documentId: req.params.id,
+          documentName: doc?.name || 'a document',
+        }).catch(() => {})
+      }
+    }
+
     return res.status(201).json({ success: true, data: row, meta: {} })
   } catch (error) {
     return next(error)

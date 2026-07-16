@@ -12,6 +12,12 @@ import {
   Users,
   UserPlus,
   ShieldCheck,
+  Briefcase,
+  Layers,
+  FileText,
+  Megaphone,
+  BarChart3,
+  Sparkles,
 } from '../../design-system/icons';
 import { useTheme } from '../../design-system/ThemeProvider';
 import { useCan } from '../../hooks/permissions';
@@ -49,6 +55,13 @@ export default function HomeSidebarMenu({ navigation, onNavigate }) {
     meetings: useCan(ROUTE_PERMISSIONS[ROUTES.MEETINGS]),
     calendar: useCan(ROUTE_PERMISSIONS[ROUTES.CALENDAR]),
     team: useCan(ROUTE_PERMISSIONS[ROUTES.TEAM_LIST]),
+    deals: useCan(ROUTE_PERMISSIONS[ROUTES.DEALS]),
+    sales: useCan(ROUTE_PERMISSIONS[ROUTES.SALES_DOCS]),
+    pipeline: useCan(ROUTE_PERMISSIONS[ROUTES.PIPELINE]),
+    campaigns: useCan(ROUTE_PERMISSIONS[ROUTES.CAMPAIGNS]),
+    reports: useCan(ROUTE_PERMISSIONS[ROUTES.REPORTS]),
+    copilot: useCan(ROUTE_PERMISSIONS[ROUTES.COPILOT]),
+    settings: useCan(ROUTE_PERMISSIONS[ROUTES.NOTIFICATION_SETTINGS]),
   };
 
   const go = (route, params) => {
@@ -65,6 +78,12 @@ export default function HomeSidebarMenu({ navigation, onNavigate }) {
 
   const workspaceItems = [
     { label: 'Documents', icon: FileStack, visible: can.documents, onPress: () => go(ROUTES.DOCUMENTS, { title: 'Documents' }) },
+    { label: 'Deals', icon: Briefcase, visible: can.deals, onPress: () => go(ROUTES.DEALS) },
+    { label: 'Pipeline', icon: Layers, visible: can.pipeline, onPress: () => go(ROUTES.PIPELINE) },
+    { label: 'Sales docs', icon: FileText, visible: can.sales, onPress: () => go(ROUTES.SALES_DOCS) },
+    { label: 'Campaigns', icon: Megaphone, visible: can.campaigns, onPress: () => go(ROUTES.CAMPAIGNS) },
+    { label: 'Reports', icon: BarChart3, visible: can.reports, onPress: () => go(ROUTES.REPORTS) },
+    { label: 'Copilot', icon: Sparkles, visible: can.copilot, onPress: () => go(ROUTES.COPILOT) },
     // Attendance and Leave — disabled for now (not removed, just hidden from the sidebar).
     // { label: 'Attendance', icon: CalendarCheck, visible: can.attendance, onPress: () => go(ROUTES.ATTENDANCE) },
     // { label: 'Leave', icon: Umbrella, visible: can.leave, onPress: () => go(ROUTES.LEAVE) },
@@ -75,6 +94,7 @@ export default function HomeSidebarMenu({ navigation, onNavigate }) {
     { label: 'Team', icon: Users, visible: can.team, onPress: () => go(ROUTES.TEAM_LIST) },
     { label: 'Invitations', icon: UserPlus, visible: can.team, onPress: () => go(ROUTES.INVITATIONS, { title: 'Invitations' }) },
     { label: 'Roles', icon: ShieldCheck, visible: can.team, onPress: () => go(ROUTES.ROLES, { title: 'Roles' }) },
+    { label: 'Notifications settings', icon: Bell, visible: can.settings, onPress: () => go(ROUTES.NOTIFICATION_SETTINGS) },
   ].filter((item) => item.visible !== false);
 
   return (

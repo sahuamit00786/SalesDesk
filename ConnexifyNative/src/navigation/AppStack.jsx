@@ -24,6 +24,15 @@ import SecurityScreen from '../features/settings/screens/SecurityScreen';
 import AttendanceScreen from '../features/attendance/screens/AttendanceScreen';
 import LeaveScreen from '../features/leave/screens/LeaveScreen';
 import NotificationsScreen from '../features/notifications/screens/NotificationsScreen';
+import DealsListScreen from '../features/deals/screens/DealsListScreen';
+import DealDetailScreen from '../features/deals/screens/DealDetailScreen';
+import { SalesDocsListScreen, SalesDocDetailScreen } from '../features/sales/screens/SalesDocsScreen';
+import GlobalSearchScreen from '../features/search/screens/GlobalSearchScreen';
+import PipelineBoardScreen from '../features/pipeline/screens/PipelineBoardScreen';
+import { CampaignsListScreen, CampaignDetailScreen } from '../features/campaigns/screens/CampaignsScreen';
+import { ReportsHubScreen, ReportDetailScreen } from '../features/reports/screens/ReportsScreen';
+import CopilotScreen from '../features/copilot/screens/CopilotScreen';
+import NotificationSettingsScreen from '../features/settings/screens/NotificationSettingsScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -65,6 +74,20 @@ export default function AppStack() {
       <Stack.Screen name={ROUTES.CHANGE_PASSWORD} component={SecurityScreen} options={{ animation: 'slide_from_bottom' }} />
       <Stack.Screen name={ROUTES.SETTINGS_APPEARANCE} component={AppearanceScreen} options={{ animation: 'slide_from_bottom' }} />
       <Stack.Screen name={ROUTES.SETTINGS_SECURITY} component={SecurityScreen} options={{ animation: 'slide_from_bottom' }} />
+
+      {/* Modules */}
+      <Stack.Screen name={ROUTES.DEALS} component={DealsListScreen} />
+      <Stack.Screen name={ROUTES.DEAL_DETAIL} component={DealDetailScreen} />
+      <Stack.Screen name={ROUTES.SALES_DOCS} component={SalesDocsListScreen} />
+      <Stack.Screen name="SalesDocDetail" component={SalesDocDetailScreen} />
+      <Stack.Screen name={ROUTES.SEARCH} component={GlobalSearchScreen} />
+      <Stack.Screen name={ROUTES.PIPELINE} component={PipelineBoardScreen} />
+      <Stack.Screen name={ROUTES.CAMPAIGNS} component={CampaignsListScreen} />
+      <Stack.Screen name="CampaignDetail" component={CampaignDetailScreen} />
+      <Stack.Screen name={ROUTES.REPORTS} component={ReportsHubScreen} />
+      <Stack.Screen name="ReportDetail" component={ReportDetailScreen} />
+      <Stack.Screen name={ROUTES.COPILOT} component={CopilotScreen} />
+      <Stack.Screen name={ROUTES.NOTIFICATION_SETTINGS} component={NotificationSettingsScreen} />
     </Stack.Navigator>
   );
 }
