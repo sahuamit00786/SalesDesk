@@ -1,3 +1,5 @@
+import { SOCKET_URL } from '@/config'
+
 export function fileExtLower(name) {
   const n = String(name || '').toLowerCase()
   return n.includes('.') ? n.split('.').pop() : ''
@@ -57,10 +59,11 @@ export function getFileUrl(filePath) {
   if (t.startsWith('http://') || t.startsWith('https://')) return t
   let path = t.startsWith('/') ? t : `/${t}`
   try {
-    return encodeURI(decodeURI(path))
+    path = encodeURI(decodeURI(path))
   } catch {
-    return encodeURI(path)
+    path = encodeURI(path)
   }
+  return `${SOCKET_URL}${path}`
 }
 
 /** Map a task JSON attachment into a document row the preview dialog understands. */
