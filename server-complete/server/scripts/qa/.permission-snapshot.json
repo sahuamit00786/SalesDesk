@@ -1,0 +1,23 @@
+{
+  "mobileGatedRoutes": [
+    "/activities",
+    "/attendance",
+    "/calendar",
+    "/calls",
+    "/campaigns",
+    "/copilot",
+    "/deals",
+    "/documents",
+    "/leads",
+    "/leave",
+    "/meetings",
+    "/opportunities",
+    "/pipeline",
+    "/quotations",
+    "/reports",
+    "/tasks",
+    "/team",
+    "/workspace"
+  ],
+  "orphans": []
+}

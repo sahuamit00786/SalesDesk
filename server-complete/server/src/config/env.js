@@ -1,0 +1,33 @@
+import Joi from 'joi'
+
+const schema = Joi.object({
+  NODE_ENV: Joi.string().valid('development', 'production', 'test').default('development'),
+  PORT: Joi.number().default(4000),
+  DB_NAME: Joi.string().required(),
+  DB_USER: Joi.string().required(),
+  DB_PASSWORD: Joi.string().allow('').default(''),
+  DB_HOST: Joi.string().default('127.0.0.1'),
+  DB_PORT: Joi.number().default(3306),
+  JWT_ACCESS_SECRET: Joi.string().min(16).required(),
+  JWT_REFRESH_SECRET: Joi.string().min(16).required(),
+  JWT_ACCESS_EXPIRES: Joi.string().default('15m'),
+  JWT_REFRESH_EXPIRES: Joi.string().default('7d'),
+  REDIS_URL: Joi.string().allow('', null).optional(),
+  OPENAI_API_KEY: Joi.string().allow('', null).optional(),
+  OPENAI_MODEL: Joi.string().allow('', null).optional(),
+  // Aurinko ("Continue with Google" for Gmail + Calendar) — all optional; the
+  // integration stays dormant until AURINKO_CLIENT_ID/SECRET are set.
+  AURINKO_CLIENT_ID: Joi.string().allow('', null).optional(),
+  AURINKO_CLIENT_SECRET: Joi.string().allow('', null).optional(),
+  AURINKO_SIGNING_SECRET: Joi.string().allow('', null).optional(),
+  AURINKO_API_BASE: Joi.string().uri().allow('', null).optional(),
+  PUBLIC_SERVER_URL: Joi.string().uri().allow('', null).optional(),
+}).unknown(true)
+
+export function validateEnv() {
+  const { error, value } = schema.validate(process.env, { abortEarly: false, convert: true })
+  if (error) {
+    throw new Error(`Invalid environment: ${error.message}`)
+  }
+  return value
+}
