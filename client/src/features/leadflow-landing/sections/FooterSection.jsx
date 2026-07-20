@@ -2,16 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Check, Mail, Phone } from 'lucide-react'
 import { LeadNestLogo } from '@/components/shared/LeadNestLogo'
-import { Github, Linkedin, Twitter, Youtube } from '@/components/shared/BrandIcons'
 import { CONTACT, FOOTER } from '@/features/leadflow-landing/landingContent'
-
-// PLACEHOLDER social links — point to real profiles when they exist
-const SOCIALS = [
-  { label: 'Twitter', icon: Twitter, href: '#' },
-  { label: 'LinkedIn', icon: Linkedin, href: '#' },
-  { label: 'YouTube', icon: Youtube, href: '#' },
-  { label: 'GitHub', icon: Github, href: '#' },
-]
 
 function FooterLink({ link }) {
   const className = 'text-sm text-ln-mut transition-colors hover:text-ln-ink'
@@ -56,18 +47,6 @@ export function FooterSection() {
               <LeadNestLogo className="h-9 w-auto max-w-[11rem]" />
             </Link>
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-ln-mut">{FOOTER.tagline}</p>
-            <div className="mt-5 flex items-center gap-3">
-              {SOCIALS.map(({ label, icon: Icon, href }) => (
-                <a
-                  key={label}
-                  href={href}
-                  aria-label={label}
-                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-ln-line bg-white text-ln-mut transition-colors hover:text-ln-ink"
-                >
-                  <Icon size={16} strokeWidth={1.75} />
-                </a>
-              ))}
-            </div>
           </div>
 
           {FOOTER.columns.map((col) => (

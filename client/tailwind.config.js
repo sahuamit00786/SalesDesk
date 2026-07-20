@@ -11,15 +11,15 @@ export default {
         display: ['Space Grotesk', 'Plus Jakarta Sans', 'sans-serif'],
       },
       colors: {
-        // LeadNest landing (Attio-style monochrome + violet accent)
+        // LeadNest landing — black + purple
         ln: {
           bg: '#FFFFFF',
-          bg2: '#FAFAFB',
+          bg2: '#FAF8FE',
           ink: '#111111',
           mut: '#6B7280',
-          line: '#ECECEC',
-          btn: '#111111',
-          btnh: '#2B2B2B',
+          line: '#ECE5FA',
+          btn: '#7C3AED',
+          btnh: '#6D28D9',
           accent: '#7C3AED',
         },
         lf: {
