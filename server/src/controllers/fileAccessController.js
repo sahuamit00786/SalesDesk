@@ -1,5 +1,7 @@
 import { resolveStoredFile, streamStoredFile, statStoredFile } from '../services/storageService.js'
-import { Document, LeadFile, Lead, UserWorkspace } from '../models/index.js'
+import path from 'node:path'
+import { Op } from 'sequelize'
+import { Document, LeadFile, Lead, UserWorkspace, Meeting, Workspace } from '../models/index.js'
 import { leadAccessWhere } from '../services/leadVisibility.js'
 import { isElevated } from '../services/recordVisibility.js'
 
@@ -20,9 +22,33 @@ import { isElevated } from '../services/recordVisibility.js'
  * Fail closed: mismatch → 403 (don't leak existence); genuinely missing → 404.
  */
 
+/**
+ * SECURITY FIX (BUG-5) — cross-tenant file access via the elevated-role shortcut.
+ *
+ * Previously this returned `true` for ANY elevated user (`isElevated` = company
+ * admin | workspace_admin | manager) WITHOUT checking that `workspaceId` belongs
+ * to that user's company. Because every company has its own admin, a company
+ * admin of tenant B could read tenant A's documents, email attachments, webform
+ * uploads, lead files and leave files simply by knowing the stored ref —
+ * verified: a foreign admin received 200 + full file contents.
+ *
+ * The tenant boundary must be established BEFORE any role shortcut applies:
+ * resolve the workspace, confirm it belongs to the caller's company, and only
+ * then let elevation substitute for explicit membership.
+ */
 async function userCanAccessWorkspace(user, workspaceId) {
-  if (!workspaceId) return false
+  if (!workspaceId || !user?.companyId) return false
+
+  // Tenant gate first — a role shortcut must never cross a company boundary.
+  const workspace = await Workspace.findOne({
+    where: { id: workspaceId, companyId: user.companyId },
+    attributes: ['id'],
+  }).catch(() => null)
+  if (!workspace) return false
+
+  // Within the caller's own company, elevated roles see all workspaces.
   if (isElevated(user)) return true
+
   const membership = await UserWorkspace.findOne({
     where: { userId: user.id, workspaceId },
   }).catch(() => null)
@@ -91,6 +117,74 @@ export async function serveFile(req, res, next) {
         }
       })
       .pipe(res)
+  } catch (err) {
+    next(err)
+  }
+}
+
+/**
+ * SECURITY FIX (BUG-1) — authenticated + tenant-scoped call-recording serving.
+ *
+ * The previous `GET /api/v1/recordings/:filename` handler blocked path traversal
+ * but performed NO ownership check: it joined the filename onto the recordings
+ * directory and streamed it. Any authenticated user of ANY company could download
+ * any other tenant's call recording by name (verified: a foreign-company admin
+ * received 200 + full audio). Recording filenames are multer hashes — obscurity,
+ * not authorization — and they leak to clients via meeting payloads.
+ *
+ * Recordings are linked to a tenant through `meetings.audio_file_path`; `meetings`
+ * is workspace-scoped (no company_id column), so workspace membership is the
+ * correct gate — the same rule `authorizeDocuments` already applies.
+ *
+ * Fail closed: unknown/foreign recording → 404 (don't confirm existence).
+ */
+export async function serveRecording(req, res, next) {
+  try {
+    const { filename } = req.params
+
+    // Defence in depth: keep the traversal guard even though we now also require
+    // a DB row to match, so a malicious path can never reach the filesystem.
+    if (
+      !filename ||
+      filename.includes('..') ||
+      filename.includes('/') ||
+      filename.includes('\\') ||
+      path.isAbsolute(filename)
+    ) {
+      return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Invalid filename' } })
+    }
+
+    // Find the meeting that owns this recording, then verify the caller may see
+    // that meeting's workspace. `Op.like` on the stored path handles both bare
+    // filenames and "recordings/<name>" style values.
+    const meeting = await Meeting.findOne({
+      where: {
+        [Op.or]: [
+          { audioFilePath: filename },
+          { audioFilePath: { [Op.like]: `%${filename}` } },
+        ],
+      },
+      attributes: ['id', 'workspaceId'],
+    }).catch(() => null)
+
+    if (!meeting || !(await userCanAccessWorkspace(req.user, meeting.workspaceId))) {
+      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Recording not found' } })
+    }
+
+    const recordingsDir = path.resolve(process.cwd(), 'recordings')
+    const filePath = path.join(recordingsDir, filename)
+
+    // Confirm the resolved path is still inside the recordings directory.
+    if (!filePath.startsWith(recordingsDir + path.sep)) {
+      return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Invalid filename' } })
+    }
+
+    res.setHeader('Cache-Control', 'private, max-age=0, no-store')
+    return res.sendFile(filePath, (err) => {
+      if (err && !res.headersSent) {
+        res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Recording not found' } })
+      }
+    })
   } catch (err) {
     next(err)
   }

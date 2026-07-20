@@ -334,7 +334,7 @@ export async function list(req, res, next) {
       limit,
       offset,
       distinct: true,
-      col: 'Lead.id',
+      col: 'id',
     })
     return res.json({
       success: true,

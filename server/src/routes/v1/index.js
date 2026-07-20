@@ -12,10 +12,10 @@ import { requireHrRole } from '../../middleware/requireHrRole.js'
 import * as authController from '../../controllers/authController.js'
 import * as analyticsController from '../../controllers/analyticsController.js'
 import * as analyticsReportsExtended from '../../controllers/analyticsReportsExtended.js'
-import { requireAnalyticsView, requireAnalyticsAdmin } from '../../middleware/requireAnalyticsView.js'
+import { requireAnalyticsView, requireTeamAnalytics, requireAnalyticsAdmin } from '../../middleware/requireAnalyticsView.js'
 import * as leadsController from '../../controllers/leadsController.js'
 import * as searchController from '../../controllers/searchController.js'
-import { serveFile } from '../../controllers/fileAccessController.js'
+import { serveFile, serveRecording } from '../../controllers/fileAccessController.js'
 import * as activitiesController from '../../controllers/activitiesController.js'
 import * as companyController from '../../controllers/companyController.js'
 import * as workspaceController from '../../controllers/workspaceController.js'
@@ -123,20 +123,10 @@ router.use(
 )
 
 // Authenticated recordings file serve — replaces the former public static /recordings route
-router.get('/recordings/:filename', requireAuth, requireCompany, workspaceContext, (req, res) => {
-  const { filename } = req.params
-  // Prevent path traversal
-  if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
-    return res.status(400).json({ success: false, error: 'Invalid filename' })
-  }
-  const recordingsDir = path.resolve(process.cwd(), 'recordings')
-  const filePath = path.join(recordingsDir, filename)
-  res.sendFile(filePath, (err) => {
-    if (err && !res.headersSent) {
-      res.status(404).json({ success: false, error: 'Recording not found' })
-    }
-  })
-})
+// SECURITY FIX (BUG-1): ownership is now verified in serveRecording.
+// The previous inline handler had no tenant check — any authenticated user could
+// download any company's call recording by filename.
+router.get('/recordings/:filename', requireAuth, apiLimiter, requireCompany, workspaceContext, serveRecording)
 
 router.use(
   '/transcription',
@@ -282,14 +272,14 @@ router.get('/analytics/pipeline-report', requireAuth, apiLimiter, requireCompany
 router.get('/analytics/activities-report', requireAuth, apiLimiter, requireCompany, workspaceContext, requireAnalyticsView, analyticsController.activitiesReport)
 router.get('/analytics/meetings-report', requireAuth, apiLimiter, requireCompany, workspaceContext, requireAnalyticsView, analyticsController.meetingsReport)
 router.get('/analytics/tasks-report', requireAuth, apiLimiter, requireCompany, workspaceContext, requireAnalyticsView, analyticsController.tasksReport)
-router.get('/analytics/team-report', requireAuth, apiLimiter, requireCompany, workspaceContext, requireAnalyticsView, analyticsController.teamReport)
+router.get('/analytics/team-report', requireAuth, apiLimiter, requireCompany, workspaceContext, requireTeamAnalytics, analyticsController.teamReport)
 router.get('/analytics/deals-report', requireAuth, apiLimiter, requireCompany, workspaceContext, requireAnalyticsView, analyticsController.dealsReport)
 router.get('/analytics/opportunities-report', requireAuth, apiLimiter, requireCompany, workspaceContext, requireAnalyticsView, analyticsReportsExtended.opportunitiesReport)
 router.get('/analytics/followups-report', requireAuth, apiLimiter, requireCompany, workspaceContext, requireAnalyticsView, analyticsReportsExtended.followupsReport)
 router.get('/analytics/sales-docs-report', requireAuth, apiLimiter, requireCompany, workspaceContext, requireAnalyticsView, analyticsReportsExtended.salesDocsReport)
 router.get('/analytics/payments-report', requireAuth, apiLimiter, requireCompany, workspaceContext, requireAnalyticsView, analyticsReportsExtended.paymentsReport)
 router.get('/analytics/leave-report', requireAuth, apiLimiter, requireCompany, workspaceContext, requireAnalyticsView, analyticsReportsExtended.leaveReport)
-router.get('/analytics/employee-monthly-report', requireAuth, apiLimiter, requireCompany, workspaceContext, requireAnalyticsView, analyticsReportsExtended.employeeMonthlyReport)
+router.get('/analytics/employee-monthly-report', requireAuth, apiLimiter, requireCompany, workspaceContext, requireTeamAnalytics, analyticsReportsExtended.employeeMonthlyReport)
 router.get('/analytics/data-health-report', requireAuth, apiLimiter, requireCompany, workspaceContext, requireAnalyticsAdmin, analyticsReportsExtended.dataHealthReport)
 router.get('/analytics/campaigns-report', requireAuth, apiLimiter, requireCompany, workspaceContext, requireAnalyticsView, analyticsReportsExtended.campaignsReport)
 
