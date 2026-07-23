@@ -19,12 +19,11 @@ import {
   YAxis,
 } from 'recharts'
 import { PageShell } from '@/components/layout/PageShell'
+import { DisabledNavLink } from '@/components/shared/DisabledNavLink'
 import { useGetActivitiesFeedQuery } from '@/features/activities/activitiesApi'
-import { useGetLeadsQuery } from '@/features/leads/leadsApi'
 import { useGetTasksQuery } from '@/features/tasks/tasksApi'
-import { useGetCallsQuery } from '@/features/calls/callsApi'
-import { useGetMeetingsQuery } from '@/features/meetings/meetingsApi'
 import { useGetDashboardChartsQuery } from '@/features/analytics/analyticsApi'
+import { usePermission } from '@/hooks/usePermission'
 import { CHART_COLORS } from '@/features/dashboard/dummyDashboardData'
 import { STATUS_OPTIONS } from '@/features/leads/constants'
 import { useFormatChartCurrency } from '@/hooks/useEffectiveCurrency'
@@ -257,6 +256,19 @@ export function DashboardPage() {
   const axisStroke = '#e3e7f0'
   const tickStyle = { fill: '#4b5263', fontSize: 11 }
 
+  // ── Per-widget permission gates — skip the query entirely (no 403 spam / generic
+  // error toasts) for record-level lists this user's menu matrix doesn't grant. Aggregate
+  // stat-card totals below come from /analytics/dashboard-charts instead, which is
+  // intentionally ungated — Dashboard access always shows the company-wide counts, just
+  // never the underlying records (task titles, activity notes, etc). ──
+  const canViewTasks = usePermission('engage.tasks', 'view')
+  const canViewActivities = usePermission('engage.activities', 'view')
+  const canViewCalendar = usePermission('engage.calendar', 'view')
+  // Card "view all" links below only navigate where the target page won't just bounce the
+  // user back out (RequireOnboarded's route guard) — no query attached, just gates the Link.
+  const canViewLeads = usePermission('main.leads', 'view')
+  const canManageLeadSetup = usePermission('main.leads', 'admin')
+
   // ── Date range for chart API ──
   const { from, to } = useMemo(() => {
     const now = new Date()
@@ -278,7 +290,10 @@ export function DashboardPage() {
   const charts = cd?.charts || {}
 
   // ── Recent activities (10 most recent) ──
-  const { data: recentActData, isLoading: recentActLoading } = useGetActivitiesFeedQuery({ limit: 10 })
+  const { data: recentActData, isLoading: recentActLoading } = useGetActivitiesFeedQuery(
+    { limit: 10 },
+    { skip: !canViewActivities },
+  )
   const recentActivities = useMemo(
     () => (Array.isArray(recentActData?.data) ? recentActData.data : []),
     [recentActData],
@@ -292,12 +307,15 @@ export function DashboardPage() {
     const end = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1)
     return { from: start.toISOString(), to: end.toISOString() }
   }, [calMonth])
-  const { data: monthEventsData } = useGetCalendarEventsQuery({
-    from: monthRange.from,
-    to: monthRange.to,
-    types: 'meeting',
-    ownerUserId: authUser?.id,
-  })
+  const { data: monthEventsData } = useGetCalendarEventsQuery(
+    {
+      from: monthRange.from,
+      to: monthRange.to,
+      types: 'meeting',
+      ownerUserId: authUser?.id,
+    },
+    { skip: !canViewCalendar },
+  )
   // Map of yyyy-mm-dd -> meetings[]
   const meetingsByDay = useMemo(() => {
     const evts = Array.isArray(monthEventsData?.data) ? monthEventsData.data : []
@@ -313,32 +331,27 @@ export function DashboardPage() {
     return map
   }, [monthEventsData])
 
-  // ── Existing stat card queries — all-time (from account start to now) ──
-  const activityFrom = useMemo(() => new Date(EPOCH_DATE).toISOString(), [])
-  const activityTo = useMemo(() => new Date().toISOString(), [])
-
-  const { data: leadsTotalData, isLoading: leadsTotalLoading, isError: leadsTotalError } = useGetLeadsQuery({ page: 1, limit: 1, isOpportunity: false })
-  const { data: oppsData, isLoading: oppsLoading, isError: oppsError } = useGetLeadsQuery({ page: 1, limit: 1, isOpportunity: true })
-  const { data: tasksData, isLoading: tasksLoading, isError: tasksError } = useGetTasksQuery({})
-
-  const activityParams = useMemo(() => ({ from: activityFrom, to: activityTo, limit: 1 }), [activityFrom, activityTo])
-  const { data: emailsFeed } = useGetActivitiesFeedQuery({ ...activityParams, types: 'email' })
-  // Calls/meetings live in their own tables, not the activity log — count those directly.
-  const { data: callsData } = useGetCallsQuery({})
-  const { data: meetingsData } = useGetMeetingsQuery({ limit: 1 })
-
-  const totalLeads = leadsTotalData?.meta?.total
-  const totalOpportunities = oppsData?.meta?.total
+  const { data: tasksData, isLoading: tasksLoadingRaw, isError: tasksErrorRaw } = useGetTasksQuery(
+    {},
+    { skip: !canViewTasks },
+  )
+  // A user without view access isn't a query "error" — treat it the same way in the UI.
+  const tasksError = tasksErrorRaw && canViewTasks
+  const tasksLoading = tasksLoadingRaw && canViewTasks
 
   const expiringTasks = useMemo(() => {
     const rows = Array.isArray(tasksData?.data) ? tasksData.data : []
     return sortExpiringTasks(rows.filter(isExpiringTask)).slice(0, DASHBOARD_EXPIRING_TASK_LIMIT)
   }, [tasksData])
 
-  const callsTotal = Array.isArray(callsData?.data) ? callsData.data.length : 0
-  const meetingsTotal = meetingsData?.meta?.total ?? 0
-  const emailsTotal = emailsFeed?.meta?.total ?? 0
-  const loadingTop = leadsTotalLoading || oppsLoading
+  // Stat-card totals — sourced from the ungated dashboard-charts KPI block, not the
+  // permission-gated /leads, /calls, /meetings list endpoints (see gate comment above).
+  const totalLeads = cd?.kpis?.totalLeads
+  const totalOpportunities = cd?.kpis?.totalOpps
+  const callsTotal = cd?.kpis?.callsTotal
+  const meetingsTotal = cd?.kpis?.meetingsTotal
+  const emailsTotal = cd?.kpis?.emailsTotal
+  const loadingTop = chartsLoading
 
   return (
     <PageShell fullWidth>
@@ -351,11 +364,11 @@ export function DashboardPage() {
           </section>
         ) : (
           <section aria-label="Summary totals and activity" className="mt-3 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
-            <StatDeltaCard label="Total leads" value={leadsTotalError ? '—' : String(totalLeads ?? 0)} hint="All leads you can access" compact />
-            <StatDeltaCard label="Total opportunities" value={oppsError ? '—' : String(totalOpportunities ?? 0)} hint="Open pipeline records" compact />
+            <StatDeltaCard label="Total leads" value={String(totalLeads ?? 0)} hint="All leads you can access" compact />
+            <StatDeltaCard label="Total opportunities" value={String(totalOpportunities ?? 0)} hint="Open pipeline records" compact />
             <StatDeltaCard
               label="New leads"
-              value={leadsTotalError ? '—' : String(totalLeads ?? 0)}
+              value={String(totalLeads ?? 0)}
               hint="Since account start"
               compact
             />
@@ -430,7 +443,7 @@ export function DashboardPage() {
                       <div className="text-center">
                         <TrendingUp className="mx-auto mb-2 h-7 w-7 text-ink-faint" />
                         <p className="text-sm text-ink-muted">No open pipeline data</p>
-                        <Link to="/pipeline" className="mt-1 text-xs font-semibold text-brand-600 hover:underline">Add opportunities →</Link>
+                        <DisabledNavLink to="/pipeline" allowed={canViewLeads} className="mt-1 text-xs font-semibold text-brand-600 hover:underline">Add opportunities →</DisabledNavLink>
                       </div>
                     </div>
                   )}
@@ -462,9 +475,9 @@ export function DashboardPage() {
                 Up to {DASHBOARD_EXPIRING_TASK_LIMIT} open tasks overdue or due within {EXPIRING_HORIZON_DAYS} days.
               </p>
             </div>
-            <Link to="/tasks" className="text-sm font-semibold text-brand-600 hover:text-brand-700">View all tasks →</Link>
+            <DisabledNavLink to="/tasks" allowed={canViewTasks} className="text-sm font-semibold text-brand-600 hover:text-brand-700">View all tasks →</DisabledNavLink>
           </div>
-          <DashboardExpiringTasks tasks={expiringTasks} loading={tasksLoading} error={tasksError} />
+          <DashboardExpiringTasks tasks={expiringTasks} loading={tasksLoading} error={tasksError} noAccess={!canViewTasks} />
         </section>
 
         {/* ── Trends & breakdowns ── */}
@@ -568,7 +581,7 @@ export function DashboardPage() {
                   ) : (
                     <div className="flex h-[260px] flex-col items-center justify-center gap-2 text-center">
                       <p className="text-sm text-ink-muted">No pipeline statuses configured</p>
-                      <Link to="/lead-configuration" className="text-xs font-semibold text-brand-600 hover:underline">Configure statuses →</Link>
+                      <DisabledNavLink to="/lead-configuration" allowed={canManageLeadSetup} className="text-xs font-semibold text-brand-600 hover:underline">Configure statuses →</DisabledNavLink>
                     </div>
                   )
                 )}
@@ -655,7 +668,7 @@ export function DashboardPage() {
               <h2 className="text-base font-semibold text-ink">Recent activity</h2>
               <p className="text-sm text-ink-muted">10 most recent actions across your pipeline</p>
             </div>
-            <Link to="/activities" className="text-sm font-semibold text-brand-600 hover:text-brand-700">View all →</Link>
+            <DisabledNavLink to="/activities" allowed={canViewActivities} className="text-sm font-semibold text-brand-600 hover:text-brand-700">View all →</DisabledNavLink>
           </div>
           {recentActLoading ? (
             <div className="flex flex-col gap-2">

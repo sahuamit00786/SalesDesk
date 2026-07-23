@@ -6,6 +6,7 @@ import { getEventColor } from '@/features/calendar/eventColors'
 import { useGetCalendarEventsQuery } from '@/features/calendar/calendarApi'
 import { useGetLeadFormMetaQuery } from '@/features/leads/leadsApi'
 import { useAppSelector } from '@/app/hooks'
+import { usePermission } from '@/hooks/usePermission'
 
 /**
  * @param {string} [className]
@@ -32,6 +33,7 @@ export function CalendarWorkspace({ className, lockedTypes = null, filterAssigne
 
   const user = useAppSelector((state) => state.auth.user)
   const activeWorkspaceId = useAppSelector((state) => state.workspace.activeWorkspaceId)
+  const canCreateReminder = usePermission('engage.calendar', 'create')
 
   const typesForQuery = lockedTypes?.length ? lockedTypes : selectedTypes
 
@@ -73,10 +75,14 @@ export function CalendarWorkspace({ className, lockedTypes = null, filterAssigne
         onTypesChange={setSelectedTypes}
         onDateRangeChange={setQueryRange}
         onOpenOpportunity={openOpportunityPanel}
-        onSelectSlot={(slotInfo) => {
-          setCreateDrawerDate(slotInfo.start)
-          setIsCreateDrawerOpen(true)
-        }}
+        onSelectSlot={
+          canCreateReminder
+            ? (slotInfo) => {
+                setCreateDrawerDate(slotInfo.start)
+                setIsCreateDrawerOpen(true)
+              }
+            : undefined
+        }
       />
       <CreateReminderDrawer
         isOpen={isCreateDrawerOpen}

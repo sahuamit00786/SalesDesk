@@ -27,6 +27,16 @@ export const UserWorkspace = sequelize.define(
         key: 'id',
       },
     },
+    /** Role override for this specific membership. NULL = use the user's global companyRoleId. */
+    companyRoleId: {
+      type: DataTypes.CHAR(36),
+      allowNull: true,
+      field: 'company_role_id',
+      references: {
+        model: 'company_roles',
+        key: 'id',
+      },
+    },
   },
   {
     tableName: 'user_workspaces',

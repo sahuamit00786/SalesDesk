@@ -26,7 +26,6 @@ import {
 } from '../services/leaveCalculatorService.js'
 import { createNotification } from '../services/notificationService.js'
 import { notifyLeaveDecided } from '../services/notification/teamNotificationService.js'
-import { Notification } from '../models/index.js'
 
 async function notifyLeaveApprovers({ companyId, workspaceId, applicant, leaveType, fromDate, toDate }) {
   const roles = await CompanyRole.findAll({
@@ -715,48 +714,6 @@ export async function deleteHoliday(req, res, next) {
     const row = await PublicHoliday.findOne({ where: { id: req.params.id, companyId: req.user.companyId } })
     if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Not found' } })
     await row.destroy()
-    return res.json({ success: true, data: { ok: true }, meta: {} })
-  } catch (e) {
-    return next(e)
-  }
-}
-
-export async function getNotifications(req, res, next) {
-  try {
-    const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20))
-    const rows = await Notification.findAll({
-      where: { userId: req.user.id, companyId: req.user.companyId, workspaceId: req.workspaceId },
-      order: [['createdAt', 'DESC']],
-      limit,
-    })
-    const unread = await Notification.count({
-      where: { userId: req.user.id, companyId: req.user.companyId, workspaceId: req.workspaceId, isRead: false },
-    })
-    return res.json({ success: true, data: rows, meta: { unread } })
-  } catch (e) {
-    return next(e)
-  }
-}
-
-export async function markNotificationRead(req, res, next) {
-  try {
-    const row = await Notification.findOne({
-      where: { id: req.params.id, userId: req.user.id, companyId: req.user.companyId, workspaceId: req.workspaceId },
-    })
-    if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Not found' } })
-    await row.update({ isRead: true })
-    return res.json({ success: true, data: row, meta: {} })
-  } catch (e) {
-    return next(e)
-  }
-}
-
-export async function markAllNotificationsRead(req, res, next) {
-  try {
-    await Notification.update(
-      { isRead: true },
-      { where: { userId: req.user.id, companyId: req.user.companyId, workspaceId: req.workspaceId, isRead: false } },
-    )
     return res.json({ success: true, data: { ok: true }, meta: {} })
   } catch (e) {
     return next(e)

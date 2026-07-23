@@ -114,18 +114,6 @@ export const leaveApi = baseApi.injectEndpoints({
       query: (id) => ({ url: `/leave/holidays/${id}`, method: 'DELETE' }),
       invalidatesTags: [{ type: 'Leave', id: 'HOLIDAYS' }],
     }),
-    getNotifications: build.query({
-      query: (limit = 20) => ({ url: '/notifications', params: { limit } }),
-      providesTags: [{ type: 'Notification', id: 'LIST' }],
-    }),
-    markNotificationRead: build.mutation({
-      query: (id) => ({ url: `/notifications/${id}/read`, method: 'PATCH' }),
-      invalidatesTags: [{ type: 'Notification', id: 'LIST' }],
-    }),
-    markAllNotificationsRead: build.mutation({
-      query: () => ({ url: '/notifications/mark-all-read', method: 'POST' }),
-      invalidatesTags: [{ type: 'Notification', id: 'LIST' }],
-    }),
   }),
 })
 
@@ -151,7 +139,4 @@ export const {
   useCreateHolidayMutation,
   useUpdateHolidayMutation,
   useDeleteHolidayMutation,
-  useGetNotificationsQuery,
-  useMarkNotificationReadMutation,
-  useMarkAllNotificationsReadMutation,
 } = leaveApi

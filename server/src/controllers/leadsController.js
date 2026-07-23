@@ -7,6 +7,7 @@ import { getCountries, getCountryCallingCode } from 'libphonenumber-js/min'
 import { google } from 'googleapis'
 import { getGoogleOAuthClient, readGoogleOAuthEnv } from '../services/google/googleEnv.js'
 import { sequelize } from '../models/index.js'
+import { primaryClientOrigin } from '../config/corsOrigins.js'
 import {
   Activity,
   AssignmentRule,
@@ -161,130 +162,6 @@ function attachmentsCountFor(row) {
 function commentsCountFor(row) {
   if (Array.isArray(row?.comments)) return row.comments.length
   return null
-}
-
-const RECURRENCE_FREQ = ['daily', 'weekly', 'monthly', 'custom']
-
-function sanitizeRecurrenceRule(value) {
-  if (value === undefined) return undefined
-  if (value === null) return null
-  if (typeof value !== 'object') return null
-  const freq = String(value.freq || '').trim().toLowerCase()
-  if (!RECURRENCE_FREQ.includes(freq)) return null
-  const intervalNum = Number(value.interval || 1)
-  const interval = Number.isFinite(intervalNum) && intervalNum > 0 ? Math.min(Math.floor(intervalNum), 365) : 1
-  const out = { freq, interval }
-  if (value.until) {
-    const u = new Date(value.until)
-    if (!Number.isNaN(u.getTime())) out.until = u.toISOString()
-  }
-  if (Array.isArray(value.byweekday)) {
-    const days = value.byweekday
-      .map((d) => Number(d))
-      .filter((n) => Number.isInteger(n) && n >= 0 && n <= 6)
-    if (days.length) out.byweekday = Array.from(new Set(days)).sort((a, b) => a - b)
-  }
-  return out
-}
-
-function describeRecurrence(rule) {
-  if (!rule || typeof rule !== 'object') return null
-  const freq = rule.freq
-  const interval = rule.interval || 1
-  if (freq === 'daily') return interval === 1 ? 'Daily' : `Every ${interval} days`
-  if (freq === 'weekly') return interval === 1 ? 'Weekly' : `Every ${interval} weeks`
-  if (freq === 'monthly') return interval === 1 ? 'Monthly' : `Every ${interval} months`
-  if (freq === 'custom') return `Custom (${interval}x)`
-  return null
-}
-
-function advanceDateByRule(date, rule) {
-  if (!date) return null
-  const rawDate = new Date(date)
-  if (Number.isNaN(rawDate.getTime())) return null
-  const interval = rule.interval || 1
-  const next = new Date(rawDate.getTime())
-  if (rule.freq === 'daily' || rule.freq === 'custom') {
-    next.setDate(next.getDate() + interval)
-  } else if (rule.freq === 'weekly') {
-    if (Array.isArray(rule.byweekday) && rule.byweekday.length) {
-      // Find the next byweekday after the current date.
-      for (let i = 1; i <= 7 * Math.max(interval, 1); i += 1) {
-        const candidate = new Date(rawDate.getTime())
-        candidate.setDate(candidate.getDate() + i)
-        if (rule.byweekday.includes(candidate.getDay())) {
-          return candidate
-        }
-      }
-      next.setDate(next.getDate() + 7 * interval)
-    } else {
-      next.setDate(next.getDate() + 7 * interval)
-    }
-  } else if (rule.freq === 'monthly') {
-    next.setMonth(next.getMonth() + interval)
-  } else {
-    return null
-  }
-  return next
-}
-
-async function spawnNextRecurrence(parentTask, actorUserId) {
-  if (!parentTask?.recurrenceRule) return null
-  const rule = parentTask.recurrenceRule
-  const baseDue = parentTask.dueAt ? new Date(parentTask.dueAt) : null
-  if (!baseDue) return null
-  const nextDue = advanceDateByRule(baseDue, rule)
-  if (!nextDue) return null
-  if (rule.until) {
-    const until = new Date(rule.until)
-    if (!Number.isNaN(until.getTime()) && nextDue.getTime() > until.getTime()) return null
-  }
-  let nextStart = null
-  if (parentTask.startAt) {
-    const baseStart = new Date(parentTask.startAt)
-    if (!Number.isNaN(baseStart.getTime())) {
-      nextStart = advanceDateByRule(baseStart, rule)
-    }
-  }
-  const rootParentId = parentTask.recurrenceParentId || parentTask.id
-  // Avoid duplicates: don't spawn if a child for this exact dueAt already exists.
-  const existing = await LeadTask.findOne({
-    where: {
-      recurrenceParentId: rootParentId,
-      dueAt: nextDue,
-    },
-  })
-  if (existing) return existing
-  const child = await LeadTask.create({
-    leadId: parentTask.leadId,
-    workspaceId: parentTask.workspaceId,
-    companyId: parentTask.companyId,
-    title: parentTask.title,
-    taskType: parentTask.taskType,
-    description: parentTask.description,
-    startAt: nextStart,
-    dueAt: nextDue,
-    priority: parentTask.priority,
-    status: 'pending',
-    createdBy: actorUserId || parentTask.createdBy,
-    assignedTo: parentTask.assignedTo,
-    recurrenceRule: rule,
-    recurrenceParentId: rootParentId,
-    attachments: attachmentsArray(parentTask.attachments),
-  })
-  await createSystemActivity({
-    leadId: parentTask.leadId,
-    userId: actorUserId || parentTask.createdBy,
-    body: `Recurring task spawned for ${nextDue.toISOString()}`,
-    metadata: {
-      action: 'task_recurrence_spawned',
-      taskId: child.id,
-      parentTaskId: parentTask.id,
-      title: child.title,
-      dueAt: nextDue.toISOString(),
-    },
-  })
-  return child
 }
 
 function sanitizeReminderInput(item) {
@@ -928,6 +805,46 @@ export async function list(req, res, next) {
   }
 }
 
+/**
+ * ID-only variant of `list` for "select all matching filters" bulk actions.
+ * Skips joins (assignee/tags/pipeline status/assignments) and engagement
+ * aggregation entirely — those are expensive per-page (5+ grouped queries) and
+ * unnecessary when the caller only wants the id set to select/act on in bulk.
+ */
+export async function listIds(req, res, next) {
+  try {
+    let accessWhere
+    try {
+      accessWhere = await buildLeadListAccessWhere(req)
+    } catch (e) {
+      if (e.status === 403) {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'FORBIDDEN', message: e.publicMessage || e.message },
+        })
+      }
+      throw e
+    }
+
+    const flatWhere = buildListWhere(req.query)
+    const advancedWhere = buildAdvancedListWhere(parseFiltersParam(req.query.filters), LEAD_FILTER_FIELDS)
+    let where = { ...accessWhere, ...flatWhere }
+    if (advancedWhere) {
+      where = { [Op.and]: [where, advancedWhere] }
+    }
+
+    const rows = await Lead.findAll({
+      where,
+      attributes: ['id'],
+      raw: true,
+    })
+
+    return res.json({ success: true, data: { ids: rows.map((r) => r.id) } })
+  } catch (e) {
+    return next(e)
+  }
+}
+
 export async function getOne(req, res, next) {
   try {
     const include = [
@@ -1542,6 +1459,15 @@ export async function listArchived(req, res, next) {
     const where = { ...accessWhere, isDeleted: true }
     if (req.query.isOpportunity === 'true') where.isOpportunity = true
     else if (req.query.isOpportunity === 'false') where.isOpportunity = false
+    if (req.query.search) {
+      const q = `%${String(req.query.search).trim().toLowerCase()}%`
+      where[Op.or] = [
+        sqlWhere(fn('LOWER', col('Lead.title')), { [Op.like]: q }),
+        sqlWhere(fn('LOWER', col('Lead.contact_name')), { [Op.like]: q }),
+        sqlWhere(fn('LOWER', col('Lead.company')), { [Op.like]: q }),
+        sqlWhere(fn('LOWER', col('Lead.email')), { [Op.like]: q }),
+      ]
+    }
 
     const { count, rows } = await Lead.findAndCountAll({
       where,
@@ -1702,7 +1628,7 @@ export async function bulk(req, res, next) {
       await Lead.destroy({ where: { id: { [Op.in]: ids } } })
     }
     if (action === 'update') {
-      const ALLOWED = ['status', 'pipelineStatus', 'sourceId', 'value', 'country', 'city', 'state']
+      const ALLOWED = ['status', 'pipelineStatus', 'sourceId', 'assignedTo', 'value', 'valueCurrency', 'country', 'city', 'state']
       const patch = {}
       for (const key of ALLOWED) {
         if (Object.prototype.hasOwnProperty.call(payload, key) && payload[key] !== undefined && payload[key] !== '') {
@@ -2335,8 +2261,7 @@ export async function connectGoogleEmailCallback(req, res, next) {
     if (row) {
       registerGmailWatchForTokenRow(row).catch(() => {})
     }
-    const clientOrigin = process.env.CLIENT_ORIGIN || 'http://localhost:5173'
-    const base = clientOrigin.replace(/\/$/, '')
+    const base = primaryClientOrigin
     const returnPath = state.returnTo || '/integrations'
     const query = returnPath === '/integrations' ? 'tab=google&connected=1' : 'connected=1'
     const redirectUrl = `${base}${returnPath}?${query}`
@@ -2757,7 +2682,6 @@ function decorateTaskRow(row) {
   json.attachmentsCount = json.attachments.length
   json.commentsCount = commentsCountFor(json) ?? json.commentsCount ?? 0
   json.isOverdue = isOverdueTask(json)
-  json.recurrenceLabel = describeRecurrence(json.recurrenceRule)
   return json
 }
 
@@ -2995,7 +2919,6 @@ export async function createTask(req, res, next) {
 
     const status = normalizeLeadTaskStatus(req.body?.status) || 'pending'
     const priority = normalizeLeadTaskPriority(req.body?.priority) || 'medium'
-    const recurrenceRule = sanitizeRecurrenceRule(req.body?.recurrenceRule)
     const attachments = sanitizeAttachmentsInput(req.body?.attachments)
 
     const row = await LeadTask.create({
@@ -3012,7 +2935,6 @@ export async function createTask(req, res, next) {
       completedAt: status === 'completed' ? new Date() : null,
       createdBy: req.user.id,
       assignedTo: req.body?.assignedTo || null,
-      recurrenceRule: recurrenceRule === undefined ? null : recurrenceRule,
       attachments: attachments === undefined ? [] : attachments || [],
     })
     await replaceLeadTaskSubtasks(row.id, req.body?.subtasks)
@@ -3116,10 +3038,6 @@ export async function patchTask(req, res, next) {
       }
     }
     if ('assignedTo' in req.body) payload.assignedTo = req.body.assignedTo || null
-    if ('recurrenceRule' in req.body) {
-      const sanitized = sanitizeRecurrenceRule(req.body.recurrenceRule)
-      payload.recurrenceRule = sanitized === undefined ? null : sanitized
-    }
     if ('attachments' in req.body) {
       const sanitized = sanitizeAttachmentsInput(req.body.attachments)
       payload.attachments = sanitized === undefined ? [] : sanitized || []
@@ -3160,13 +3078,6 @@ export async function patchTask(req, res, next) {
           toStatus: after.status,
         },
       })
-      if (after.status === 'completed') {
-        try {
-          await spawnNextRecurrence(row, req.user.id)
-        } catch {
-          // recurrence spawn is best-effort; don't fail the patch
-        }
-      }
     }
     if (before.priority !== after.priority) {
       await createSystemActivity({

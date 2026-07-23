@@ -116,6 +116,8 @@ UserMenuPermission.belongsTo(User, { foreignKey: 'userId', as: 'user' })
 User.hasMany(UserMenuPermission, { foreignKey: 'userId', as: 'menuPermissions' })
 UserMenuPermission.belongsTo(MenuMaster, { foreignKey: 'menuId', as: 'menu' })
 MenuMaster.hasMany(UserMenuPermission, { foreignKey: 'menuId', as: 'userLinks' })
+// Per-workspace override scope (nullable — NULL rows are the global grant).
+UserMenuPermission.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
 
 Workspace.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
 Company.hasMany(Workspace, { foreignKey: 'companyId', as: 'workspaces' })
@@ -123,6 +125,8 @@ UserWorkspace.belongsTo(User, { foreignKey: 'userId', as: 'user' })
 UserWorkspace.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
 User.hasMany(UserWorkspace, { foreignKey: 'userId', as: 'workspaceMemberships' })
 Workspace.hasMany(UserWorkspace, { foreignKey: 'workspaceId', as: 'userMemberships' })
+// Role override for this specific membership (nullable — NULL falls back to User.companyRoleId).
+UserWorkspace.belongsTo(CompanyRole, { foreignKey: 'companyRoleId', as: 'companyRoleOverride' })
 
 Team.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
 Team.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })

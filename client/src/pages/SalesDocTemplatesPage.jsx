@@ -9,6 +9,7 @@ import {
   useDeleteSalesDocTemplateMutation,
 } from '@/features/sales-docs/salesDocTemplatesApi'
 import { QUOTATION_PRESET_LABELS, INVOICE_PRESET_LABELS } from '@/features/sales-docs/presetLabels'
+import { usePermission } from '@/hooks/usePermission'
 
 const DOC_TYPE_CONFIG = {
   quotation: {
@@ -22,7 +23,10 @@ const DOC_TYPE_CONFIG = {
 }
 
 export function SalesDocTemplatesPage() {
-  const templatesQuery = useGetSalesDocTemplatesQuery()
+  const canView = usePermission('manage.sales_doc_templates', 'view')
+  const canUpdate = usePermission('manage.sales_doc_templates', 'update')
+  const canDelete = usePermission('manage.sales_doc_templates', 'delete')
+  const templatesQuery = useGetSalesDocTemplatesQuery(undefined, { skip: !canView })
   const rows = templatesQuery.data?.data?.items ?? templatesQuery.data?.items ?? []
 
   const [deleteTpl] = useDeleteSalesDocTemplateMutation()
@@ -31,11 +35,19 @@ export function SalesDocTemplatesPage() {
   const [editingRow, setEditingRow] = useState(null)
 
   function openEdit(row) {
+    if (!canUpdate) {
+      toast.error("You don't have permission to edit templates.")
+      return
+    }
     setEditingRow(row)
     setDrawerOpen(true)
   }
 
   function handleDelete(row) {
+    if (!canDelete) {
+      toast.error("You don't have permission to delete templates.")
+      return
+    }
     if (!confirm('Delete this template?')) return
     deleteTpl(row.id)
       .unwrap()
@@ -52,8 +64,8 @@ export function SalesDocTemplatesPage() {
         <SalesDocTemplateGallery
           items={rows}
           docTypeConfig={DOC_TYPE_CONFIG}
-          onEdit={openEdit}
-          onDelete={handleDelete}
+          onEdit={canUpdate ? openEdit : undefined}
+          onDelete={canDelete ? handleDelete : undefined}
         />
       </PageStack>
 

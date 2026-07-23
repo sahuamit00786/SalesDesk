@@ -31,6 +31,7 @@ import { mergePartsToE164 } from '@/utils/phoneNumbers'
 import { cn } from '@/utils/cn'
 import { useEffectiveCurrency } from '@/hooks/useEffectiveCurrency'
 import { DEAL_CURRENCY_OPTIONS } from '@/features/deals/dealCurrencies'
+import { useAppSelector } from '@/app/hooks'
 
 const initialForm = {
   contactName: '',
@@ -327,6 +328,12 @@ export function AddLeadModal({
     return sys.length ? sys : sources
   }, [sources])
   const users = formMeta.users || []
+  const authUser = useAppSelector((s) => s.auth.user)
+  // Sales-tier users (anyone below workspace admin/manager) can only ever own leads they
+  // create themselves — the assignment picker is locked to "me" for them.
+  const canAssignOthers =
+    Boolean(authUser?.isCompanyAdmin) ||
+    ['workspace_admin', 'manager'].includes(authUser?.companyRole?.userRoleKind)
   const availableTags = useMemo(() => formMeta.tags || [], [formMeta.tags])
   const customFieldDefs = useMemo(() => formMeta.customFields || [], [formMeta.customFields])
   const bulkImportFieldTargets = useMemo(() => {
@@ -336,6 +343,7 @@ export function AddLeadModal({
   const [form, setForm] = useState(initialForm)
   const [asOpportunity, setAsOpportunity] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [importProgress, setImportProgress] = useState(null)
   const [activeTab, setActiveTab] = useState('single')
   const [parsed, setParsed] = useState({ columns: [], rows: [] })
   const [bulkFileName, setBulkFileName] = useState('')
@@ -421,14 +429,16 @@ export function AddLeadModal({
     setActiveTab('single')
     setAssigneeDropdownOpen(false)
     setAssigneeSearch('')
-    setBulkAssigneeIds([])
+    setBulkAssigneeIds(canAssignOthers || !authUser?.id ? [] : [authUser.id])
     setBulkAssigneeDropdownOpen(false)
     setBulkAssigneeSearch('')
-    setForm(
-      initialLead
-        ? toEditForm(initialLead)
-        : { ...initialForm, valueCurrency: effectiveCurrency },
-    )
+    const nextForm = initialLead
+      ? toEditForm(initialLead)
+      : { ...initialForm, valueCurrency: effectiveCurrency }
+    if (!canAssignOthers && authUser?.id) {
+      nextForm.assignedUserIds = [authUser.id]
+    }
+    setForm(nextForm)
     const fromLead = Boolean(initialLead?.isOpportunity)
     setAsOpportunity(fromLead || Boolean(defaultIsOpportunity))
     setParsed({ columns: [], rows: [] })
@@ -439,7 +449,7 @@ export function AddLeadModal({
     setImportActiveSheet('')
     bulkPasteSigRef.current = ''
     setBulkImportSourceId('')
-  }, [open, initialLead, defaultIsOpportunity, effectiveCurrency])
+  }, [open, initialLead, defaultIsOpportunity, effectiveCurrency, canAssignOthers, authUser?.id])
 
   useEffect(() => {
     if (!open || activeTab !== 'bulk') return
@@ -599,13 +609,32 @@ export function AddLeadModal({
       return out
     })
     setBusy(true)
+    const total = mappedRows.length
+    setImportProgress({ done: 0, total })
+    const CHUNK_SIZE = 200
+    let importedCount = 0
+    let duplicateCount = 0
+    let errorCount = 0
     try {
-      await onBulkImport?.(mappedRows)
-      toast.success(`Imported ${mappedRows.length} leads`)
+      for (let i = 0; i < mappedRows.length; i += CHUNK_SIZE) {
+        const chunk = mappedRows.slice(i, i + CHUNK_SIZE)
+        const res = await onBulkImport?.(chunk)
+        const data = res?.data || res
+        importedCount += data?.imported || 0
+        duplicateCount += data?.duplicates || 0
+        errorCount += data?.errors?.length || 0
+        setImportProgress({ done: Math.min(i + chunk.length, total), total })
+      }
+      toast.success(
+        duplicateCount || errorCount
+          ? `Imported ${importedCount} leads (${duplicateCount} duplicates, ${errorCount} errors skipped)`
+          : `Imported ${importedCount} leads`,
+      )
       clearBulkImport()
       onClose?.()
     } finally {
       setBusy(false)
+      setImportProgress(null)
     }
   }
 
@@ -636,13 +665,26 @@ export function AddLeadModal({
           : 'Create one lead, or bulk-import from a CSV / Excel file: map columns to fields and choose a workspace source once for the whole file.'
       }
       footer={
-        <div className="flex justify-end gap-2">
+        <div className="flex items-center justify-end gap-3">
           <button type="button" className="h-10 rounded-xl border border-surface-border px-5" onClick={onClose}>Cancel</button>
+          {activeTab === 'bulk' && importProgress ? (
+            <div className="flex items-center gap-2">
+              <div className="h-1.5 w-24 overflow-hidden rounded-full bg-surface-subtle">
+                <div
+                  className="h-full rounded-full bg-[var(--brand-primary)] transition-all duration-200"
+                  style={{ width: `${importProgress.total ? Math.round((importProgress.done / importProgress.total) * 100) : 0}%` }}
+                />
+              </div>
+              <span className="text-xs font-medium text-ink-muted whitespace-nowrap">
+                {importProgress.done}/{importProgress.total}
+              </span>
+            </div>
+          ) : null}
           {activeTab === 'single' ? (
             <button type="submit" form="add-lead-form" className="h-10 rounded-xl bg-[var(--brand-primary)] px-5 text-white" disabled={busy}>{busy ? 'Saving...' : 'Save Lead'}</button>
           ) : activeTab === 'bulk' ? (
             <button type="button" className="h-10 rounded-xl bg-[var(--brand-primary)] px-5 text-white" disabled={busy || !parsed.rows.length || !bulkImportSourceId} onClick={submitBulk}>
-              {busy ? 'Importing...' : `Import ${parsed.rows.length || 0} Leads`}
+              {busy ? (importProgress ? `Importing ${importProgress.done}/${importProgress.total}...` : 'Importing...') : `Import ${parsed.rows.length || 0} Leads`}
             </button>
           ) : null}
         </div>
@@ -876,8 +918,10 @@ export function AddLeadModal({
               <div className="relative">
                 <button
                   type="button"
-                  onClick={() => setAssigneeDropdownOpen((openState) => !openState)}
-                  className="flex h-10 w-full items-center justify-between rounded-xl border border-surface-border bg-white px-3.5 pl-9 text-left text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                  disabled={!canAssignOthers}
+                  onClick={() => canAssignOthers && setAssigneeDropdownOpen((openState) => !openState)}
+                  title={!canAssignOthers ? 'Leads you create are always assigned to you' : undefined}
+                  className="flex h-10 w-full items-center justify-between rounded-xl border border-surface-border bg-white px-3.5 pl-9 text-left text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 disabled:cursor-not-allowed disabled:bg-surface-subtle disabled:opacity-80"
                 >
                   <User className="pointer-events-none absolute left-3 top-1/2 h-3 w-3 -translate-y-1/2 text-ink-faint" />
                   <span className={selectedAssigneeLabel ? 'text-ink' : 'text-ink-faint'}>
@@ -1035,12 +1079,14 @@ export function AddLeadModal({
           </div>
 
           <div className="rounded-2xl border border-surface-border p-4">
-            <p className="text-sm font-semibold text-ink">Assign to (round-robin)</p>
+            <p className="text-sm font-semibold text-ink">{canAssignOthers ? 'Assign to (round-robin)' : 'Assign to'}</p>
             <div className="relative mt-3">
               <button
                 type="button"
-                onClick={() => setBulkAssigneeDropdownOpen((v) => !v)}
-                className="flex h-10 w-full items-center justify-between rounded-xl border border-surface-border bg-white px-3.5 pl-9 text-left text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                disabled={!canAssignOthers}
+                onClick={() => canAssignOthers && setBulkAssigneeDropdownOpen((v) => !v)}
+                title={!canAssignOthers ? 'Imported leads are always assigned to you' : undefined}
+                className="flex h-10 w-full items-center justify-between rounded-xl border border-surface-border bg-white px-3.5 pl-9 text-left text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 disabled:cursor-not-allowed disabled:bg-surface-subtle disabled:opacity-80"
               >
                 <User className="pointer-events-none absolute left-3 top-1/2 h-3 w-3 -translate-y-1/2 text-ink-faint" />
                 <span className={selectedBulkAssigneeLabel ? 'text-ink' : 'text-ink-faint'}>

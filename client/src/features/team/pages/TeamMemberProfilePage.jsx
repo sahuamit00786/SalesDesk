@@ -27,7 +27,9 @@ import {
 } from '@/components/ui/icons'
 import { PageShell } from '@/components/layout/PageShell'
 import { TeamMemberAccessDrawer } from '@/features/team/components/TeamMemberAccessDrawer'
+import { MyProfileEditDrawer } from '@/features/team/components/MyProfileEditDrawer'
 import { useGetTeamUserQuery } from '@/features/team/teamApi'
+import { useAppSelector } from '@/app/hooks'
 import { labelCompanyUserRoleKind } from '@/constants/companyUserRoleKind'
 import { useGetActivitiesFeedQuery } from '@/features/activities/activitiesApi'
 import { useGetTasksQuery } from '@/features/tasks/tasksApi'
@@ -36,6 +38,7 @@ import { LeadTabSectionHeader, LeadTabEmptyState } from '@/features/leads/compon
 import { useGetMeetingsQuery } from '@/features/meetings/meetingsApi'
 import { useGetRemindersQuery } from '@/features/reminders/remindersApi'
 import { cn } from '@/utils/cn'
+import { usePermission } from '@/hooks/usePermission'
 
 const TABS = [
   { id: 'activity', label: 'Activity', icon: Sparkles },
@@ -580,7 +583,7 @@ function NoteCard({ row }) {
   )
 }
 
-function ProfileSidebar({ user, onEdit, canEdit = true }) {
+function ProfileSidebar({ user, onEdit, canEdit = true, isSelf = false }) {
   const headerInitials = initialsFor(user?.name || user?.email || '')
   const cityState = [user?.city, user?.country].filter(Boolean).join(', ')
   const roleLabel = user?.companyRole?.name
@@ -615,14 +618,16 @@ function ProfileSidebar({ user, onEdit, canEdit = true }) {
                   <Pencil className="h-3.5 w-3.5" aria-hidden />
                 </button>
               ) : null}
-              <Link
-                to={`/team/${user?.id}/permissions`}
-                aria-label="Menu permissions"
-                title="Menu permissions"
-                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-surface-border bg-white text-ink-muted transition hover:bg-surface-subtle hover:text-ink"
-              >
-                <Lock className="h-3.5 w-3.5" aria-hidden />
-              </Link>
+              {isSelf ? null : (
+                <Link
+                  to={`/team/${user?.id}/permissions`}
+                  aria-label="Menu permissions"
+                  title="Menu permissions"
+                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-surface-border bg-white text-ink-muted transition hover:bg-surface-subtle hover:text-ink"
+                >
+                  <Lock className="h-3.5 w-3.5" aria-hidden />
+                </Link>
+              )}
             </div>
             <p className="mt-1 text-sm text-ink-muted">{user?.jobTitle || roleLabel || 'Team member'}</p>
             <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5">
@@ -712,7 +717,11 @@ function ProfileSidebar({ user, onEdit, canEdit = true }) {
 }
 
 export function TeamMemberProfilePage() {
-  const { userId } = useParams()
+  const { userId: routeUserId } = useParams()
+  const currentUser = useAppSelector((s) => s.auth.user)
+  const userId = routeUserId || currentUser?.id
+  const isSelf = Boolean(currentUser?.id) && String(currentUser.id) === String(userId)
+  const canAdminTeam = usePermission('settings.team', 'admin')
   const [activeTab, setActiveTab] = useState('activity')
   const [editOpen, setEditOpen] = useState(false)
   const [meetingListNow] = useState(() => Date.now())
@@ -820,7 +829,12 @@ export function TeamMemberProfilePage() {
           </div>
         ) : user ? (
           <>
-            <ProfileSidebar user={user} onEdit={() => setEditOpen(true)} canEdit={Boolean(user?.isActive)} />
+            <ProfileSidebar
+              user={user}
+              onEdit={() => setEditOpen(true)}
+              canEdit={isSelf || (canAdminTeam && Boolean(user?.isActive))}
+              isSelf={isSelf}
+            />
 
             <section className="rounded-2xl border border-surface-border bg-white p-4 sm:p-5">
               <div className="grid grid-cols-2 gap-3 border-b border-surface-border pb-4 sm:grid-cols-4">
@@ -974,12 +988,21 @@ export function TeamMemberProfilePage() {
         ) : null}
       </div>
 
-      <TeamMemberAccessDrawer
-        open={editOpen}
-        user={user}
-        onClose={() => setEditOpen(false)}
-        onSaved={() => refetchUser()}
-      />
+      {isSelf ? (
+        <MyProfileEditDrawer
+          open={editOpen}
+          user={user}
+          onClose={() => setEditOpen(false)}
+          onSaved={() => refetchUser()}
+        />
+      ) : (
+        <TeamMemberAccessDrawer
+          open={editOpen}
+          user={user}
+          onClose={() => setEditOpen(false)}
+          onSaved={() => refetchUser()}
+        />
+      )}
     </PageShell>
   )
 }

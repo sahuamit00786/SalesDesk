@@ -242,8 +242,8 @@ export function AttachmentPickerModal({ open, onClose, onConfirm, existing = [],
       }))
       setSessionUploads((prev) => [...prev, ...normalized])
       toast.success(`${normalized.length} file${normalized.length === 1 ? '' : 's'} uploaded`)
-    } catch {
-      toast.error('Upload failed')
+    } catch (err) {
+      toast.error(err?.data?.error?.message || err?.error || 'Upload failed')
     } finally {
       e.target.value = ''
     }

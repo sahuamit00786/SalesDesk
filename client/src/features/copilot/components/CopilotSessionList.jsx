@@ -66,7 +66,7 @@ export function CopilotSessionList({ sessions, activeSessionId, onSelect, onNew,
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
             <Sparkles className="h-4 w-4" />
           </span>
-          <span className="truncate text-sm font-semibold tracking-tight text-ink">LeadNext Copilot</span>
+          <span className="truncate text-sm font-semibold tracking-tight text-ink">LeadNest Copilot</span>
         </div>
         {onCollapse ? (
           <button

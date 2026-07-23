@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button'
 import { getRouteMeta } from '@/components/layout/navConfig'
 import { WorkspaceSwitcher } from '@/components/layout/WorkspaceSwitcher'
 import { WorkspaceManagementModal } from '@/components/layout/WorkspaceManagementModal'
-import { HrNotificationBell } from '@/features/leave/components/HrNotificationBell'
+import { NotificationBell } from '@/features/notifications/components/NotificationBell'
 import { ProfileMenuDropdown } from '@/components/layout/ProfileMenuDropdown'
 import { useHrRole } from '@/features/hr/useHrRole'
 import { useNotificationsSocket } from '@/features/notifications/useNotificationsSocket'
@@ -45,7 +45,7 @@ export function Topbar({ onMenu }) {
         </div>
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
           <WorkspaceSwitcher onWorkspaceSettingsClick={() => setWorkspaceModalOpen(true)} />
-          <HrNotificationBell />
+          <NotificationBell />
           <ProfileMenuDropdown />
         </div>
       </header>

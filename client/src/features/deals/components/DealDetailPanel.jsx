@@ -44,7 +44,6 @@ import {
   LEAD_TASK_STATUS_OPTIONS,
   TaskOverdueBadge,
   TaskPriorityIcon,
-  TaskRecurrenceIcon,
   TaskStatusPill,
   taskTypeLabel,
 } from '@/features/leads/components/LeadTaskDrawer'
@@ -53,6 +52,7 @@ import { usePatchPipelineStatusMutation } from '@/features/opportunities/opportu
 import { useGetDealQuery, usePatchDealStageMutation, useGetDealActivitiesQuery, useCreateDealActivityMutation } from '@/features/deals/dealsApi'
 import { formatStageLabel } from '@/features/opportunities/components/OpportunitiesKanban'
 import { useGetDocumentsQuery, useUploadDocumentMutation } from '@/features/documents/documentsApi'
+import { usePermission } from '@/hooks/usePermission'
 import { DealInvoicesPanel, DealQuotationsPanel } from '@/features/deals/components/DealSalesDocsTabs'
 import { formatDealMoney, normalizeDealCurrency } from '@/features/deals/dealCurrencies'
 import { DealPaymentsTab } from '@/features/deals/components/DealPaymentsTab'
@@ -393,6 +393,14 @@ export function DealDetailPanel({ open, onClose, opp, pipelineStatuses = [], def
   const [createDealActivity, { isLoading: loggingDealActivity }] = useCreateDealActivityMutation()
   const changingStage = changingOppStage || changingDealStage
   const [uploadDocument, { isLoading: uploadingDocument }] = useUploadDocumentMutation()
+  const canUpdateLeadNotes = usePermission('main.leads', 'update')
+  const canCreateLeadNotes = usePermission('main.leads', 'create')
+  const canUpdateTasks = usePermission('engage.tasks', 'update')
+  const canCreateTasks = usePermission('engage.tasks', 'create')
+  const canUpdateOpportunity = usePermission('main.opportunities', 'update')
+  const canUpdateDeal = usePermission('main.deals', 'update')
+  const canCreateDealActivity = usePermission('main.deals', 'create')
+  const canUploadDocuments = usePermission('manage.documents', 'create')
 
   const lead = leadResp?.data
   const activities = activityData?.data || []
@@ -491,6 +499,11 @@ export function DealDetailPanel({ open, onClose, opp, pipelineStatuses = [], def
       setStageMenuOpen(false)
       return
     }
+    if (dealId ? !canUpdateDeal : !canUpdateOpportunity) {
+      toast.error("You don't have permission to change the stage.")
+      setStageMenuOpen(false)
+      return
+    }
     try {
       if (dealId) {
         await patchDealStage({ id: dealId, currentStage: nextStage }).unwrap()
@@ -507,6 +520,10 @@ export function DealDetailPanel({ open, onClose, opp, pipelineStatuses = [], def
   }
 
   async function submitNote() {
+    if (!canCreateLeadNotes) {
+      toast.error("You don't have permission to add notes.")
+      return
+    }
     if (!notePlainText(noteBody)) {
       toast.error('Note body cannot be empty')
       return
@@ -522,6 +539,10 @@ export function DealDetailPanel({ open, onClose, opp, pipelineStatuses = [], def
   }
 
   async function handleDeleteNote(noteId) {
+    if (!canUpdateLeadNotes) {
+      toast.error("You don't have permission to delete notes.")
+      return
+    }
     try {
       await deleteNote({ id: leadApiId, noteId }).unwrap()
       toast.success('Note deleted')
@@ -532,6 +553,10 @@ export function DealDetailPanel({ open, onClose, opp, pipelineStatuses = [], def
 
   async function submitDealActivity({ type, body }) {
     if (!dealId) return
+    if (!canCreateDealActivity) {
+      toast.error("You don't have permission to log deal activity.")
+      return
+    }
     try {
       await createDealActivity({ id: dealId, type, body }).unwrap()
       toast.success('Activity logged')
@@ -541,6 +566,10 @@ export function DealDetailPanel({ open, onClose, opp, pipelineStatuses = [], def
   }
 
   async function handleCompleteTask(task) {
+    if (!canUpdateTasks) {
+      toast.error("You don't have permission to update tasks.")
+      return
+    }
     try {
       await patchTask({ id: leadApiId, taskId: task.id, status: 'completed' }).unwrap()
       toast.success('Task completed')
@@ -550,6 +579,10 @@ export function DealDetailPanel({ open, onClose, opp, pipelineStatuses = [], def
   }
 
   async function handleDeleteTask(task) {
+    if (!canUpdateTasks) {
+      toast.error("You don't have permission to delete tasks.")
+      return
+    }
     try {
       await deleteTask({ id: leadApiId, taskId: task.id }).unwrap()
       toast.success('Task deleted')
@@ -559,6 +592,10 @@ export function DealDetailPanel({ open, onClose, opp, pipelineStatuses = [], def
   }
 
   async function handleTaskStatusChange(task, status) {
+    if (!canUpdateTasks) {
+      toast.error("You don't have permission to update tasks.")
+      return
+    }
     try {
       await patchTask({
         id: leadApiId,
@@ -573,6 +610,10 @@ export function DealDetailPanel({ open, onClose, opp, pipelineStatuses = [], def
 
   async function handleUploadDocument(file, fileType) {
     if (!file) return
+    if (!canUploadDocuments) {
+      toast.error("You don't have permission to upload documents.")
+      return
+    }
     try {
       await uploadDocument({
         file,
@@ -870,6 +911,8 @@ export function DealDetailPanel({ open, onClose, opp, pipelineStatuses = [], def
                 onSubmit={submitNote}
                 submitting={creatingNote}
                 onDelete={handleDeleteNote}
+                canCreate={canCreateLeadNotes}
+                canDelete={canUpdateLeadNotes}
               />
             ) : tab === 'tasks' ? (
               <TasksTab
@@ -885,6 +928,8 @@ export function DealDetailPanel({ open, onClose, opp, pipelineStatuses = [], def
                 onComplete={handleCompleteTask}
                 onDelete={handleDeleteTask}
                 onChangeStatus={handleTaskStatusChange}
+                canCreate={canCreateTasks}
+                canUpdate={canUpdateTasks}
               />
             ) : tab === 'payments' ? (
               <DealPaymentsTab
@@ -1098,7 +1143,7 @@ function ActivityTab({ activities, tasks, loading, isDeal = false, onLogActivity
   )
 }
 
-function NotesTab({ notes, noteTitle, onNoteTitleChange, noteBody, onNoteBodyChange, onSubmit, submitting, onDelete }) {
+function NotesTab({ notes, noteTitle, onNoteTitleChange, noteBody, onNoteBodyChange, onSubmit, submitting, onDelete, canCreate = true, canDelete = true }) {
   const [showComposer, setShowComposer] = useState(false)
 
   function handleSubmit() {
@@ -1110,7 +1155,7 @@ function NotesTab({ notes, noteTitle, onNoteTitleChange, noteBody, onNoteBodyCha
     <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="flex shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-5 py-3">
         <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500">Notes</p>
-        {!showComposer && (
+        {!showComposer && canCreate && (
           <button
             type="button"
             onClick={() => setShowComposer(true)}
@@ -1184,15 +1229,17 @@ function NotesTab({ notes, noteTitle, onNoteTitleChange, noteBody, onNoteBodyCha
                         By {note.user?.name || 'System'} · {formatDate(note.createdAt)}
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => onDelete(note.id)}
-                      className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-rose-200 bg-white text-rose-600 shadow-sm hover:bg-rose-50"
-                      aria-label="Delete note"
-                      title="Delete note"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    {canDelete ? (
+                      <button
+                        type="button"
+                        onClick={() => onDelete(note.id)}
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-rose-200 bg-white text-rose-600 shadow-sm hover:bg-rose-50"
+                        aria-label="Delete note"
+                        title="Delete note"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    ) : null}
                   </div>
                   {hasBody ? (
                     <div
@@ -1212,19 +1259,21 @@ function NotesTab({ notes, noteTitle, onNoteTitleChange, noteBody, onNoteBodyCha
   )
 }
 
-function TasksTab({ tasks, onCreate, onEdit, onComplete, onDelete, onChangeStatus }) {
+function TasksTab({ tasks, onCreate, onEdit, onComplete, onDelete, onChangeStatus, canCreate = true, canUpdate = true }) {
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="flex shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-5 py-3">
         <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500">Tasks</p>
-        <button
-          type="button"
-          onClick={onCreate}
-          className="inline-flex items-center gap-1.5 rounded-md border border-neutral-900 bg-neutral-900 px-3 py-1.5 text-xs font-semibold cx-icon-inherit text-white shadow-sm hover:bg-neutral-800"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          Add task
-        </button>
+        {canCreate ? (
+          <button
+            type="button"
+            onClick={onCreate}
+            className="inline-flex items-center gap-1.5 rounded-md border border-neutral-900 bg-neutral-900 px-3 py-1.5 text-xs font-semibold cx-icon-inherit text-white shadow-sm hover:bg-neutral-800"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add task
+          </button>
+        ) : null}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto bg-neutral-50 px-5 py-4 scrollbar-subtle">
         {tasks.length === 0 ? (
@@ -1275,7 +1324,6 @@ function TasksTab({ tasks, onCreate, onEdit, onComplete, onDelete, onChangeStatu
                           </span>
                           <TaskStatusPill value={task.status} />
                           {isOverdue ? <TaskOverdueBadge /> : null}
-                          {task.recurrenceRule ? <TaskRecurrenceIcon rule={task.recurrenceRule} /> : null}
                           <TaskAttachmentIcons attachments={task.attachments} />
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
@@ -1283,6 +1331,7 @@ function TasksTab({ tasks, onCreate, onEdit, onComplete, onDelete, onChangeStatu
                             <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Status</span>
                             <select
                               value={statusValue}
+                              disabled={!canUpdate}
                               onChange={(e) => onChangeStatus?.(task, e.target.value)}
                               className="h-8 min-w-[8.5rem] rounded-md border border-neutral-300 bg-white px-2 text-xs font-medium text-neutral-800 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-400/30"
                               aria-label="Change task status"
@@ -1294,7 +1343,7 @@ function TasksTab({ tasks, onCreate, onEdit, onComplete, onDelete, onChangeStatu
                               ))}
                             </select>
                           </label>
-                          {task.status !== 'completed' && task.status !== 'cancelled' ? (
+                          {canUpdate && task.status !== 'completed' && task.status !== 'cancelled' ? (
                             <button
                               type="button"
                               className="h-8 rounded-md border border-emerald-200 bg-white px-2.5 text-xs font-semibold text-emerald-800 shadow-sm hover:bg-emerald-50"
@@ -1303,13 +1352,15 @@ function TasksTab({ tasks, onCreate, onEdit, onComplete, onDelete, onChangeStatu
                               Mark complete
                             </button>
                           ) : null}
-                          <button
-                            type="button"
-                            className="h-8 rounded-md border border-rose-200 bg-white px-2.5 text-xs font-semibold text-rose-700 shadow-sm hover:bg-rose-50"
-                            onClick={() => onDelete(task)}
-                          >
-                            Delete
-                          </button>
+                          {canUpdate ? (
+                            <button
+                              type="button"
+                              className="h-8 rounded-md border border-rose-200 bg-white px-2.5 text-xs font-semibold text-rose-700 shadow-sm hover:bg-rose-50"
+                              onClick={() => onDelete(task)}
+                            >
+                              Delete
+                            </button>
+                          ) : null}
                         </div>
                       </div>
                     </div>

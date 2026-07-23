@@ -40,6 +40,11 @@ export async function ensureCompanyWorkspace(company, opts = {}) {
     if (existing.name !== desiredName) patch.name = desiredName
     if (!existing.themeColor) patch.themeColor = DEFAULT_WORKSPACE_THEME_COLOR
     if (!existing.sidebarTextColor) patch.sidebarTextColor = DEFAULT_WORKSPACE_SIDEBAR_TEXT_COLOR
+    // Onboarding hasn't finished: workspace currency still follows the company pick,
+    // since the workspace was auto-created before the user chose one.
+    if (!company.onboardingCompletedAt && company.baseCurrency && existing.defaultCurrency !== company.baseCurrency) {
+      patch.defaultCurrency = company.baseCurrency
+    }
     if (Object.keys(patch).length) await existing.update(patch, { transaction })
     return existing
   }

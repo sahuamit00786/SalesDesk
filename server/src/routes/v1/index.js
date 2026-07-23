@@ -6,7 +6,7 @@ import { rateLimit } from '../../middleware/rateLimit.js'
 import { requireAuth } from '../../middleware/auth.js'
 import { requireCompany } from '../../middleware/requireCompany.js'
 import { workspaceContext } from '../../middleware/workspaceContext.js'
-import { requirePermission } from '../../middleware/requirePermission.js'
+import { requirePermission, requirePermissionOrSelf } from '../../middleware/requirePermission.js'
 import { loadPermissions } from '../../middleware/loadPermissions.js'
 import { requireHrRole } from '../../middleware/requireHrRole.js'
 import * as authController from '../../controllers/authController.js'
@@ -49,7 +49,14 @@ import transcriptionRoutes from '../transcriptionRoutes.js'
 import aiMeetingRoutes from '../AiMeetingRoutes.js'
 import copilotRoutes from '../copilotRoutes.js'
 import { getFilterPresets, createFilterPreset, deleteFilterPreset } from '../../controllers/filterPresetsController.js'
-import { getNotifications as getNotificationsV2, markNotificationRead as markNotificationReadV2, markAllRead, getUnreadCount } from '../../controllers/notificationController.js'
+import {
+  getNotifications as getNotificationsV2,
+  markNotificationRead as markNotificationReadV2,
+  markAllRead,
+  getUnreadCount,
+  markNotificationsSeen,
+  getNotificationSummary,
+} from '../../controllers/notificationController.js'
 import * as auditLogController from '../../controllers/auditLogController.js'
 import * as emailSequencesController from '../../controllers/emailSequencesController.js'
 import * as scoringRulesController from '../../controllers/scoringRulesController.js'
@@ -165,6 +172,7 @@ router.post('/auth/refresh', authLimiter, authController.refresh)
 router.post('/auth/forgot-password', otpLimiter, authController.forgotPassword)
 router.post('/auth/reset-password', otpLimiter, authController.resetPassword)
 router.post('/auth/logout', requireAuth, authLimiter, authController.logout)
+router.post('/auth/change-password', requireAuth, authLimiter, authController.changePassword)
 router.get('/auth/invitations/preview', authLimiter, teamController.previewInvitation)
 router.post('/auth/invitations/accept', authLimiter, teamController.acceptInvitation)
 router.post('/auth/sso/google', authLimiter, teamController.googleSsoPlaceholder)
@@ -196,13 +204,13 @@ router.post(
   companyController.provisionMyWorkspace,
 )
 
+// Read is open to every company member — it backs the read-only "Email notifications"
+// tab every user sees under topbar Settings; only editing needs the workspace grant.
 router.get(
   '/settings/notification-emails',
   requireAuth,
   apiLimiter,
   requireCompany,
-  loadPermissions,
-  requirePermission('settings.workspace', 'view'),
   notificationSettingsController.getNotificationEmailSettings,
 )
 router.patch(
@@ -283,13 +291,13 @@ router.get('/analytics/employee-monthly-report', requireAuth, apiLimiter, requir
 router.get('/analytics/data-health-report', requireAuth, apiLimiter, requireCompany, workspaceContext, requireAnalyticsAdmin, analyticsReportsExtended.dataHealthReport)
 router.get('/analytics/campaigns-report', requireAuth, apiLimiter, requireCompany, workspaceContext, requireAnalyticsView, analyticsReportsExtended.campaignsReport)
 
+// Read is open to every company member — it backs the read-only "Company information"
+// tab every user sees under topbar Settings; only editing needs the billing_profile grant.
 router.get(
   '/billing-profile',
   requireAuth,
   apiLimiter,
   requireCompany, workspaceContext,
-  loadPermissions,
-  requirePermission('settings.billing_profile', 'view'),
   billingProfileController.getBillingProfile,
 )
 router.patch(
@@ -308,7 +316,7 @@ router.get(
   apiLimiter,
   requireCompany, workspaceContext,
   loadPermissions,
-  requirePermission('manage.quotation_templates', 'view'),
+  requirePermission('manage.sales_doc_templates', 'view'),
   salesDocTemplatesController.listSalesDocTemplates,
 )
 router.post(
@@ -317,7 +325,7 @@ router.post(
   apiLimiter,
   requireCompany, workspaceContext,
   loadPermissions,
-  requirePermission('manage.quotation_templates', 'create'),
+  requirePermission('manage.sales_doc_templates', 'create'),
   salesDocTemplatesController.createSalesDocTemplate,
 )
 router.get(
@@ -326,7 +334,7 @@ router.get(
   apiLimiter,
   requireCompany, workspaceContext,
   loadPermissions,
-  requirePermission('manage.quotation_templates', 'view'),
+  requirePermission('manage.sales_doc_templates', 'view'),
   salesDocTemplatesController.getSalesDocTemplate,
 )
 router.patch(
@@ -335,7 +343,7 @@ router.patch(
   apiLimiter,
   requireCompany, workspaceContext,
   loadPermissions,
-  requirePermission('manage.quotation_templates', 'update'),
+  requirePermission('manage.sales_doc_templates', 'update'),
   salesDocTemplatesController.patchSalesDocTemplate,
 )
 router.delete(
@@ -344,7 +352,7 @@ router.delete(
   apiLimiter,
   requireCompany, workspaceContext,
   loadPermissions,
-  requirePermission('manage.quotation_templates', 'delete'),
+  requirePermission('manage.sales_doc_templates', 'delete'),
   salesDocTemplatesController.deleteSalesDocTemplate,
 )
 
@@ -506,6 +514,7 @@ router.get(
   requirePermission('main.leads', 'view'),
   leadsController.list,
 )
+router.get('/leads/ids', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('main.leads', 'view'), leadsController.listIds)
 router.get('/leads/analytics/source', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('main.leads', 'view'), leadsController.sourceAnalytics)
 router.get('/leads/form-meta', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('main.leads', 'view'), leadsController.formMeta)
 router.get('/leads/saved-views', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('main.leads', 'view'), leadsController.listSavedViews)
@@ -545,7 +554,7 @@ router.post(
   apiLimiter,
   requireCompany, workspaceContext,
   loadPermissions,
-  requirePermission('main.leads', 'update'),
+  requirePermission('main.lead_distribution', 'update'),
   leadsController.distributeRoundRobin,
 )
 router.get('/leads/archived', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('main.leads', 'view'), leadsController.listArchived)
@@ -566,7 +575,7 @@ router.post('/leads/:id/notes', requireAuth, apiLimiter, requireCompany, workspa
 router.patch('/leads/:id/notes/:noteId', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('main.leads', 'update'), leadsController.patchNote)
 router.delete('/leads/:id/notes/:noteId', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('main.leads', 'update'), leadsController.deleteNote)
 router.get('/leads/email/google/status', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('main.leads', 'view'), leadsController.getGoogleEmailAuthStatus)
-router.get('/leads/email/google/connect-url', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('main.leads', 'update'), leadsController.getGoogleEmailConnectUrl)
+router.get('/leads/email/google/connect-url', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('settings.integrations', 'update'), leadsController.getGoogleEmailConnectUrl)
 router.get('/leads/email/google/callback', apiLimiter, leadsController.connectGoogleEmailCallback)
 router.get('/leads/:id/emails', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('main.leads', 'view'), leadsController.listLeadEmails)
 router.get('/leads/:id/email-threads', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('main.leads', 'view'), leadsController.listLeadEmailThreads)
@@ -652,10 +661,10 @@ router.get(
   leadsController.getTaskTimeline,
 )
 router.delete('/leads/:id/tasks/:taskId', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('engage.tasks', 'update'), leadsController.deleteTask)
-router.get('/leads/:id/followups', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('main.leads', 'view'), leadsController.listFollowups)
-router.post('/leads/:id/followups', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('main.leads', 'create'), leadsController.createFollowup)
-router.patch('/leads/:id/followups/:followupId', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('main.leads', 'update'), leadsController.patchFollowup)
-router.delete('/leads/:id/followups/:followupId', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('main.leads', 'update'), leadsController.deleteFollowup)
+router.get('/leads/:id/followups', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('engage.followups', 'view'), leadsController.listFollowups)
+router.post('/leads/:id/followups', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('engage.followups', 'create'), leadsController.createFollowup)
+router.patch('/leads/:id/followups/:followupId', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('engage.followups', 'update'), leadsController.patchFollowup)
+router.delete('/leads/:id/followups/:followupId', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('engage.followups', 'update'), leadsController.deleteFollowup)
 router.get('/leads/:id/files', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('main.leads', 'view'), leadsController.listFiles)
 router.post('/leads/:id/files', requireAuth, apiLimiter, requireCompany, workspaceContext, loadPermissions, requirePermission('main.leads', 'create'), leadFileUpload.array('files', 10), leadsController.createFile)
 router.use(
@@ -750,6 +759,15 @@ router.delete(
   teamController.cancelInvitation,
 )
 router.get(
+  '/team/invitations/check-email',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('settings.team', 'create'),
+  teamController.checkInvitationEmail,
+)
+router.get(
   '/team/users',
   requireAuth,
   apiLimiter,
@@ -764,7 +782,7 @@ router.get(
   apiLimiter,
   requireCompany,
   loadPermissions,
-  requirePermission('settings.team', 'view'),
+  requirePermissionOrSelf('settings.team', 'view'),
   teamController.getCompanyUser,
 )
 router.patch(
@@ -802,6 +820,15 @@ router.put(
   loadPermissions,
   requirePermission('settings.team', 'admin'),
   teamController.replaceUserWorkspaces,
+)
+router.post(
+  '/team/users/:id/workspaces',
+  requireAuth,
+  apiLimiter,
+  requireCompany,
+  loadPermissions,
+  requirePermission('settings.team', 'admin'),
+  teamController.addUserWorkspace,
 )
 router.get(
   '/team/users/:id/menu-permissions',
@@ -1372,11 +1399,11 @@ router.post('/leave/:id/reject', requireAuth, apiLimiter, requireCompany, worksp
 // —— Notifications —— (self-service personal inbox, intentionally no module gate)
 // Static paths must come before /:id param routes to avoid param matching
 router.get('/notifications/unread-count', requireAuth, apiLimiter, requireCompany, workspaceContext, getUnreadCount)
+router.get('/notifications/summary', requireAuth, apiLimiter, requireCompany, workspaceContext, getNotificationSummary)
 router.post('/notifications/read-all', requireAuth, apiLimiter, requireCompany, workspaceContext, markAllRead)
-router.post('/notifications/mark-all-read', requireAuth, apiLimiter, requireCompany, workspaceContext, leaveController.markAllNotificationsRead)
+router.post('/notifications/mark-seen', requireAuth, apiLimiter, requireCompany, workspaceContext, markNotificationsSeen)
 router.get('/notifications', requireAuth, apiLimiter, requireCompany, workspaceContext, getNotificationsV2)
 router.post('/notifications/:id/read', requireAuth, apiLimiter, requireCompany, workspaceContext, markNotificationReadV2)
-router.patch('/notifications/:id/read', requireAuth, apiLimiter, requireCompany, workspaceContext, leaveController.markNotificationRead)
 
 router.get('/track/open', emailTrackingController.trackOpen)
 router.get('/track/click', emailTrackingController.trackClick)

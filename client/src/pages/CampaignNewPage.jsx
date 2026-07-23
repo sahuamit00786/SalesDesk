@@ -18,6 +18,8 @@ import {
 import { selectWorkspaceList } from '@/features/workspace/workspaceSlice'
 import { ListSearchToolbar, buildLeadsListQueryParams, countActiveRules } from '@/features/filters'
 import { cn } from '@/utils/cn'
+import { usePermission } from '@/hooks/usePermission'
+import toast from 'react-hot-toast'
 import { CurrencyPicker } from '@/components/shared/CurrencyPicker'
 import { useEffectiveCurrency } from '@/hooks/useEffectiveCurrency'
 
@@ -85,6 +87,7 @@ export function CampaignNewPage() {
   const { data: formMetaData } = useGetLeadFormMetaQuery()
   const { data: teamData } = useTeamUsersQuery()
   const [createCampaign, { isLoading: saving }] = useCreateCampaignMutation()
+  const canCreate = usePermission('automate.campaigns', 'create')
 
   useEffect(() => {
     setCampaignCurrency(effectiveCurrency)
@@ -229,6 +232,10 @@ export function CampaignNewPage() {
 
   const onSubmit = async (e) => {
     e.preventDefault()
+    if (!canCreate) {
+      toast.error("You don't have permission to create campaigns.")
+      return
+    }
     if (!name.trim()) return
     if (teamPick.size < 1) return
     if (selected.size < 1) return

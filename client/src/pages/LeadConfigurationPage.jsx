@@ -31,6 +31,7 @@ import {
 } from '@/features/leads/leadsApi'
 import { CustomFieldEditorDrawer } from '@/features/leads/components/CustomFieldEditorDrawer'
 import { CustomFieldsSetupTable } from '@/features/leads/components/CustomFieldsSetupTable'
+import { usePermission } from '@/hooks/usePermission'
 import { cn } from '@/utils/cn'
 
 const TABS = [
@@ -78,7 +79,8 @@ function YesNoPill({ yes }) {
 }
 
 export function LeadConfigurationPage() {
-  const { data, isLoading } = useGetLeadSetupQuery()
+  const canManage = usePermission('main.leads', 'admin')
+  const { data, isLoading } = useGetLeadSetupQuery(undefined, { skip: !canManage })
   const [createSource, { isLoading: creatingSource }] = useCreateLeadSourceMutation()
   const [updateSource, { isLoading: updatingSource }] = useUpdateLeadSourceMutation()
   const [deleteSource] = useDeleteLeadSourceMutation()
@@ -94,7 +96,7 @@ export function LeadConfigurationPage() {
   const [deleteDealStatus] = useDeleteDealStatusMutation()
   const [reorderDealStatuses, { isLoading: reorderingDealStatuses }] = useReorderDealStatusesMutation()
   const { data: customFieldsData, isLoading: loadingCustomFields } = useGetCustomFieldsQuery(undefined, {
-    skip: false,
+    skip: !canManage,
   })
   const [createCustomField, { isLoading: creatingCustomField }] = useCreateCustomFieldMutation()
   const [patchCustomField, { isLoading: patchingCustomField }] = usePatchCustomFieldMutation()
@@ -471,6 +473,17 @@ export function LeadConfigurationPage() {
     updatingDealStatus,
     reorderingDealStatuses,
   ])
+
+  if (!canManage) {
+    return (
+      <PageShell fullWidth mainClassName="pt-1.5 pb-3 sm:pb-4">
+        <div className="rounded-2xl border border-surface-border bg-white px-6 py-10 text-center">
+          <p className="text-sm font-medium text-ink">You don't have permission to view lead configuration.</p>
+          <p className="mt-1 text-xs text-ink-muted">Contact your workspace admin for access.</p>
+        </div>
+      </PageShell>
+    )
+  }
 
   return (
     <PageShell fullWidth mainClassName="pt-1.5 pb-3 sm:pb-4">

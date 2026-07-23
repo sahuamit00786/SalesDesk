@@ -64,6 +64,11 @@ export const Reminder = sequelize.define(
       allowNull: true,
       field: 'completed_at',
     },
+    notifiedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'notified_at',
+    },
     targetType: {
       type: DataTypes.ENUM('general', 'lead', 'opportunity', 'meeting', 'task', 'followup'),
       allowNull: false,

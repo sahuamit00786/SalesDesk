@@ -1,3 +1,5 @@
+// No `usePermission('insights.reports', ...)` gate here on purpose — see AnalyticsPage.jsx;
+// analytics access runs on a separate tier system (requireAnalyticsView/etc.), not menu-CRUD.
 import { useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, RefreshCw } from '@/components/ui/icons'

@@ -189,8 +189,8 @@ export function LeadEmailComposeModal({
       const rows = Array.isArray(res?.data) ? res.data : []
       setUploadedAttachments((prev) => [...prev, ...rows])
       e.target.value = ''
-    } catch {
-      toast.error('Upload failed')
+    } catch (err) {
+      toast.error(err?.data?.error?.message || err?.error || 'Upload failed')
     }
   }
 

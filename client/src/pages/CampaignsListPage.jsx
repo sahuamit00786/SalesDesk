@@ -12,6 +12,7 @@ import { CurrencyPicker } from '@/components/shared/CurrencyPicker'
 import { formatCampaignEndDate, toCampaignDateInputValue } from '@/features/campaigns/campaignDateUtils'
 import { useTeamUsersQuery } from '@/features/team/teamApi'
 import { cn } from '@/utils/cn'
+import { usePermission } from '@/hooks/usePermission'
 
 const STATUS_META = {
   active: { label: 'Active', tone: 'border-emerald-300 bg-emerald-50 text-emerald-800', dot: 'bg-emerald-500' },
@@ -96,18 +97,20 @@ function CampaignCard({ campaign, index, onEdit }) {
             >
               <LineChart className="h-4 w-4" />
             </Link>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                onEdit(campaign)
-              }}
-              className="rounded-lg p-1.5 text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-600"
-              aria-label={`Edit ${campaign.name}`}
-            >
-              <MoreHorizontal className="h-4 w-4" />
-            </button>
+            {onEdit ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  onEdit(campaign)
+                }}
+                className="rounded-lg p-1.5 text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-600"
+                aria-label={`Edit ${campaign.name}`}
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </button>
+            ) : null}
           </div>
         </div>
 
@@ -128,8 +131,11 @@ function CampaignCard({ campaign, index, onEdit }) {
 }
 
 export function CampaignsListPage() {
+  const canView = usePermission('automate.campaigns', 'view')
+  const canCreate = usePermission('automate.campaigns', 'create')
+  const canUpdate = usePermission('automate.campaigns', 'update')
   const [statusTab, setStatusTab] = useState('')
-  const { data, isLoading, isFetching, refetch } = useListCampaignsQuery(statusTab ? { status: statusTab } : {})
+  const { data, isLoading, isFetching, refetch } = useListCampaignsQuery(statusTab ? { status: statusTab } : {}, { skip: !canView })
   const [patchCampaign, { isLoading: savingCampaign }] = usePatchCampaignMutation()
   const [editingCampaign, setEditingCampaign] = useState(null)
   const [editName, setEditName] = useState('')
@@ -181,6 +187,7 @@ export function CampaignsListPage() {
   }, [editCampaignId, campaignDetail?.data])
 
   const openEditDrawer = (campaign) => {
+    if (!canUpdate) return
     setEditingCampaign(campaign)
     setEditName(String(campaign?.name || ''))
     setEditDescription(String(campaign?.description || ''))
@@ -253,12 +260,14 @@ export function CampaignsListPage() {
           >
             <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
           </button>
-          <Link
-            to="/campaigns/new"
-            className="ml-auto inline-flex h-10 shrink-0 items-center rounded-xl bg-[var(--brand-primary)] px-4 text-xs font-semibold text-white shadow-sm hover:bg-[var(--brand-primary-dark)]"
-          >
-            New campaign
-          </Link>
+          {canCreate ? (
+            <Link
+              to="/campaigns/new"
+              className="ml-auto inline-flex h-10 shrink-0 items-center rounded-xl bg-[var(--brand-primary)] px-4 text-xs font-semibold text-white shadow-sm hover:bg-[var(--brand-primary-dark)]"
+            >
+              New campaign
+            </Link>
+          ) : null}
         </PageFilterBar>
 
         {isLoading ? (
@@ -282,7 +291,7 @@ export function CampaignsListPage() {
             {rows.map((c, i) => (
               <li key={c.id}>
                 <Link to={`/campaigns/${c.id}`} className="block outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 rounded-2xl">
-                  <CampaignCard campaign={c} index={i} onEdit={openEditDrawer} />
+                  <CampaignCard campaign={c} index={i} onEdit={canUpdate ? openEditDrawer : undefined} />
                 </Link>
               </li>
             ))}

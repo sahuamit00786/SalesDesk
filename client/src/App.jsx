@@ -135,6 +135,7 @@ export default function App() {
             {/* <Route path="/leave/approval" element={<LeaveApprovalPage />} /> */}
             {/* <Route path="/leave/config" element={<LeaveConfigPage />} /> */}
             <Route path="/team" element={<TeamPage />} />
+            <Route path="/my-profile" element={<TeamMemberProfilePage />} />
             <Route path="/team/:userId" element={<TeamMemberProfilePage />} />
             <Route path="/team/:userId/permissions" element={<TeamMemberPermissionsPage />} />
             <Route path="/integrations" element={<IntegrationsPage />} />

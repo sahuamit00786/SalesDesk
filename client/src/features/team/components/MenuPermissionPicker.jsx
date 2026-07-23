@@ -53,7 +53,11 @@ export function MenuPermissionPicker({ menuItems, value, onChange }) {
   const menuPermissions = value || []
 
   function permissionFor(menuId) {
-    return menuPermissions.find((m) => m.menuId === menuId) || emptyPermission(menuId)
+    const p = menuPermissions.find((m) => m.menuId === menuId) || emptyPermission(menuId)
+    // Normalize stale/legacy rows saved before view-implication was enforced (create/update/
+    // delete without view) so the checkboxes never show a state the server wouldn't grant.
+    if (p.canEdit || p.canUpdate || p.canDelete) return { ...p, canView: true }
+    return p
   }
 
   function setMenuPermissions(menuId, nextState) {
@@ -67,7 +71,18 @@ export function MenuPermissionPicker({ menuItems, value, onChange }) {
 
   function togglePermission(menuId, key) {
     const current = permissionFor(menuId)
-    setMenuPermissions(menuId, { ...current, [key]: !current[key] })
+    const next = { ...current, [key]: !current[key] }
+    if (key === 'canView' && !next.canView) {
+      // Can't create/update/delete without view — matches the server's `can()` fallback
+      // (create/update/delete each imply view), so the checkboxes never lie about that.
+      next.canEdit = false
+      next.canUpdate = false
+      next.canDelete = false
+    } else if (key !== 'canView' && next[key]) {
+      // Granting create/update/delete implies view.
+      next.canView = true
+    }
+    setMenuPermissions(menuId, next)
   }
 
   function setMenuAll(menuId, enabled) {
@@ -123,7 +138,7 @@ export function MenuPermissionPicker({ menuItems, value, onChange }) {
             <div className="divide-y divide-surface-border">
               {sectionMenus.map((m) => {
                 const p = permissionFor(m.id)
-                const menuEnabled = p.canView || p.canEdit || p.canUpdate || p.canDelete
+                const menuEnabled = p.canView && p.canEdit && p.canUpdate && p.canDelete
                 const IconComponent = m.icon
                 return (
                   <div key={m.id} className="px-6 py-4 hover:bg-slate-50/50 transition-colors">

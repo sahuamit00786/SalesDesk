@@ -92,6 +92,7 @@ export function TaskListView({
   onOpenTask,
   onQuickPatch,
   patchingKey,
+  canUpdate = true,
 }) {
   if (isLoading) return <SkeletonList rows={8} />
   if (isError) {
@@ -127,7 +128,7 @@ export function TaskListView({
                 open={openSections[section.id]}
                 onToggle={() => onToggleSection(section.id)}
                 count={section.count}
-                action={listGroupBy === 'status' && section.id === 'in_progress' && section.count > 0 ? (
+                action={canUpdate && listGroupBy === 'status' && section.id === 'in_progress' && section.count > 0 ? (
                   <button
                     type="button"
                     onClick={() => onMarkAllCompleted(section.tasks)}
@@ -175,6 +176,7 @@ export function TaskListView({
                             onOpenTask={onOpenTask}
                             onQuickPatch={onQuickPatch}
                             patchingKey={patchingKey}
+                            canUpdate={canUpdate}
                           />
                         ))
                       )}

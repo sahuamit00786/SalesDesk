@@ -18,6 +18,7 @@ import {
   useGetWebFormsQuery,
   useUpdateWebFormMutation,
 } from '../webFormsApi'
+import { usePermission } from '@/hooks/usePermission'
 
 export function WebFormsListPage() {
   const navigate = useNavigate()
@@ -25,7 +26,11 @@ export function WebFormsListPage() {
   const [shareForm, setShareForm] = useState(null)
   const [submissionFormId, setSubmissionFormId] = useState(null)
   const [deleteForm, setDeleteForm] = useState(null)
-  const { data, isLoading, refetch } = useGetWebFormsQuery('')
+  const canView = usePermission('automate.forms', 'view')
+  const canCreate = usePermission('automate.forms', 'create')
+  const canUpdate = usePermission('automate.forms', 'update')
+  const canDelete = usePermission('automate.forms', 'delete')
+  const { data, isLoading, refetch } = useGetWebFormsQuery('', { skip: !canView })
   const { data: formDetailData, isLoading: submissionsLoading } = useGetWebFormQuery(submissionFormId, {
     skip: !submissionFormId,
   })
@@ -46,6 +51,7 @@ export function WebFormsListPage() {
   const submissionColumns = selectedFormDetail?.form?.fields || []
 
   function openNewFormBuilder() {
+    if (!canCreate) return
     navigate('/forms/new/builder')
   }
 
@@ -127,7 +133,7 @@ export function WebFormsListPage() {
         headerAlign: 'right',
         renderCell: ({ row }) => (
           <div className="inline-flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-            {row.status !== 'active' ? (
+            {row.status !== 'active' && canUpdate ? (
               <button
                 type="button"
                 onClick={() => activateForm(row)}
@@ -138,14 +144,16 @@ export function WebFormsListPage() {
                 Publish
               </button>
             ) : null}
-            <button
-              type="button"
-              onClick={() => navigate(`/forms/${row.id}/builder`)}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-brand-200 bg-white text-brand-700"
-              title="Builder"
-            >
-              <Pencil className="h-4 w-4" />
-            </button>
+            {canUpdate ? (
+              <button
+                type="button"
+                onClick={() => navigate(`/forms/${row.id}/builder`)}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-brand-200 bg-white text-brand-700"
+                title="Builder"
+              >
+                <Pencil className="h-4 w-4" />
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => setShareForm(row)}
@@ -162,19 +170,21 @@ export function WebFormsListPage() {
             >
               <Eye className="h-4 w-4" />
             </button>
-            <button
-              type="button"
-              onClick={() => setDeleteForm(row)}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-danger"
-              title="Delete"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
+            {canDelete ? (
+              <button
+                type="button"
+                onClick={() => setDeleteForm(row)}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-danger"
+                title="Delete"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            ) : null}
           </div>
         ),
       },
     ],
-    [navigate, updating],
+    [navigate, updating, canUpdate, canDelete],
   )
 
   const submissionGridColumns = useMemo(() => {
@@ -223,14 +233,18 @@ export function WebFormsListPage() {
             <Button type="button" variant="secondary" title="Refresh" onClick={() => refetch()}>
               <RefreshCw className="h-4 w-4" />
             </Button>
-            <Button type="button" variant="secondary" onClick={exportCsv} disabled={forms.length === 0}>
-              <Download className="h-4 w-4" />
-              Export CSV
-            </Button>
-            <Button type="button" onClick={openNewFormBuilder}>
-              <Plus className="h-4 w-4" />
-              New form
-            </Button>
+            {canView ? (
+              <Button type="button" variant="secondary" onClick={exportCsv} disabled={forms.length === 0}>
+                <Download className="h-4 w-4" />
+                Export CSV
+              </Button>
+            ) : null}
+            {canCreate ? (
+              <Button type="button" onClick={openNewFormBuilder}>
+                <Plus className="h-4 w-4" />
+                New form
+              </Button>
+            ) : null}
           </div>
         </PageFilterBar>
         <PageContentPanel flush>

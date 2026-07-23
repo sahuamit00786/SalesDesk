@@ -12,10 +12,13 @@ export const leadsApi = baseApi.injectEndpoints({
       async onQueryStarted(_arg, { queryFulfilled }) {
         try {
           await queryFulfilled
-        } catch {
-          toast.error('Something went wrong. Please try again.')
+        } catch (err) {
+          toast.error(err?.error?.data?.error?.message || 'Something went wrong. Please try again.')
         }
       },
+    }),
+    getLeadIds: build.query({
+      query: (params) => ({ url: '/leads/ids', params }),
     }),
     getLead: build.query({
       query: (id) => `/leads/${id}`,
@@ -103,8 +106,8 @@ export const leadsApi = baseApi.injectEndpoints({
       async onQueryStarted(_arg, { queryFulfilled }) {
         try {
           await queryFulfilled
-        } catch {
-          toast.error('Something went wrong. Please try again.')
+        } catch (err) {
+          toast.error(err?.error?.data?.error?.message || 'Something went wrong. Please try again.')
         }
       },
       invalidatesTags: (_r, _e, arg) => [
@@ -386,6 +389,7 @@ export const leadsApi = baseApi.injectEndpoints({
 export const {
   useGetLeadsQuery,
   useLazyGetLeadsQuery,
+  useLazyGetLeadIdsQuery,
   useGetLeadQuery,
   useGetLeadFormMetaQuery,
   useGetLeadSetupQuery,

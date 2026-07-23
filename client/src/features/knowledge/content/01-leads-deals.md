@@ -91,7 +91,7 @@ Assignment Rules are automatic, ongoing rules applied at creation time. **Lead D
 Yes, if your company has connected Google/Gmail. Each lead has an **Emails** tab where you can send messages, see threaded conversation history, and sync replies. Inbound replies notify the lead's assigned owner.
 
 **What are Tasks, Follow-ups, and Notes on a lead?**
-- **Tasks**: to‑dos with a type (call, email, meeting, demo, follow‑up, WhatsApp, site visit, internal, document, custom, other), priority (low/medium/high/urgent), status (pending/in progress/completed/cancelled), due dates, subtasks, comments, attachments, and optional recurrence (daily/weekly/monthly/custom).
+- **Tasks**: to‑dos with a type (call, email, meeting, demo, follow‑up, WhatsApp, site visit, internal, document, custom, other), priority (low/medium/high/urgent), status (pending/in progress/completed/cancelled), due dates, subtasks, comments, and attachments.
 - **Follow-ups**: lightweight scheduled reminders tied to the lead.
 - **Notes**: free-text notes with an optional title, kept in the lead's record.
 All of these are visible on the lead's detail page and contribute to the Activity Timeline.

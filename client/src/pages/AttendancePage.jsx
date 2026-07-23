@@ -146,8 +146,8 @@ export function AttendancePage() {
       a.click()
       URL.revokeObjectURL(url)
       toast.success('Export downloaded')
-    } catch {
-      toast.error('Export failed')
+    } catch (err) {
+      toast.error(err?.data?.error?.message || 'Export failed')
     }
   }
 

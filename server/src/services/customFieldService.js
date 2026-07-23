@@ -194,7 +194,7 @@ export function enrichLeadPlainWithCustomFields(plain) {
   return plain
 }
 
-function validateValueAgainstField(field, raw) {
+export function validateValueAgainstField(field, raw) {
   const type = field.type
   if (field.isRequired && isEmptyValue(type, raw)) {
     throw new Error(`${field.label} is required`)

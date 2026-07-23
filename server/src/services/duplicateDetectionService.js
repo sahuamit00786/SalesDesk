@@ -22,7 +22,7 @@ export async function findDuplicates(workspaceId, { email, phone }, excludeLeadI
   })
 }
 
-function resolveMatchField(leadData, firstDupe) {
+export function resolveMatchField(leadData, firstDupe) {
   const emailMatch =
     leadData.email &&
     firstDupe.email &&

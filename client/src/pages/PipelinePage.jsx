@@ -27,6 +27,7 @@ import { Select } from '@/components/ui/Select'
 import { DataGrid } from '@/components/shared/DataGrid'
 import { formatDealMoney } from '@/features/deals/dealCurrencies'
 import { MixedMoneyValue } from '@/components/shared/MixedMoneyValue'
+import { usePermission } from '@/hooks/usePermission'
 
 const SORT_OPTIONS = [
   { value: 'updatedAt:desc', label: 'Recently updated' },
@@ -135,7 +136,11 @@ export function PipelinePage() {
     return Object.fromEntries(Object.entries(q).filter(([, v]) => v !== undefined && v !== ''))
   }, [page, limit, mode, debouncedSearch, selectedStages, selectedAssignees, sort, order])
 
-  const { data, isLoading, isFetching } = useGetLeadsQuery(listQuery)
+  const canViewLeads = usePermission('main.leads', 'view')
+  const canUpdateOpportunities = usePermission('main.opportunities', 'update')
+  const canCreateDeals = usePermission('main.deals', 'create')
+
+  const { data, isLoading, isFetching } = useGetLeadsQuery(listQuery, { skip: !canViewLeads })
   const { data: formMetaData } = useGetLeadFormMetaQuery()
   const [patchPipelineStatus, { isLoading: updatingStage }] = usePatchPipelineStatusMutation()
   const [addDealRow, setAddDealRow] = useState(null)
@@ -303,7 +308,7 @@ export function PipelinePage() {
             <Select
               className="h-8 w-full appearance-none pr-7 text-[11px] font-semibold"
               value={row.currentStage || ''}
-              disabled={updatingStage}
+              disabled={updatingStage || !canUpdateOpportunities}
               onChange={(event) => handleStageChange(row, event.target.value)}
               aria-label={`Pipeline status for ${row.fullName || 'opportunity'}`}
             >
@@ -361,19 +366,21 @@ export function PipelinePage() {
             >
               Open
             </button>
-            <button
-              type="button"
-              onClick={(event) => handleCreateDeal(row, event)}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 text-[11px] font-semibold text-emerald-800 shadow-sm hover:bg-emerald-100/90"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Add deal
-            </button>
+            {canCreateDeals ? (
+              <button
+                type="button"
+                onClick={(event) => handleCreateDeal(row, event)}
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 text-[11px] font-semibold text-emerald-800 shadow-sm hover:bg-emerald-100/90"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add deal
+              </button>
+            ) : null}
           </div>
         ),
       },
     ],
-    [pipelineStatuses, updatingStage, navigate],
+    [pipelineStatuses, updatingStage, navigate, canUpdateOpportunities, canCreateDeals, handleStageChange, handleCreateDeal],
   )
 
   const onPipelineRowClick = useCallback(
@@ -603,15 +610,17 @@ export function PipelinePage() {
                     Board
                   </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={exportVisibleRows}
-                  aria-label="Export"
-                  title="Export"
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-surface-border bg-white text-ink-muted shadow-sm hover:bg-surface-subtle hover:text-ink"
-                >
-                  <Download className="h-4 w-4" />
-                </button>
+                {canViewLeads ? (
+                  <button
+                    type="button"
+                    onClick={exportVisibleRows}
+                    aria-label="Export"
+                    title="Export"
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-surface-border bg-white text-ink-muted shadow-sm hover:bg-surface-subtle hover:text-ink"
+                  >
+                    <Download className="h-4 w-4" />
+                  </button>
+                ) : null}
             </div>
             {activeFilterCount > 0 ? (
               <div className="flex flex-wrap items-center gap-1.5 border-t border-surface-border/80 pt-2 text-[11px]">

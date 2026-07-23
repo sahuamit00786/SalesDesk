@@ -26,6 +26,7 @@ import {
   WorkflowRunOverlayProvider,
 } from '@/features/workflows/workflowRunOverlayContext'
 import { stepsToByNodeId } from '@/features/workflows/workflowRunStepUtils'
+import { usePermission } from '@/hooks/usePermission'
 import {
   useGetWorkflowQuery,
   usePatchWorkflowMutation,
@@ -48,11 +49,16 @@ const STATUS_LABEL = {
 function TestRunModal({ open, onClose, workflowId, onRan }) {
   const [selectedLead, setSelectedLead] = useState(null)
   const [testWorkflow, { isLoading }] = useTestWorkflowMutation()
+  const canTest = usePermission('automate.automation', 'view')
 
   if (!open) return null
 
   const run = async (e) => {
     e.preventDefault()
+    if (!canTest) {
+      toast.error("You don't have permission to test workflows.")
+      return
+    }
     if (!selectedLead?.id) {
       toast.error('Select a lead to test with.')
       return
@@ -63,8 +69,8 @@ function TestRunModal({ open, onClose, workflowId, onRan }) {
       onRan?.()
       onClose()
       setSelectedLead(null)
-    } catch {
-      toast.error('Test run failed — check lead and workflow.')
+    } catch (err) {
+      toast.error(err?.data?.error?.message || 'Test run failed — check lead and workflow.')
     }
   }
 
@@ -127,6 +133,8 @@ function WorkflowEditorLoaded({ wf, refetchWorkflow, teamUsers, templates, leadS
   const [selectedRunId, setSelectedRunId] = useState(null)
   const [patchWorkflow] = usePatchWorkflowMutation()
   const [publishWorkflow, { isLoading: publishing }] = usePublishWorkflowMutation()
+  const canUpdate = usePermission('automate.automation', 'update')
+  const canTest = usePermission('automate.automation', 'view')
   const { data: runsData, refetch: refetchRuns } = useListWorkflowRunsQuery(wf.id, { skip: !wf.id })
 
   const runs = useMemo(() => (Array.isArray(runsData?.data) ? runsData.data : []), [runsData])
@@ -170,39 +178,52 @@ function WorkflowEditorLoaded({ wf, refetchWorkflow, teamUsers, templates, leadS
 
   const onDebouncedSave = useCallback(
     async (definitionJson) => {
+      if (!canUpdate) return
       await patchWorkflow({ id: wf.id, definitionJson }).unwrap()
     },
-    [wf.id, patchWorkflow],
+    [wf.id, patchWorkflow, canUpdate],
   )
 
   const saveName = useCallback(async () => {
     const trimmed = name.trim()
     if (!trimmed || trimmed === (wf.name || '')) return
+    if (!canUpdate) {
+      toast.error("You don't have permission to update workflows.")
+      return
+    }
     try {
       await patchWorkflow({ id: wf.id, name: trimmed }).unwrap()
       await refetchWorkflow()
       toast.success('Name saved')
-    } catch {
-      toast.error('Could not save name')
+    } catch (err) {
+      toast.error(err?.data?.error?.message || 'Could not save name')
     }
-  }, [wf.id, wf.name, name, patchWorkflow, refetchWorkflow])
+  }, [wf.id, wf.name, name, patchWorkflow, refetchWorkflow, canUpdate])
 
   const onPublish = async () => {
+    if (!canUpdate) {
+      toast.error("You don't have permission to publish workflows.")
+      return
+    }
     try {
       await publishWorkflow(wf.id).unwrap()
       toast.success('Version published')
-    } catch {
-      toast.error('Publish failed')
+    } catch (err) {
+      toast.error(err?.data?.error?.message || 'Publish failed')
     }
   }
 
   const setPaused = async (paused) => {
+    if (!canUpdate) {
+      toast.error("You don't have permission to update workflows.")
+      return
+    }
     try {
       await patchWorkflow({ id: wf.id, status: paused ? 'paused' : 'active' }).unwrap()
       await refetchWorkflow()
       toast.success(paused ? 'Workflow paused' : 'Workflow resumed')
-    } catch {
-      toast.error('Could not update status')
+    } catch (err) {
+      toast.error(err?.data?.error?.message || 'Could not update status')
     }
   }
 
@@ -295,15 +316,17 @@ function WorkflowEditorLoaded({ wf, refetchWorkflow, teamUsers, templates, leadS
               <History className="h-3.5 w-3.5" />
               Runs
             </button>
-            <button
-              type="button"
-              onClick={() => setTestOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-surface-border bg-white px-3 py-2 text-xs font-semibold text-ink hover:bg-surface-muted dark:bg-ink/80"
-            >
-              <Play className="h-3.5 w-3.5" />
-              Test
-            </button>
-            {status === 'active' ? (
+            {canTest ? (
+              <button
+                type="button"
+                onClick={() => setTestOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-surface-border bg-white px-3 py-2 text-xs font-semibold text-ink hover:bg-surface-muted dark:bg-ink/80"
+              >
+                <Play className="h-3.5 w-3.5" />
+                Test
+              </button>
+            ) : null}
+            {canUpdate && status === 'active' ? (
               <button
                 type="button"
                 onClick={() => setPaused(true)}
@@ -312,7 +335,7 @@ function WorkflowEditorLoaded({ wf, refetchWorkflow, teamUsers, templates, leadS
                 <Pause className="h-3.5 w-3.5" />
                 Pause
               </button>
-            ) : (
+            ) : canUpdate ? (
               <button
                 type="button"
                 onClick={() => setPaused(false)}
@@ -321,16 +344,18 @@ function WorkflowEditorLoaded({ wf, refetchWorkflow, teamUsers, templates, leadS
                 <PlayCircle className="h-3.5 w-3.5" />
                 Activate
               </button>
-            )}
-            <button
-              type="button"
-              disabled={publishing}
-              onClick={onPublish}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-slate-800 px-3 py-2 text-xs font-semibold cx-icon-inherit text-white hover:bg-slate-900 disabled:opacity-60"
-            >
-              {publishing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Rocket className="h-3.5 w-3.5" />}
-              Publish
-            </button>
+            ) : null}
+            {canUpdate ? (
+              <button
+                type="button"
+                disabled={publishing}
+                onClick={onPublish}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-slate-800 px-3 py-2 text-xs font-semibold cx-icon-inherit text-white hover:bg-slate-900 disabled:opacity-60"
+              >
+                {publishing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Rocket className="h-3.5 w-3.5" />}
+                Publish
+              </button>
+            ) : null}
           </div>
         </div>
       </div>

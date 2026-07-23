@@ -6,6 +6,7 @@ import toast from 'react-hot-toast'
 import { cn } from '@/utils/cn'
 import { usePatchPipelineStatusMutation } from '@/features/opportunities/opportunitiesApi'
 import { formatDealMoney } from '@/features/deals/dealCurrencies'
+import { usePermission } from '@/hooks/usePermission'
 
 export function formatStageLabel(value) {
   const text = String(value || '').trim()
@@ -119,7 +120,7 @@ function KanbanCardOverlayPreview({ opp, accent }) {
   )
 }
 
-function KanbanCard({ opp, accent, onOpen, onCreateDeal }) {
+function KanbanCard({ opp, accent, onOpen, onCreateDeal, canDrag, canCreateDeal }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: opp.id,
     data: { opp },
@@ -139,31 +140,35 @@ function KanbanCard({ opp, accent, onOpen, onCreateDeal }) {
       )}
     >
       <div className="flex gap-2">
-        <button
-          type="button"
-          className="mt-0.5 shrink-0 cursor-grab touch-none rounded text-ink-muted opacity-0 transition-opacity duration-200 hover:text-ink focus-visible:opacity-100 group-hover:opacity-100 active:cursor-grabbing"
-          {...listeners}
-          {...attributes}
-          aria-label="Drag to change stage"
-        >
-          <GripVertical className="h-4 w-4" />
-        </button>
+        {canDrag ? (
+          <button
+            type="button"
+            className="mt-0.5 shrink-0 cursor-grab touch-none rounded text-ink-muted opacity-0 transition-opacity duration-200 hover:text-ink focus-visible:opacity-100 group-hover:opacity-100 active:cursor-grabbing"
+            {...listeners}
+            {...attributes}
+            aria-label="Drag to change stage"
+          >
+            <GripVertical className="h-4 w-4" />
+          </button>
+        ) : null}
         <button type="button" className="min-w-0 flex-1 text-left" onClick={() => onOpen(opp.id)}>
           <KanbanCardBody opp={opp} />
         </button>
       </div>
-      <div className="mt-2 border-t border-surface-border/70 pt-2">
-        <button
-          type="button"
-          className="inline-flex h-7 items-center rounded-md border border-emerald-200 bg-emerald-50 px-2 text-[10px] font-semibold text-emerald-800 shadow-sm transition-colors duration-200 hover:bg-emerald-100/90"
-          onClick={(event) => {
-            event.stopPropagation()
-            onCreateDeal?.(opp)
-          }}
-        >
-          Add to Deals
-        </button>
-      </div>
+      {canCreateDeal ? (
+        <div className="mt-2 border-t border-surface-border/70 pt-2">
+          <button
+            type="button"
+            className="inline-flex h-7 items-center rounded-md border border-emerald-200 bg-emerald-50 px-2 text-[10px] font-semibold text-emerald-800 shadow-sm transition-colors duration-200 hover:bg-emerald-100/90"
+            onClick={(event) => {
+              event.stopPropagation()
+              onCreateDeal?.(opp)
+            }}
+          >
+            Add to Deals
+          </button>
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -179,7 +184,7 @@ function ColumnEmptyState() {
   )
 }
 
-function KanbanColumn({ stageName, displayLabel, opportunities, accent, onOpen, onCreateDeal }) {
+function KanbanColumn({ stageName, displayLabel, opportunities, accent, onOpen, onCreateDeal, canDrag, canCreateDeal }) {
   const droppableId = `stage:${stageName}`
   const { setNodeRef, isOver } = useDroppable({ id: droppableId })
 
@@ -209,6 +214,8 @@ function KanbanColumn({ stageName, displayLabel, opportunities, accent, onOpen, 
               accent={accent}
               onOpen={onOpen}
               onCreateDeal={onCreateDeal}
+              canDrag={canDrag}
+              canCreateDeal={canCreateDeal}
             />
           ))
         )}
@@ -217,7 +224,7 @@ function KanbanColumn({ stageName, displayLabel, opportunities, accent, onOpen, 
   )
 }
 
-function KanbanOtherColumn({ displayLabel, opportunities, onOpen, onCreateDeal }) {
+function KanbanOtherColumn({ displayLabel, opportunities, onOpen, onCreateDeal, canDrag, canCreateDeal }) {
   const accent = { border: 'border-l-amber-500', dot: 'bg-amber-500' }
   return (
     <div className="flex h-full min-h-0 w-[280px] shrink-0 flex-col rounded-2xl border border-amber-200/80 bg-amber-50/30 shadow-sm">
@@ -239,6 +246,8 @@ function KanbanOtherColumn({ displayLabel, opportunities, onOpen, onCreateDeal }
             accent={accent}
             onOpen={onOpen}
             onCreateDeal={onCreateDeal}
+            canDrag={canDrag}
+            canCreateDeal={canCreateDeal}
           />
         ))}
       </div>
@@ -267,6 +276,8 @@ export function OpportunitiesKanban({ opportunities = [], pipelineStatuses = [],
   const navigate = useNavigate()
   const [patchPipelineStatus] = usePatchPipelineStatusMutation()
   const [activeId, setActiveId] = useState(null)
+  const canDrag = usePermission('main.opportunities', 'update')
+  const canCreateDeal = usePermission('main.deals', 'create')
   // Optimistic local state: null means use the server-side `opportunities` prop
   const [localOpportunities, setLocalOpportunities] = useState(null)
 
@@ -296,6 +307,7 @@ export function OpportunitiesKanban({ opportunities = [], pipelineStatuses = [],
   async function handleDragEnd(event) {
     const { active, over } = event
     setActiveId(null)
+    if (!canDrag) return
     if (!over) return
     const overId = String(over.id)
     if (!overId.startsWith('stage:')) return
@@ -366,6 +378,8 @@ export function OpportunitiesKanban({ opportunities = [], pipelineStatuses = [],
             accent={stageAccent(idx)}
             onOpen={handleOpen}
             onCreateDeal={onCreateDeal}
+            canDrag={canDrag}
+            canCreateDeal={canCreateDeal}
           />
         ))}
         {merged.other.length > 0 ? (
@@ -374,6 +388,8 @@ export function OpportunitiesKanban({ opportunities = [], pipelineStatuses = [],
             opportunities={merged.other}
             onOpen={handleOpen}
             onCreateDeal={onCreateDeal}
+            canDrag={canDrag}
+            canCreateDeal={canCreateDeal}
           />
         ) : null}
       </div>

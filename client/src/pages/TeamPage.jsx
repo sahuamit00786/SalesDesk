@@ -39,10 +39,13 @@ import {
   usePatchUserRoleMutation,
   usePatchUserProfileMutation,
   useReplaceUserWorkspacesMutation,
+  useAddUserWorkspaceMutation,
+  useLazyCheckInvitationEmailQuery,
   useTeamInvitationsQuery,
   useTeamRolesQuery,
   useTeamUsersQuery,
 } from '@/features/team/teamApi'
+import { useDebounce } from '@/hooks/useDebounce'
 import { cn } from '@/utils/cn'
 import { PageShell } from '@/components/layout/PageShell'
 import { PageStack } from '@/components/layout/PageStack'
@@ -52,6 +55,7 @@ import { PageTabButton } from '@/components/layout/PageTabButton'
 import { inputFieldClassName } from '@/components/ui/Input'
 import { DataGrid } from '@/components/shared/DataGrid'
 import { IconInput, IconTextarea } from '@/components/ui/IconInput'
+import { usePermission } from '@/hooks/usePermission'
 
 function isoCountryForPhone(countryField) {
   const c = String(countryField || '')
@@ -226,7 +230,13 @@ export function TeamPage() {
   const { data: invitesData, isLoading: invitesLoading, refetch: refetchInvites } = useTeamInvitationsQuery()
   const { data: wsData } = useWorkspacesQuery()
 
+  const canCreateTeam = usePermission('settings.team', 'create')
+  const canDeleteTeam = usePermission('settings.team', 'delete')
+  const canAdminTeam = usePermission('settings.team', 'admin')
+
   const [createInvitation, { isLoading: creatingInvite }] = useCreateInvitationMutation()
+  const [addUserWorkspace, { isLoading: addingUserWorkspace }] = useAddUserWorkspaceMutation()
+  const [triggerCheckEmail, { data: emailCheckData, isFetching: checkingEmail }] = useLazyCheckInvitationEmailQuery()
   const [patchRole, { isLoading: patchingRoleMeta }] = usePatchRoleMutation()
   const [deleteRole, { isLoading: deletingRole }] = useDeleteRoleMutation()
   const [cancelInvitation, { isLoading: cancellingInvite }] = useCancelInvitationMutation()
@@ -261,6 +271,9 @@ export function TeamPage() {
     }
   })
   const [inviteForm, setInviteForm] = useState(() => ({ ...EMPTY_INVITE_FORM }))
+  const [addMemberTab, setAddMemberTab] = useState('invite')
+  const [existingDraft, setExistingDraft] = useState({ otherWorkspaceId: '', existingUserId: '', existingRoleId: '' })
+  const debouncedInviteEmail = useDebounce(inviteForm.email.trim().toLowerCase(), 400)
   const [roleForm, setRoleForm] = useState({
     name: '',
     description: '',
@@ -290,8 +303,60 @@ export function TeamPage() {
   const [deactivateDialog, setDeactivateDialog] = useState({ open: false, user: null })
   const [cancelInviteDialog, setCancelInviteDialog] = useState({ open: false, invite: null })
 
+  const otherWorkspaces = useMemo(
+    () => workspaces.filter((w) => w.id !== inviteWorkspace?.id),
+    [workspaces, inviteWorkspace],
+  )
+  const { data: otherWorkspaceUsersData, isFetching: loadingOtherWorkspaceUsers } = useTeamUsersQuery(
+    existingDraft.otherWorkspaceId,
+    { skip: !existingDraft.otherWorkspaceId },
+  )
+  const otherWorkspaceUsers = useMemo(() => {
+    const items = otherWorkspaceUsersData?.data?.items || []
+    if (!inviteWorkspace?.id) return items
+    return items.filter((u) => !(u.workspaces || []).some((w) => w.id === inviteWorkspace.id))
+  }, [otherWorkspaceUsersData, inviteWorkspace])
+
   const inviteBusy = creatingInvite
   const userBusy = patchingRole || patchingProfile || patchingWorkspaces || deactivatingUser || reactivatingUser
+  const emailLooksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(debouncedInviteEmail)
+  const emailExists = Boolean(emailCheckData?.data?.exists)
+
+  useEffect(() => {
+    if (!inviteDrawerOpen || addMemberTab !== 'invite' || !emailLooksValid) return
+    triggerCheckEmail(debouncedInviteEmail)
+  }, [inviteDrawerOpen, addMemberTab, emailLooksValid, debouncedInviteEmail, triggerCheckEmail])
+
+  function switchToExistingWorkspaceTab() {
+    const match = emailCheckData?.data
+    const preferredWorkspaceId = (match?.workspaces || []).find((w) => w.id !== inviteWorkspace?.id)?.id || ''
+    setAddMemberTab('existing')
+    setExistingDraft({
+      otherWorkspaceId: preferredWorkspaceId,
+      existingUserId: preferredWorkspaceId ? match?.userId || '' : '',
+      existingRoleId: '',
+    })
+  }
+
+  async function submitExistingMember(e) {
+    e.preventDefault()
+    if (!canCreateTeam) return toast.error("You don't have permission to invite users.")
+    if (!inviteWorkspace?.id) return toast.error('Select a workspace in the sidebar first')
+    if (!existingDraft.existingUserId) return toast.error('Select a user')
+    if (!existingDraft.existingRoleId) return toast.error('Choose a role')
+    try {
+      await addUserWorkspace({
+        userId: existingDraft.existingUserId,
+        workspaceId: inviteWorkspace.id,
+        companyRoleId: existingDraft.existingRoleId,
+      }).unwrap()
+      toast.success('Member added to this workspace')
+      closeInviteDrawer()
+      refetchUsers()
+    } catch (err) {
+      toast.error(apiErrorMessage(err))
+    }
+  }
 
   useEffect(() => {
     try {
@@ -383,17 +448,19 @@ export function TeamPage() {
         headerAlign: 'right',
         renderCell: ({ row: u }) => (
           <div className="inline-flex gap-1" onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              disabled={userBusy}
-              onClick={() => openAccessDrawer(u)}
-              aria-label="Edit member access"
-              title="Edit role, workspaces, and profile"
-              className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-brand-200 bg-white text-brand-700 shadow-sm hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <PencilLine className="h-3.5 w-3.5" />
-            </button>
-            {u.isActive ? (
+            {canAdminTeam ? (
+              <button
+                type="button"
+                disabled={userBusy}
+                onClick={() => openAccessDrawer(u)}
+                aria-label="Edit member access"
+                title="Edit role, workspaces, and profile"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-brand-200 bg-white text-brand-700 shadow-sm hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <PencilLine className="h-3.5 w-3.5" />
+              </button>
+            ) : null}
+            {canAdminTeam && u.isActive ? (
               <button
                 type="button"
                 disabled={userBusy}
@@ -404,7 +471,7 @@ export function TeamPage() {
               >
                 <UserMinus className="h-3.5 w-3.5" />
               </button>
-            ) : (
+            ) : canAdminTeam ? (
               <button
                 type="button"
                 disabled={userBusy}
@@ -423,7 +490,7 @@ export function TeamPage() {
               >
                 <UserCheck className="h-3.5 w-3.5" />
               </button>
-            )}
+            ) : null}
             <button
               type="button"
               onClick={() => navigate(`/team/${u.id}/permissions`)}
@@ -437,7 +504,7 @@ export function TeamPage() {
         ),
       },
     ],
-    [userBusy],
+    [userBusy, canAdminTeam, navigate, reactivateUser, refetchUsers],
   )
 
   const inviteColumns = useMemo(
@@ -653,10 +720,13 @@ export function TeamPage() {
   function closeInviteDrawer() {
     setInviteDrawerOpen(false)
     setInviteForm({ ...EMPTY_INVITE_FORM })
+    setAddMemberTab('invite')
+    setExistingDraft({ otherWorkspaceId: '', existingUserId: '', existingRoleId: '' })
   }
 
   async function submitInvite(e) {
     e.preventDefault()
+    if (!canCreateTeam) return toast.error("You don't have permission to invite users.")
     if (!inviteForm.email.trim()) return toast.error('Enter an email')
     if (!inviteForm.companyRoleId) return toast.error('Choose a role')
     const wsIds = inviteWorkspace?.id ? [inviteWorkspace.id] : inviteForm.workspaceIds
@@ -735,6 +805,10 @@ export function TeamPage() {
 
   async function saveAccessChanges() {
     if (!accessUser) return
+    if (!canAdminTeam) {
+      toast.error("You don't have permission to change user access.")
+      return
+    }
     if (!accessWorkspaceIds.length) {
       toast.error('At least one workspace is required')
       return
@@ -774,6 +848,10 @@ export function TeamPage() {
 
   async function confirmDeactivateUser() {
     if (!deactivateDialog.user) return
+    if (!canAdminTeam) {
+      toast.error("You don't have permission to deactivate users.")
+      return
+    }
     try {
       await deactivateUser({ id: deactivateDialog.user.id, reassignOwnerUserId: null }).unwrap()
       toast.success('User deactivated')
@@ -786,6 +864,10 @@ export function TeamPage() {
 
   async function confirmCancelInvitation() {
     if (!cancelInviteDialog.invite) return
+    if (!canDeleteTeam) {
+      toast.error("You don't have permission to cancel invitations.")
+      return
+    }
     try {
       await cancelInvitation(cancelInviteDialog.invite.id).unwrap()
       toast.success('Invitation canceled')
@@ -823,21 +905,23 @@ export function TeamPage() {
                   </button>
                 ))}
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  const wsId = inviteWorkspace?.id
-                  setInviteForm({
-                    ...EMPTY_INVITE_FORM,
-                    workspaceIds: wsId ? [wsId] : [],
-                  })
-                  setInviteDrawerOpen(true)
-                }}
-                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-brand-200 bg-white px-3 text-xs font-medium text-brand-700 shadow-sm hover:bg-white"
-              >
-                <UserPlus className="h-3.5 w-3.5" />
-                Add user
-              </button>
+              {canCreateTeam ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const wsId = inviteWorkspace?.id
+                    setInviteForm({
+                      ...EMPTY_INVITE_FORM,
+                      workspaceIds: wsId ? [wsId] : [],
+                    })
+                    setInviteDrawerOpen(true)
+                  }}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-brand-200 bg-white px-3 text-xs font-medium text-brand-700 shadow-sm hover:bg-white"
+                >
+                  <UserPlus className="h-3.5 w-3.5" />
+                  Add user
+                </button>
+              ) : null}
             </section>
 
             {/* Members Search & Filters */}
@@ -1122,7 +1206,11 @@ export function TeamPage() {
         onClose={closeInviteDrawer}
         className="bg-white"
         title="Add team member"
-        description="Invite by email. Profile details you fill are applied automatically when they accept and finish signup."
+        description={
+          addMemberTab === 'invite'
+            ? 'Invite by email. Profile details you fill are applied automatically when they accept and finish signup.'
+            : 'Pull in someone who already has an account in another workspace, with a role scoped to this workspace.'
+        }
         footer={
           <div className="flex justify-end gap-2 pt-2">
             <button
@@ -1132,17 +1220,52 @@ export function TeamPage() {
             >
               Cancel
             </button>
-            <button
-              type="submit"
-              form="invite-member-form"
-              disabled={inviteBusy}
-              className="h-10 rounded-xl bg-slate-800 px-5 text-sm font-semibold text-white shadow-lg shadow-brand-600/25 transition hover:bg-slate-800 disabled:opacity-60"
-            >
-              {inviteBusy ? 'Sending…' : 'Send invitation'}
-            </button>
+            {addMemberTab === 'invite' ? (
+              <button
+                type="submit"
+                form="invite-member-form"
+                disabled={inviteBusy || emailExists}
+                className="h-10 rounded-xl bg-slate-800 px-5 text-sm font-semibold text-white shadow-lg shadow-brand-600/25 transition hover:bg-slate-800 disabled:opacity-60"
+              >
+                {inviteBusy ? 'Sending…' : 'Send invitation'}
+              </button>
+            ) : (
+              <button
+                type="submit"
+                form="existing-member-form"
+                disabled={addingUserWorkspace}
+                className="h-10 rounded-xl bg-slate-800 px-5 text-sm font-semibold text-white shadow-lg shadow-brand-600/25 transition hover:bg-slate-800 disabled:opacity-60"
+              >
+                {addingUserWorkspace ? 'Adding…' : 'Add to workspace'}
+              </button>
+            )}
           </div>
         }
       >
+        <div className="mb-3.5 flex gap-1 rounded-xl border border-surface-border bg-surface-subtle p-1">
+          <button
+            type="button"
+            onClick={() => setAddMemberTab('invite')}
+            className={cn(
+              'flex-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors',
+              addMemberTab === 'invite' ? 'bg-white text-ink shadow-sm' : 'text-ink-muted hover:text-ink',
+            )}
+          >
+            Invite by email
+          </button>
+          <button
+            type="button"
+            onClick={() => setAddMemberTab('existing')}
+            className={cn(
+              'flex-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors',
+              addMemberTab === 'existing' ? 'bg-white text-ink shadow-sm' : 'text-ink-muted hover:text-ink',
+            )}
+          >
+            From another workspace
+          </button>
+        </div>
+
+        {addMemberTab === 'invite' ? (
         <form id="invite-member-form" className="space-y-3.5" onSubmit={submitInvite}>
           <DrawerSection>
             <div>
@@ -1170,6 +1293,23 @@ export function TeamPage() {
                 disabled={inviteBusy}
                 className="bg-white"
               />
+              {emailExists ? (
+                <div className="mt-1.5 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50/60 px-3 py-2 text-xs text-amber-800">
+                  <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+                  <span>
+                    This person already has an account in your company.{' '}
+                    <button
+                      type="button"
+                      onClick={switchToExistingWorkspaceTab}
+                      className="font-semibold underline underline-offset-2"
+                    >
+                      Use "From another workspace" instead.
+                    </button>
+                  </span>
+                </div>
+              ) : checkingEmail ? (
+                <p className="mt-1.5 text-[11px] text-ink-faint">Checking…</p>
+              ) : null}
             </div>
             <div>
               <PhoneField
@@ -1300,6 +1440,85 @@ export function TeamPage() {
             )}
           </DrawerSection>
         </form>
+        ) : (
+        <form id="existing-member-form" className="space-y-3.5" onSubmit={submitExistingMember}>
+          <DrawerSection>
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Workspace</label>
+              <div className="relative mt-1.5">
+                <Building2 className="pointer-events-none absolute left-3 top-1/2 z-[1] h-3.5 w-3.5 -translate-y-1/2 text-ink-faint" strokeWidth={1.75} />
+                <select
+                  value={existingDraft.otherWorkspaceId}
+                  onChange={(e) =>
+                    setExistingDraft({ otherWorkspaceId: e.target.value, existingUserId: '', existingRoleId: '' })
+                  }
+                  disabled={addingUserWorkspace}
+                  className="h-10 w-full cursor-pointer appearance-none rounded-xl border border-surface-border bg-white pl-9 pr-3 text-sm outline-none transition-shadow focus:border-brand-400 focus:ring-2 focus:ring-brand-500/15 disabled:opacity-70"
+                >
+                  <option value="">Select a workspace</option>
+                  {otherWorkspaces.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Person</label>
+              <div className="relative mt-1.5">
+                <User className="pointer-events-none absolute left-3 top-1/2 z-[1] h-3.5 w-3.5 -translate-y-1/2 text-ink-faint" strokeWidth={1.75} />
+                <select
+                  value={existingDraft.existingUserId}
+                  onChange={(e) => setExistingDraft((d) => ({ ...d, existingUserId: e.target.value }))}
+                  disabled={addingUserWorkspace || !existingDraft.otherWorkspaceId || loadingOtherWorkspaceUsers}
+                  className="h-10 w-full cursor-pointer appearance-none rounded-xl border border-surface-border bg-white pl-9 pr-3 text-sm outline-none transition-shadow focus:border-brand-400 focus:ring-2 focus:ring-brand-500/15 disabled:opacity-70"
+                >
+                  <option value="">
+                    {!existingDraft.otherWorkspaceId
+                      ? 'Select a workspace first'
+                      : loadingOtherWorkspaceUsers
+                        ? 'Loading…'
+                        : otherWorkspaceUsers.length
+                          ? 'Select a person'
+                          : 'No members to add'}
+                  </option>
+                  {otherWorkspaceUsers.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name || u.email} ({u.email})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
+                Role in {inviteWorkspace?.name || 'this workspace'}
+              </label>
+              <div className="relative mt-1.5">
+                <ShieldCheck className="pointer-events-none absolute left-3 top-1/2 z-[1] h-3.5 w-3.5 -translate-y-1/2 text-ink-faint" strokeWidth={1.75} />
+                <select
+                  value={existingDraft.existingRoleId}
+                  onChange={(e) => setExistingDraft((d) => ({ ...d, existingRoleId: e.target.value }))}
+                  disabled={addingUserWorkspace}
+                  className="h-10 w-full cursor-pointer appearance-none rounded-xl border border-surface-border bg-white pl-9 pr-3 text-sm outline-none transition-shadow focus:border-brand-400 focus:ring-2 focus:ring-brand-500/15 disabled:opacity-70"
+                >
+                  <option value="">Select role</option>
+                  {roles.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                      {r.userRoleKind ? ` — ${labelCompanyUserRoleKind(r.userRoleKind)}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <p className="mt-1.5 text-[11px] leading-relaxed text-ink-muted">
+                This role only applies in {inviteWorkspace?.name || 'this workspace'} — their role in other workspaces is unchanged.
+              </p>
+            </div>
+          </DrawerSection>
+        </form>
+        )}
       </RightDrawer>
 
       <RightDrawer
@@ -1317,6 +1536,7 @@ export function TeamPage() {
               disabled={patchingRoleMeta}
               onClick={async () => {
                 if (!editingRoleId) return
+                if (!canAdminTeam) return toast.error("You don't have permission to edit roles.")
                 if (!roleForm.userRoleKind) return toast.error('Select a role type')
                 try {
                   await patchRole({
@@ -1453,6 +1673,7 @@ export function TeamPage() {
               type="button"
               disabled={deletingRole || !deleteRoleDialog.fallbackRoleId}
               onClick={async () => {
+                if (!canAdminTeam) return toast.error("You don't have permission to delete roles.")
                 try {
                   await deleteRole({
                     id: deleteRoleDialog.roleId,

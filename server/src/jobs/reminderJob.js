@@ -1,11 +1,73 @@
 import cron from 'node-cron'
 import { Op } from 'sequelize'
 import { Meeting } from '../models/Meeting.js'
-import { Lead, LeadFollowup, ActivityReminder, Activity, User } from '../models/index.js'
+import { Lead, LeadFollowup, ActivityReminder, Activity, User, Reminder } from '../models/index.js'
 import { notifyMeetingParticipants } from '../services/notification/meetingNotificationService.js'
 import { notifyFollowupDue, notifyMeetingReminderInternal } from '../services/notification/teamNotificationService.js'
 import { enqueueTeamNotification } from '../queues/notificationEmailQueue.js'
 import { NOTIFICATION_EVENT_TYPES } from '../services/notification/notificationPreferencesService.js'
+import { createNotification, notifyUserEmail } from '../services/notificationService.js'
+import { primaryClientOrigin } from '../config/corsOrigins.js'
+
+const REMINDER_TARGET_ROUTES = {
+  task: '/tasks',
+  lead: '/leads',
+  opportunity: '/opportunities',
+  meeting: '/meetings',
+  followup: '/leads',
+  general: '/calendar',
+}
+
+function reminderLink(reminder) {
+  const base = REMINDER_TARGET_ROUTES[reminder.targetType] || '/calendar'
+  return reminder.targetId && reminder.targetType !== 'task' ? `${base}/${reminder.targetId}` : base
+}
+
+function reminderEmailHtml(reminder) {
+  const url = `${primaryClientOrigin}${reminderLink(reminder)}`
+  return `
+    <p>Reminder: <strong>${reminder.title}</strong></p>
+    ${reminder.notes ? `<p>${reminder.notes}</p>` : ''}
+    <p><a href="${url}">Open in LeadFlow</a></p>
+  `
+}
+
+/** Fires reminders (general/lead/opportunity/meeting/task/followup) at their remindAt time, honoring each reminder's own push/email channel choice. */
+async function sendDueReminders(now) {
+  const dueReminders = await Reminder.findAll({
+    where: {
+      status: 'pending',
+      notifiedAt: null,
+      remindAt: { [Op.lte]: now },
+    },
+  })
+  for (const reminder of dueReminders) {
+    try {
+      if (reminder.ownerUserId) {
+        const user = await User.findByPk(reminder.ownerUserId, { attributes: ['id', 'name', 'email'] })
+        if (user) {
+          if (reminder.channelPush) {
+            await createNotification({
+              userId: user.id,
+              companyId: reminder.companyId,
+              workspaceId: reminder.workspaceId,
+              title: 'Reminder',
+              message: reminder.title,
+              type: 'reminder_due',
+              link: reminderLink(reminder),
+            })
+          }
+          if (reminder.channelEmail) {
+            await notifyUserEmail(user, `Reminder: ${reminder.title}`, reminderEmailHtml(reminder))
+          }
+        }
+      }
+    } catch (e) {
+      console.error('[cron] reminder notify failed:', e?.message)
+    }
+    await reminder.update({ notifiedAt: now })
+  }
+}
 
 async function sendReminder(meeting) {
   console.log(`Reminder sent for ${meeting.title}`)
@@ -98,6 +160,9 @@ export function startReminderJob() {
         }
         await followup.update({ notifiedAt: now })
       }
+
+      // --- Generic reminders (task/lead/opportunity/meeting/followup/general), fire once when due ---
+      await sendDueReminders(now)
 
       // --- Call reminders (T-15 min), fire once per reminder ---
       const in15 = new Date(now.getTime() + 15 * 60 * 1000)

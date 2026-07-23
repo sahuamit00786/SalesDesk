@@ -20,6 +20,7 @@ import { DataGrid } from '@/components/shared/DataGrid'
 import { DealDetailPanel } from '@/features/deals/components/DealDetailPanel'
 import { useGetLeadFormMetaQuery, useGetLeadsQuery } from '@/features/leads/leadsApi'
 import { SalesDocFiltersModal } from '@/features/sales-docs/components/SalesDocFiltersModal'
+import { usePermission } from '@/hooks/usePermission'
 
 export function QuotationsPage() {
   const navigate = useNavigate()
@@ -28,6 +29,8 @@ export function QuotationsPage() {
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [convertTarget, setConvertTarget] = useState(null)
   const [selectedDeal, setSelectedDeal] = useState(null)
+  const canViewQuotations = usePermission('manage.quotations', 'view')
+  const canCreateQuotations = usePermission('manage.quotations', 'create')
 
   const { data: formMetaData } = useGetLeadFormMetaQuery()
   const rawDealStatuses = formMetaData?.data?.dealStatuses || []
@@ -74,7 +77,7 @@ export function QuotationsPage() {
     }),
     [leadIdFilter, statusFilter, dateFrom, dateTo, createdByFilter, minAmount, maxAmount],
   )
-  const { data, isLoading, refetch } = useGetQuotationsQuery(queryArg)
+  const { data, isLoading, refetch } = useGetQuotationsQuery(queryArg, { skip: !canViewQuotations })
   const [convert, { isLoading: converting }] = useConvertQuotationToInvoiceMutation()
   const [deleteQuotation, { isLoading: deleting }] = useDeleteQuotationMutation()
 
@@ -151,31 +154,35 @@ export function QuotationsPage() {
           <Button type="button" variant="secondary" title="Refresh" onClick={() => refetch()}>
             <RefreshCw className="h-4 w-4" />
           </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            title="Export all as CSV"
-            onClick={() => {
-              if (!rows.length) return
-              const keys = ['quotationNumber', 'status', 'totalAmount', 'currency', 'createdAt']
-              const csv = [keys.join(','), ...rows.map((r) => keys.map((k) => `"${String(r[k] ?? '').replaceAll('"', '""')}"`).join(','))].join('\n')
-              const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-              const url = URL.createObjectURL(blob)
-              const a = document.createElement('a')
-              a.href = url; a.download = `quotations-${new Date().toISOString().slice(0, 10)}.csv`; a.click()
-              URL.revokeObjectURL(url)
-            }}
-          >
-            <Download className="h-4 w-4" />
-          </Button>
-          <div className="ml-auto flex gap-2">
-            <Link
-              to={leadIdFilter ? `/quotations/new?leadId=${encodeURIComponent(leadIdFilter)}` : '/quotations/new'}
-              className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-medium cx-icon-inherit text-white hover:bg-brand-700"
+          {canViewQuotations ? (
+            <Button
+              type="button"
+              variant="secondary"
+              title="Export all as CSV"
+              onClick={() => {
+                if (!rows.length) return
+                const keys = ['quotationNumber', 'status', 'totalAmount', 'currency', 'createdAt']
+                const csv = [keys.join(','), ...rows.map((r) => keys.map((k) => `"${String(r[k] ?? '').replaceAll('"', '""')}"`).join(','))].join('\n')
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url; a.download = `quotations-${new Date().toISOString().slice(0, 10)}.csv`; a.click()
+                URL.revokeObjectURL(url)
+              }}
             >
-              <Plus className="h-4 w-4" />
-              New quotation
-            </Link>
+              <Download className="h-4 w-4" />
+            </Button>
+          ) : null}
+          <div className="ml-auto flex gap-2">
+            {canCreateQuotations ? (
+              <Link
+                to={leadIdFilter ? `/quotations/new?leadId=${encodeURIComponent(leadIdFilter)}` : '/quotations/new'}
+                className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-medium cx-icon-inherit text-white hover:bg-brand-700"
+              >
+                <Plus className="h-4 w-4" />
+                New quotation
+              </Link>
+            ) : null}
           </div>
         </PageFilterBar>
 

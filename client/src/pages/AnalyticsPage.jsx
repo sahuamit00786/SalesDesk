@@ -1,3 +1,8 @@
+// No `usePermission('insights.reports', ...)` gate here on purpose: analytics access is
+// controlled by a separate tier system (requireAnalyticsView/requireTeamAnalytics/
+// requireAnalyticsAdmin in server/src/middleware/requireAnalyticsView.js), not the
+// menu-CRUD permission model. Gating on `insights.reports` would be misleading — an admin
+// could revoke it thinking they'd restricted access while the tier system still grants it.
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowRight, Search, AlertTriangle, CheckSquare, CalendarCheck, Users, DollarSign, ListTodo, Percent } from '@/components/ui/icons'

@@ -50,15 +50,37 @@ export async function list(req, res, next) {
     if (!workspaceId) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'workspaceId required' } })
 
     const page = Math.max(1, Number(req.query.page) || 1)
-    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50))
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20))
     const offset = (page - 1) * limit
 
-    const { rows, count } = await DuplicateLead.findAndCountAll({
+    const allRows = await DuplicateLead.findAll({
       where: { workspaceId, status: 'pending', isDeleted: false },
       order: [['createdAt', 'DESC']],
-      limit,
-      offset,
     })
+
+    const search = String(req.query.search || '').trim().toLowerCase()
+    const matchingRows = search
+      ? allRows.filter((r) => {
+          const d = r.leadData || {}
+          const haystack = [
+            d.contactName,
+            d.fullName,
+            d.title,
+            d.email,
+            d.phone,
+            d.company,
+            d.companyName,
+            r.matchedLeadTitle,
+          ]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase()
+          return haystack.includes(search)
+        })
+      : allRows
+
+    const count = matchingRows.length
+    const rows = matchingRows.slice(offset, offset + limit)
 
     const matchedLeadIds = [...new Set(rows.map((r) => r.matchedLeadId).filter(Boolean))]
     const matchedLeads = matchedLeadIds.length

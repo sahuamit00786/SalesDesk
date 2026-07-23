@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { useSelector } from 'react-redux'
 import toast from 'react-hot-toast'
 import { Clock, Mail } from '@/components/ui/icons'
 import { Button } from '@/components/ui/Button'
@@ -9,6 +8,7 @@ import {
   useGetNotificationEmailSettingsQuery,
   usePatchNotificationEmailSettingsMutation,
 } from '@/features/settings/settingsApi'
+import { usePermission } from '@/hooks/usePermission'
 
 const EVENT_ROWS = [
   { key: 'leadAssigned', label: 'Lead assigned', description: 'When leads are assigned to a user (bulk, create, round-robin).' },
@@ -56,8 +56,7 @@ function SectionHeader({ title, description, icon: Icon }) {
 }
 
 export function NotificationEmailSettingsTab() {
-  const user = useSelector((s) => s.auth.user)
-  const isAdmin = Boolean(user?.isCompanyAdmin)
+  const canUpdate = usePermission('settings.workspace', 'update')
   const { data, isLoading } = useGetNotificationEmailSettingsQuery()
   const [patchSettings, { isLoading: saving }] = usePatchNotificationEmailSettingsMutation()
 
@@ -82,8 +81,8 @@ export function NotificationEmailSettingsTab() {
   }
 
   async function handleSave() {
-    if (!isAdmin) {
-      toast.error('Only company admins can change notification settings')
+    if (!canUpdate) {
+      toast.error("You don't have permission to change notification settings")
       return
     }
     try {
@@ -111,9 +110,9 @@ export function NotificationEmailSettingsTab() {
           icon={Mail}
         />
 
-        {!isAdmin ? (
+        {!canUpdate ? (
           <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-            Only company admins can edit these settings. You can still receive notifications based on the current
+            You don't have permission to edit these settings. You can still receive notifications based on the current
             configuration.
           </p>
         ) : null}
@@ -159,7 +158,7 @@ export function NotificationEmailSettingsTab() {
                         min={0}
                         max={23}
                         value={event.digestHour ?? 8}
-                        disabled={!isAdmin}
+                        disabled={!canUpdate}
                         onChange={(e) => updateEvent(row.key, { digestHour: Number(e.target.value) })}
                       />
                     </div>
@@ -170,7 +169,7 @@ export function NotificationEmailSettingsTab() {
                         min={0}
                         max={59}
                         value={event.digestMinute ?? 0}
-                        disabled={!isAdmin}
+                        disabled={!canUpdate}
                         onChange={(e) => updateEvent(row.key, { digestMinute: Number(e.target.value) })}
                       />
                     </div>
@@ -178,7 +177,7 @@ export function NotificationEmailSettingsTab() {
                       <label className="mb-1 block text-xs font-medium text-ink-muted">Timezone label</label>
                       <Input
                         value={event.timezone ?? 'UTC'}
-                        disabled={!isAdmin}
+                        disabled={!canUpdate}
                         onChange={(e) => updateEvent(row.key, { timezone: e.target.value })}
                         placeholder="e.g. Asia/Kolkata"
                       />
@@ -211,7 +210,7 @@ export function NotificationEmailSettingsTab() {
                 <label className="mb-1 block text-xs font-medium text-ink-muted">Start hour</label>
                 <Select
                   value={String(form.quietHours.startHour ?? 22)}
-                  disabled={!isAdmin}
+                  disabled={!canUpdate}
                   onChange={(e) => updateQuiet({ startHour: Number(e.target.value) })}
                 >
                   {Array.from({ length: 24 }, (_, i) => (
@@ -227,7 +226,7 @@ export function NotificationEmailSettingsTab() {
                   type="number"
                   min={0}
                   max={59}
-                  disabled={!isAdmin}
+                  disabled={!canUpdate}
                   value={form.quietHours.startMinute ?? 0}
                   onChange={(e) => updateQuiet({ startMinute: Number(e.target.value) })}
                 />
@@ -236,7 +235,7 @@ export function NotificationEmailSettingsTab() {
                 <label className="mb-1 block text-xs font-medium text-ink-muted">End hour</label>
                 <Select
                   value={String(form.quietHours.endHour ?? 7)}
-                  disabled={!isAdmin}
+                  disabled={!canUpdate}
                   onChange={(e) => updateQuiet({ endHour: Number(e.target.value) })}
                 >
                   {Array.from({ length: 24 }, (_, i) => (
@@ -252,7 +251,7 @@ export function NotificationEmailSettingsTab() {
                   type="number"
                   min={0}
                   max={59}
-                  disabled={!isAdmin}
+                  disabled={!canUpdate}
                   value={form.quietHours.endMinute ?? 0}
                   onChange={(e) => updateQuiet({ endMinute: Number(e.target.value) })}
                 />
@@ -261,7 +260,7 @@ export function NotificationEmailSettingsTab() {
           ) : null}
         </div>
 
-        {isAdmin ? (
+        {canUpdate ? (
           <div className="mt-6 flex justify-end">
             <Button variant="primary" onClick={handleSave} disabled={saving}>
               {saving ? 'Saving…' : 'Save notification settings'}

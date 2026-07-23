@@ -3,6 +3,7 @@ import { Archive, RotateCcw, Trash2 } from '@/components/ui/icons'
 import toast from 'react-hot-toast'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { useGetArchivedLeadsQuery, useBulkArchivedLeadsMutation } from '@/features/leads/leadsApi'
+import { usePermission } from '@/hooks/usePermission'
 
 function formatPhone(lead) {
   const code = lead.phoneCountryCode || ''
@@ -13,15 +14,17 @@ function formatPhone(lead) {
 const PAGE_SIZE = 20
 
 /** The "Archived Leads/Opportunities" tab — shows soft-deleted records with restore / permanent-delete, single or bulk. */
-export function ArchivedLeadsTab({ isOpportunity = false }) {
+export function ArchivedLeadsTab({ isOpportunity = false, search = '' }) {
   const [page, setPage] = useState(1)
   const [selected, setSelected] = useState([])
   const { data, isLoading, isFetching, refetch } = useGetArchivedLeadsQuery(
-    { page, limit: PAGE_SIZE, isOpportunity },
+    { page, limit: PAGE_SIZE, isOpportunity, search: search.trim() || undefined },
     { refetchOnMountOrArgChange: true },
   )
   const [bulkArchived, { isLoading: actionRunning }] = useBulkArchivedLeadsMutation()
   const [confirm, setConfirm] = useState(null) // { action: 'restore' | 'permanentDelete', ids: string[] }
+  const canRestore = usePermission('main.leads', 'update')
+  const canPurge = usePermission('main.leads', 'delete')
 
   const records = data?.data || []
   const total = data?.meta?.total ?? records.length
@@ -33,6 +36,10 @@ export function ArchivedLeadsTab({ isOpportunity = false }) {
     setSelected([])
     setConfirm(null)
   }, [page, isOpportunity])
+
+  useEffect(() => {
+    setPage(1)
+  }, [search, isOpportunity])
 
   function toggleOne(id) {
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
@@ -51,8 +58,8 @@ export function ArchivedLeadsTab({ isOpportunity = false }) {
       const label = count === 1 ? noun : nounPlural
       toast.success(action === 'restore' ? `${count} ${label} restored` : `${count} ${label} permanently deleted`)
       setSelected((prev) => prev.filter((id) => !ids.includes(id)))
-    } catch {
-      toast.error(action === 'restore' ? `Could not restore ${nounPlural}` : `Could not delete ${nounPlural}`)
+    } catch (err) {
+      toast.error(err?.data?.error?.message || (action === 'restore' ? `Could not restore ${nounPlural}` : `Could not delete ${nounPlural}`))
     } finally {
       setConfirm(null)
     }
@@ -67,14 +74,19 @@ export function ArchivedLeadsTab({ isOpportunity = false }) {
   }
 
   if (!records.length) {
+    const searching = Boolean(search.trim())
     return (
       <div className="flex h-48 flex-col items-center justify-center gap-2 text-center">
         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-surface-muted">
           <Archive className="h-5 w-5 text-ink-muted" />
         </div>
-        <p className="text-sm font-semibold text-ink">No archived {nounPlural}</p>
+        <p className="text-sm font-semibold text-ink">
+          {searching ? `No matching archived ${nounPlural}` : `No archived ${nounPlural}`}
+        </p>
         <p className="text-xs text-ink-muted">
-          Deleted {nounPlural} show up here so you can restore or purge them.
+          {searching
+            ? 'Try a different search term.'
+            : `Deleted ${nounPlural} show up here so you can restore or purge them.`}
         </p>
       </div>
     )
@@ -98,22 +110,26 @@ export function ArchivedLeadsTab({ isOpportunity = false }) {
         <div className="flex items-center justify-between rounded-xl border border-brand-200 bg-brand-50/60 px-4 py-2.5">
           <p className="text-xs font-semibold text-ink">{selected.length} selected</p>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setConfirm({ action: 'restore', ids: selected })}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
-            >
-              <RotateCcw className="h-3.5 w-3.5" />
-              Restore selected
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfirm({ action: 'permanentDelete', ids: selected })}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 text-xs font-semibold text-red-600 hover:bg-red-100"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              Delete selected permanently
-            </button>
+            {canRestore ? (
+              <button
+                type="button"
+                onClick={() => setConfirm({ action: 'restore', ids: selected })}
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                Restore selected
+              </button>
+            ) : null}
+            {canPurge ? (
+              <button
+                type="button"
+                onClick={() => setConfirm({ action: 'permanentDelete', ids: selected })}
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 text-xs font-semibold text-red-600 hover:bg-red-100"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete selected permanently
+              </button>
+            ) : null}
           </div>
         </div>
       )}
@@ -155,24 +171,28 @@ export function ArchivedLeadsTab({ isOpportunity = false }) {
                   </td>
                   <td className="cx-table-cell-actions text-right">
                     <div className="inline-flex gap-1">
-                      <button
-                        type="button"
-                        onClick={() => setConfirm({ action: 'restore', ids: [lead.id] })}
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-700"
-                        aria-label={`Restore ${noun}`}
-                        title={`Restore ${noun}`}
-                      >
-                        <RotateCcw className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setConfirm({ action: 'permanentDelete', ids: [lead.id] })}
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-danger"
-                        aria-label={`Delete ${noun} permanently`}
-                        title="Delete permanently"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                      {canRestore ? (
+                        <button
+                          type="button"
+                          onClick={() => setConfirm({ action: 'restore', ids: [lead.id] })}
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-700"
+                          aria-label={`Restore ${noun}`}
+                          title={`Restore ${noun}`}
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />
+                        </button>
+                      ) : null}
+                      {canPurge ? (
+                        <button
+                          type="button"
+                          onClick={() => setConfirm({ action: 'permanentDelete', ids: [lead.id] })}
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-danger"
+                          aria-label={`Delete ${noun} permanently`}
+                          title="Delete permanently"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      ) : null}
                     </div>
                   </td>
                 </tr>

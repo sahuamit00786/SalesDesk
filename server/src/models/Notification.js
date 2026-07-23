@@ -56,6 +56,11 @@ export const Notification = sequelize.define(
       defaultValue: false,
       field: 'is_read',
     },
+    seenAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'seen_at',
+    },
     link: {
       type: DataTypes.STRING(512),
       allowNull: true,

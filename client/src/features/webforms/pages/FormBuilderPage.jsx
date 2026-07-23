@@ -22,6 +22,7 @@ import {
   useUpdateWebFormEmailTemplateMutation,
   useUpdateWebFormMutation,
 } from '../webFormsApi'
+import { usePermission } from '@/hooks/usePermission'
 
 const NEW_FORM_DRAFT = {
   name: 'Untitled form',
@@ -61,6 +62,9 @@ export function FormBuilderPage() {
   const [createEmailTemplate, { isLoading: savingTemplate }] = useCreateWebFormEmailTemplateMutation()
   const [updateEmailTemplate, { isLoading: updatingTemplate }] = useUpdateWebFormEmailTemplateMutation()
   const [deleteEmailTemplate, { isLoading: deletingTemplate }] = useDeleteWebFormEmailTemplateMutation()
+  const canCreate = usePermission('automate.forms', 'create')
+  const canUpdate = usePermission('automate.forms', 'update')
+  const canDelete = usePermission('automate.forms', 'delete')
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
   const [activePaletteType, setActivePaletteType] = useState(null)
   const [centerMode, setCenterMode] = useState('builder')
@@ -115,6 +119,10 @@ export function FormBuilderPage() {
 
   async function save() {
     if (!form) return
+    if (isNew ? !canCreate : !canUpdate) {
+      toast.error("You don't have permission to save this form.")
+      return
+    }
     const payload = { ...(localForm || form), fields }
     delete payload.id
 
@@ -279,11 +287,20 @@ export function FormBuilderPage() {
         templates={templates}
         onGenerate={generateEmailTemplate}
         generating={generatingTemplate}
-        onSaveTemplate={(payload) => createEmailTemplate(payload).unwrap()}
+        onSaveTemplate={(payload) => {
+          if (!canCreate) return Promise.reject(new Error("You don't have permission to save templates."))
+          return createEmailTemplate(payload).unwrap()
+        }}
         saving={savingTemplate}
-        onUpdateTemplate={(payload) => updateEmailTemplate(payload).unwrap()}
+        onUpdateTemplate={(payload) => {
+          if (!canUpdate) return Promise.reject(new Error("You don't have permission to update templates."))
+          return updateEmailTemplate(payload).unwrap()
+        }}
         updating={updatingTemplate}
-        onDeleteTemplate={(idValue) => deleteEmailTemplate(idValue).unwrap()}
+        onDeleteTemplate={(idValue) => {
+          if (!canDelete) return Promise.reject(new Error("You don't have permission to delete templates."))
+          return deleteEmailTemplate(idValue).unwrap()
+        }}
         deleting={deletingTemplate}
         onApplyTemplate={(payload) => {
           setLocalForm((prev) => ({

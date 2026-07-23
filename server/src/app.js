@@ -44,10 +44,13 @@ app.use(
 app.use(express.json({ limit: '5mb' }))
 app.use(cookieParser())
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'))
-app.use('/uploads', express.static(path.join(appRoot, 'uploads')))
+const staticAssetHeaders = helmet.crossOriginResourcePolicy({ policy: 'cross-origin' })
+
+app.use('/uploads', staticAssetHeaders, express.static(path.join(appRoot, 'uploads')))
 
 app.use(
   '/pdfs',
+  staticAssetHeaders,
   express.static(
     path.join(appRoot, 'pdfs')
   )

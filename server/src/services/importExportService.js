@@ -1,12 +1,21 @@
-import { Op } from 'sequelize'
-import { Lead, OpportunityStage, User } from '../models/index.js'
-import { findDuplicates, saveDuplicateRecord } from './duplicateDetectionService.js'
-import { recalculateScore } from './leadScoringService.js'
-import { createLeadSystemActivity } from './leadSystemActivity.js'
-import { autoAssignLead } from './assignmentRulesService.js'
+import { randomUUID } from 'node:crypto'
+import { Op, fn, col, where as sqlWhere } from 'sequelize'
+import { Lead, OpportunityStage, User, AssignmentRule, Activity, CustomField, CustomFieldValue, DuplicateLead } from '../models/index.js'
+import { resolveMatchField } from './duplicateDetectionService.js'
+import { SCORE_WEIGHTS } from './leadScoringService.js'
+import { matchesConditions, pickAssignee } from './assignmentRulesService.js'
 import { notifyLeadAssignedBatch } from './notification/teamNotificationService.js'
-import { upsertLeadCustomFields } from './customFieldService.js'
+import { validateValueAgainstField } from './customFieldService.js'
 import { phoneDigitsKey } from '../utils/phoneDigits.js'
+
+/** Insert rows in chunks so a single statement never exceeds MySQL's packet size. */
+const BULK_CHUNK_SIZE = 500
+
+async function bulkInsertChunked(Model, rows) {
+  for (let i = 0; i < rows.length; i += BULK_CHUNK_SIZE) {
+    await Model.bulkCreate(rows.slice(i, i + BULK_CHUNK_SIZE))
+  }
+}
 
 const LEAD_STATUS = ['new', 'contacted', 'qualified', 'proposal', 'won', 'lost', 'junk']
 
@@ -85,6 +94,9 @@ function buildLeadRowPayload(row, defaultPipeline, userId, companyId, workspaceI
 
 export async function importLeads(workspaceId, companyId, userId, rows) {
   const results = { imported: 0, skipped: 0, duplicates: 0, errors: [], createdLeadIds: [] }
+  const allRows = rows || []
+  if (!allRows.length) return results
+
   const defStage =
     (await OpportunityStage.findOne({
       where: { workspaceId, companyId, isDefault: true },
@@ -103,31 +115,102 @@ export async function importLeads(workspaceId, companyId, userId, rows) {
   const defaultPipeline = defStage?.name || 'Lead Inbound'
   const assignCounts = new Map()
 
-  for (const [idx, row] of (rows || []).entries()) {
+  // Fetch cross-row dependencies once instead of per-row (was the ~10-query-per-row bottleneck).
+  const [assignmentRules, customFieldDefs] = await Promise.all([
+    AssignmentRule.findAll({ where: { workspaceId, isActive: true }, order: [['priority', 'ASC']] }),
+    CustomField.findAll({ where: { workspaceId }, order: [['order', 'ASC'], ['createdAt', 'ASC']] }),
+  ])
+
+  const emailSet = new Set()
+  const phoneSet = new Set()
+  for (const row of allRows) {
+    if (row.email) emailSet.add(String(row.email).trim().toLowerCase())
+    if (row.phone) phoneSet.add(String(row.phone).trim())
+  }
+  let existingMatches = []
+  if (emailSet.size || phoneSet.size) {
+    const orConds = []
+    if (emailSet.size) orConds.push(sqlWhere(fn('LOWER', col('email')), { [Op.in]: [...emailSet] }))
+    if (phoneSet.size) orConds.push({ phone: { [Op.in]: [...phoneSet] } })
+    existingMatches = await Lead.findAll({
+      where: { workspaceId, isDeleted: false, [Op.or]: orConds },
+      attributes: ['id', 'title', 'contactName', 'email', 'phone', 'status', 'score', 'company'],
+      order: [['updatedAt', 'DESC']],
+    })
+  }
+  const byEmail = new Map()
+  const byPhone = new Map()
+  for (const l of existingMatches) {
+    if (l.email) {
+      const k = String(l.email).trim().toLowerCase()
+      if (!byEmail.has(k)) byEmail.set(k, l)
+    }
+    if (l.phone) {
+      const k = String(l.phone).trim()
+      if (!byPhone.has(k)) byPhone.set(k, l)
+    }
+  }
+  // Rows already claimed earlier in this same batch also count as duplicates for later rows.
+  const claimedByEmail = new Map()
+  const claimedByPhone = new Map()
+
+  const leadsToCreate = []
+  const activityRows = []
+  const customFieldValueRows = []
+  const duplicatesToCreate = []
+
+  for (const [idx, row] of allRows.entries()) {
     try {
-      const dupes = await findDuplicates(workspaceId, { email: row.email, phone: row.phone })
-      if (dupes.length) {
-        await saveDuplicateRecord({
-          leadData: { ...row, source: 'csv_import' },
-          dupes,
+      const emailKey = row.email ? String(row.email).trim().toLowerCase() : ''
+      const phoneKey = row.phone ? String(row.phone).trim() : ''
+      const matched =
+        (emailKey && claimedByEmail.get(emailKey)) ||
+        (phoneKey && claimedByPhone.get(phoneKey)) ||
+        (emailKey && byEmail.get(emailKey)) ||
+        (phoneKey && byPhone.get(phoneKey)) ||
+        null
+
+      if (matched) {
+        const leadData = { ...row, source: 'csv_import' }
+        duplicatesToCreate.push({
+          leadData,
+          matchedLeadId: matched.id || null,
+          matchedLeadTitle: matched.title || matched.contactName || 'Unknown',
+          matchField: resolveMatchField(leadData, matched),
           source: 'csv_import',
-          workspaceId,
+          status: 'pending',
+          workspaceId: workspaceId || null,
           companyId,
-          createdByUserId: userId,
+          createdByUserId: userId || null,
+          isDeleted: false,
         })
         results.duplicates += 1
         continue
       }
-      const payload = buildLeadRowPayload(row, defaultPipeline, userId, companyId, workspaceId)
-      const lead = await Lead.create(payload)
-      await upsertLeadCustomFields({
-        leadId: lead.id,
-        workspaceId,
-        companyId,
-        customFields: row.customFields || {},
-      })
-      await recalculateScore(lead.id)
-      results.createdLeadIds.push(lead.id)
+
+      const id = randomUUID()
+      const payload = { ...buildLeadRowPayload(row, defaultPipeline, userId, companyId, workspaceId), id }
+
+      // Score is computed fresh on a just-built lead with no activities yet — no DB round trip needed.
+      let score = 0
+      if (payload.email) score += SCORE_WEIGHTS.hasEmail
+      if (payload.phone) score += SCORE_WEIGHTS.hasPhone
+      if (payload.companyId) score += SCORE_WEIGHTS.hasCompany
+      if (Number(payload.value || 0) > 0) score += SCORE_WEIGHTS.hasValue
+      if (payload.closingDate) score += SCORE_WEIGHTS.hasClosingDate
+      payload.score = Math.min(100, score)
+
+      // Custom fields validated against the pre-fetched definitions (throws -> row lands in results.errors).
+      if (row.customFields && typeof row.customFields === 'object' && customFieldDefs.length) {
+        for (const field of customFieldDefs) {
+          const hasKey = Object.prototype.hasOwnProperty.call(row.customFields, field.key)
+          const raw = hasKey ? row.customFields[field.key] : undefined
+          if (!hasKey && !field.isRequired) continue
+          const stored = validateValueAgainstField(field, raw)
+          if (stored === null) continue
+          customFieldValueRows.push({ customFieldId: field.id, leadId: id, value: stored })
+        }
+      }
 
       if (payload.assignedTo) {
         const uid = String(payload.assignedTo)
@@ -135,23 +218,49 @@ export async function importLeads(workspaceId, companyId, userId, rows) {
           assignCounts.set(uid, (assignCounts.get(uid) || 0) + 1)
         }
       } else {
-        const assignedUserId = await autoAssignLead(lead, { suppressNotification: true })
-        if (assignedUserId && String(assignedUserId) !== String(userId)) {
-          assignCounts.set(String(assignedUserId), (assignCounts.get(String(assignedUserId)) || 0) + 1)
+        for (const rule of assignmentRules) {
+          if (!matchesConditions(payload, rule.conditions)) continue
+          const assignedUserId = await pickAssignee(rule)
+          if (!assignedUserId) continue
+          payload.assignedTo = assignedUserId
+          activityRows.push({
+            type: 'assignment',
+            leadId: id,
+            userId: assignedUserId,
+            body: `Assigned by rule ${rule.name}`,
+            metadata: { ruleId: rule.id, userId: assignedUserId },
+          })
+          if (String(assignedUserId) !== String(userId)) {
+            assignCounts.set(String(assignedUserId), (assignCounts.get(String(assignedUserId)) || 0) + 1)
+          }
+          break
         }
       }
 
-      await createLeadSystemActivity({
-        leadId: lead.id,
-        userId,
+      activityRows.push({
+        type: 'system',
+        leadId: id,
+        userId: userId || null,
         body: 'Lead imported from CSV',
-        metadata: { action: 'lead_imported_csv', source: 'csv_import' },
+        metadata: { actorUserId: userId, action: 'lead_imported_csv', source: 'csv_import' },
       })
+
+      leadsToCreate.push(payload)
+      results.createdLeadIds.push(id)
       results.imported += 1
+
+      const claim = { id, title: payload.title, contactName: payload.contactName, email: payload.email, phone: payload.phone, status: payload.status, score: payload.score, company: payload.company }
+      if (emailKey) claimedByEmail.set(emailKey, claim)
+      if (phoneKey) claimedByPhone.set(phoneKey, claim)
     } catch (err) {
       results.errors.push({ row: idx + 1, message: err.message })
     }
   }
+
+  await bulkInsertChunked(Lead, leadsToCreate)
+  await bulkInsertChunked(CustomFieldValue, customFieldValueRows)
+  await bulkInsertChunked(Activity, activityRows)
+  await bulkInsertChunked(DuplicateLead, duplicatesToCreate)
 
   if (assignCounts.size) {
     notifyLeadAssignedBatch({

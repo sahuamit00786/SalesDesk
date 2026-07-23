@@ -2,6 +2,7 @@
 import { RightDrawer } from '@/components/ui/RightDrawer'
 import { STATUS_OPTIONS } from '@/features/leads/constants'
 import { CustomFieldInput } from '@/features/leads/components/CustomFieldsForm'
+import { DEAL_CURRENCY_OPTIONS } from '@/features/deals/dealCurrencies'
 
 const CUSTOM_FIELD_KEY_PREFIX = 'cf:'
 
@@ -13,7 +14,9 @@ function capitalize(s) {
 function getFieldDefs(isOpportunities, customFields) {
   const shared = [
     { key: 'sourceId', label: 'Source', type: 'source' },
+    { key: 'assignedTo', label: 'Assign to', type: 'user' },
     { key: 'value', label: 'Deal value', type: 'number' },
+    { key: 'valueCurrency', label: 'Currency', type: 'currency' },
     { key: 'country', label: 'Country', type: 'text' },
     { key: 'city', label: 'City', type: 'text' },
     { key: 'state', label: 'State / region', type: 'text' },
@@ -40,7 +43,7 @@ function getFieldDefs(isOpportunities, customFields) {
   ]
 }
 
-export function BulkEditModal({ open, onClose, count, sources, pipelineStatuses, customFields, onSubmit, submitting, isOpportunities }) {
+export function BulkEditModal({ open, onClose, count, sources, pipelineStatuses, customFields, users, onSubmit, submitting, isOpportunities }) {
   const [enabled, setEnabled] = useState({})
   const [values, setValues] = useState({})
   const fields = useMemo(() => getFieldDefs(isOpportunities, customFields), [isOpportunities, customFields])
@@ -124,6 +127,18 @@ export function BulkEditModal({ open, onClose, count, sources, pipelineStatuses,
                   <select className={selectCls} value={values[field.key] || ''} onChange={(e) => set(field.key, e.target.value)}>
                     <option value="">-- choose source --</option>
                     {(sources || []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                )}
+                {field.type === 'user' && (
+                  <select className={selectCls} value={values[field.key] || ''} onChange={(e) => set(field.key, e.target.value)}>
+                    <option value="">-- choose teammate --</option>
+                    {(users || []).map((u) => <option key={u.id} value={u.id}>{u.name || u.email}</option>)}
+                  </select>
+                )}
+                {field.type === 'currency' && (
+                  <select className={selectCls} value={values[field.key] || ''} onChange={(e) => set(field.key, e.target.value)}>
+                    <option value="">-- choose currency --</option>
+                    {DEAL_CURRENCY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
                 )}
                 {field.type === 'number' && (

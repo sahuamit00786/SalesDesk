@@ -17,6 +17,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { DealDetailPanel } from '@/features/deals/components/DealDetailPanel'
 import { useGetLeadFormMetaQuery, useGetLeadsQuery } from '@/features/leads/leadsApi'
 import { SalesDocFiltersModal } from '@/features/sales-docs/components/SalesDocFiltersModal'
+import { usePermission } from '@/hooks/usePermission'
 
 export function InvoicesPage() {
   const [params] = useSearchParams()
@@ -24,6 +25,8 @@ export function InvoicesPage() {
   const [paymentPanelInvoiceId, setPaymentPanelInvoiceId] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [selectedDeal, setSelectedDeal] = useState(null)
+  const canViewInvoices = usePermission('manage.invoices', 'view')
+  const canCreateInvoices = usePermission('manage.invoices', 'create')
 
   const { data: formMetaData } = useGetLeadFormMetaQuery()
   const rawDealStatuses = formMetaData?.data?.dealStatuses || []
@@ -70,7 +73,7 @@ export function InvoicesPage() {
     }),
     [leadIdFilter, statusFilter, dateFrom, dateTo, createdByFilter, minAmount, maxAmount],
   )
-  const { data, isLoading, refetch } = useGetInvoicesQuery(queryArg)
+  const { data, isLoading, refetch } = useGetInvoicesQuery(queryArg, { skip: !canViewInvoices })
   const [deleteInvoice, { isLoading: deleting }] = useDeleteInvoiceMutation()
 
   const invoiceColumns = useInvoiceGridColumns({
@@ -135,38 +138,42 @@ export function InvoicesPage() {
           <Button type="button" variant="secondary" title="Refresh" onClick={() => refetch()}>
             <RefreshCw className="h-4 w-4" />
           </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            title="Export all as CSV"
-            onClick={() => {
-              if (!rows.length) return
-              const keys = ['invoiceNumber', 'status', 'grandTotal', 'amountPaid', 'currency', 'issueDate', 'dueDate']
-              const csv = [
-                keys.join(','),
-                ...rows.map((r) =>
-                  keys.map((k) => `"${String(r[k] ?? '').replaceAll('"', '""')}"`).join(','),
-                ),
-              ].join('\n')
-              const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-              const url = URL.createObjectURL(blob)
-              const a = document.createElement('a')
-              a.href = url
-              a.download = `invoices-${new Date().toISOString().slice(0, 10)}.csv`
-              a.click()
-              URL.revokeObjectURL(url)
-            }}
-          >
-            <Download className="h-4 w-4" />
-          </Button>
-          <div className="ml-auto">
-            <Link
-              to={leadIdFilter ? `/invoices/new?leadId=${encodeURIComponent(leadIdFilter)}` : '/invoices/new'}
-              className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-medium cx-icon-inherit text-white hover:bg-brand-700"
+          {canViewInvoices ? (
+            <Button
+              type="button"
+              variant="secondary"
+              title="Export all as CSV"
+              onClick={() => {
+                if (!rows.length) return
+                const keys = ['invoiceNumber', 'status', 'grandTotal', 'amountPaid', 'currency', 'issueDate', 'dueDate']
+                const csv = [
+                  keys.join(','),
+                  ...rows.map((r) =>
+                    keys.map((k) => `"${String(r[k] ?? '').replaceAll('"', '""')}"`).join(','),
+                  ),
+                ].join('\n')
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = `invoices-${new Date().toISOString().slice(0, 10)}.csv`
+                a.click()
+                URL.revokeObjectURL(url)
+              }}
             >
-              <Plus className="h-4 w-4" />
-              New invoice
-            </Link>
+              <Download className="h-4 w-4" />
+            </Button>
+          ) : null}
+          <div className="ml-auto">
+            {canCreateInvoices ? (
+              <Link
+                to={leadIdFilter ? `/invoices/new?leadId=${encodeURIComponent(leadIdFilter)}` : '/invoices/new'}
+                className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-medium cx-icon-inherit text-white hover:bg-brand-700"
+              >
+                <Plus className="h-4 w-4" />
+                New invoice
+              </Link>
+            ) : null}
           </div>
         </PageFilterBar>
 

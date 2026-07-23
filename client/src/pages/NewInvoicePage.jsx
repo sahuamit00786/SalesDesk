@@ -20,6 +20,7 @@ import { DealBalanceCard } from '@/features/sales-docs/components/DealBalanceCar
 import { aggregateInvoiceTotals } from '@/features/sales-docs/previewTotals'
 import { suggestedInvoiceNumber } from '@/features/sales-docs/suggestedDocNumber'
 import { cn } from '@/utils/cn'
+import { usePermission } from '@/hooks/usePermission'
 import { pickTemplateIdFromSearch } from '@/utils/docTemplateQuery'
 import { useEffectiveCurrency } from '@/hooks/useEffectiveCurrency'
 
@@ -196,6 +197,8 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
 
   const [createInvoice, { isLoading: creating }] = useCreateInvoiceMutation()
   const [patchInvoice, { isLoading: patching }] = usePatchInvoiceMutation()
+  const canCreateInvoices = usePermission('manage.invoices', 'create')
+  const canUpdateInvoices = usePermission('manage.invoices', 'update')
 
   const billPayload = billRes?.data
   const billing = billPayload?.data ?? billPayload
@@ -347,6 +350,10 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
   const statusLockedByPayments = ['partially_paid', 'paid', 'overdue', 'refunded'].includes(status)
 
   async function saveInvoice() {
+    if (savedId ? !canUpdateInvoices : !canCreateInvoices) {
+      toast.error("You don't have permission to save this invoice.")
+      return
+    }
     const items = buildItemsPayload()
     if (!activeDealId && !clientLeadId) {
       toast.error('Select a client')
@@ -436,14 +443,16 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
                 Print / PDF
               </Link>
             ) : null}
-            <button
-              type="button"
-              disabled={busy}
-              onClick={saveInvoice}
-              className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
-            >
-              {creating || patching ? 'Saving…' : savedId ? 'Update invoice' : 'Save invoice'}
-            </button>
+            {(savedId ? canUpdateInvoices : canCreateInvoices) ? (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={saveInvoice}
+                className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {creating || patching ? 'Saving…' : savedId ? 'Update invoice' : 'Save invoice'}
+              </button>
+            ) : null}
           </div>
         </div>
 

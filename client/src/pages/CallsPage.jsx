@@ -11,6 +11,7 @@ import { cn } from '@/utils/cn'
 import { useGetCallsQuery } from '@/features/calls/callsApi'
 import { ConvertCallModal } from '@/features/calls/components/ConvertCallModal'
 import { MoreFiltersMenu } from '@/features/calls/components/MoreFiltersMenu'
+import { usePermission } from '@/hooks/usePermission'
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200]
 
@@ -53,6 +54,7 @@ function fmtDurationExact(seconds) {
 }
 
 export function CallsPage() {
+  const canConvert = usePermission('engage.meetings', 'update')
   const [page, setPage] = useState(1)
   const [limit, setLimit] = useState(50)
 
@@ -260,7 +262,7 @@ export function CallsPage() {
             <span className="inline-flex items-center rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-semibold text-brand-700 ring-1 ring-brand-100">
               Linked
             </span>
-          ) : (
+          ) : canConvert ? (
             <button
               type="button"
               onClick={(e) => {
@@ -272,6 +274,8 @@ export function CallsPage() {
               <UserPlus className="h-3 w-3" />
               Convert
             </button>
+          ) : (
+            <span className="text-[10px] text-ink-faint">—</span>
           ),
       },
       {

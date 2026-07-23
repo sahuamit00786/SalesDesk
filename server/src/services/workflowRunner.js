@@ -10,6 +10,7 @@ import {
   LeadFollowup,
   EmailTemplate,
   User,
+  Activity,
 } from '../models/index.js'
 import { runTemplateSendJobInline, enqueueTemplateSendJob, getEmailTemplateQueue } from '../queues/emailTemplateQueue.js'
 import { notifyLeadAssigned, notifyTaskAssigned } from './notification/teamNotificationService.js'
@@ -364,7 +365,6 @@ async function executeNode(run, workflow, node, context) {
         completedAt: null,
         createdBy: createdByRaw,
         assignedTo: assignedTo || null,
-        recurrenceRule: null,
         attachments: [],
       })
       const subRows = taskSubtasksFromWorkflowNode(node)
@@ -585,14 +585,17 @@ export async function runLeadWorkflowTriggersForLead({
   actorUserId,
   skipWorkflowIds = null,
   onWorkflowProcessed = null,
+  workflows = null,
 }) {
   const leadPlain = toPlainLead(lead)
   const beforePlain = before ? toPlainLead(before) : null
   const skip = skipWorkflowIds ? new Set([...skipWorkflowIds].map(String)) : null
-  const rows = await Workflow.findAll({
-    where: { companyId, workspaceId, status: 'active' },
-    order: [['updatedAt', 'DESC']],
-  })
+  const rows =
+    workflows ||
+    (await Workflow.findAll({
+      where: { companyId, workspaceId, status: 'active' },
+      order: [['updatedAt', 'DESC']],
+    }))
   const summary = { matched: 0, started: 0, failed: 0, errors: [] }
   for (const wf of rows) {
     const def = getDefinition(wf)
@@ -679,9 +682,17 @@ export async function emitLeadWorkflowTriggersBulkImport({ leadIds, companyId, w
   const { tryEnqueueBulkLeadWorkflowTriggers } = await import('../queues/workflowTriggerQueue.js')
   const enqueued = await tryEnqueueBulkLeadWorkflowTriggers({ leadIds, companyId, workspaceId, actorUserId })
   if (enqueued) return
-  for (const leadId of leadIds) {
-    const row = await Lead.findByPk(leadId)
-    if (!row) continue
+
+  // No Redis/BullMQ: run inline. Fetch workflows + leads once instead of 2 queries per lead.
+  const workflows = await Workflow.findAll({
+    where: { companyId, workspaceId, status: 'active' },
+    order: [['updatedAt', 'DESC']],
+  })
+  if (!workflows.length) return
+
+  const leadRows = await Lead.findAll({ where: { id: { [Op.in]: leadIds } } })
+  const activityRows = []
+  for (const row of leadRows) {
     const summary = await runLeadWorkflowTriggersForLead({
       eventType: 'lead_created',
       lead: row.get({ plain: true }),
@@ -689,19 +700,23 @@ export async function emitLeadWorkflowTriggersBulkImport({ leadIds, companyId, w
       companyId,
       workspaceId,
       actorUserId,
+      workflows,
     })
     if (summary.matched > 0) {
-      const { createLeadSystemActivity } = await import('../services/leadSystemActivity.js')
-      await createLeadSystemActivity({
-        leadId,
+      activityRows.push({
+        type: 'system',
+        leadId: row.id,
         userId: actorUserId || null,
         body:
           summary.failed > 0
             ? `Automation: ${summary.started}/${summary.matched} workflow run(s); ${summary.failed} failed.`
             : `Automation: ${summary.started} workflow run(s) started (import).`,
-        metadata: { action: 'workflow_triggers_completed', eventType: 'lead_created', viaQueue: false, ...summary },
+        metadata: { actorUserId, action: 'workflow_triggers_completed', eventType: 'lead_created', viaQueue: false, ...summary },
       })
     }
+  }
+  if (activityRows.length) {
+    await Activity.bulkCreate(activityRows)
   }
 }
 

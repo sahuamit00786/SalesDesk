@@ -21,6 +21,7 @@ import { formatStageLabel } from '@/features/opportunities/components/Opportunit
 import { useGetDealsQuery, usePatchDealStageMutation, useCreateDealMutation } from '@/features/deals/dealsApi'
 import { useGetLeadFormMetaQuery, useGetLeadQuery } from '@/features/leads/leadsApi'
 import { cn } from '@/utils/cn'
+import { usePermission } from '@/hooks/usePermission'
 import { TablePaginationBar } from '@/components/ui/TablePaginationBar'
 import { inputFieldClassName } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
@@ -102,7 +103,11 @@ export function DealsPage() {
     return Object.fromEntries(Object.entries(q).filter(([, v]) => v !== undefined && v !== ''))
   }, [page, limit, mode, debouncedSearch, selectedStages, sort, order])
 
-  const { data, isLoading, isFetching, refetch } = useGetDealsQuery(listQuery)
+  const canViewDeals = usePermission('main.deals', 'view')
+  const canCreateDeals = usePermission('main.deals', 'create')
+  const canUpdateDeals = usePermission('main.deals', 'update')
+
+  const { data, isLoading, isFetching, refetch } = useGetDealsQuery(listQuery, { skip: !canViewDeals })
   const { data: formMetaData } = useGetLeadFormMetaQuery()
   const [patchStage, { isLoading: updatingStage }] = usePatchDealStageMutation()
   const [createDeal] = useCreateDealMutation()
@@ -345,7 +350,7 @@ export function DealsPage() {
               <Select
                 className="h-8 w-full appearance-none pr-8 text-xs font-semibold"
                 value={row.currentStage || ''}
-                disabled={updatingStage}
+                disabled={updatingStage || !canUpdateDeals}
                 onChange={(e) => handleStageChange(row, e.target.value)}
                 aria-label="Stage"
               >
@@ -588,14 +593,16 @@ export function DealsPage() {
                   </div>
                 ) : null}
               </div>
-              <button
-                type="button"
-                title="Export CSV"
-                onClick={exportVisibleRows}
-                className="inline-flex h-9 items-center justify-center rounded-xl border border-surface-border bg-white px-2.5 text-xs font-semibold text-ink shadow-sm hover:bg-surface-subtle"
-              >
-                <Download className="h-3.5 w-3.5" />
-              </button>
+              {canViewDeals ? (
+                <button
+                  type="button"
+                  title="Export CSV"
+                  onClick={exportVisibleRows}
+                  className="inline-flex h-9 items-center justify-center rounded-xl border border-surface-border bg-white px-2.5 text-xs font-semibold text-ink shadow-sm hover:bg-surface-subtle"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                </button>
+              ) : null}
               <button
                 type="button"
                 disabled={mode !== 'list'}
@@ -611,14 +618,16 @@ export function DealsPage() {
               >
                 Group by opportunity
               </button>
-              <button
-                type="button"
-                onClick={() => setOpenAddDealDrawer(true)}
-                className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[var(--brand-primary)] px-3 text-xs font-semibold cx-icon-inherit text-white shadow-sm hover:bg-[var(--brand-primary-dark)]"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                New deal
-              </button>
+              {canCreateDeals ? (
+                <button
+                  type="button"
+                  onClick={() => setOpenAddDealDrawer(true)}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[var(--brand-primary)] px-3 text-xs font-semibold cx-icon-inherit text-white shadow-sm hover:bg-[var(--brand-primary-dark)]"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  New deal
+                </button>
+              ) : null}
             </div>
           </div>
         </div>

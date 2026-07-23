@@ -10,6 +10,7 @@ import {
   refreshTokenPayloadForUser,
 } from '../services/tokenService.js'
 import {
+  changePasswordSchema,
   forgotPasswordSchema,
   loginSchema,
   refreshSchema,
@@ -570,6 +571,55 @@ export async function resetPassword(req, res, next) {
     return res.json({
       success: true,
       data: { message: 'Password updated. You can sign in with your new password.' },
+      meta: {},
+    })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function changePassword(req, res, next) {
+  try {
+    const { error, value } = changePasswordSchema.validate(req.body, { abortEarly: false })
+    if (error) {
+      const err = new Error('Validation failed')
+      err.status = 400
+      err.code = 'VALIDATION'
+      err.publicMessage = joiPublicMessages(error)
+      throw err
+    }
+
+    const user = await User.unscoped().findByPk(req.user.id)
+    if (!user) {
+      const err = new Error('Not found')
+      err.status = 404
+      err.code = 'NOT_FOUND'
+      err.publicMessage = 'User not found'
+      throw err
+    }
+
+    const currentOk = await bcrypt.compare(value.currentPassword, user.password)
+    if (!currentOk) {
+      const err = new Error('Invalid current password')
+      err.status = 400
+      err.code = 'VALIDATION'
+      err.publicMessage = 'Current password is incorrect'
+      throw err
+    }
+
+    user.password = await bcrypt.hash(value.password, 10)
+    user.refreshTokenVersion = (Number(user.refreshTokenVersion) || 0) + 1
+    await user.save()
+
+    notifySecurityChange({
+      companyId: user.companyId,
+      recipientUserId: user.id,
+      kind: 'password',
+    }).catch(() => {})
+
+    return res.json({
+      success: true,
+      data: { message: 'Password updated. Please sign in again.' },
       meta: {},
     })
   } catch (e) {

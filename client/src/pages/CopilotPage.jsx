@@ -42,8 +42,8 @@ export function CopilotPage() {
     try {
       const res = await createSession().unwrap()
       dispatch(setActiveCopilotSession(res.data.id))
-    } catch {
-      toast.error('Could not start a new chat')
+    } catch (err) {
+      toast.error(err?.data?.error?.message || 'Could not start a new chat')
     }
   }
 
@@ -51,8 +51,8 @@ export function CopilotPage() {
     try {
       await deleteSession(sessionId).unwrap()
       if (sessionId === activeSessionId) dispatch(setActiveCopilotSession(null))
-    } catch {
-      toast.error('Could not delete conversation')
+    } catch (err) {
+      toast.error(err?.data?.error?.message || 'Could not delete conversation')
     }
   }
 

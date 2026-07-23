@@ -54,6 +54,7 @@ export function useNotificationsSocket() {
         notificationsApi.util.invalidateTags([
           { type: 'Notification', id: 'LIST' },
           { type: 'Notification', id: 'UNREAD_COUNT' },
+          { type: 'Notification', id: 'SUMMARY' },
         ]),
       )
 

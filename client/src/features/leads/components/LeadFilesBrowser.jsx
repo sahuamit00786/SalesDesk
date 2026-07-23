@@ -188,8 +188,8 @@ export function LeadFilesPanel({ leadId, leadName = 'This lead', onClose, classN
       setSelectedIds([])
       refetchDocs()
       refetchTree()
-    } catch {
-      toast.error('Could not move files')
+    } catch (err) {
+      toast.error(err?.data?.error?.message || 'Could not move files')
     }
   }, [moveDocumentFolder, sourceFolderId, refetchDocs, refetchTree])
 
@@ -286,8 +286,8 @@ export function LeadFilesPanel({ leadId, leadName = 'This lead', onClose, classN
       setShowNewFolder(false)
       refetchTree()
       if (res?.data?.id) setContext({ type: 'folder', id: res.data.id, name: res.data.name })
-    } catch {
-      toast.error('Could not create folder')
+    } catch (err) {
+      toast.error(err?.data?.error?.message || 'Could not create folder')
     }
   }
 
@@ -297,8 +297,8 @@ export function LeadFilesPanel({ leadId, leadName = 'This lead', onClose, classN
       toast.success('File deleted')
       setSelectedIds((p) => p.filter((x) => x !== row.id))
       refetchDocs()
-    } catch {
-      toast.error('Could not delete file')
+    } catch (err) {
+      toast.error(err?.data?.error?.message || 'Could not delete file')
     }
   }
 

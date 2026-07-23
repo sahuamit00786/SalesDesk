@@ -22,6 +22,7 @@ import {
 } from '@/features/leads/leadsApi'
 import { LeadTabEmptyState, LeadTabSectionHeader } from '@/features/leads/components/LeadTabSectionHeader'
 import { SkeletonList } from '@/components/shared/SkeletonLoader'
+import { usePermission } from '@/hooks/usePermission'
 
 function pad2(n) {
   return String(n).padStart(2, '0')
@@ -101,6 +102,8 @@ export function LeadFollowupsTab({ leadId }) {
   const [createFollowup, { isLoading: creating }] = useCreateLeadFollowupMutation()
   const [patchFollowup, { isLoading: patching }] = usePatchLeadFollowupMutation()
   const [deleteFollowup] = useDeleteLeadFollowupMutation()
+  const canCreate = usePermission('engage.followups', 'create')
+  const canUpdate = usePermission('engage.followups', 'update')
 
   const [drawerOpen, setDrawerOpen] = useState(false)
   /** When set, drawer is editing this follow-up (pending only from UI). */
@@ -308,7 +311,7 @@ export function LeadFollowupsTab({ leadId }) {
     }
   }
 
-  const addFollowUpButton = (
+  const addFollowUpButton = canCreate ? (
     <button
       type="button"
       onClick={openDrawer}
@@ -317,7 +320,7 @@ export function LeadFollowupsTab({ leadId }) {
       <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
       Add follow-up
     </button>
-  )
+  ) : null
 
   const filterControl = (
     <div className="flex flex-wrap items-center gap-1.5">
@@ -464,7 +467,7 @@ export function LeadFollowupsTab({ leadId }) {
                       )}
                     </div>
                     <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
-                      {fu.status === 'pending' ? (
+                      {fu.status === 'pending' && canUpdate ? (
                         <>
                           <button
                             type="button"
@@ -505,20 +508,22 @@ export function LeadFollowupsTab({ leadId }) {
                           </button>
                         </>
                       ) : null}
-                      <button
-                        type="button"
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 transition hover:border-red-200 hover:bg-red-50/60 hover:text-red-700"
-                        title="Delete"
-                        onClick={async () => {
-                          try {
-                            await deleteFollowup({ id: leadId, followupId: fu.id }).unwrap()
-                          } catch (err) {
-                            toast.error(err?.data?.error?.message || 'Could not delete')
-                          }
-                        }}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" aria-hidden />
-                      </button>
+                      {canUpdate ? (
+                        <button
+                          type="button"
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 transition hover:border-red-200 hover:bg-red-50/60 hover:text-red-700"
+                          title="Delete"
+                          onClick={async () => {
+                            try {
+                              await deleteFollowup({ id: leadId, followupId: fu.id }).unwrap()
+                            } catch (err) {
+                              toast.error(err?.data?.error?.message || 'Could not delete')
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                        </button>
+                      ) : null}
                     </div>
                   </div>
 

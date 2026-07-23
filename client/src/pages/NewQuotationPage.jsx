@@ -18,6 +18,7 @@ import { QUOTATION_PRESET_LABELS } from '@/features/sales-docs/presetLabels'
 import { buildCustomerSnapshotFromLead, formatAddressLines } from '@/features/sales-docs/customerSnapshot'
 import { DealBalanceCard } from '@/features/sales-docs/components/DealBalanceCard'
 import { aggregateQuotationTotals } from '@/features/sales-docs/previewTotals'
+import { usePermission } from '@/hooks/usePermission'
 import { suggestedQuotationNumber } from '@/features/sales-docs/suggestedDocNumber'
 import { cn } from '@/utils/cn'
 import { pickTemplateIdFromSearch } from '@/utils/docTemplateQuery'
@@ -190,6 +191,8 @@ function NewQuotationEditor({ templateId, quotationId = '', initialLeadId = '', 
 
   const [createQuotation, { isLoading: creating }] = useCreateQuotationMutation()
   const [patchQuotation, { isLoading: patching }] = usePatchQuotationMutation()
+  const canCreateQuotations = usePermission('manage.quotations', 'create')
+  const canUpdateQuotations = usePermission('manage.quotations', 'update')
 
   const billPayload = billRes?.data
   const billing = billPayload?.data ?? billPayload
@@ -357,6 +360,10 @@ function NewQuotationEditor({ templateId, quotationId = '', initialLeadId = '', 
   const isConverted = status === 'converted'
 
   async function saveQuotation() {
+    if (savedId ? !canUpdateQuotations : !canCreateQuotations) {
+      toast.error("You don't have permission to save this quotation.")
+      return
+    }
     const items = buildItemsPayload()
     if (!activeDealId && !clientLeadId) {
       toast.error('Select a client')
@@ -440,7 +447,7 @@ function NewQuotationEditor({ templateId, quotationId = '', initialLeadId = '', 
               <span className="rounded-lg bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-800">
                 Converted to invoice — locked
               </span>
-            ) : (
+            ) : (savedId ? canUpdateQuotations : canCreateQuotations) ? (
               <button
                 type="button"
                 disabled={busy}
@@ -449,7 +456,7 @@ function NewQuotationEditor({ templateId, quotationId = '', initialLeadId = '', 
               >
                 {creating || patching ? 'Saving…' : savedId ? 'Update quotation' : 'Save quotation'}
               </button>
-            )}
+            ) : null}
           </div>
         </div>
 

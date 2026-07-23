@@ -18,6 +18,7 @@ import { PageShell } from '@/components/layout/PageShell'
 import { PageStack } from '@/components/layout/PageStack'
 import { PageFilterBar } from '@/components/layout/PageFilterBar'
 import { PageContentPanel } from '@/components/layout/PageContentPanel'
+import { RequirePermission } from '@/components/auth/RequirePermission'
 import { DataGrid } from '@/components/shared/DataGrid'
 import { cn } from '@/utils/cn'
 import { STATUS_STYLES } from '@/features/leads/constants'
@@ -586,15 +587,17 @@ export function LeadDistributionPage() {
               ) : null}
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                disabled={assignDisabled}
-                onClick={() => setAssignModalOpen(true)}
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--brand-primary)] px-3 py-2 text-xs font-bold cx-icon-inherit text-white shadow-sm transition hover:bg-[var(--brand-primary-dark)] disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <Users className="h-3.5 w-3.5" />
-                Assign leads
-              </button>
+              <RequirePermission menu="main.lead_distribution" action="update">
+                <button
+                  type="button"
+                  disabled={assignDisabled}
+                  onClick={() => setAssignModalOpen(true)}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--brand-primary)] px-3 py-2 text-xs font-bold cx-icon-inherit text-white shadow-sm transition hover:bg-[var(--brand-primary-dark)] disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <Users className="h-3.5 w-3.5" />
+                  Assign leads
+                </button>
+              </RequirePermission>
               <button
                 type="button"
                 onClick={selectAllOnPage}

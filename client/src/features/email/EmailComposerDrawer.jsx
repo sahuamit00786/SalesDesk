@@ -313,8 +313,8 @@ export function EmailComposerDrawer({ open, onClose, initial = null, onSent }) {
       const rows = Array.isArray(res?.data) ? res.data : []
       setUploadedAttachments((prev) => [...prev, ...rows])
       e.target.value = ''
-    } catch {
-      toast.error('Upload failed')
+    } catch (err) {
+      toast.error(err?.data?.error?.message || err?.error || 'Upload failed')
     }
   }
 
@@ -375,8 +375,8 @@ export function EmailComposerDrawer({ open, onClose, initial = null, onSent }) {
       toast.success('Email sent')
       onClose?.()
       onSent?.()
-    } catch {
-      toast.error('Could not send email')
+    } catch (err) {
+      toast.error(err?.data?.error?.message || err?.error || 'Could not send email')
     }
   }
 

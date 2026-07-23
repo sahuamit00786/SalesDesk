@@ -24,8 +24,7 @@ export const tasksApi = baseApi.injectEndpoints({
           patch.undo()
         }
       },
-      // Keep Task LIST invalidation: recurring tasks spawn a next occurrence on
-      // completion and the server hides stale completed tasks — refetch reconciles.
+      // Keep Task LIST invalidation: the server hides stale completed tasks — refetch reconciles.
       invalidatesTags: (_r, _e, arg) => [
         { type: 'Task', id: 'LIST' },
         ...(arg.leadId

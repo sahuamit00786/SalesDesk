@@ -94,8 +94,8 @@ export function TaskEventHoverCard({ event, anchorRect, onMouseEnter, onMouseLea
         await patchLeadTask({ id: leadId, taskId, ...body }).unwrap()
         if (successMsg) toast.success(successMsg)
         return true
-      } catch {
-        toast.error('Could not save changes.')
+      } catch (err) {
+        toast.error(err?.data?.error?.message || 'Could not save changes.')
         return false
       }
     },

@@ -11,8 +11,11 @@ import {
   formatDocMoney as fmtMoney,
 } from '@/features/sales-docs/components/SalesDocListCells'
 import { cn } from '@/utils/cn'
+import { usePermission } from '@/hooks/usePermission'
 
 export function useInvoiceGridColumns({ onPaymentClick, setDeleteTarget, deleting, onDealClick }) {
+  const canUpdate = usePermission('manage.invoices', 'update')
+  const canDelete = usePermission('manage.invoices', 'delete')
   return useMemo(
     () => [
       {
@@ -97,13 +100,15 @@ export function useInvoiceGridColumns({ onPaymentClick, setDeleteTarget, deletin
         headerAlign: 'right',
         renderCell: ({ row }) => (
           <div className="inline-flex gap-1">
-            <SalesDocActionIcon
-              as={Link}
-              to={`/invoices/new?invoiceId=${encodeURIComponent(row.id)}`}
-              title="Edit invoice"
-            >
-              <Pencil className="h-4 w-4" />
-            </SalesDocActionIcon>
+            {canUpdate ? (
+              <SalesDocActionIcon
+                as={Link}
+                to={`/invoices/new?invoiceId=${encodeURIComponent(row.id)}`}
+                title="Edit invoice"
+              >
+                <Pencil className="h-4 w-4" />
+              </SalesDocActionIcon>
+            ) : null}
             <SalesDocActionIcon as={Link} to={`/invoices/${row.id}/print`} title="Print / PDF">
               <Printer className="h-4 w-4" />
             </SalesDocActionIcon>
@@ -114,19 +119,21 @@ export function useInvoiceGridColumns({ onPaymentClick, setDeleteTarget, deletin
             >
               <Receipt className="h-4 w-4" />
             </SalesDocActionIcon>
-            <SalesDocActionIcon
-              type="button"
-              disabled={deleting}
-              title="Delete invoice"
-              className="border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
-              onClick={() => setDeleteTarget(row)}
-            >
-              <Trash2 className="h-4 w-4" />
-            </SalesDocActionIcon>
+            {canDelete ? (
+              <SalesDocActionIcon
+                type="button"
+                disabled={deleting}
+                title="Delete invoice"
+                className="border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+                onClick={() => setDeleteTarget(row)}
+              >
+                <Trash2 className="h-4 w-4" />
+              </SalesDocActionIcon>
+            ) : null}
           </div>
         ),
       },
     ],
-    [onPaymentClick, setDeleteTarget, deleting, onDealClick],
+    [onPaymentClick, setDeleteTarget, deleting, onDealClick, canUpdate, canDelete],
   )
 }

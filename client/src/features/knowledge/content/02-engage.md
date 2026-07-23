@@ -89,9 +89,6 @@ Yes — in List view, use "Mark all completed" on a group of open tasks; it proc
 **Q: What happens when I check off a subtask (checklist item)?**
 The parent task's progress bar updates (e.g. "2/5" or a percentage). Completing the parent task itself sets progress to 100% regardless of checklist state; cancelling sets it to 0%.
 
-**Q: What happens to a recurring task when I complete it?**
-The server automatically spawns the next occurrence — this is why the task list refetches after any task update, to reflect the newly created follow-on task and hide the completed one from active views.
-
 **Q: Can I move a task's status/priority quickly without opening it?**
 Yes — drag a card between columns on the Board view, or use inline quick actions on a list row; both call the same "quick patch" that updates just that field.
 
@@ -103,7 +100,7 @@ Click **New Task** — this opens the same task drawer used from a lead's page. 
 2. Fill in title, due date, priority, assignee, and optional checklist items.
 3. Save — it appears in the relevant status/priority group.
 4. As work progresses, drag it across Board columns, or check off subtasks, or use quick actions to change status.
-5. Mark it Completed when done (recurring tasks will auto-create their next occurrence).
+5. Mark it Completed when done.
 
 ### Tips & common mistakes
 - Don't edit a task's checklist from a stale cached row — always open it via the detail drawer so the app fetches the full task record (a common mistake in older UI is passing an incomplete row straight into the edit form, which can accidentally wipe reminders or checklist data; the Task Detail Drawer specifically guards against this by refetching the full record before opening).
@@ -112,9 +109,6 @@ Click **New Task** — this opens the same task drawer used from a lead's page. 
 ### Troubleshooting
 **Q: Why did my task edit seem to "lose" its reminders?**
 The app deliberately refetches the complete task record before letting you edit it, exactly to prevent this. If you still see missing data, refresh the page and reopen the task.
-
-**Q: Why is a completed recurring task still showing as active?**
-The list may need a refresh — completing it should trigger a new occurrence and hide the old one from open views; if it persists, reload the Tasks page.
 
 ### Permissions
 Viewing tasks requires **Engage → Tasks: View**. Creating requires **Create**, editing/patching (including drag-and-drop status changes) requires **Update**.

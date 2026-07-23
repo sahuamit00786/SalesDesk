@@ -1,5 +1,5 @@
 import { Op } from 'sequelize'
-import { UserWorkspace, Workspace } from '../models/index.js'
+import { UserWorkspace, Workspace, CompanyRole } from '../models/index.js'
 import { resolveListWorkspaceFilterId } from '../utils/resolveListWorkspaceFilter.js'
 
 function dedupeIds(ids) {
@@ -115,6 +115,39 @@ export async function setWorkspaceMembershipsForUser({ userId, companyId, worksp
     { transaction },
   )
   return validIds
+}
+
+/** Sets/clears the role override for one specific (userId, workspaceId) membership. Throws
+ * 400 if the user isn't a member of that workspace — the override has nothing to attach to. */
+export async function setWorkspaceRoleOverride({ userId, workspaceId, companyRoleId, transaction }) {
+  const membership = await UserWorkspace.findOne({ where: { userId, workspaceId }, transaction })
+  if (!membership) {
+    const err = new Error('Not a workspace member')
+    err.status = 400
+    err.code = 'VALIDATION'
+    err.publicMessage = 'User is not a member of that workspace'
+    throw err
+  }
+  membership.companyRoleId = companyRoleId
+  await membership.save({ transaction })
+  return membership.companyRoleId
+}
+
+/** Batched lookup of each user's role override for one workspace, for list/detail display. */
+export async function getWorkspaceRoleOverrides({ userIds, workspaceId }) {
+  const uniqueUserIds = dedupeIds(userIds)
+  const map = new Map()
+  if (!uniqueUserIds.length || !workspaceId) return map
+
+  const rows = await UserWorkspace.findAll({
+    where: { userId: { [Op.in]: uniqueUserIds }, workspaceId, companyRoleId: { [Op.ne]: null } },
+    attributes: ['userId'],
+    include: [{ model: CompanyRole, as: 'companyRoleOverride', attributes: ['id', 'name', 'userRoleKind', 'roleNo'] }],
+  })
+  for (const row of rows) {
+    if (row.companyRoleOverride) map.set(row.userId, row.companyRoleOverride)
+  }
+  return map
 }
 
 /** Resolves the workspace to attribute a background/cron-created row to for a given user:

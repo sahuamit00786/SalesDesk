@@ -2,7 +2,7 @@ import { AssignmentRule, Activity } from '../models/index.js'
 import { getRedis } from '../config/redis.js'
 import { notifyLeadAssigned } from './notification/teamNotificationService.js'
 
-function matchesConditions(lead, conditions) {
+export function matchesConditions(lead, conditions) {
   const c = conditions || {}
   if (c.source && c.source !== lead.source) return false
   if (c.tag && Array.isArray(lead.tags) && !lead.tags.some((t) => t.name === c.tag)) return false
@@ -10,7 +10,7 @@ function matchesConditions(lead, conditions) {
   return true
 }
 
-async function pickAssignee(rule) {
+export async function pickAssignee(rule) {
   if (!Array.isArray(rule.assignees) || !rule.assignees.length) return null
   const redis = getRedis()
   if (!redis) return rule.assignees[0]

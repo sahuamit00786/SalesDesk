@@ -9,8 +9,8 @@ export const workflowsApi = baseApi.injectEndpoints({
       async onQueryStarted(_arg, { queryFulfilled }) {
         try {
           await queryFulfilled
-        } catch {
-          toast.error('Could not load workflows.')
+        } catch (err) {
+          toast.error(err?.error?.data?.error?.message || 'Could not load workflows.')
         }
       },
     }),

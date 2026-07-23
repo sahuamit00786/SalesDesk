@@ -17,3 +17,18 @@ export function requirePermission(resource, action) {
     return next()
   }
 }
+
+/**
+ * Like `requirePermission`, but also passes when `paramName` on the route matches the
+ * caller's own id — e.g. viewing your own team profile shouldn't require the
+ * `settings.team` grant that's meant for admins browsing *other* people's records.
+ */
+export function requirePermissionOrSelf(resource, action, paramName = 'id') {
+  const base = requirePermission(resource, action)
+  return function requirePermissionOrSelfMiddleware(req, res, next) {
+    if (req.user && req.params[paramName] === req.user.id) {
+      return next()
+    }
+    return base(req, res, next)
+  }
+}

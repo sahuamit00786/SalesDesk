@@ -131,8 +131,8 @@ export default function InlineReplyBox({ thread, myEmail, leads, leadByEmail, de
       const rows = Array.isArray(res?.data) ? res.data : []
       setUploadedAttachments((prev) => [...prev, ...rows])
       e.target.value = ''
-    } catch {
-      toast.error('Upload failed')
+    } catch (err) {
+      toast.error(err?.data?.error?.message || err?.error || 'Upload failed')
     }
   }
 
@@ -157,8 +157,8 @@ export default function InlineReplyBox({ thread, myEmail, leads, leadByEmail, de
       toast.success('Email sent')
       setMode(null)
       onSent?.()
-    } catch {
-      toast.error('Could not send email')
+    } catch (err) {
+      toast.error(err?.data?.error?.message || err?.error || 'Could not send email')
     }
   }
 

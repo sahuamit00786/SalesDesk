@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Pencil, Trash2, Info } from '@/components/ui/icons'
 import { Link } from 'react-router-dom'
 import { LeadScorePill } from '@/features/leads/components/LeadScorePill'
@@ -114,6 +114,8 @@ export function LeadsTable({
   onToggleAll,
   onEdit,
   onDelete,
+  canEdit = true,
+  canDelete = true,
   sort,
   onSort,
   variant = 'leads',
@@ -124,6 +126,7 @@ export function LeadsTable({
   const isOpp = variant === 'opportunities'
   const [hoverLead, setHoverLead] = useState(null)
   const [hoverAnchor, setHoverAnchor] = useState(null)
+  const selectedSet = useMemo(() => new Set(selected), [selected])
 
   const baseColumns = isOpp
     ? [
@@ -170,7 +173,7 @@ export function LeadsTable({
                 <th className="w-12 align-middle">
                   <input
                     type="checkbox"
-                    checked={rows.length > 0 && rows.every((r) => selected.includes(r.id))}
+                    checked={rows.length > 0 && rows.every((r) => selectedSet.has(r.id))}
                     onChange={(e) => onToggleAll(e.target.checked)}
                   />
                 </th>
@@ -221,7 +224,7 @@ export function LeadsTable({
                       )}
                     >
                       <td className="align-middle">
-                        <input type="checkbox" checked={selected.includes(lead.id)} onChange={() => onToggleRow(lead.id)} />
+                        <input type="checkbox" checked={selectedSet.has(lead.id)} onChange={() => onToggleRow(lead.id)} />
                       </td>
                       {isOpp ? (
                         <>
@@ -282,24 +285,28 @@ export function LeadsTable({
                       </td>
                       <td className="cx-table-cell-actions text-right">
                         <div className="inline-flex gap-1 opacity-100 transition">
-                          <button
-                            type="button"
-                            onClick={() => onEdit(lead)}
-                            className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-brand-200 bg-brand-50 text-brand-700"
-                            aria-label="Edit lead"
-                            title="Edit lead"
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => onDelete(lead)}
-                            className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-danger"
-                            aria-label="Delete lead"
-                            title="Delete lead"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
+                          {canEdit ? (
+                            <button
+                              type="button"
+                              onClick={() => onEdit(lead)}
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-brand-200 bg-brand-50 text-brand-700"
+                              aria-label="Edit lead"
+                              title="Edit lead"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                          ) : null}
+                          {canDelete ? (
+                            <button
+                              type="button"
+                              onClick={() => onDelete(lead)}
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-danger"
+                              aria-label="Delete lead"
+                              title="Delete lead"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          ) : null}
                         </div>
                       </td>
                     </tr>

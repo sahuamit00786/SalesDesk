@@ -5,6 +5,7 @@ import { useAppDispatch, useAppSelector } from '@/app/hooks'
 import { logout } from '@/features/auth/authSlice'
 import { useLogoutMutation } from '@/features/auth/authApi'
 import { useHrRole } from '@/features/hr/useHrRole'
+import { buildAllowedRouteSet, isMenuPathAllowed } from '@/utils/menuAccess'
 
 function roleLabel(role) {
   if (role === 'admin') return 'Admin'
@@ -30,6 +31,8 @@ export function ProfileMenuDropdown() {
   }, [])
 
   const initial = String(user?.name || 'U').charAt(0).toUpperCase()
+  const allowedRoutes = buildAllowedRouteSet(user?.allowedMenus, { isCompanyAdmin: user?.isCompanyAdmin })
+  const canViewWorkspace = isMenuPathAllowed('/workspace', allowedRoutes)
 
   return (
     <div className="relative" ref={ref}>
@@ -51,7 +54,7 @@ export function ProfileMenuDropdown() {
         <div className="absolute right-0 top-full z-50 mt-2 w-48 rounded-xl border border-surface-border bg-white py-1 shadow-xl">
           {user?.id ? (
             <Link
-              to={`/team/${user.id}`}
+              to="/my-profile"
               className="flex items-center gap-2 px-4 py-2 text-sm text-ink hover:bg-surface-subtle"
               onClick={() => setOpen(false)}
             >
@@ -59,14 +62,16 @@ export function ProfileMenuDropdown() {
               Profile
             </Link>
           ) : null}
-          <Link
-            to="/workspace"
-            className="flex items-center gap-2 px-4 py-2 text-sm text-ink hover:bg-surface-subtle"
-            onClick={() => setOpen(false)}
-          >
-            <Settings className="h-4 w-4" />
-            Settings
-          </Link>
+          {canViewWorkspace ? (
+            <Link
+              to="/workspace"
+              className="flex items-center gap-2 px-4 py-2 text-sm text-ink hover:bg-surface-subtle"
+              onClick={() => setOpen(false)}
+            >
+              <Settings className="h-4 w-4" />
+              Settings
+            </Link>
+          ) : null}
           <button
             type="button"
             className="flex w-full items-center gap-2 px-4 py-2 text-sm text-danger hover:bg-surface-subtle"

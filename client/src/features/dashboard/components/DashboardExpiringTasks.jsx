@@ -261,8 +261,16 @@ function ExpiringTaskCard({ task }) {
   )
 }
 
-export function DashboardExpiringTasks({ tasks, loading, error }) {
+export function DashboardExpiringTasks({ tasks, loading, error, noAccess }) {
   if (loading) return <DashboardExpiringTasksSkeleton />
+
+  if (noAccess) {
+    return (
+      <p className="rounded-2xl border border-surface-border bg-surface-subtle px-4 py-3 text-sm text-ink-muted">
+        You don't have permission to view tasks. Contact your workspace admin for access.
+      </p>
+    )
+  }
 
   if (error) {
     return (

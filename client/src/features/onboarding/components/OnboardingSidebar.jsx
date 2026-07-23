@@ -40,7 +40,8 @@ export function OnboardingSidebar({ activeStep, furthestStep, onSelectStep, prog
               disabled={!reachable}
               className={cn(
                 'relative z-[1] flex gap-3 rounded-xl py-2.5 pl-1 pr-2 text-left transition-colors lg:min-w-0 lg:py-3 lg:pr-3',
-                reachable && 'hover:bg-surface-muted/80',
+                current && 'bg-brand-50',
+                reachable && !current && 'hover:bg-surface-muted/80',
                 !reachable && 'cursor-not-allowed opacity-45',
               )}
             >
@@ -48,7 +49,7 @@ export function OnboardingSidebar({ activeStep, furthestStep, onSelectStep, prog
                 className={cn(
                   'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
                   completed && 'border-emerald-500 bg-emerald-500 cx-icon-inherit text-white',
-                  current && !completed && 'border-brand-600 bg-white text-brand-700 ring-4 ring-brand-500/15',
+                  current && !completed && 'border-brand-600 bg-brand-600 text-white ring-4 ring-brand-500/30',
                   !completed && !current && 'border-surface-border bg-white text-ink-muted',
                 )}
               >

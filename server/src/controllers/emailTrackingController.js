@@ -1,4 +1,5 @@
 import { EmailSuppression, LeadEmail, LeadEmailLog } from '../models/index.js'
+import { primaryClientOrigin } from '../config/corsOrigins.js'
 
 const PIXEL = Buffer.from(
   'R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==',
@@ -50,7 +51,7 @@ export async function trackClick(req, res, next) {
         { where: { id: log_id, clickedAt: null } },
       )
     }
-    return res.redirect(destination || process.env.CLIENT_ORIGIN || '/')
+    return res.redirect(destination || primaryClientOrigin || '/')
   } catch (err) {
     return next(err)
   }
@@ -77,7 +78,7 @@ export async function unsubscribe(req, res, next) {
         })
       }
     }
-    return res.redirect(`${process.env.CLIENT_ORIGIN || ''}/unsubscribe-success`)
+    return res.redirect(`${primaryClientOrigin}/unsubscribe-success`)
   } catch (err) {
     return next(err)
   }

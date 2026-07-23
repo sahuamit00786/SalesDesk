@@ -11,12 +11,14 @@ import {
   TeamMember,
   User,
   UserMenuPermission,
+  UserWorkspace,
   Workspace,
 } from '../models/index.js'
 import { userAuthIncludes } from '../queries/userIncludes.js'
 import { serializeUser } from '../serializers/userSerializer.js'
 import { generateInvitePlainToken, hashInviteToken, inviteExpiresAt, verifyInviteToken } from '../services/inviteTokenService.js'
 import { sendTeamInviteEmail } from '../services/mailService.js'
+import { primaryClientOrigin } from '../config/corsOrigins.js'
 import { signAccessToken, signRefreshToken, refreshTokenPayloadForUser } from '../services/tokenService.js'
 import {
   acceptInvitationSchema,
@@ -31,17 +33,23 @@ import {
   patchUserProfileSchema,
   patchUserRoleSchema,
   putUserMenuPermissionsSchema,
+  getUserMenuPermissionsQuerySchema,
+  addUserWorkspaceSchema,
+  checkInvitationEmailSchema,
   replaceUserWorkspacesSchema,
   reassignLeadsSchema,
   teamMemberSchema,
 } from '../validations/team.js'
 import {
-  allowedWorkspaceIdsForUser,
   hydrateWorkspaceSummaryForUsers,
   listWorkspaceIdsForUser,
   addWorkspaceMembershipsForUser,
   setWorkspaceMembershipsForUser,
+  scopedWorkspaceIdsForRequest,
+  setWorkspaceRoleOverride,
+  getWorkspaceRoleOverrides,
 } from '../services/userWorkspaceService.js'
+import { resolveListWorkspaceFilterId } from '../utils/resolveListWorkspaceFilter.js'
 
 function joiPublicMessages(error) {
   return error.details
@@ -50,8 +58,7 @@ function joiPublicMessages(error) {
 }
 
 function inviteAcceptBaseUrl() {
-  const origin = (process.env.CLIENT_ORIGIN || 'http://localhost:5173').replace(/\/$/, '')
-  return `${origin}/accept-invite`
+  return `${primaryClientOrigin}/accept-invite`
 }
 
 function uniqueIds(ids) {
@@ -323,8 +330,11 @@ export async function deleteCompanyRole(req, res, next) {
       err.publicMessage = 'Default role cannot be deleted'
       throw err
     }
-    const usingCount = await User.count({ where: { companyId: req.user.companyId, companyRoleId: role.id, isCompanyAdmin: false } })
-    if (usingCount > 0) {
+    const [globalUsingCount, workspaceOverrideUsingCount] = await Promise.all([
+      User.count({ where: { companyId: req.user.companyId, companyRoleId: role.id, isCompanyAdmin: false } }),
+      UserWorkspace.count({ where: { companyRoleId: role.id } }),
+    ])
+    if (globalUsingCount > 0 || workspaceOverrideUsingCount > 0) {
       if (!value.fallbackCompanyRoleId) {
         const err = new Error('Role in use')
         err.status = 409
@@ -346,6 +356,7 @@ export async function deleteCompanyRole(req, res, next) {
         { companyRoleId: fallback.id },
         { where: { companyId: req.user.companyId, companyRoleId: role.id, isCompanyAdmin: false } },
       )
+      await UserWorkspace.update({ companyRoleId: fallback.id }, { where: { companyRoleId: role.id } })
     }
     await role.destroy()
     return res.json({ success: true, data: { ok: true }, meta: {} })
@@ -360,6 +371,19 @@ export async function deleteCompanyRole(req, res, next) {
  */
 export async function getUserMenuPermissions(req, res, next) {
   try {
+    const { error, value } = getUserMenuPermissionsQuerySchema.validate(req.query, {
+      abortEarly: false,
+      stripUnknown: true,
+    })
+    if (error) {
+      const err = new Error('Validation failed')
+      err.status = 400
+      err.code = 'VALIDATION'
+      err.publicMessage = joiPublicMessages(error)
+      throw err
+    }
+    const workspaceId = value.workspaceId || null
+
     const user = await User.findOne({
       where: { id: req.params.id, companyId: req.user.companyId },
       attributes: ['id'],
@@ -372,22 +396,35 @@ export async function getUserMenuPermissions(req, res, next) {
       throw err
     }
 
-    const [menus, links] = await Promise.all([
+    const [menus, overrideLinks] = await Promise.all([
       MenuMaster.findAll({
         where: { isActive: true },
         attributes: ['id', 'key', 'label', 'route', 'parentId', 'sortOrder'],
         order: [['sortOrder', 'ASC']],
       }),
-      UserMenuPermission.findAll({
-        where: { userId: user.id },
-        attributes: ['menuId', 'canView', 'canEdit', 'canUpdate', 'canDelete'],
-      }),
+      workspaceId
+        ? UserMenuPermission.findAll({
+            where: { userId: user.id, workspaceId },
+            attributes: ['menuId', 'canView', 'canEdit', 'canUpdate', 'canDelete'],
+          })
+        : Promise.resolve([]),
     ])
+    // No override for this workspace yet — fall back to the global grant so the picker
+    // shows the effective permissions instead of a misleading blank slate.
+    const scope = workspaceId && overrideLinks.length ? 'workspace' : 'global'
+    const links =
+      scope === 'workspace'
+        ? overrideLinks
+        : await UserMenuPermission.findAll({
+            where: { userId: user.id, workspaceId: null },
+            attributes: ['menuId', 'canView', 'canEdit', 'canUpdate', 'canDelete'],
+          })
     const byMenuId = new Map(links.map((l) => [l.menuId, l]))
 
     return res.json({
       success: true,
       data: {
+        scope,
         items: menus.map((m) => {
           const l = byMenuId.get(m.id)
           return {
@@ -421,6 +458,13 @@ export async function getUserMenuPermissions(req, res, next) {
 export async function putUserMenuPermissions(req, res, next) {
   try {
     requireCompanyAdmin(req)
+    if (req.params.id === req.user.id) {
+      const err = new Error('Cannot change own menu permissions')
+      err.status = 400
+      err.code = 'SELF_PERMISSIONS'
+      err.publicMessage = 'Ask another admin to change your menu permissions'
+      throw err
+    }
     const { error, value } = putUserMenuPermissionsSchema.validate(req.body, { abortEarly: false, stripUnknown: true })
     if (error) {
       const err = new Error('Validation failed')
@@ -454,13 +498,18 @@ export async function putUserMenuPermissions(req, res, next) {
       }
     }
 
+    const workspaceId = value.workspaceId || null
+
     await sequelize.transaction(async (t) => {
-      await UserMenuPermission.destroy({ where: { userId: user.id }, transaction: t })
+      // Scoped to the exact same workspaceId being written — an unscoped destroy here
+      // would wipe the global baseline while saving a workspace override, or vice versa.
+      await UserMenuPermission.destroy({ where: { userId: user.id, workspaceId }, transaction: t })
       if (menuPermissions.length) {
         await UserMenuPermission.bulkCreate(
           menuPermissions.map((p) => ({
             userId: user.id,
             menuId: p.menuId,
+            workspaceId,
             canView: p.canView,
             canEdit: p.canEdit,
             canUpdate: p.canUpdate,
@@ -533,39 +582,15 @@ export async function createInvitation(req, res, next) {
 
     const dupUser = await User.unscoped().findOne({ where: { email: normEmail, companyId } })
     if (dupUser?.emailVerified) {
-      const workspaceIds = uniqueIds(value.workspaceIds)
-      const validWorkspaces = await Workspace.findAll({
-        where: { companyId, id: { [Op.in]: workspaceIds } },
-        attributes: ['id', 'name'],
-      })
-      if (validWorkspaces.length !== workspaceIds.length) {
-        const err = new Error('Invalid workspace assignment')
-        err.status = 400
-        err.code = 'VALIDATION'
-        err.publicMessage = 'Select valid workspaces from your company'
-        throw err
-      }
-      if (value.companyRoleId && value.companyRoleId !== dupUser.companyRoleId) {
-        dupUser.companyRoleId = value.companyRoleId
-        await dupUser.save()
-      }
-      const mergedIds = await addWorkspaceMembershipsForUser({
-        userId: dupUser.id,
-        companyId,
-        workspaceIds,
-      })
-      return res.status(200).json({
-        success: true,
-        data: {
-          userId: dupUser.id,
-          email: dupUser.email,
-          workspaceIds: mergedIds,
-          addedToWorkspaces: workspaceIds,
-          existingMember: true,
-          message: 'User already exists — added to selected workspace(s).',
-        },
-        meta: {},
-      })
+      // Explicit, visible path now exists (the "From another workspace" tab / addUserWorkspace
+      // endpoint) — no more silent merge here, since nothing in the UI surfaced it before.
+      // This is now just a server-side safety net; the frontend's debounced email lookup
+      // (checkInvitationEmail) is expected to catch this before the form even submits.
+      const err = new Error('User already exists in this company')
+      err.status = 409
+      err.code = 'USER_EXISTS_IN_COMPANY'
+      err.publicMessage = 'This person already has an account in your company. Use "From another workspace" to add them here.'
+      throw err
     }
 
     const company = await Company.findByPk(companyId)
@@ -647,6 +672,47 @@ export async function createInvitation(req, res, next) {
         expiresAt: inv.expiresAt?.toISOString() ?? null,
         emailDispatched: mail.sent,
         inviteUrl: process.env.NODE_ENV !== 'production' && !mail.sent ? inviteUrl : undefined,
+      },
+      meta: {},
+    })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+/**
+ * GET /team/invitations/check-email?email=
+ * Read-only lookup so the invite form can warn *before* submit: does this email already
+ * belong to a verified user in this company? Same match rule as the dup-check inside
+ * createInvitation (email + companyId, emailVerified only).
+ */
+export async function checkInvitationEmail(req, res, next) {
+  try {
+    const { error, value } = checkInvitationEmailSchema.validate(req.query, { abortEarly: false, stripUnknown: true })
+    if (error) {
+      const err = new Error('Validation failed')
+      err.status = 400
+      err.code = 'VALIDATION'
+      err.publicMessage = joiPublicMessages(error)
+      throw err
+    }
+
+    const companyId = req.user.companyId
+    const normEmail = value.email.trim().toLowerCase()
+    const dupUser = await User.unscoped().findOne({ where: { email: normEmail, companyId } })
+
+    if (!dupUser?.emailVerified) {
+      return res.json({ success: true, data: { exists: false }, meta: {} })
+    }
+
+    const workspaceSummary = await hydrateWorkspaceSummaryForUsers([dupUser.id])
+    return res.json({
+      success: true,
+      data: {
+        exists: true,
+        userId: dupUser.id,
+        name: dupUser.name,
+        workspaces: workspaceSummary.get(dupUser.id) || [],
       },
       meta: {},
     })
@@ -882,7 +948,8 @@ export async function acceptInvitation(req, res, next) {
 export async function listCompanyUsers(req, res, next) {
   try {
     const companyId = req.user.companyId
-    const allowedWorkspaceIds = await allowedWorkspaceIdsForUser(req.user)
+    const scopedWorkspaceIds = await scopedWorkspaceIdsForRequest(req)
+    const selectedWorkspaceId = resolveListWorkspaceFilterId(req) || null
     const rows = await User.findAll({
       where: { companyId },
       include: [{ model: CompanyRole, as: 'companyRole', attributes: ['id', 'name', 'userRoleKind', 'roleNo'] }],
@@ -909,42 +976,52 @@ export async function listCompanyUsers(req, res, next) {
       ],
     })
     const workspaceSummaryByUser = await hydrateWorkspaceSummaryForUsers(rows.map((u) => u.id))
+    const roleOverrideByUser = await getWorkspaceRoleOverrides({
+      userIds: rows.map((u) => u.id),
+      workspaceId: selectedWorkspaceId,
+    })
     return res.json({
       success: true,
       data: {
         items: rows
           .filter((u) => !u.isCompanyAdmin)
-          .map((u) => ({
-            id: u.id,
-            name: u.name,
-            email: u.email,
-            isActive: u.isActive,
-            deactivatedAt: u.deactivatedAt?.toISOString() ?? null,
-            department: u.department ?? null,
-            jobTitle: u.jobTitle ?? null,
-            businessPhone: u.businessPhone ?? null,
-            whatsappNumber: u.whatsappNumber ?? null,
-            profilePhotoUrl: u.profilePhotoUrl ?? null,
-            street: u.street ?? null,
-            city: u.city ?? null,
-            country: u.country ?? null,
-            postalCode: u.postalCode ?? null,
-            lastLoginAt: u.lastLoginAt?.toISOString() ?? null,
-            companyRole: u.companyRole
-              ? {
-                  id: u.companyRole.id,
-                  name: u.companyRole.name,
-                  userRoleKind: u.companyRole.userRoleKind || 'custom',
-                  roleNo: u.companyRole.roleNo != null ? Number(u.companyRole.roleNo) : null,
-                }
-              : null,
-            isCompanyAdmin: false,
-            workspaces:
-              req.user.isCompanyAdmin
-                ? workspaceSummaryByUser.get(u.id) || []
-                : (workspaceSummaryByUser.get(u.id) || []).filter((w) => allowedWorkspaceIds.includes(w.id)),
-            createdAt: u.createdAt?.toISOString() ?? null,
-          })),
+          .filter((u) => {
+            const ws = workspaceSummaryByUser.get(u.id) || []
+            return ws.some((w) => scopedWorkspaceIds.includes(w.id))
+          })
+          .map((u) => {
+            const roleOverride = roleOverrideByUser.get(u.id)
+            const effectiveRole = roleOverride || u.companyRole
+            return {
+              id: u.id,
+              name: u.name,
+              email: u.email,
+              isActive: u.isActive,
+              deactivatedAt: u.deactivatedAt?.toISOString() ?? null,
+              department: u.department ?? null,
+              jobTitle: u.jobTitle ?? null,
+              businessPhone: u.businessPhone ?? null,
+              whatsappNumber: u.whatsappNumber ?? null,
+              profilePhotoUrl: u.profilePhotoUrl ?? null,
+              street: u.street ?? null,
+              city: u.city ?? null,
+              country: u.country ?? null,
+              postalCode: u.postalCode ?? null,
+              lastLoginAt: u.lastLoginAt?.toISOString() ?? null,
+              companyRole: effectiveRole
+                ? {
+                    id: effectiveRole.id,
+                    name: effectiveRole.name,
+                    userRoleKind: effectiveRole.userRoleKind || 'custom',
+                    roleNo: effectiveRole.roleNo != null ? Number(effectiveRole.roleNo) : null,
+                  }
+                : null,
+              roleIsWorkspaceOverride: Boolean(roleOverride),
+              isCompanyAdmin: false,
+              workspaces: (workspaceSummaryByUser.get(u.id) || []).filter((w) => scopedWorkspaceIds.includes(w.id)),
+              createdAt: u.createdAt?.toISOString() ?? null,
+            }
+          }),
       },
       meta: {},
     })
@@ -956,7 +1033,7 @@ export async function listCompanyUsers(req, res, next) {
 export async function getCompanyUser(req, res, next) {
   try {
     const companyId = req.user.companyId
-    const allowedWorkspaceIds = await allowedWorkspaceIdsForUser(req.user)
+    const scopedWorkspaceIds = await scopedWorkspaceIdsForRequest(req)
     const user = await User.findOne({
       where: { id: req.params.id, companyId },
       include: [{ model: CompanyRole, as: 'companyRole', attributes: ['id', 'name', 'userRoleKind', 'roleNo'] }],
@@ -990,9 +1067,16 @@ export async function getCompanyUser(req, res, next) {
       throw err
     }
     const workspaceSummaryByUser = await hydrateWorkspaceSummaryForUsers([user.id])
-    const workspaces = req.user.isCompanyAdmin
+    const workspaces = req.user.id === user.id
       ? workspaceSummaryByUser.get(user.id) || []
-      : (workspaceSummaryByUser.get(user.id) || []).filter((w) => allowedWorkspaceIds.includes(w.id))
+      : (workspaceSummaryByUser.get(user.id) || []).filter((w) => scopedWorkspaceIds.includes(w.id))
+    const selectedWorkspaceId = resolveListWorkspaceFilterId(req) || null
+    const roleOverrideByUser = await getWorkspaceRoleOverrides({
+      userIds: [user.id],
+      workspaceId: selectedWorkspaceId,
+    })
+    const roleOverride = roleOverrideByUser.get(user.id)
+    const effectiveRole = roleOverride || user.companyRole
     return res.json({
       success: true,
       data: {
@@ -1012,14 +1096,15 @@ export async function getCompanyUser(req, res, next) {
         country: user.country ?? null,
         postalCode: user.postalCode ?? null,
         lastLoginAt: user.lastLoginAt?.toISOString() ?? null,
-        companyRole: user.companyRole
+        companyRole: effectiveRole
           ? {
-              id: user.companyRole.id,
-              name: user.companyRole.name,
-              userRoleKind: user.companyRole.userRoleKind || 'custom',
-              roleNo: user.companyRole.roleNo != null ? Number(user.companyRole.roleNo) : null,
+              id: effectiveRole.id,
+              name: effectiveRole.name,
+              userRoleKind: effectiveRole.userRoleKind || 'custom',
+              roleNo: effectiveRole.roleNo != null ? Number(effectiveRole.roleNo) : null,
             }
           : null,
+        roleIsWorkspaceOverride: Boolean(roleOverride),
         isCompanyAdmin: Boolean(user.isCompanyAdmin),
         workspaces,
         createdAt: user.createdAt?.toISOString() ?? null,
@@ -1076,6 +1161,14 @@ export async function patchUserRole(req, res, next) {
       err.publicMessage = 'Role not found in this company'
       throw err
     }
+
+    if (value.workspaceId) {
+      await setWorkspaceRoleOverride({ userId: target.id, workspaceId: value.workspaceId, companyRoleId: value.companyRoleId })
+      return res.json(
+        { success: true, data: { id: target.id, workspaceId: value.workspaceId, companyRoleId: value.companyRoleId }, meta: {} },
+      )
+    }
+
     target.companyRoleId = value.companyRoleId
     await target.save()
     return res.json({ success: true, data: { id: target.id, companyRoleId: target.companyRoleId }, meta: {} })
@@ -1221,6 +1314,75 @@ export async function replaceUserWorkspaces(req, res, next) {
     return res.json({
       success: true,
       data: { userId: target.id, workspaceIds },
+      meta: {},
+    })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+/**
+ * POST /team/users/:id/workspaces
+ * Adds an existing company user (already a member of some other workspace) to ONE MORE
+ * workspace, with an explicit role for that new membership — the "add from another
+ * workspace" flow. Additive (uses addWorkspaceMembershipsForUser), never replaces the
+ * user's existing workspace memberships. Hard company-admin check, same precedent as
+ * putUserMenuPermissions: granting workspace access + a role is privilege-sensitive.
+ */
+export async function addUserWorkspace(req, res, next) {
+  try {
+    requireCompanyAdmin(req)
+    const { error, value } = addUserWorkspaceSchema.validate(req.body, { abortEarly: false, stripUnknown: true })
+    if (error) {
+      const err = new Error('Validation failed')
+      err.status = 400
+      err.code = 'VALIDATION'
+      err.publicMessage = joiPublicMessages(error)
+      throw err
+    }
+
+    const companyId = req.user.companyId
+    const target = await User.findOne({ where: { id: req.params.id, companyId }, attributes: ['id', 'isCompanyAdmin'] })
+    if (!target) {
+      const err = new Error('Not found')
+      err.status = 404
+      err.code = 'NOT_FOUND'
+      err.publicMessage = 'User not found'
+      throw err
+    }
+    if (target.isCompanyAdmin) {
+      const err = new Error('Cannot assign a workspace role to a company admin')
+      err.status = 400
+      err.code = 'VALIDATION'
+      err.publicMessage = 'Company admins already have access to every workspace'
+      throw err
+    }
+
+    const [workspace, role] = await Promise.all([
+      Workspace.findOne({ where: { id: value.workspaceId, companyId }, attributes: ['id'] }),
+      CompanyRole.findOne({ where: { id: value.companyRoleId, companyId }, attributes: ['id'] }),
+    ])
+    if (!workspace) {
+      const err = new Error('Invalid workspace')
+      err.status = 400
+      err.code = 'VALIDATION'
+      err.publicMessage = 'Workspace not found in this company'
+      throw err
+    }
+    if (!role) {
+      const err = new Error('Invalid role')
+      err.status = 400
+      err.code = 'VALIDATION'
+      err.publicMessage = 'Role not found in this company'
+      throw err
+    }
+
+    await addWorkspaceMembershipsForUser({ userId: target.id, companyId, workspaceIds: [value.workspaceId] })
+    await setWorkspaceRoleOverride({ userId: target.id, workspaceId: value.workspaceId, companyRoleId: value.companyRoleId })
+
+    return res.json({
+      success: true,
+      data: { userId: target.id, workspaceId: value.workspaceId, companyRoleId: value.companyRoleId },
       meta: {},
     })
   } catch (e) {

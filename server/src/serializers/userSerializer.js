@@ -1,4 +1,9 @@
-/** Dashboard is available to every company user regardless of role menu matrix. */
+/**
+ * Dashboard is available to every company user regardless of role menu matrix.
+ * `synthetic: true` marks this as a fallback (not a real grant) so callers — e.g. the
+ * login gate that blocks users with zero real menu permissions — can tell it apart from
+ * an actual UserMenuPermission row for the dashboard menu.
+ */
 const DASHBOARD_ALLOWED_MENU = {
   key: 'main.dashboard',
   route: '/',
@@ -8,6 +13,7 @@ const DASHBOARD_ALLOWED_MENU = {
   canCreate: true,
   canUpdate: true,
   canDelete: true,
+  synthetic: true,
 }
 
 const ADMIN_MENU_PERMS = { canView: true, canCreate: true, canUpdate: true, canDelete: true }

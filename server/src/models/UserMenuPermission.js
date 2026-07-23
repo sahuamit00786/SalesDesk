@@ -13,6 +13,8 @@ export const UserMenuPermission = sequelize.define(
     id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
     userId: { type: DataTypes.UUID, allowNull: false, field: 'user_id' },
     menuId: { type: DataTypes.UUID, allowNull: false, field: 'menu_id' },
+    /** NULL = the global grant. Set = an override scoped to one workspace only. */
+    workspaceId: { type: DataTypes.CHAR(36), allowNull: true, field: 'workspace_id' },
     canView: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false, field: 'can_view' },
     canEdit: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false, field: 'can_edit' },
     canUpdate: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false, field: 'can_update' },
@@ -20,6 +22,8 @@ export const UserMenuPermission = sequelize.define(
   },
   {
     tableName: 'user_menu_permissions',
-    indexes: [{ name: 'user_menu_permissions_user_menu_uq', unique: true, fields: ['user_id', 'menu_id'] }],
+    indexes: [
+      { name: 'user_menu_permissions_user_menu_workspace_uq', unique: true, fields: ['user_id', 'menu_id', 'workspace_id'] },
+    ],
   },
 )

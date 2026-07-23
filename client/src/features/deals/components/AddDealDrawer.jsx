@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
+import { useAppSelector } from '@/app/hooks'
 import { Pencil, Plus } from '@/components/ui/icons'
 import { RightDrawer } from '@/components/ui/RightDrawer'
 import { useGetLeadQuery, useGetLeadsQuery } from '@/features/leads/leadsApi'
@@ -39,6 +40,13 @@ export function AddDealDrawer({
   const [oppPickerOpen, setOppPickerOpen] = useState(false)
   const oppFieldRef = useRef(null)
 
+  const authUser = useAppSelector((s) => s.auth.user)
+  // Sales-tier users (anyone below workspace admin/manager) can't hand deals to
+  // teammates — the owner picker is locked to "me" for them.
+  const canAssignOthers =
+    Boolean(authUser?.isCompanyAdmin) ||
+    ['workspace_admin', 'manager'].includes(authUser?.companyRole?.userRoleKind)
+
   useEffect(() => {
     if (!open) return
     if (editingDeal) {
@@ -46,19 +54,19 @@ export function AddDealDrawer({
       setDealDescription(editingDeal.dealDescription || '')
       setDealValue(editingDeal.dealValue != null ? String(editingDeal.dealValue) : '')
       setDealCurrency(normalizeDealCurrency(editingDeal.dealCurrency))
-      setOwnerUserId(editingDeal.owner?.id || editingDeal.ownerUserId || '')
+      setOwnerUserId(!canAssignOthers && authUser?.id ? authUser.id : editingDeal.owner?.id || editingDeal.ownerUserId || '')
       setSelectedOppId(editingDeal.parentOpportunityLeadId || fixedOpportunityLeadId || '')
     } else {
       setDealName('')
       setDealDescription('')
       setDealValue('')
       setDealCurrency(effectiveCurrency)
-      setOwnerUserId('')
+      setOwnerUserId(!canAssignOthers && authUser?.id ? authUser.id : '')
       setSelectedOppId(fixedOpportunityLeadId || '')
     }
     setOppSearch('')
     setOppPickerOpen(false)
-  }, [open, editingDeal, fixedOpportunityLeadId, effectiveCurrency])
+  }, [open, editingDeal, fixedOpportunityLeadId, effectiveCurrency, canAssignOthers, authUser?.id])
 
   useEffect(() => {
     if (!oppPickerOpen) return
@@ -347,8 +355,10 @@ export function AddDealDrawer({
         <label className="block text-xs font-medium text-neutral-600">
           Owner
           <select
-            className="mt-1 w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm"
+            className="mt-1 w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400"
             value={ownerUserId}
+            disabled={!canAssignOthers}
+            title={!canAssignOthers ? 'Deals you create are always assigned to you' : undefined}
             onChange={(e) => setOwnerUserId(e.target.value)}
           >
             <option value="">Select owner…</option>

@@ -8,6 +8,7 @@ import { SkeletonCards } from '@/components/shared/SkeletonLoader'
 import { usePatchDealStageMutation } from '@/features/deals/dealsApi'
 import { formatStageLabel } from '@/features/opportunities/components/OpportunitiesKanban'
 import { formatDealMoney, normalizeDealCurrency } from '@/features/deals/dealCurrencies'
+import { usePermission } from '@/hooks/usePermission'
 
 const ACCENT_PALETTE = ['var(--brand-primary)', 'var(--brand-primary-dark)', '#7C3AED', '#6D28D9']
 
@@ -58,7 +59,7 @@ function groupByStage(opportunities, stageOrder) {
   return { byStage, other }
 }
 
-function DealCardBody({ opp, interactive = false, onOpen, onOpenClient, onEdit }) {
+function DealCardBody({ opp, interactive = false, canEdit = false, onOpen, onOpenClient, onEdit }) {
   const accent = accentForId(opp.id)
   const hasDealName = Boolean(String(opp.dealName || '').trim())
   const headline = (hasDealName ? opp.dealName : opp.companyName || opp.fullName || 'Deal').trim()
@@ -93,7 +94,7 @@ function DealCardBody({ opp, interactive = false, onOpen, onOpenClient, onEdit }
     <>
       <div className="h-1 w-full" style={{ backgroundColor: accent }} />
       <div className="relative p-3 pt-2.5">
-        {interactive ? (
+        {interactive && canEdit ? (
           <button
             type="button"
             className="absolute right-2 top-2 rounded p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600"
@@ -191,10 +192,11 @@ function DealCardOverlay({ opp }) {
   )
 }
 
-function DealKanbanCard({ opp, onOpen, onOpenClient, onEdit }) {
+function DealKanbanCard({ opp, onOpen, onOpenClient, onEdit, canDrag }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: opp.id,
     data: { opp },
+    disabled: !canDrag,
   })
   const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined
 
@@ -202,19 +204,20 @@ function DealKanbanCard({ opp, onOpen, onOpenClient, onEdit }) {
     <div
       ref={setNodeRef}
       style={style}
-      {...listeners}
-      {...attributes}
+      {...(canDrag ? listeners : null)}
+      {...(canDrag ? attributes : null)}
       className={cn(
-        'cursor-grab touch-none overflow-hidden rounded-xl border border-neutral-200/90 bg-white shadow-sm transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg active:cursor-grabbing',
+        'touch-none overflow-hidden rounded-xl border border-neutral-200/90 bg-white shadow-sm transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg',
+        canDrag ? 'cursor-grab active:cursor-grabbing' : 'cursor-default',
         isDragging && 'opacity-40 shadow-none',
       )}
     >
-      <DealCardBody opp={opp} interactive onOpen={onOpen} onOpenClient={onOpenClient} onEdit={onEdit} />
+      <DealCardBody opp={opp} interactive canEdit={canDrag} onOpen={onOpen} onOpenClient={onOpenClient} onEdit={onEdit} />
     </div>
   )
 }
 
-function DealColumn({ stageName, displayLabel, opportunities, isWonColumn, onOpen, onOpenClient, onEdit }) {
+function DealColumn({ stageName, displayLabel, opportunities, isWonColumn, onOpen, onOpenClient, onEdit, canDrag }) {
   const droppableId = `stage:${stageName}`
   const { setNodeRef, isOver } = useDroppable({ id: droppableId })
   const columnSum = opportunities.reduce((acc, o) => acc + Number(o.dealValue || 0), 0)
@@ -256,14 +259,14 @@ function DealColumn({ stageName, displayLabel, opportunities, isWonColumn, onOpe
             <p className="text-[11px] font-medium text-neutral-400">No deals in this stage.</p>
           </div>
         ) : (
-          opportunities.map((opp) => <DealKanbanCard key={opp.id} opp={opp} onOpen={onOpen} onOpenClient={onOpenClient} onEdit={onEdit} />)
+          opportunities.map((opp) => <DealKanbanCard key={opp.id} opp={opp} onOpen={onOpen} onOpenClient={onOpenClient} onEdit={onEdit} canDrag={canDrag} />)
         )}
       </div>
     </div>
   )
 }
 
-function DealOtherColumn({ displayLabel, opportunities, onOpen, onOpenClient, onEdit }) {
+function DealOtherColumn({ displayLabel, opportunities, onOpen, onOpenClient, onEdit, canDrag }) {
   return (
     <div className="flex h-full min-h-0 w-[280px] shrink-0 flex-col rounded-2xl border border-amber-200 bg-amber-50/90 shadow-sm">
       <div className="sticky top-0 z-10 shrink-0 rounded-t-2xl border-b border-amber-200 bg-amber-50/95 px-3 py-2.5 backdrop-blur">
@@ -272,7 +275,7 @@ function DealOtherColumn({ displayLabel, opportunities, onOpen, onOpenClient, on
       </div>
       <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto p-2.5 scrollbar-subtle">
         {opportunities.map((opp) => (
-          <DealKanbanCard key={opp.id} opp={opp} onOpen={onOpen} onOpenClient={onOpenClient} onEdit={onEdit} />
+          <DealKanbanCard key={opp.id} opp={opp} onOpen={onOpen} onOpenClient={onOpenClient} onEdit={onEdit} canDrag={canDrag} />
         ))}
       </div>
     </div>
@@ -294,6 +297,7 @@ export function DealsPipelineKanban({
 }) {
   const navigate = useNavigate()
   const [patchStage] = usePatchDealStageMutation()
+  const canDrag = usePermission('main.deals', 'update')
 
   function openDeal(id) {
     if (onOpenDeal) onOpenDeal(id)
@@ -334,6 +338,7 @@ export function DealsPipelineKanban({
   async function handleDragEnd(event) {
     const { active, over } = event
     setActiveId(null)
+    if (!canDrag) return
     if (!over?.id) return
     const dragged = effectiveOpportunities.find((o) => o.id === active.id)
     if (!dragged) return
@@ -392,6 +397,7 @@ export function DealsPipelineKanban({
               onOpen={openDeal}
               onOpenClient={openClientFromDeal}
               onEdit={onEditOpportunity}
+              canDrag={canDrag}
             />
           )
         })}
@@ -402,6 +408,7 @@ export function DealsPipelineKanban({
             onOpen={openDeal}
             onOpenClient={openClientFromDeal}
             onEdit={onEditOpportunity}
+            canDrag={canDrag}
           />
         ) : null}
       </div>

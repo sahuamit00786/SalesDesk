@@ -10,6 +10,7 @@ import {
   setActiveWorkspace,
 } from '@/features/workspace/workspaceSlice'
 import { useOutsideClick } from '@/hooks/useOutsideClick'
+import { usePermission } from '@/hooks/usePermission'
 import { cn } from '@/utils/cn'
 
 function selectIsCompanyAdmin(state) {
@@ -25,7 +26,10 @@ export function WorkspaceSwitcher({ onWorkspaceSettingsClick }) {
   const persistedActiveId = useAppSelector((s) => s.workspace.activeWorkspaceId)
   const fallbackActive = useAppSelector(selectActiveWorkspace) ?? { id: '', name: 'Workspace' }
   const isCompanyAdmin = useAppSelector(selectIsCompanyAdmin)
-  const { data } = useWorkspacesQuery()
+  // Members without workspace-settings access fall back to session-provided workspaces below —
+  // skip the live call so it doesn't 403 on every page for them.
+  const canViewWorkspaces = usePermission('settings.workspace', 'view')
+  const { data } = useWorkspacesQuery(undefined, { skip: !canViewWorkspaces })
 
   const liveItems = Array.isArray(data?.data?.items) ? data.data.items : Array.isArray(data?.data) ? data.data : []
   const liveWorkspaces = liveItems

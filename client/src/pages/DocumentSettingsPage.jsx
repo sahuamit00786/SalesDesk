@@ -12,6 +12,7 @@ import {
   usePatchBillingProfileMutation,
 } from '@/features/sales-docs/billingProfileApi'
 import { DOC_NUMBER_FORMATS, buildDocNumberPreview } from '@/features/sales-docs/docNumberPreview'
+import { usePermission } from '@/hooks/usePermission'
 
 const fieldLabel = 'block text-xs font-medium text-ink-muted'
 const fieldInput = cn(inputFieldClassName, 'mt-1')
@@ -87,7 +88,9 @@ function NumberingCard({ icon: Icon, iconClass, title, description, value, initi
 }
 
 export function DocumentSettingsPage() {
-  const { data, isLoading } = useGetBillingProfileQuery()
+  const canView = usePermission('settings.billing_profile', 'view')
+  const canUpdate = usePermission('settings.billing_profile', 'update')
+  const { data, isLoading } = useGetBillingProfileQuery(undefined, { skip: !canView })
   const [patchProfile, { isLoading: saving }] = usePatchBillingProfileMutation()
   const profile = data?.data
 
@@ -111,6 +114,7 @@ export function DocumentSettingsPage() {
   }, [profile, seeded])
 
   async function save() {
+    if (!canUpdate) return toast.error("You don't have permission to change numbering settings.")
     const qPrefix = quotation.prefix.trim()
     const iPrefix = invoice.prefix.trim()
     if (!qPrefix || !iPrefix) return toast.error('Prefixes cannot be empty')
@@ -172,11 +176,13 @@ export function DocumentSettingsPage() {
               </NumberingCard>
             </div>
 
-            <div className="flex justify-end">
-              <Button type="button" onClick={save} disabled={saving}>
-                {saving ? 'Saving…' : 'Save numbering settings'}
-              </Button>
-            </div>
+            {canUpdate ? (
+              <div className="flex justify-end">
+                <Button type="button" onClick={save} disabled={saving}>
+                  {saving ? 'Saving…' : 'Save numbering settings'}
+                </Button>
+              </div>
+            ) : null}
           </div>
         )}
       </PageStack>

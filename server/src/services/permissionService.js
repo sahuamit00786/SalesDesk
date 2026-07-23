@@ -31,18 +31,7 @@ export function can(set, resource, action) {
   return set.has(`${resource}:${action}`)
 }
 
-/**
- * Permissions are per-user (UserMenuPermission), not role-scoped — role/userRoleKind is
- * purely a label/tier now, it no longer carries menu-CRUD grants.
- */
-export async function loadPermissionSetForUser({ isCompanyAdmin, userId }) {
-  if (isCompanyAdmin) return new Set(['*:admin'])
-  if (!userId) return new Set()
-  const rows = await UserMenuPermission.findAll({
-    where: { userId },
-    attributes: ['canView', 'canEdit', 'canUpdate', 'canDelete'],
-    include: [{ model: MenuMaster, as: 'menu', attributes: ['resource'] }],
-  })
+function mapMenuRows(rows) {
   const mapped = []
   for (const r of rows) {
     const m = r.menu
@@ -52,5 +41,37 @@ export async function loadPermissionSetForUser({ isCompanyAdmin, userId }) {
     if (r.canUpdate) mapped.push({ resource: m.resource, action: 'update' })
     if (r.canDelete) mapped.push({ resource: m.resource, action: 'delete' })
   }
-  return permissionSetFromRows(mapped)
+  return mapped
+}
+
+/**
+ * Permissions are per-user (UserMenuPermission), not role-scoped — role/userRoleKind is
+ * purely a label/tier now, it no longer carries menu-CRUD grants.
+ *
+ * When `workspaceId` is given, a workspace-scoped override (rows with that exact
+ * workspaceId) takes over entirely if any exist; otherwise falls back to the user's
+ * global grant (workspaceId IS NULL) — same behavior as before this param existed.
+ * A wrong/unrecognized workspaceId just means "0 override rows found, fall back to
+ * global" — harmless, since an override row can only exist because an admin already
+ * created it for that exact (userId, workspaceId).
+ */
+export async function loadPermissionSetForUser({ isCompanyAdmin, userId, workspaceId }) {
+  if (isCompanyAdmin) return new Set(['*:admin'])
+  if (!userId) return new Set()
+
+  if (workspaceId) {
+    const overrideRows = await UserMenuPermission.findAll({
+      where: { userId, workspaceId },
+      attributes: ['canView', 'canEdit', 'canUpdate', 'canDelete'],
+      include: [{ model: MenuMaster, as: 'menu', attributes: ['resource'] }],
+    })
+    if (overrideRows.length) return permissionSetFromRows(mapMenuRows(overrideRows))
+  }
+
+  const rows = await UserMenuPermission.findAll({
+    where: { userId, workspaceId: null },
+    attributes: ['canView', 'canEdit', 'canUpdate', 'canDelete'],
+    include: [{ model: MenuMaster, as: 'menu', attributes: ['resource'] }],
+  })
+  return permissionSetFromRows(mapMenuRows(rows))
 }

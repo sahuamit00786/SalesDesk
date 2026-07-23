@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { ArrowLeft, Lock, ShieldCheck } from '@/components/ui/icons'
 import { PageShell } from '@/components/layout/PageShell'
@@ -44,14 +44,25 @@ function menuPermissionsFromItems(items) {
 
 export function TeamMemberPermissionsPage() {
   const { userId } = useParams()
-  const isCompanyAdmin = useAppSelector((s) => Boolean(s.auth.user?.isCompanyAdmin))
+  const [searchParams] = useSearchParams()
+  const currentUserId = useAppSelector((s) => s.auth.user?.id)
+  const isSelf = Boolean(currentUserId) && String(currentUserId) === String(userId)
+  const isCompanyAdmin = useAppSelector((s) => Boolean(s.auth.user?.isCompanyAdmin)) && !isSelf
 
   const { data: userResp, isLoading: userLoading } = useGetTeamUserQuery(userId, { skip: !userId })
   const user = userResp?.data || null
+  const memberWorkspaces = user?.workspaces || []
 
-  const { data, isLoading, error, refetch } = useGetUserMenuPermissionsQuery(userId, { skip: !userId })
+  const [scope, setScope] = useState(() => searchParams.get('workspaceId') || 'global')
+  const scopeWorkspaceId = scope === 'global' ? undefined : scope
+
+  const { data, isLoading, error, refetch } = useGetUserMenuPermissionsQuery(
+    { id: userId, workspaceId: scopeWorkspaceId },
+    { skip: !userId },
+  )
   const [putPermissions, { isLoading: saving }] = usePutUserMenuPermissionsMutation()
   const items = useMemo(() => data?.data?.items || [], [data])
+  const permScope = data?.data?.scope || 'global'
 
   const menuItems = useMemo(
     () => items.map((i) => ({ id: i.menuId, key: i.key, label: i.label, route: i.route, parentId: i.parentId })),
@@ -72,7 +83,7 @@ export function TeamMemberPermissionsPage() {
 
   async function handleSave() {
     try {
-      await putPermissions({ id: userId, menuPermissions: draft || [] }).unwrap()
+      await putPermissions({ id: userId, menuPermissions: draft || [], workspaceId: scopeWorkspaceId }).unwrap()
       toast.success('Permissions updated')
       setDirty(false)
       refetch()
@@ -116,22 +127,48 @@ export function TeamMemberPermissionsPage() {
               </p>
             </div>
           </div>
-          {isCompanyAdmin ? (
-            <button
-              type="button"
-              disabled={!dirty || saving}
-              onClick={handleSave}
-              className="h-10 shrink-0 rounded-xl bg-slate-800 px-5 text-sm font-medium cx-icon-inherit text-white disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {saving ? 'Saving…' : 'Save permissions'}
-            </button>
-          ) : null}
+          <div className="flex shrink-0 items-center gap-2">
+            {memberWorkspaces.length > 1 ? (
+              <select
+                value={scope}
+                onChange={(e) => setScope(e.target.value)}
+                className="h-10 cursor-pointer rounded-xl border border-surface-border bg-white px-3 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/15"
+              >
+                <option value="global">Company default (all workspaces)</option>
+                {memberWorkspaces.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.name}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+            {isCompanyAdmin ? (
+              <button
+                type="button"
+                disabled={!dirty || saving}
+                onClick={handleSave}
+                className="h-10 shrink-0 rounded-xl bg-slate-800 px-5 text-sm font-medium cx-icon-inherit text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {saving ? 'Saving…' : 'Save permissions'}
+              </button>
+            ) : null}
+          </div>
         </div>
+
+        {scope !== 'global' ? (
+          <p className="mb-3 text-xs text-ink-muted">
+            {permScope === 'workspace'
+              ? `Editing an override specific to ${memberWorkspaces.find((w) => w.id === scope)?.name || 'this workspace'}.`
+              : `Showing the company default — no override exists yet for ${memberWorkspaces.find((w) => w.id === scope)?.name || 'this workspace'}.`}
+          </p>
+        ) : null}
 
         {!isCompanyAdmin ? (
           <div className="mb-3 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50/60 px-3 py-2 text-xs text-amber-800">
             <ShieldCheck className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
-            Only company admins can change another user's menu permissions. You're viewing this read-only.
+            {isSelf
+              ? "You can't change your own menu permissions. Ask another admin. You're viewing this read-only."
+              : "Only company admins can change another user's menu permissions. You're viewing this read-only."}
           </div>
         ) : null}
 

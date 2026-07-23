@@ -74,6 +74,7 @@ export function TaskRow({
   onOpenTask,
   onQuickPatch,
   patchingKey,
+  canUpdate = true,
 }) {
   const isChild = Boolean(subtask)
   const parent = isChild ? task : null
@@ -114,7 +115,7 @@ export function TaskRow({
               type="checkbox"
               className="h-3.5 w-3.5 shrink-0 rounded border-gray-300 text-[#7c3aed] focus:ring-[#7c3aed]"
               checked={isChild ? Boolean(subtask.done) : parentComplete}
-              disabled={isPatching || (!isChild && parentCancelled)}
+              disabled={!canUpdate || isPatching || (!isChild && parentCancelled)}
               onChange={() => isChild ? onToggleSubtaskDone?.(task, subtask) : onToggleParentComplete?.(task)}
             />
             <div className="min-w-0 flex-1">
@@ -163,7 +164,7 @@ export function TaskRow({
             <span className="inline-flex items-center gap-1">
               <StatusPillMenu
                 value={task.status || 'pending'}
-                disabled={isPatching}
+                disabled={!canUpdate || isPatching}
                 onChange={(status) => onQuickPatch?.(task, { status })}
               />
               {overdue ? <AlertTriangle className="h-3 w-3 shrink-0 text-red-600" aria-label="Overdue" /> : null}
@@ -176,7 +177,7 @@ export function TaskRow({
           {!isChild ? (
             <PriorityFlagMenu
               value={priKey}
-              disabled={isPatching}
+              disabled={!canUpdate || isPatching}
               onChange={(priority) => onQuickPatch?.(task, { priority })}
             />
           ) : (
@@ -226,6 +227,7 @@ export function TaskRow({
               onOpenTask={onOpenTask}
               onQuickPatch={onQuickPatch}
               patchingKey={patchingKey}
+              canUpdate={canUpdate}
             />
           ))
         : null}

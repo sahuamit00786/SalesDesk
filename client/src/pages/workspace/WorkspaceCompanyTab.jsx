@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/icons'
 import { useGetBillingProfileQuery, usePatchBillingProfileMutation } from '@/features/sales-docs/billingProfileApi'
 import { useUploadDocumentMutation } from '@/features/documents/documentsApi'
+import { getFileUrl } from '@/features/documents/documentUtils'
 import { useAppSelector } from '@/app/hooks'
 import { usePatchMyCompanyMutation } from '@/features/company/companyApi'
 import { DEAL_CURRENCY_OPTIONS } from '@/features/deals/dealCurrencies'
@@ -22,6 +23,7 @@ import { PhoneField } from '@/components/ui/PhoneField'
 import { Button } from '@/components/ui/Button'
 import { controlClassName } from '@/components/ui/fieldTokens'
 import { cn } from '@/utils/cn'
+import { usePermission } from '@/hooks/usePermission'
 
 function isoCountryForPhone(countryField) {
   const c = String(countryField || '')
@@ -75,13 +77,6 @@ function normalizeTaxIdValue(draft, raw) {
 
 function apiErrorMessage(err) {
   return err?.data?.error?.message ?? err?.error ?? 'Something went wrong'
-}
-
-function publicAssetUrl(path) {
-  if (!path) return ''
-  const p = String(path).trim()
-  if (p.startsWith('http://') || p.startsWith('https://')) return p
-  return p.startsWith('/') ? p : `/${p}`
 }
 
 function emptyDraft() {
@@ -234,7 +229,7 @@ function ImageField({ label, hint, value, onValueChange, onUpload, uploading, pr
           )}
         >
           {value ? (
-            <img src={publicAssetUrl(value)} alt="" className="h-full w-full object-contain" />
+            <img src={getFileUrl(value)} alt="" className="h-full w-full object-contain" />
           ) : (
             <div className="flex flex-col items-center justify-center gap-1.5">
               <ImagePlus className="h-5 w-5 text-ink-faint" aria-hidden />
@@ -270,6 +265,8 @@ export function WorkspaceCompanyTab() {
   const [patchMyCompany, { isLoading: savingCurrency }] = usePatchMyCompanyMutation()
   const [uploadDocument, { isLoading: uploadingImage }] = useUploadDocumentMutation()
   const [companyTab, setCompanyTab] = useState('profile')
+  const canUpdateBillingProfile = usePermission('settings.billing_profile', 'update')
+  const canUpdateWorkspaceSettings = usePermission('settings.workspace', 'update')
 
   const user = useAppSelector((s) => s.auth.user)
   const savedCurrency = String(user?.company?.baseCurrency || 'USD').toUpperCase()
@@ -301,6 +298,10 @@ export function WorkspaceCompanyTab() {
 
   async function handleSave(e) {
     e.preventDefault()
+    if (!canUpdateBillingProfile || (currencyDirty && !canUpdateWorkspaceSettings)) {
+      toast.error("You don't have permission to save these changes.")
+      return
+    }
     try {
       await patchProfile(draftToPatchBody(draft)).unwrap()
       if (currencyDirty) {
@@ -317,6 +318,10 @@ export function WorkspaceCompanyTab() {
     const file = ev.target.files?.[0]
     ev.target.value = ''
     if (!file) return
+    if (!canUpdateBillingProfile) {
+      toast.error("You don't have permission to update these images.")
+      return
+    }
     if (!file.type.startsWith('image/')) {
       toast.error('Please choose an image file')
       return
@@ -367,25 +372,32 @@ export function WorkspaceCompanyTab() {
 
   return (
     <form onSubmit={handleSave} className="w-full space-y-4">
-      <div className="flex flex-col gap-3 rounded-2xl border border-surface-border bg-gradient-to-br from-white to-white/50 p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-center gap-3.5">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-brand-100 bg-brand-50 text-brand-700 shadow-sm">
-            {draft.logoUrl ? (
-              <img src={publicAssetUrl(draft.logoUrl)} alt="" className="h-full w-full object-contain" />
-            ) : (
-              <Building2 className="h-5 w-5" aria-hidden />
-            )}
-          </div>
-          <div className="min-w-0">
-            <h2 className="truncate text-base font-semibold text-ink">
-              {draft.legalName.trim() || 'Company information'}
-            </h2>
-            <p className="mt-1 text-xs leading-snug text-ink-muted">
-              Shown on quotations and invoices. Numbers auto-format as{' '}
-              <span className="font-mono text-ink">QT/DDMMYYYY/n</span> ·{' '}
-              <span className="font-mono text-ink">INV/DDMMYYYY/n</span>
-            </p>
-          </div>
+      <div
+        className="flex flex-col gap-3 rounded-2xl border border-surface-border/50 bg-gradient-to-br from-white/60 to-white p-2 shadow-sm sm:flex-row sm:items-center sm:justify-between"
+      >
+        <div className="flex flex-wrap gap-2" role="tablist" aria-label="Company form sections">
+          {COMPANY_FORM_TABS.map((t) => {
+            const Icon = t.icon
+            const active = companyTab === t.id
+            return (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setCompanyTab(t.id)}
+                className={cn(
+                  'inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl px-3.5 text-xs font-medium transition-all sm:flex-none sm:px-4',
+                  active
+                    ? 'bg-[var(--brand-primary)] text-white shadow-md'
+                    : 'text-ink-muted hover:bg-brand-50 hover:text-brand-700 hover:shadow-sm',
+                )}
+              >
+                <Icon className="h-4 w-4 shrink-0" aria-hidden />
+                <span className="truncate">{t.label}</span>
+              </button>
+            )
+          })}
         </div>
         <div className="flex shrink-0 items-center gap-2 sm:justify-end">
           {dirty ? (
@@ -394,40 +406,13 @@ export function WorkspaceCompanyTab() {
               Unsaved changes
             </span>
           ) : null}
-          <Button type="submit" disabled={saving || !dirty} className="whitespace-nowrap">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Save className="h-4 w-4" aria-hidden />}
-            {saving ? 'Saving…' : 'Save changes'}
-          </Button>
+          {canUpdateBillingProfile ? (
+            <Button type="submit" disabled={saving || !dirty} className="whitespace-nowrap">
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Save className="h-4 w-4" aria-hidden />}
+              {saving ? 'Saving…' : 'Save changes'}
+            </Button>
+          ) : null}
         </div>
-      </div>
-
-      <div
-        className="flex flex-wrap gap-2 rounded-2xl border border-surface-border/50 bg-gradient-to-br from-white/60 to-white p-2 shadow-sm"
-        role="tablist"
-        aria-label="Company form sections"
-      >
-        {COMPANY_FORM_TABS.map((t) => {
-          const Icon = t.icon
-          const active = companyTab === t.id
-          return (
-            <button
-              key={t.id}
-              type="button"
-              role="tab"
-              aria-selected={active}
-              onClick={() => setCompanyTab(t.id)}
-              className={cn(
-                'inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl px-3.5 text-xs font-medium transition-all sm:flex-none sm:px-4',
-                active
-                  ? 'bg-[var(--brand-primary)] text-white shadow-md'
-                  : 'text-ink-muted hover:bg-brand-50 hover:text-brand-700 hover:shadow-sm',
-              )}
-            >
-              <Icon className="h-4 w-4 shrink-0" aria-hidden />
-              <span className="truncate">{t.label}</span>
-            </button>
-          )
-        })}
       </div>
 
       {companyTab === 'profile' ? (

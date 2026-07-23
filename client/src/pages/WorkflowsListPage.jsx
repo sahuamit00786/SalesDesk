@@ -19,6 +19,7 @@ import {
 } from '@/features/workflows/workflowsApi'
 import { useGetLeadsQuery } from '@/features/leads/leadsApi'
 import { cn } from '@/utils/cn'
+import { usePermission } from '@/hooks/usePermission'
 
 const STATUS_META = {
   draft: { label: 'Draft', tone: 'border-amber-200 bg-amber-50 text-amber-900', dot: 'bg-amber-500' },
@@ -65,8 +66,8 @@ function TestRunDrawer({ workflow, open, onClose }) {
       setSelectedRecord(null)
       setSearch('')
       onClose()
-    } catch {
-      toast.error('Test run failed.')
+    } catch (err) {
+      toast.error(err?.data?.error?.message || 'Test run failed.')
     }
   }
 
@@ -149,7 +150,11 @@ function TestRunDrawer({ workflow, open, onClose }) {
 export function WorkflowsListPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
-  const { data, isLoading, refetch } = useListWorkflowsQuery()
+  const canView = usePermission('automate.automation', 'view')
+  const canCreate = usePermission('automate.automation', 'create')
+  const canUpdate = usePermission('automate.automation', 'update')
+  const canDelete = usePermission('automate.automation', 'delete')
+  const { data, isLoading, refetch } = useListWorkflowsQuery(undefined, { skip: !canView })
   const [createWorkflow, { isLoading: creating }] = useCreateWorkflowMutation()
   const [patchWorkflow] = usePatchWorkflowMutation()
   const [deleteWorkflow] = useDeleteWorkflowMutation()
@@ -175,6 +180,7 @@ export function WorkflowsListPage() {
   )
 
   const openCreateModal = () => {
+    if (!canCreate) return
     setNewWorkflowName('')
     setCreateOpen(true)
   }
@@ -187,6 +193,10 @@ export function WorkflowsListPage() {
 
   const submitNewWorkflow = async (e) => {
     e.preventDefault()
+    if (!canCreate) {
+      toast.error("You don't have permission to create workflows.")
+      return
+    }
     const trimmed = newWorkflowName.trim()
     if (!trimmed) {
       toast.error('Enter workflow name.')
@@ -200,31 +210,40 @@ export function WorkflowsListPage() {
         setNewWorkflowName('')
         navigate(`/automation/${id}`)
       } else toast.error('Could not create workflow.')
-    } catch {
-      toast.error('Could not create workflow.')
+    } catch (err) {
+      toast.error(err?.data?.error?.message || 'Could not create workflow.')
     }
   }
 
   const togglePause = async (row) => {
+    if (!canUpdate) {
+      toast.error("You don't have permission to update workflows.")
+      setMenuOpen(null)
+      return
+    }
     const next = String(row.status).toLowerCase() === 'paused' ? 'active' : 'paused'
     try {
       await patchWorkflow({ id: row.id, status: next }).unwrap()
       toast.success(next === 'paused' ? 'Paused' : 'Resumed')
       refetch()
-    } catch {
-      toast.error('Could not update workflow.')
+    } catch (err) {
+      toast.error(err?.data?.error?.message || 'Could not update workflow.')
     }
     setMenuOpen(null)
   }
 
   const remove = async (row) => {
+    if (!canDelete) {
+      toast.error("You don't have permission to delete workflows.")
+      return
+    }
     if (!window.confirm(`Delete workflow “${row.name}”? This cannot be undone.`)) return
     try {
       await deleteWorkflow(row.id).unwrap()
       toast.success('Workflow deleted')
       refetch()
-    } catch {
-      toast.error('Delete failed')
+    } catch (err) {
+      toast.error(err?.data?.error?.message || 'Delete failed')
     }
     setMenuOpen(null)
   }
@@ -243,14 +262,16 @@ export function WorkflowsListPage() {
             <option value="active">Active</option>
             <option value="paused">Paused</option>
           </select>
-          <button
-            type="button"
-            onClick={openCreateModal}
-            className="ml-auto inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-[var(--brand-primary)] px-4 text-sm font-semibold cx-icon-inherit text-white shadow-sm hover:bg-[var(--brand-primary-dark)]"
-          >
-            <Plus className="h-4 w-4" />
-            New workflow
-          </button>
+          {canCreate ? (
+            <button
+              type="button"
+              onClick={openCreateModal}
+              className="ml-auto inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-[var(--brand-primary)] px-4 text-sm font-semibold cx-icon-inherit text-white shadow-sm hover:bg-[var(--brand-primary-dark)]"
+            >
+              <Plus className="h-4 w-4" />
+              New workflow
+            </button>
+          ) : null}
         </PageFilterBar>
 
         {isLoading ? (
@@ -306,13 +327,15 @@ export function WorkflowsListPage() {
                       </button>
                       {menuOpen === row.id ? (
                         <div className="absolute right-0 top-9 z-10 min-w-[160px] rounded-xl border border-surface-border bg-white py-1 shadow-lg dark:bg-ink">
-                          <button
-                            type="button"
-                            className="flex w-full px-3 py-2 text-left text-xs font-medium text-ink hover:bg-surface-muted"
-                            onClick={() => togglePause(row)}
-                          >
-                            {status === 'paused' ? 'Resume' : 'Pause'}
-                          </button>
+                          {canUpdate ? (
+                            <button
+                              type="button"
+                              className="flex w-full px-3 py-2 text-left text-xs font-medium text-ink hover:bg-surface-muted"
+                              onClick={() => togglePause(row)}
+                            >
+                              {status === 'paused' ? 'Resume' : 'Pause'}
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             className="flex w-full px-3 py-2 text-left text-xs font-medium text-ink hover:bg-surface-muted"
@@ -320,14 +343,16 @@ export function WorkflowsListPage() {
                           >
                             Test run…
                           </button>
-                          <button
-                            type="button"
-                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-rose-700 hover:bg-rose-50"
-                            onClick={() => remove(row)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                            Delete
-                          </button>
+                          {canDelete ? (
+                            <button
+                              type="button"
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-rose-700 hover:bg-rose-50"
+                              onClick={() => remove(row)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              Delete
+                            </button>
+                          ) : null}
                         </div>
                       ) : null}
                     </div>

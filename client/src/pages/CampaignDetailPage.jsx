@@ -43,6 +43,7 @@ import { formatDealMoney } from '@/features/deals/dealCurrencies'
 import { AddLeadsDrawer } from '@/features/campaigns/components/AddLeadsDrawer'
 import { AddMembersDrawer } from '@/features/campaigns/components/AddMembersDrawer'
 import { cn } from '@/utils/cn'
+import { usePermission } from '@/hooks/usePermission'
 
 function downloadCsvText(csvText, filename) {
   const blob = new Blob([csvText], { type: 'text/csv' })
@@ -88,6 +89,8 @@ export function CampaignDetailPage() {
   const authUser = useSelector((s) => s.auth.user)
   const isSalesRole = !authUser?.isCompanyAdmin && authUser?.companyRole?.userRoleKind === 'sales'
   const canManage = !isSalesRole
+  const canCreateCampaigns = usePermission('automate.campaigns', 'create')
+  const canUpdateCampaigns = usePermission('automate.campaigns', 'update')
 
   const { data: campRes, isLoading: campLoading } = useGetCampaignQuery(id, { skip: !id })
   const campaign = campRes?.data
@@ -208,8 +211,8 @@ export function CampaignDetailPage() {
       const csv = await triggerExportLeads({ campaignId: id }).unwrap()
       downloadCsvText(csv, `campaign-${id}-leads.csv`)
       toast.success('Leads exported')
-    } catch {
-      toast.error('Export failed')
+    } catch (e) {
+      toast.error(e?.data?.error?.message || 'Export failed')
     }
   }
 
@@ -218,8 +221,8 @@ export function CampaignDetailPage() {
       const csv = await triggerExportPayments({ campaignId: id }).unwrap()
       downloadCsvText(csv, `campaign-${id}-payments.csv`)
       toast.success('Payments exported')
-    } catch {
-      toast.error('Export failed')
+    } catch (e) {
+      toast.error(e?.data?.error?.message || 'Export failed')
     }
   }
 
@@ -363,7 +366,7 @@ export function CampaignDetailPage() {
           )
         },
       },
-      ...(canManage ? [{
+      ...(canUpdateCampaigns ? [{
         field: 'actions',
         headerName: '',
         width: 56,
@@ -409,7 +412,7 @@ export function CampaignDetailPage() {
         },
       }] : []),
     ],
-    [selected, stageOptions, patching, campaignCurrency, formatAmount, canManage, removeConfirmId, removing],
+    [selected, stageOptions, patching, campaignCurrency, formatAmount, canUpdateCampaigns, removeConfirmId, removing],
   )
 
   const rosterRows = useMemo(
@@ -491,50 +494,58 @@ export function CampaignDetailPage() {
               </div>
             </div>
 
-            {/* Action buttons — admins/managers only */}
+            {/* Action buttons — admins/managers only, and only when granted via menu permissions */}
             {canManage && (
               <div className="mt-3 flex w-full flex-nowrap gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  className="flex-1"
-                  onClick={() => setAddLeadsOpen(true)}
-                >
-                  <Users className="h-3.5 w-3.5" />
-                  Add leads
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  className="flex-1"
-                  onClick={() => setAddMembersOpen(true)}
-                >
-                  <UserPlus className="h-3.5 w-3.5" />
-                  Add members
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  className="flex-1"
-                  disabled={distributing}
-                  onClick={onDistribute}
-                  title="Distribute all unassigned leads round-robin to team members"
-                >
-                  <Shuffle className="h-3.5 w-3.5" />
-                  {distributing ? 'Distributing…' : 'Distribute unassigned'}
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  className="flex-1"
-                  onClick={() => setStageEditorOpen(true)}
-                >
-                  <ListOrdered className="h-3.5 w-3.5" />
-                  Edit stages
-                </Button>
+                {canCreateCampaigns ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => setAddLeadsOpen(true)}
+                  >
+                    <Users className="h-3.5 w-3.5" />
+                    Add leads
+                  </Button>
+                ) : null}
+                {canCreateCampaigns ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    className="flex-1"
+                    onClick={() => setAddMembersOpen(true)}
+                  >
+                    <UserPlus className="h-3.5 w-3.5" />
+                    Add members
+                  </Button>
+                ) : null}
+                {canUpdateCampaigns ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    className="flex-1"
+                    disabled={distributing}
+                    onClick={onDistribute}
+                    title="Distribute all unassigned leads round-robin to team members"
+                  >
+                    <Shuffle className="h-3.5 w-3.5" />
+                    {distributing ? 'Distributing…' : 'Distribute unassigned'}
+                  </Button>
+                ) : null}
+                {canUpdateCampaigns ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    className="flex-1"
+                    onClick={() => setStageEditorOpen(true)}
+                  >
+                    <ListOrdered className="h-3.5 w-3.5" />
+                    Edit stages
+                  </Button>
+                ) : null}
                 <Button
                   type="button"
                   size="sm"

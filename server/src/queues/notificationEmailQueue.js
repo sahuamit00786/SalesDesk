@@ -12,13 +12,14 @@ import {
   subjectForEvent,
 } from '../services/notification/notificationEmailTemplates.js'
 import { NotificationDeliveryLog, User, Workspace, Company } from '../models/index.js'
+import { primaryClientOrigin } from '../config/corsOrigins.js'
 
 const QUEUE_NAME = 'team-notification-email'
 let queue = null
 let worker = null
 
 function clientOrigin() {
-  return String(process.env.CLIENT_ORIGIN || 'http://localhost:5173').replace(/\/$/, '')
+  return primaryClientOrigin
 }
 
 async function loadContext(jobData) {

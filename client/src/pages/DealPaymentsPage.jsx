@@ -11,6 +11,7 @@ import { DealDetailPanel } from '@/features/deals/components/DealDetailPanel'
 import { inputFieldClassName } from '@/components/ui/Input'
 import { TablePaginationBar } from '@/components/ui/TablePaginationBar'
 import { cn } from '@/utils/cn'
+import { usePermission } from '@/hooks/usePermission'
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200]
 
@@ -64,7 +65,8 @@ export function DealPaymentsPage() {
     return q
   }, [page, limit, status, mode, dateFrom, dateTo, createdByUserId])
 
-  const { data, isLoading, isFetching, isError, refetch } = useListAllPaymentsQuery(query)
+  const canViewPayments = usePermission('main.deal_payments', 'view')
+  const { data, isLoading, isFetching, isError, refetch } = useListAllPaymentsQuery(query, { skip: !canViewPayments })
   const { data: formMetaData } = useGetLeadFormMetaQuery()
   const users = formMetaData?.data?.users || []
   const rawDealStatuses = formMetaData?.data?.dealStatuses || []

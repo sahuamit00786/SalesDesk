@@ -25,6 +25,7 @@ import { useGetGoogleEmailStatusQuery, useGetLeadsQuery, useSyncLeadEmailsMutati
 import { readAuthFromStorage } from '@/features/auth/authSlice'
 import { useAppSelector } from '@/app/hooks'
 import { selectResolvedActiveWorkspaceId } from '@/features/workspace/workspaceSlice'
+import { usePermission } from '@/hooks/usePermission'
 
 const PAGE_SIZE = 40
 
@@ -131,6 +132,8 @@ export function EmailPage() {
   const [syncLeadEmails, { isLoading: syncingLead }] = useSyncLeadEmailsMutation()
   const [markMailboxThreadRead] = useMarkMailboxThreadReadMutation()
   const [saveAttachment, { isLoading: savingAtt }] = useSaveMailboxAttachmentToLeadMutation()
+  const canCompose = usePermission('main.leads', 'create')
+  const canSync = usePermission('engage.email', 'update')
   const { data: leadsData } = useGetLeadsQuery({ page: 1, limit: 400, search: '' }, { skip: !googleEmailConnected })
   const leads = useMemo(() => (Array.isArray(leadsData?.data) ? leadsData.data : []), [leadsData?.data])
 
@@ -260,6 +263,10 @@ export function EmailPage() {
 
   const syncing = syncingAll || syncingLead
   const handleRefresh = useCallback(async () => {
+    if (!canSync) {
+      toast.error("You don't have permission to sync emails.")
+      return
+    }
     if (crmMode) {
       try {
         if (leadId) await syncLeadEmails({ id: leadId }).unwrap()
@@ -297,13 +304,16 @@ export function EmailPage() {
       const url = `/api/v1/email/mailbox-attachments/${encodeURIComponent(messageId)}/${encodeURIComponent(att.id)}?${q}`
       try {
         const res = await fetch(url, { headers, credentials: 'include' })
-        if (!res.ok) throw new Error('Failed to load attachment')
+        if (!res.ok) {
+          const body = await res.json().catch(() => null)
+          throw new Error(body?.error?.message || 'Failed to load attachment')
+        }
         const blob = await res.blob()
         const obj = URL.createObjectURL(blob)
         window.open(obj, '_blank', 'noopener,noreferrer')
         window.setTimeout(() => URL.revokeObjectURL(obj), 120000)
-      } catch {
-        toast.error('Could not open attachment')
+      } catch (err) {
+        toast.error(err?.message || 'Could not open attachment')
       }
     },
     [workspaceId],
@@ -378,7 +388,7 @@ export function EmailPage() {
     onLeadIdChange: (id) => { setLeadId(id); selectThread(null) },
     leads,
     onCompose: openNewCompose,
-    composeDisabled: !googleEmailConnected,
+    composeDisabled: !googleEmailConnected || !canCompose,
   }
 
   return (

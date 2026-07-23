@@ -26,6 +26,7 @@ import {
 import { AttachmentPickerModal } from '@/features/templates/components/AttachmentPickerModal'
 import { EmailPreviewCard } from '@/features/templates/components/EmailPreviewCard'
 import { LEAD_MERGE_FIELDS, SAMPLE_PREVIEW_VALUES } from '@/features/templates/mergeTags'
+import { usePermission } from '@/hooks/usePermission'
 
 const MAX_ATTACHMENTS = 3
 
@@ -117,6 +118,10 @@ export default function TemplatesPage() {
   const [archiveTemplate, archiveState] = useArchiveTemplateMutation()
   const [generateTemplateContent, generateState] = useGenerateTemplateContentMutation()
   const [deleteDialog, setDeleteDialog] = useState({ open: false, template: null })
+  const canViewTemplates = usePermission('engage.templates', 'view')
+  const canCreateTemplates = usePermission('engage.templates', 'create')
+  const canUpdateTemplates = usePermission('engage.templates', 'update')
+  const canDeleteTemplates = usePermission('engage.templates', 'delete')
 
   async function handleDeleteConfirm() {
     const t = deleteDialog.template
@@ -221,35 +226,39 @@ export default function TemplatesPage() {
         header: '',
         cell: ({ row }) => (
           <div className="flex items-center justify-end gap-1">
-            <button
-              type="button"
-              title="Edit template"
-              onClick={(e) => {
-                e.stopPropagation()
-                setActiveId(row.original.id)
-                setExtendedTab('preview')
-                setDrawerMode('edit')
-              }}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-ink-muted transition-colors hover:bg-brand-50 hover:text-brand-700"
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </button>
-            <button
-              type="button"
-              title="Delete template"
-              onClick={(e) => {
-                e.stopPropagation()
-                setDeleteDialog({ open: true, template: row.original })
-              }}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-ink-muted transition-colors hover:bg-rose-50 hover:text-rose-600"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
+            {canUpdateTemplates ? (
+              <button
+                type="button"
+                title="Edit template"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setActiveId(row.original.id)
+                  setExtendedTab('preview')
+                  setDrawerMode('edit')
+                }}
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-ink-muted transition-colors hover:bg-brand-50 hover:text-brand-700"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+            ) : null}
+            {canDeleteTemplates ? (
+              <button
+                type="button"
+                title="Delete template"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setDeleteDialog({ open: true, template: row.original })
+                }}
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-ink-muted transition-colors hover:bg-rose-50 hover:text-rose-600"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            ) : null}
           </div>
         ),
       },
     ],
-    [],
+    [canUpdateTemplates, canDeleteTemplates],
   )
 
   const mentionOptions = useMemo(() => {
@@ -417,27 +426,31 @@ export default function TemplatesPage() {
               <option value="never_sent">Never Sent</option>
             </select>
             <div className="ml-auto flex shrink-0 items-center gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                className="h-9 shrink-0 whitespace-nowrap px-3 text-xs"
-                disabled={!templateRows.length}
-                onClick={() => downloadTemplatesCsv(templateRows)}
-              >
-                <Download className="h-3.5 w-3.5" />
-                Export CSV
-              </Button>
-              <Button
-                type="button"
-                className="h-9 shrink-0 whitespace-nowrap px-3 text-xs"
-                onClick={() => {
-                  setDraft(EMPTY_DRAFT)
-                  setExtendedTab('preview')
-                  setDrawerMode('create')
-                }}
-              >
-                + Create Template
-              </Button>
+              {canViewTemplates ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="h-9 shrink-0 whitespace-nowrap px-3 text-xs"
+                  disabled={!templateRows.length}
+                  onClick={() => downloadTemplatesCsv(templateRows)}
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Export CSV
+                </Button>
+              ) : null}
+              {canCreateTemplates ? (
+                <Button
+                  type="button"
+                  className="h-9 shrink-0 whitespace-nowrap px-3 text-xs"
+                  onClick={() => {
+                    setDraft(EMPTY_DRAFT)
+                    setExtendedTab('preview')
+                    setDrawerMode('create')
+                  }}
+                >
+                  + Create Template
+                </Button>
+              ) : null}
             </div>
           </div>
           <DataGrid
@@ -470,7 +483,7 @@ export default function TemplatesPage() {
         }
         footer={
           <div className="flex w-full items-center justify-between gap-2">
-            {drawerMode === 'edit' && activeTemplate?.id && !String(activeTemplate.id).startsWith('d') ? (
+            {drawerMode === 'edit' && activeTemplate?.id && !String(activeTemplate.id).startsWith('d') && canDeleteTemplates ? (
               <button
                 type="button"
                 onClick={() => archiveTemplate(activeTemplate.id)}
@@ -734,18 +747,20 @@ export default function TemplatesPage() {
                 <p className="mt-0.5 text-[11px] text-ink-muted">Email preview</p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPreviewOpen(false)
-                    setExtendedTab('preview')
-                    setDrawerMode('edit')
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand-primary)] px-3 py-1.5 text-xs font-semibold cx-icon-inherit text-white hover:bg-[var(--brand-primary-dark)]"
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                  Edit template
-                </button>
+                {canUpdateTemplates ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPreviewOpen(false)
+                      setExtendedTab('preview')
+                      setDrawerMode('edit')
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand-primary)] px-3 py-1.5 text-xs font-semibold cx-icon-inherit text-white hover:bg-[var(--brand-primary-dark)]"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Edit template
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => setPreviewOpen(false)}

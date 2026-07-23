@@ -64,3 +64,11 @@ export const resetPasswordSchema = Joi.object({
     'any.only': 'Passwords must match',
   }),
 })
+
+export const changePasswordSchema = Joi.object({
+  currentPassword: Joi.string().required(),
+  password: Joi.string().required().custom(strongPassword),
+  confirmPassword: Joi.string().valid(Joi.ref('password')).required().messages({
+    'any.only': 'Passwords must match',
+  }),
+})

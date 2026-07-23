@@ -1,7 +1,7 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Building2, Check, LogOut } from '@/components/ui/icons'
+import { Building2, Check, LogOut, Plus } from '@/components/ui/icons'
 import { useAppDispatch, useAppSelector } from '@/app/hooks'
 import { baseApi } from '@/features/api/baseApi'
 import { logout } from '@/features/auth/authSlice'
@@ -9,6 +9,7 @@ import { useWorkspacesQuery } from '@/features/workspace/workspaceApi'
 import { selectWorkspaceList, setActiveWorkspace } from '@/features/workspace/workspaceSlice'
 import { DASHBOARD_PATH } from '@/constants/appRoutes'
 import { cn } from '@/utils/cn'
+import { WorkspaceManagementModal } from '@/components/layout/WorkspaceManagementModal'
 
 function selectIsCompanyAdmin(state) {
   return state.auth.user?.isCompanyAdmin ?? false
@@ -33,6 +34,7 @@ export function SelectWorkspacePage() {
   const navigate = useNavigate()
   const location = useLocation()
   const isCompanyAdmin = useAppSelector(selectIsCompanyAdmin)
+  const [workspaceModalOpen, setWorkspaceModalOpen] = useState(false)
   const userName = useAppSelector((s) => s.auth.user?.name)
   const companyName = useAppSelector((s) => s.auth.user?.company?.name)
   const lastPickedId = useAppSelector((s) => s.workspace.activeWorkspaceId)
@@ -67,7 +69,17 @@ export function SelectWorkspacePage() {
         aria-hidden
       />
 
-      <div className="absolute right-4 top-4 z-20 sm:right-6 sm:top-6">
+      <div className="absolute right-4 top-4 z-20 flex items-center gap-2 sm:right-6 sm:top-6">
+        {isCompanyAdmin ? (
+          <button
+            type="button"
+            onClick={() => setWorkspaceModalOpen(true)}
+            className="inline-flex h-10 items-center gap-2 rounded-xl border border-surface-border bg-white/80 px-4 text-sm font-medium text-ink-muted backdrop-blur transition-colors hover:border-brand-300 hover:bg-brand-50 hover:text-ink focus:outline-none focus:ring-2 focus:ring-brand-500/25"
+          >
+            <Plus className="h-4 w-4" aria-hidden />
+            Add workspace
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={() => dispatch(logout())}
@@ -77,6 +89,9 @@ export function SelectWorkspacePage() {
           Sign out
         </button>
       </div>
+      {isCompanyAdmin ? (
+        <WorkspaceManagementModal open={workspaceModalOpen} onClose={() => setWorkspaceModalOpen(false)} />
+      ) : null}
 
       <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-5xl flex-col px-4 pb-10 pt-12 sm:px-6 sm:pt-16 lg:px-8">
         <motion.div variants={staggerContainer} initial="initial" animate="animate" className="space-y-8">
@@ -115,6 +130,16 @@ export function SelectWorkspacePage() {
                   ? 'This company has no active workspaces yet. Create one to get started.'
                   : 'Your account is not assigned to any workspace yet. Ask a company admin to add you.'}
               </p>
+              {isCompanyAdmin ? (
+                <button
+                  type="button"
+                  onClick={() => setWorkspaceModalOpen(true)}
+                  className="mx-auto mt-4 inline-flex h-10 items-center gap-2 rounded-xl bg-slate-800 px-4 text-sm font-medium text-white shadow-sm transition hover:bg-slate-700"
+                >
+                  <Plus className="h-4 w-4" aria-hidden />
+                  Add workspace
+                </button>
+              ) : null}
             </motion.div>
           ) : (
             <motion.div

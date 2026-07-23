@@ -45,6 +45,7 @@ export const acceptInvitationSchema = Joi.object({
 
 export const patchUserRoleSchema = Joi.object({
   companyRoleId,
+  workspaceId: Joi.string().uuid().optional(),
 })
 
 export const patchUserProfileSchema = Joi.object({
@@ -109,7 +110,9 @@ export const deleteCompanyRoleSchema = Joi.object({
   fallbackCompanyRoleId: Joi.string().uuid().allow(null).optional(),
 })
 
-/** Per-user menu-CRUD grants — replace-all payload. Empty array means "revoke everything". */
+/** Per-user menu-CRUD grants — replace-all payload. Empty array means "revoke everything".
+ * Optional `workspaceId` scopes the replace to that workspace's override instead of the
+ * user's global grant. */
 export const putUserMenuPermissionsSchema = Joi.object({
   menuPermissions: Joi.array()
     .items(
@@ -122,4 +125,20 @@ export const putUserMenuPermissionsSchema = Joi.object({
       }),
     )
     .required(),
+  workspaceId: Joi.string().uuid().optional(),
+})
+
+export const getUserMenuPermissionsQuerySchema = Joi.object({
+  workspaceId: Joi.string().uuid().optional(),
+})
+
+/** Adds an existing company user (already in some other workspace) to one more workspace,
+ * with an explicit role override for that new membership. */
+export const addUserWorkspaceSchema = Joi.object({
+  workspaceId: Joi.string().uuid().required(),
+  companyRoleId: Joi.string().uuid().required(),
+})
+
+export const checkInvitationEmailSchema = Joi.object({
+  email: Joi.string().email().required(),
 })

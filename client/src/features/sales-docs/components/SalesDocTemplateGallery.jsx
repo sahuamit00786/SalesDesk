@@ -191,30 +191,34 @@ export function SalesDocTemplateGallery({
 
                 <div className="mt-3 flex items-center justify-between border-t border-surface-border pt-3">
                   <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      data-gallery-card-action
-                      className="rounded-lg p-1.5 text-ink-faint hover:bg-brand-50 hover:text-brand-700"
-                      title="Edit template"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        onEdit?.(row)
-                      }}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      data-gallery-card-action
-                      className="rounded-lg p-1.5 text-ink-faint hover:bg-red-50 hover:text-red-600"
-                      title="Delete"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        onDelete?.(row)
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    {onEdit ? (
+                      <button
+                        type="button"
+                        data-gallery-card-action
+                        className="rounded-lg p-1.5 text-ink-faint hover:bg-brand-50 hover:text-brand-700"
+                        title="Edit template"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onEdit(row)
+                        }}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                    ) : null}
+                    {onDelete ? (
+                      <button
+                        type="button"
+                        data-gallery-card-action
+                        className="rounded-lg p-1.5 text-ink-faint hover:bg-red-50 hover:text-red-600"
+                        title="Delete"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onDelete(row)
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    ) : null}
                   </div>
                   <span className={cn('rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize', statusBadgeClass(row.status))}>
                     {row.status || 'active'}

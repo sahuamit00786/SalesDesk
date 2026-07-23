@@ -28,6 +28,7 @@ import { fileExtLower } from '@/features/documents/documentUtils'
 import { DocumentPreviewDialog } from '@/features/documents/components/DocumentPreviewDialog'
 import { RightDrawer } from '@/components/ui/RightDrawer'
 import { Input } from '@/components/ui/Input'
+import { usePermission } from '@/hooks/usePermission'
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 function splitFileStemAndExt(fileName) {
@@ -198,14 +199,16 @@ function FolderSideItem({ folder, depth = 0, activeId, onSelect, onDelete, dragO
         </button>
 
         {/* delete button */}
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onDelete(folder) }}
-          className="shrink-0 rounded p-1 text-zinc-300 transition hover:bg-red-50 hover:text-red-500"
-          title="Delete folder"
-        >
-          <Trash2 size={11} />
-        </button>
+        {onDelete ? (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onDelete(folder) }}
+            className="shrink-0 rounded p-1 text-zinc-300 transition hover:bg-red-50 hover:text-red-500"
+            title="Delete folder"
+          >
+            <Trash2 size={11} />
+          </button>
+        ) : null}
       </div>
 
       {expanded && hasChildren && folder.children.map((child) => (
@@ -444,6 +447,9 @@ export function DocumentsPage() {
   const [deleteDocument] = useDeleteDocumentMutation()
   const [uploadDocument, { isLoading: uploading }] = useUploadDocumentMutation()
   const [patchDocument, { isLoading: patching }] = usePatchDocumentMutation()
+  const canCreateDocs = usePermission('manage.documents', 'create')
+  const canUpdateDocs = usePermission('manage.documents', 'update')
+  const canDeleteDocs = usePermission('manage.documents', 'delete')
 
   // ── Ctrl+X / Escape keyboard shortcuts ──────────────────────────────────
   useEffect(() => {
@@ -475,6 +481,10 @@ export function DocumentsPage() {
 
   async function pasteToFolder(folderId) {
     if (!cutIds.length || !folderId) return
+    if (!canUpdateDocs) {
+      toast.error("You don't have permission to move documents.")
+      return
+    }
     const sourceFolderId = context.type === 'folder' ? context.id : null
     try {
       await Promise.all(cutIds.map((id) => moveDocumentFolder({ id, fromFolderId: sourceFolderId, toFolderId: folderId }).unwrap()))
@@ -483,8 +493,8 @@ export function DocumentsPage() {
       setSelectedIds([])
       refetchDocs()
       refetchTree()
-    } catch {
-      toast.error('Could not paste documents')
+    } catch (err) {
+      toast.error(err?.data?.error?.message || 'Could not paste documents')
     }
   }
 
@@ -492,6 +502,10 @@ export function DocumentsPage() {
   async function handleCreateFolder() {
     const name = newFolderName.trim()
     if (!name) return
+    if (!canCreateDocs) {
+      toast.error("You don't have permission to create folders.")
+      return
+    }
     const parentFolderId = context.type === 'folder' ? context.id : null
     try {
       const res = await createFolder({ name, parentFolderId }).unwrap()
@@ -500,8 +514,8 @@ export function DocumentsPage() {
       setShowNewFolder(false)
       refetchTree()
       if (res?.data?.id) setContext({ type: 'folder', id: res.data.id, name: res.data.name })
-    } catch {
-      toast.error('Could not create folder')
+    } catch (err) {
+      toast.error(err?.data?.error?.message || 'Could not create folder')
     }
   }
 
@@ -519,14 +533,18 @@ export function DocumentsPage() {
     setDragDocId(null)
     setDragOverFolderId(null)
     if (!docId || !folderId) return
+    if (!canUpdateDocs) {
+      toast.error("You don't have permission to move documents.")
+      return
+    }
     const sourceFolderId = context.type === 'folder' ? context.id : null
     try {
       await moveDocumentFolder({ id: docId, fromFolderId: sourceFolderId, toFolderId: folderId }).unwrap()
       toast.success('Document moved to folder')
       refetchDocs()
       refetchTree()
-    } catch {
-      toast.error('Could not move document')
+    } catch (err) {
+      toast.error(err?.data?.error?.message || 'Could not move document')
     }
   }
 
@@ -537,6 +555,10 @@ export function DocumentsPage() {
     setDragDocId(null)
     setDragOverFolderId(null)
     if (!folderId) return
+    if (!canUpdateDocs) {
+      toast.error("You don't have permission to move documents.")
+      return
+    }
     const ids = selectedIds.length > 1 && selectedIds.includes(docId) ? selectedIds : (docId ? [docId] : [])
     if (!ids.length) return
     const sourceFolderId = context.type === 'folder' ? context.id : null
@@ -545,28 +567,36 @@ export function DocumentsPage() {
       toast.success(`${ids.length} document${ids.length !== 1 ? 's' : ''} moved`)
       refetchDocs()
       refetchTree()
-    } catch {
-      toast.error('Could not move documents')
+    } catch (err) {
+      toast.error(err?.data?.error?.message || 'Could not move documents')
     }
   }
 
   // ── Bulk move ────────────────────────────────────────────────────────────
   async function handleBulkMoveToFolder(folderId) {
     if (!selectedIds.length || !folderId) return
+    if (!canUpdateDocs) {
+      toast.error("You don't have permission to move documents.")
+      return
+    }
     try {
       await Promise.all(selectedIds.map((id) => addToFolder({ id, folderIds: [folderId] }).unwrap()))
       toast.success(`${selectedIds.length} document${selectedIds.length !== 1 ? 's' : ''} moved`)
       setSelectedIds([])
       setShowMoveModal(false)
       refetchDocs()
-    } catch {
-      toast.error('Could not move some documents')
+    } catch (err) {
+      toast.error(err?.data?.error?.message || 'Could not move some documents')
     }
   }
 
   // ── Delete ────────────────────────────────────────────────────────────────
   // ── File delete (opens modal) ────────────────────────────────────────────
   function promptDeleteFile(row) {
+    if (!canDeleteDocs) {
+      toast.error("You don't have permission to delete files.")
+      return
+    }
     setDeleteFileConfirm({ id: row.id, name: row.name })
   }
 
@@ -579,8 +609,8 @@ export function DocumentsPage() {
       setSelectedIds((p) => p.filter((x) => x !== deleteFileConfirm.id))
       setDeleteFileConfirm(null)
       refetchDocs()
-    } catch {
-      toast.error('Could not delete file')
+    } catch (err) {
+      toast.error(err?.data?.error?.message || 'Could not delete file')
     } finally {
       setDeleteActionLoading(false)
     }
@@ -588,6 +618,10 @@ export function DocumentsPage() {
 
   // ── Folder delete (fetches count, opens modal) ───────────────────────────
   async function promptDeleteFolder(folder) {
+    if (!canDeleteDocs) {
+      toast.error("You don't have permission to delete folders.")
+      return
+    }
     setDeleteFolderConfirm({ folder, fileCount: null, subfolderCount: null, loading: true })
     try {
       const res = await triggerFolderInfo(folder.id).unwrap()
@@ -609,8 +643,8 @@ export function DocumentsPage() {
       setDeleteFolderConfirm(null)
       refetchTree()
       refetchDocs()
-    } catch {
-      toast.error('Could not delete folder')
+    } catch (err) {
+      toast.error(err?.data?.error?.message || 'Could not delete folder')
     } finally {
       setDeleteActionLoading(false)
     }
@@ -625,6 +659,7 @@ export function DocumentsPage() {
   // ── Upload ────────────────────────────────────────────────────────────────
   async function onUploadSubmit(e) {
     e.preventDefault()
+    if (!canCreateDocs) return toast.error("You don't have permission to upload documents.")
     if (!uploadForm.file) return toast.error('Select a file')
     const stampedBase = `${uploadForm.nameBase.trim()}_${generateTimestamp()}`
     const fullName = joinStemExt(stampedBase, uploadForm.nameExt).trim()
@@ -647,6 +682,7 @@ export function DocumentsPage() {
   // ── Edit ─────────────────────────────────────────────────────────────────
   async function onEditSave() {
     if (!editRow?.id) return
+    if (!canUpdateDocs) return toast.error("You don't have permission to rename documents.")
     const fullName = joinStemExt(editForm.nameBase, editForm.nameExt).trim()
     if (!fullName) return toast.error('Name required')
     try {
@@ -715,14 +751,16 @@ export function DocumentsPage() {
               <div className="pt-1">
                 <div className="mb-1.5 flex items-center justify-between px-1">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-ink-faint">Folders</span>
-                  <button
-                    type="button"
-                    title="New folder"
-                    onClick={() => { setShowNewFolder((v) => !v); setTimeout(() => newFolderInputRef.current?.focus(), 50) }}
-                    className="rounded-lg p-1 text-ink-muted hover:bg-white hover:text-ink"
-                  >
-                    <FolderPlus size={13} />
-                  </button>
+                  {canCreateDocs ? (
+                    <button
+                      type="button"
+                      title="New folder"
+                      onClick={() => { setShowNewFolder((v) => !v); setTimeout(() => newFolderInputRef.current?.focus(), 50) }}
+                      className="rounded-lg p-1 text-ink-muted hover:bg-white hover:text-ink"
+                    >
+                      <FolderPlus size={13} />
+                    </button>
+                  ) : null}
                 </div>
 
                 {showNewFolder && (
@@ -751,7 +789,7 @@ export function DocumentsPage() {
                     folder={folder}
                     activeId={context.id}
                     onSelect={handleSelectFolder}
-                    onDelete={promptDeleteFolder}
+                    onDelete={canDeleteDocs ? promptDeleteFolder : undefined}
                     dragOverId={dragOverFolderId}
                     onDragOver={setDragOverFolderId}
                     onDragLeave={() => setDragOverFolderId(null)}
@@ -950,7 +988,7 @@ export function DocumentsPage() {
                 )}
               </nav>
               <div className="flex shrink-0 items-center gap-2">
-                {(context.type === 'folder' || context.type === 'all') && (
+                {(context.type === 'folder' || context.type === 'all') && canCreateDocs && (
                   <button
                     type="button"
                     onClick={() => { setShowNewFolder(true); setTimeout(() => newFolderInputRef.current?.focus(), 50) }}
@@ -960,14 +998,16 @@ export function DocumentsPage() {
                     New folder
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => setUploadOpen(true)}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-xl bg-brand-700 px-3 text-xs font-semibold text-white hover:bg-brand-800"
-                >
-                  <Upload size={13} />
-                  Upload
-                </button>
+                {canCreateDocs ? (
+                  <button
+                    type="button"
+                    onClick={() => setUploadOpen(true)}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-xl bg-brand-700 px-3 text-xs font-semibold text-white hover:bg-brand-800"
+                  >
+                    <Upload size={13} />
+                    Upload
+                  </button>
+                ) : null}
               </div>
             </div>
 
@@ -1117,14 +1157,16 @@ export function DocumentsPage() {
                   <p className="mt-1 text-xs text-ink-muted">
                     {allRows.length === 0 ? 'Upload a file to get started.' : 'Try clearing search or filters.'}
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => setUploadOpen(true)}
-                    className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-brand-700 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-800"
-                  >
-                    <Upload size={14} />
-                    Upload document
-                  </button>
+                  {canCreateDocs ? (
+                    <button
+                      type="button"
+                      onClick={() => setUploadOpen(true)}
+                      className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-brand-700 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-800"
+                    >
+                      <Upload size={14} />
+                      Upload document
+                    </button>
+                  ) : null}
                 </div>
               )}
 
@@ -1157,8 +1199,8 @@ export function DocumentsPage() {
                                 selected={selectedIds.includes(row.id)}
                                 onToggleSelect={toggleSelect}
                                 onOpen={setViewDoc}
-                                onEdit={openEdit}
-                                onDelete={promptDeleteFile}
+                                onEdit={canUpdateDocs ? openEdit : undefined}
+                                onDelete={canDeleteDocs ? promptDeleteFile : undefined}
                               />
                             </div>
                           )
@@ -1221,8 +1263,12 @@ export function DocumentsPage() {
                                 <td className="px-3 py-2.5 text-xs text-ink-muted">{row.uploader?.name || '—'}</td>
                                 <td className="px-3 py-2.5">
                                   <div className="flex items-center justify-end gap-1">
-                                    <button type="button" title="Edit" onClick={() => openEdit(row)} className="rounded p-1 text-ink-muted hover:bg-surface-subtle hover:text-ink"><Pencil size={13} /></button>
-                                    <button type="button" title="Delete" onClick={() => promptDeleteFile(row)} className="rounded p-1 text-ink-muted hover:bg-red-50 hover:text-red-600"><Trash2 size={13} /></button>
+                                    {canUpdateDocs ? (
+                                      <button type="button" title="Edit" onClick={() => openEdit(row)} className="rounded p-1 text-ink-muted hover:bg-surface-subtle hover:text-ink"><Pencil size={13} /></button>
+                                    ) : null}
+                                    {canDeleteDocs ? (
+                                      <button type="button" title="Delete" onClick={() => promptDeleteFile(row)} className="rounded p-1 text-ink-muted hover:bg-red-50 hover:text-red-600"><Trash2 size={13} /></button>
+                                    ) : null}
                                   </div>
                                 </td>
                               </tr>
@@ -1338,7 +1384,7 @@ export function DocumentsPage() {
             Description
             <textarea rows={4} className="mt-1 w-full rounded-xl border border-surface-border bg-surface-muted px-3 py-2 text-sm" value={editForm.description} onChange={(e) => setEditForm((p) => ({ ...p, description: e.target.value }))} />
           </label>
-          {editRow && (
+          {editRow && canDeleteDocs && (
             <button type="button" onClick={() => { promptDeleteFile(editRow); setEditOpen(false) }} className="flex w-full items-center gap-2 rounded-xl border border-red-200 px-3 py-2 text-sm text-red-600 hover:bg-red-50">
               <Trash2 size={14} />
               Delete document

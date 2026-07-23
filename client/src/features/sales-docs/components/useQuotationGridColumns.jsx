@@ -10,6 +10,7 @@ import {
   formatDocListDate,
   formatDocMoney as fmtMoney,
 } from '@/features/sales-docs/components/SalesDocListCells'
+import { usePermission } from '@/hooks/usePermission'
 
 export function useQuotationGridColumns({
   setDeleteTarget,
@@ -18,6 +19,8 @@ export function useQuotationGridColumns({
   onConvert,
   onDealClick,
 }) {
+  const canUpdate = usePermission('manage.quotations', 'update')
+  const canDelete = usePermission('manage.quotations', 'delete')
   return useMemo(
     () => [
       {
@@ -77,14 +80,16 @@ export function useQuotationGridColumns({
         headerAlign: 'right',
         renderCell: ({ row }) => (
           <div className="inline-flex gap-1" onClick={(e) => e.stopPropagation()}>
-            <SalesDocActionIcon
-              as={Link}
-              to={`/quotations/new?quotationId=${encodeURIComponent(row.id)}`}
-              title="Edit quotation"
-              className="border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50"
-            >
-              <Pencil className="h-4 w-4" />
-            </SalesDocActionIcon>
+            {canUpdate ? (
+              <SalesDocActionIcon
+                as={Link}
+                to={`/quotations/new?quotationId=${encodeURIComponent(row.id)}`}
+                title="Edit quotation"
+                className="border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50"
+              >
+                <Pencil className="h-4 w-4" />
+              </SalesDocActionIcon>
+            ) : null}
             <SalesDocActionIcon
               as={Link}
               to={`/quotations/${row.id}/print`}
@@ -93,7 +98,7 @@ export function useQuotationGridColumns({
             >
               <Printer className="h-4 w-4" />
             </SalesDocActionIcon>
-            {row.status !== 'converted' && row.status !== 'rejected' ? (
+            {row.status !== 'converted' && row.status !== 'rejected' && canUpdate ? (
               <SalesDocActionIcon
                 type="button"
                 disabled={converting}
@@ -104,19 +109,21 @@ export function useQuotationGridColumns({
                 <FileInput className="h-4 w-4" />
               </SalesDocActionIcon>
             ) : null}
-            <SalesDocActionIcon
-              type="button"
-              disabled={deleting}
-              title="Delete quotation"
-              className="border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
-              onClick={() => setDeleteTarget(row)}
-            >
-              <Trash2 className="h-4 w-4" />
-            </SalesDocActionIcon>
+            {canDelete ? (
+              <SalesDocActionIcon
+                type="button"
+                disabled={deleting}
+                title="Delete quotation"
+                className="border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+                onClick={() => setDeleteTarget(row)}
+              >
+                <Trash2 className="h-4 w-4" />
+              </SalesDocActionIcon>
+            ) : null}
           </div>
         ),
       },
     ],
-    [setDeleteTarget, deleting, converting, onConvert, onDealClick],
+    [setDeleteTarget, deleting, converting, onConvert, onDealClick, canUpdate, canDelete],
   )
 }

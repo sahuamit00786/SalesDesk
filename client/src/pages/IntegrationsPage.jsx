@@ -1,15 +1,22 @@
 import { useSearchParams } from 'react-router-dom'
 import { PageShell } from '@/components/layout/PageShell'
 import { SkeletonForm } from '@/components/shared/SkeletonLoader'
+import toast from 'react-hot-toast'
 import { useGetGoogleEmailStatusQuery, useGetGoogleEmailConnectUrlMutation } from '@/features/leads/leadsApi'
+import { usePermission } from '@/hooks/usePermission'
 
 export function IntegrationsPage() {
   const [searchParams] = useSearchParams()
   const { data: statusData, isLoading } = useGetGoogleEmailStatusQuery()
   const [getConnectUrl, { isLoading: connecting }] = useGetGoogleEmailConnectUrlMutation()
   const justConnected = searchParams.get('connected') === '1'
+  const canConnect = usePermission('settings.integrations', 'update')
 
   async function connectGoogle() {
+    if (!canConnect) {
+      toast.error("You don't have permission to manage integrations.")
+      return
+    }
     const response = await getConnectUrl().unwrap()
     const url = response?.data?.url
     if (url) window.location.href = url
@@ -91,6 +98,7 @@ export function IntegrationsPage() {
                   ) : null}
                   <button
                     type="button"
+                    hidden={!canConnect}
                     className="mt-2.5 h-8 self-start rounded-lg bg-slate-800 px-3 text-xs font-semibold text-white shadow-sm hover:bg-slate-800 disabled:opacity-60 sm:mt-3 sm:h-9 sm:text-sm"
                     disabled={connecting}
                     onClick={connectGoogle}

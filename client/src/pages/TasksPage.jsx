@@ -15,6 +15,7 @@ import { PageShell } from '@/components/layout/PageShell'
 import { CalendarWorkspace } from '@/features/calendar/components/CalendarWorkspace'
 import { LeadTaskDrawer } from '@/features/leads/components/LeadTaskDrawer'
 import { usePatchLeadTaskMutation } from '@/features/leads/leadsApi'
+import { usePermission } from '@/hooks/usePermission'
 import { useGetTasksQuery, usePatchTaskByIdMutation } from '@/features/tasks/tasksApi'
 import {
   DEFAULT_OPEN,
@@ -58,6 +59,8 @@ export function TasksPage() {
   const [showFilterModal, setShowFilterModal] = useState(false)
   const [drawerTask, setDrawerTask] = useState(null)
   const [createOpen, setCreateOpen] = useState(false)
+  const canCreateTasks = usePermission('engage.tasks', 'create')
+  const canUpdateTasks = usePermission('engage.tasks', 'update')
   const [appliedFilters, setAppliedFilters] = useState({
     leadId: '', leadLabel: '', assigneeId: '', dueFrom: '', dueTo: '',
   })
@@ -142,8 +145,8 @@ export function TasksPage() {
     setPatchingKey(key)
     try {
       await patchLeadTask({ id: leadId, taskId, status: next }).unwrap()
-    } catch {
-      toast.error('Could not update task.')
+    } catch (err) {
+      toast.error(err?.data?.error?.message || 'Could not update task.')
     } finally {
       setPatchingKey(null)
     }
@@ -183,8 +186,8 @@ export function TasksPage() {
     setPatchingKey(`${leadId}:${taskId}:sub`)
     try {
       await patchLeadTask({ id: leadId, taskId, subtasks: next }).unwrap()
-    } catch {
-      toast.error('Could not update checklist.')
+    } catch (err) {
+      toast.error(err?.data?.error?.message || 'Could not update checklist.')
     } finally {
       setPatchingKey(null)
     }
@@ -301,14 +304,16 @@ export function TasksPage() {
               ) : null}
 
               {/* New task */}
-              <button
-                type="button"
-                onClick={() => setCreateOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand-primary)] px-3 py-1.5 text-xs font-semibold cx-icon-inherit text-white shadow-sm transition hover:bg-[var(--brand-primary-dark)]"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                New Task
-              </button>
+              {canCreateTasks ? (
+                <button
+                  type="button"
+                  onClick={() => setCreateOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand-primary)] px-3 py-1.5 text-xs font-semibold cx-icon-inherit text-white shadow-sm transition hover:bg-[var(--brand-primary-dark)]"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  New Task
+                </button>
+              ) : null}
             </div>
           </div>
 
@@ -420,6 +425,7 @@ export function TasksPage() {
                 onOpenTask={setDrawerTask}
                 onQuickPatch={onRowQuickPatch}
                 patchingKey={patchingKey}
+                canUpdate={canUpdateTasks}
               />
             ) : (
               <TaskBoardView
@@ -428,6 +434,7 @@ export function TasksPage() {
                 isLoading={isLoading}
                 onOpenTask={setDrawerTask}
                 onMove={onBoardMove}
+                canUpdate={canUpdateTasks}
               />
             )}
           </div>

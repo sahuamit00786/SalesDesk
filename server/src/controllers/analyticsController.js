@@ -3,7 +3,7 @@ import { getRedis } from '../config/redis.js'
 import {
   Lead, LeadFollowup, Meeting, Reminder, Campaign, UserWorkspace,
   Activity, LeadTask, User, LeadSource, PipelineStatus,
-  Deal, DealPayment, DealActivity,
+  Deal, DealPayment, DealActivity, CallLog,
 } from '../models/index.js'
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -1422,6 +1422,9 @@ export async function dashboardCharts(req, res, next) {
       kpiWonValue,
       kpiOpenTasks,
       kpiOverdueTasks,
+      kpiCallsTotal,
+      kpiMeetingsTotal,
+      kpiEmailsTotal,
       workspaceMembers,
     ] = await Promise.all([
       // Lead status distribution
@@ -1545,6 +1548,28 @@ export async function dashboardCharts(req, res, next) {
         where: { ...taskBase, status: { [Op.notIn]: ['completed', 'cancelled'] }, dueAt: { [Op.lt]: now } },
       }),
 
+      // All-time calls total (dashboard summary — sales reps see calls they own or that
+      // sit on a lead visible to them, mirroring callService.getCalls' visibility rule).
+      CallLog.count({
+        where: isSales
+          ? {
+              companyId,
+              [Op.or]: [
+                { ownerUserId: userId },
+                ...(allLeadIds.length ? [{ leadId: { [Op.in]: allLeadIds } }] : []),
+              ],
+            }
+          : { companyId, workspaceId },
+      }),
+
+      // All-time meetings total (workspace-scoped, matches meetingService.listMeetings).
+      Meeting.count({ where: { workspaceId } }),
+
+      // All-time emails total (Activity log entries of type 'email' on leads visible to this user).
+      allLeadIds.length
+        ? Activity.count({ where: { leadId: { [Op.in]: allLeadIds }, type: 'email' } })
+        : Promise.resolve(0),
+
       // Workspace members for top performers
       UserWorkspace.findAll({
         where: { workspaceId },
@@ -1648,6 +1673,9 @@ export async function dashboardCharts(req, res, next) {
           wonValue: Number(kpiWonValue[0]?.total || 0),
           openTasks: kpiOpenTasks,
           overdueTasks: kpiOverdueTasks,
+          callsTotal: kpiCallsTotal,
+          meetingsTotal: kpiMeetingsTotal,
+          emailsTotal: kpiEmailsTotal,
         },
         charts: {
           leadStatusDist: leadStatusDist.map((r) => ({ name: capitalize(r.status), value: Number(r.count) })),

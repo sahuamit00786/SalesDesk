@@ -57,7 +57,6 @@ import {
   LeadTaskDrawer,
   TaskOverdueBadge,
   TaskPriorityIcon,
-  TaskRecurrenceIcon,
   TaskStatusPill,
   taskTypeLabel,
 } from '@/features/leads/components/LeadTaskDrawer'
@@ -99,6 +98,7 @@ import GmailThreadView from '@/features/gmail/GmailThreadView'
 import { parseStoredThread } from '@/features/gmail/gmailParserUtils'
 import { formatStageLabel as formatPipelineStageLabel } from '@/features/opportunities/components/OpportunitiesKanban'
 import { useCreateOpportunityMutation, usePatchPipelineStatusMutation, useRevertOpportunityToLeadMutation } from '@/features/opportunities/opportunitiesApi'
+import { usePermission } from '@/hooks/usePermission'
 import { AddDealDrawer } from '@/features/deals/components/AddDealDrawer'
 import { DealDetailPanel } from '@/features/deals/components/DealDetailPanel'
 import { DealQuotationsPanel, DealInvoicesPanel } from '@/features/deals/components/DealSalesDocsTabs'
@@ -675,6 +675,18 @@ export function LeadDetailPage() {
   const [revertConfirmOpen, setRevertConfirmOpen] = useState(false)
   const [patchLeadStatus] = usePatchLeadStatusMutation()
   const [leadStatusSaving, setLeadStatusSaving] = useState(false)
+  const canUpdateLead = usePermission('main.leads', 'update')
+  const canCreateLead = usePermission('main.leads', 'create')
+  const canCreateOpportunity = usePermission('main.opportunities', 'create')
+  const canUpdateOpportunity = usePermission('main.opportunities', 'update')
+  const canCreateTasks = usePermission('engage.tasks', 'create')
+  const canUpdateTasks = usePermission('engage.tasks', 'update')
+  const canCreateMeetings = usePermission('engage.meetings', 'create')
+  const canUpdateMeetings = usePermission('engage.meetings', 'update')
+  const canDeleteMeetings = usePermission('engage.meetings', 'delete')
+  const canCreateDeals = usePermission('main.deals', 'create')
+  const canUpdateDeals = usePermission('main.deals', 'update')
+  const canDeleteDeals = usePermission('main.deals', 'delete')
 
   const lead = data?.data
   const summary = data?.meta?.summary || {}
@@ -1105,22 +1117,24 @@ export function LeadDetailPage() {
                   >
                     {fullName}
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => setEditLeadOpen(true)}
-                    className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-surface-border bg-white text-ink-muted transition hover:bg-surface-subtle hover:text-ink"
-                    aria-label="Edit lead"
-                    title="Edit lead"
-                  >
-                    <Pencil className="h-3.5 w-3.5" aria-hidden />
-                  </button>
+                  {canUpdateLead ? (
+                    <button
+                      type="button"
+                      onClick={() => setEditLeadOpen(true)}
+                      className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-surface-border bg-white text-ink-muted transition hover:bg-surface-subtle hover:text-ink"
+                      aria-label="Edit lead"
+                      title="Edit lead"
+                    >
+                      <Pencil className="h-3.5 w-3.5" aria-hidden />
+                    </button>
+                  ) : null}
                 </div>
                 <p className="mt-0.5 text-xs text-ink-muted">
                   {isPipelineDealRoute ? lead.company || lead.designation || 'Opportunity' : lead.company || lead.designation || 'Lead profile'}
                 </p>
               </div>
 
-              {!lead.isOpportunity ? (
+              {!lead.isOpportunity && canCreateOpportunity ? (
                 <div className="mt-2">
                   <button
                     type="button"
@@ -1144,7 +1158,7 @@ export function LeadDetailPage() {
                   <Select
                     className="mt-1.5 h-8 rounded-lg bg-white text-[13px]"
                     value={lead.pipelineStatus || ''}
-                    disabled={pipelineSaving}
+                    disabled={pipelineSaving || !canUpdateOpportunity}
                     onChange={async (e) => {
                       const nextId = e.target.value
                       if (!nextId || nextId === lead.pipelineStatus) return
@@ -1168,13 +1182,15 @@ export function LeadDetailPage() {
                       ))
                     )}
                   </Select>
-                  <button
-                    type="button"
-                    onClick={() => setRevertConfirmOpen(true)}
-                    className="mt-1.5 h-7 w-full rounded-lg border border-surface-border bg-white text-[11px] font-semibold text-ink-muted hover:bg-surface-subtle hover:text-ink"
-                  >
-                    Revert to lead
-                  </button>
+                  {canUpdateOpportunity ? (
+                    <button
+                      type="button"
+                      onClick={() => setRevertConfirmOpen(true)}
+                      className="mt-1.5 h-7 w-full rounded-lg border border-surface-border bg-white text-[11px] font-semibold text-ink-muted hover:bg-surface-subtle hover:text-ink"
+                    >
+                      Revert to lead
+                    </button>
+                  ) : null}
                 </div>
               ) : (
                 <div className="mt-2 rounded-lg border border-surface-border bg-surface-subtle/60 p-1.5">
@@ -1187,7 +1203,7 @@ export function LeadDetailPage() {
                   <Select
                     className="mt-1.5 h-8 rounded-lg bg-white text-[13px]"
                     value={lead.status || ''}
-                    disabled={leadStatusSaving}
+                    disabled={leadStatusSaving || !canUpdateLead}
                     onChange={(e) => handleLeadStatusChange(e.target.value)}
                   >
                     {STATUS_OPTIONS.map((status) => (
@@ -1427,17 +1443,19 @@ export function LeadDetailPage() {
                 title="Tasks"
                 description="Open tasks first, soonest due date at the top. Completed and cancelled sink to the bottom."
                 action={
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs font-semibold cx-icon-inherit text-white shadow-sm transition hover:bg-slate-800"
-                    onClick={() => {
-                      setTaskDrawerTaskId(null)
-                      setTaskDrawerOpen(true)
-                    }}
-                  >
-                    <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                    Add task
-                  </button>
+                  canCreateTasks ? (
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs font-semibold cx-icon-inherit text-white shadow-sm transition hover:bg-slate-800"
+                      onClick={() => {
+                        setTaskDrawerTaskId(null)
+                        setTaskDrawerOpen(true)
+                      }}
+                    >
+                      <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                      Add task
+                    </button>
+                  ) : null
                 }
               />
               <div className="space-y-3">
@@ -1501,12 +1519,6 @@ export function LeadDetailPage() {
                                 )
                               })()
                             ) : null}
-                            {task.recurrenceRule ? (
-                              <>
-                                <span aria-hidden>·</span>
-                                <TaskRecurrenceIcon rule={task.recurrenceRule} className="max-w-[10rem] truncate !text-[9px]" />
-                              </>
-                            ) : null}
                             {isOverdue ? (
                               <>
                                 <span aria-hidden>·</span>
@@ -1517,7 +1529,7 @@ export function LeadDetailPage() {
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                        {task.status !== 'completed' && task.status !== 'cancelled' ? (
+                        {canUpdateTasks && task.status !== 'completed' && task.status !== 'cancelled' ? (
                           <button
                             type="button"
                             className="h-8 rounded-lg border border-brand-300 bg-white px-3 text-xs font-semibold text-brand-800 shadow-sm hover:bg-slate-50"
@@ -1528,26 +1540,30 @@ export function LeadDetailPage() {
                             Mark complete
                           </button>
                         ) : null}
-                        <button
-                          type="button"
-                          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
-                          onClick={() => {
-                            setTaskDrawerTaskId(task.id)
-                            setTaskDrawerOpen(true)
-                          }}
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          className="h-8 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
-                          onClick={async () => {
-                            await deleteTask({ id, taskId: task.id }).unwrap()
-                          }}
-                        >
-                          Delete
-                        </button>
+                        {canUpdateTasks ? (
+                          <button
+                            type="button"
+                            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                            onClick={() => {
+                              setTaskDrawerTaskId(task.id)
+                              setTaskDrawerOpen(true)
+                            }}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                            Edit
+                          </button>
+                        ) : null}
+                        {canUpdateTasks ? (
+                          <button
+                            type="button"
+                            className="h-8 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                            onClick={async () => {
+                              await deleteTask({ id, taskId: task.id }).unwrap()
+                            }}
+                          >
+                            Delete
+                          </button>
+                        ) : null}
                       </div>
                     </div>
 
@@ -1679,17 +1695,19 @@ export function LeadDetailPage() {
                   title="No tasks yet"
                   description="Create tasks to assign work, set due dates, and collaborate with your team on this lead."
                   action={
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs font-semibold cx-icon-inherit text-white shadow-sm transition hover:bg-slate-800"
-                      onClick={() => {
-                        setTaskDrawerTaskId(null)
-                        setTaskDrawerOpen(true)
-                      }}
-                    >
-                      <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                      Add task
-                    </button>
+                    canCreateTasks ? (
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs font-semibold cx-icon-inherit text-white shadow-sm transition hover:bg-slate-800"
+                        onClick={() => {
+                          setTaskDrawerTaskId(null)
+                          setTaskDrawerOpen(true)
+                        }}
+                      >
+                        <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                        Add task
+                      </button>
+                    ) : null
                   }
                 />
               ) : null}
@@ -1702,25 +1720,7 @@ export function LeadDetailPage() {
       title="Meetings"
       description="Scheduled meetings linked to this lead appear below."
       action={
-        <button
-          type="button"
-          onClick={() => {
-            setEditingMeeting(null)
-            setCreateMeetingModalOpen(true)
-          }}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs font-semibold cx-icon-inherit text-white shadow-sm transition hover:bg-slate-800"
-        >
-          <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
-          Create meeting
-        </button>
-      }
-    />
-    {meetings.length === 0 ? (
-      <LeadTabEmptyState
-        icon={CalendarCheck2}
-        title="No meetings yet"
-        description="Schedule a call or demo and keep Google Meet links, participants, and timing in one place."
-        action={
+        canCreateMeetings ? (
           <button
             type="button"
             onClick={() => {
@@ -1732,6 +1732,28 @@ export function LeadDetailPage() {
             <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
             Create meeting
           </button>
+        ) : null
+      }
+    />
+    {meetings.length === 0 ? (
+      <LeadTabEmptyState
+        icon={CalendarCheck2}
+        title="No meetings yet"
+        description="Schedule a call or demo and keep Google Meet links, participants, and timing in one place."
+        action={
+          canCreateMeetings ? (
+            <button
+              type="button"
+              onClick={() => {
+                setEditingMeeting(null)
+                setCreateMeetingModalOpen(true)
+              }}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs font-semibold cx-icon-inherit text-white shadow-sm transition hover:bg-slate-800"
+            >
+              <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              Create meeting
+            </button>
+          ) : null
         }
       />
     ) : (
@@ -1820,28 +1842,32 @@ export function LeadDetailPage() {
                   </a>
                 )}
 
-                <button
-                  type="button"
-                  className="rounded-xl border border-surface-border px-4 py-2 text-sm font-medium hover:bg-slate-50"
-                  onClick={() => {
-                    setEditingMeeting(meeting)
-                    setCreateMeetingModalOpen(true)
-                  }}
-                >
-                  Edit
-                </button>
+                {canUpdateMeetings ? (
+                  <button
+                    type="button"
+                    className="rounded-xl border border-surface-border px-4 py-2 text-sm font-medium hover:bg-slate-50"
+                    onClick={() => {
+                      setEditingMeeting(meeting)
+                      setCreateMeetingModalOpen(true)
+                    }}
+                  >
+                    Edit
+                  </button>
+                ) : null}
 
-                <button
-                  type="button"
-                  className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100"
-                  onClick={async () => {
-                    const ok = confirm('Delete this meeting?')
-                    if (!ok) return
-                    await deleteMeeting(meeting.id)
-                  }}
-                >
-                  Delete
-                </button>
+                {canDeleteMeetings ? (
+                  <button
+                    type="button"
+                    className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100"
+                    onClick={async () => {
+                      const ok = confirm('Delete this meeting?')
+                      if (!ok) return
+                      await deleteMeeting(meeting.id)
+                    }}
+                  >
+                    Delete
+                  </button>
+                ) : null}
               </div>
             </div>
 
@@ -1876,7 +1902,7 @@ export function LeadDetailPage() {
                   setNoteComposerOpen(true)
                   setNoteEditorVersion((v) => v + 1)
                 }
-                const createNoteButton = (
+                const createNoteButton = canCreateLead ? (
                   <button
                     type="button"
                     onClick={startCreateNote}
@@ -1885,7 +1911,7 @@ export function LeadDetailPage() {
                     <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
                     Create note
                   </button>
-                )
+                ) : null
                 return (
                   <>
                     <LeadTabSectionHeader
@@ -1938,28 +1964,32 @@ export function LeadDetailPage() {
                                     ) : null}
                                   </div>
                                   <div className="flex shrink-0 flex-wrap justify-end gap-2">
-                                    <button
-                                      type="button"
-                                      className="h-8 rounded-lg border border-surface-border bg-white px-3 text-xs font-medium text-ink hover:bg-slate-50"
-                                      onClick={() => {
-                                        setEditingNoteId(note.id)
-                                        setNoteTitle(note.metadata?.title || '')
-                                        setDraft(noteBodyToInitialHtml(note.body || ''))
-                                        setNoteComposerOpen(true)
-                                        setNoteEditorVersion((v) => v + 1)
-                                      }}
-                                    >
-                                      Edit
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="h-8 rounded-lg border border-red-200 bg-red-50 px-3 text-xs font-medium text-red-700 hover:bg-red-100"
-                                      onClick={async () => {
-                                        await deleteNote({ id, noteId: note.id }).unwrap()
-                                      }}
-                                    >
-                                      Delete
-                                    </button>
+                                    {canUpdateLead ? (
+                                      <button
+                                        type="button"
+                                        className="h-8 rounded-lg border border-surface-border bg-white px-3 text-xs font-medium text-ink hover:bg-slate-50"
+                                        onClick={() => {
+                                          setEditingNoteId(note.id)
+                                          setNoteTitle(note.metadata?.title || '')
+                                          setDraft(noteBodyToInitialHtml(note.body || ''))
+                                          setNoteComposerOpen(true)
+                                          setNoteEditorVersion((v) => v + 1)
+                                        }}
+                                      >
+                                        Edit
+                                      </button>
+                                    ) : null}
+                                    {canUpdateLead ? (
+                                      <button
+                                        type="button"
+                                        className="h-8 rounded-lg border border-red-200 bg-red-50 px-3 text-xs font-medium text-red-700 hover:bg-red-100"
+                                        onClick={async () => {
+                                          await deleteNote({ id, noteId: note.id }).unwrap()
+                                        }}
+                                      >
+                                        Delete
+                                      </button>
+                                    ) : null}
                                   </div>
                                 </div>
                               </div>
@@ -2017,14 +2047,16 @@ export function LeadDetailPage() {
                 title="Deals"
                 description={`Pipeline deals linked to this opportunity (${childDealsForOpp.length}).`}
                 action={
-                  <button
-                    type="button"
-                    onClick={() => setAddDealDrawerOpen(true)}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-slate-800 px-3 text-xs font-semibold cx-icon-inherit text-white shadow-sm hover:bg-slate-800"
-                  >
-                    <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                    Add deal
-                  </button>
+                  canCreateDeals ? (
+                    <button
+                      type="button"
+                      onClick={() => setAddDealDrawerOpen(true)}
+                      className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-slate-800 px-3 text-xs font-semibold cx-icon-inherit text-white shadow-sm hover:bg-slate-800"
+                    >
+                      <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                      Add deal
+                    </button>
+                  ) : null
                 }
               />
               {childDealsForOpp.length ? (
@@ -2089,61 +2121,67 @@ export function LeadDetailPage() {
                               </span>
                             </div>
                           </div>
-                          <div className="relative shrink-0">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setDealMenuOpenId((cur) => (cur === row.id ? null : row.id))
-                              }}
-                              className="rounded-lg p-1 text-ink-muted opacity-60 transition hover:bg-slate-100 hover:opacity-100 group-hover:opacity-100"
-                              aria-label="Deal options"
-                            >
-                              <MoreHorizontal className="h-4 w-4" aria-hidden />
-                            </button>
-                            {dealMenuOpenId === row.id ? (
-                              <>
-                                <button
-                                  type="button"
-                                  className="fixed inset-0 z-10 cursor-default"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setDealMenuOpenId(null)
-                                  }}
-                                  aria-label="Close menu"
-                                  tabIndex={-1}
-                                />
-                                <div
-                                  className="absolute right-0 top-full z-20 mt-1 w-40 overflow-hidden rounded-xl border border-surface-border bg-white shadow-lg"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
+                          {(canUpdateDeals || canDeleteDeals) ? (
+                            <div className="relative shrink-0">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setDealMenuOpenId((cur) => (cur === row.id ? null : row.id))
+                                }}
+                                className="rounded-lg p-1 text-ink-muted opacity-60 transition hover:bg-slate-100 hover:opacity-100 group-hover:opacity-100"
+                                aria-label="Deal options"
+                              >
+                                <MoreHorizontal className="h-4 w-4" aria-hidden />
+                              </button>
+                              {dealMenuOpenId === row.id ? (
+                                <>
                                   <button
                                     type="button"
-                                    onClick={() => {
+                                    className="fixed inset-0 z-10 cursor-default"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
                                       setDealMenuOpenId(null)
-                                      setEditingDeal(row)
-                                      setAddDealDrawerOpen(true)
                                     }}
-                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-ink hover:bg-slate-50"
+                                    aria-label="Close menu"
+                                    tabIndex={-1}
+                                  />
+                                  <div
+                                    className="absolute right-0 top-full z-20 mt-1 w-40 overflow-hidden rounded-xl border border-surface-border bg-white shadow-lg"
+                                    onClick={(e) => e.stopPropagation()}
                                   >
-                                    <Pencil className="h-3.5 w-3.5" />
-                                    Edit
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setDealMenuOpenId(null)
-                                      setDeleteDealConfirm(row)
-                                    }}
-                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-red-600 hover:bg-red-50"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                    Delete
-                                  </button>
-                                </div>
-                              </>
-                            ) : null}
-                          </div>
+                                    {canUpdateDeals ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setDealMenuOpenId(null)
+                                          setEditingDeal(row)
+                                          setAddDealDrawerOpen(true)
+                                        }}
+                                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-ink hover:bg-slate-50"
+                                      >
+                                        <Pencil className="h-3.5 w-3.5" />
+                                        Edit
+                                      </button>
+                                    ) : null}
+                                    {canDeleteDeals ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setDealMenuOpenId(null)
+                                          setDeleteDealConfirm(row)
+                                        }}
+                                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-red-600 hover:bg-red-50"
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                        Delete
+                                      </button>
+                                    ) : null}
+                                  </div>
+                                </>
+                              ) : null}
+                            </div>
+                          ) : null}
                         </div>
 
                         <div className="space-y-2 border-t border-surface-border px-4 py-3">
@@ -2199,21 +2237,23 @@ export function LeadDetailPage() {
                   title="No deals yet"
                   description="Add a deal to track value and stage on the Deals board, all linked to this opportunity."
                   action={
-                    <button
-                      type="button"
-                      onClick={() => setAddDealDrawerOpen(true)}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs font-semibold cx-icon-inherit text-white shadow-sm transition hover:bg-slate-800"
-                    >
-                      <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                      Add deal
-                    </button>
+                    canCreateDeals ? (
+                      <button
+                        type="button"
+                        onClick={() => setAddDealDrawerOpen(true)}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs font-semibold cx-icon-inherit text-white shadow-sm transition hover:bg-slate-800"
+                      >
+                        <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                        Add deal
+                      </button>
+                    ) : null
                   }
                 />
               )}
             </div>
           ) : (
             <div className="mt-4 space-y-4">
-              {activeTab === 'calls' ? (
+              {activeTab === 'calls' && canCreateLead ? (
                 <div className="flex justify-end">
                   <button
                     type="button"
@@ -2425,7 +2465,7 @@ export function LeadDetailPage() {
                       : 'Notes, calls, meetings, and system events will show up here as they happen.'
                   }
                   action={
-                    activeTab === 'calls' ? (
+                    activeTab === 'calls' && canCreateLead ? (
                       <button
                         type="button"
                         onClick={() => {

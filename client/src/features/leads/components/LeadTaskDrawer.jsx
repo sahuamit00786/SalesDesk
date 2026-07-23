@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
+import { useAppSelector } from '@/app/hooks'
 import {
   AlertTriangle,
   Bell,
@@ -15,7 +16,6 @@ import {
   MessageSquarePlus,
   Paperclip,
   Plus,
-  Repeat,
   Trash2,
   X,
 } from '@/components/ui/icons'
@@ -60,16 +60,6 @@ export const LEAD_TASK_STATUS_OPTIONS = [
   { value: 'completed', label: 'Completed' },
   { value: 'cancelled', label: 'Cancelled' },
 ]
-
-const RECURRENCE_FREQ_OPTIONS = [
-  { value: '', label: 'None' },
-  { value: 'daily', label: 'Daily' },
-  { value: 'weekly', label: 'Weekly' },
-  { value: 'monthly', label: 'Monthly' },
-  { value: 'custom', label: 'Custom' },
-]
-
-const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 
 function toDatetimeLocalValue(iso) {
   if (!iso) return ''
@@ -202,6 +192,13 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
   const { data: metaRes } = useGetLeadFormMetaQuery(undefined, { skip: !open })
   const assignUsers = metaRes?.data?.users || []
 
+  const authUser = useAppSelector((s) => s.auth.user)
+  // Sales-tier users (anyone below workspace admin/manager) can't hand work to
+  // teammates — task assignment is locked to "me" for them.
+  const canAssignOthers =
+    Boolean(authUser?.isCompanyAdmin) ||
+    ['workspace_admin', 'manager'].includes(authUser?.companyRole?.userRoleKind)
+
   const { data: leadsRes, isFetching: leadsFetching } = useGetLeadsQuery(
     { page: 1, limit: 20, search: leadSearch.trim() },
     { skip: !open || isLeadPreset || isEdit || leadSearch.trim().length < 1 },
@@ -225,7 +222,6 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
   const [assignedTo, setAssignedTo] = useState('')
   const [subtasks, setSubtasks] = useState([])
   const [reminders, setReminders] = useState([])
-  const [recurrence, setRecurrence] = useState({ freq: '', interval: 1, byweekday: [], until: '' })
   const [attachments, setAttachments] = useState([])
   const [pickerOpen, setPickerOpen] = useState(false)
   const [attachmentPreview, setAttachmentPreview] = useState(null)
@@ -245,7 +241,7 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
       setStatus(task.status === 'open' ? 'pending' : task.status || 'pending')
       setStartLocal(toDateInputValue(task.startAt))
       setDueLocal(toDatetimeLocalValue(task.dueAt))
-      setAssignedTo(task.assignedTo || '')
+      setAssignedTo(!canAssignOthers && authUser?.id ? authUser.id : task.assignedTo || '')
       setSubtasks(
         (task.subtasks || []).map((s) => ({ key: s.id, title: s.title, done: Boolean(s.done) })),
       )
@@ -259,13 +255,6 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
             }))
           : [],
       )
-      const rule = task.recurrenceRule || null
-      setRecurrence({
-        freq: rule?.freq || '',
-        interval: rule?.interval || 1,
-        byweekday: Array.isArray(rule?.byweekday) ? rule.byweekday : [],
-        until: rule?.until ? toDateInputValue(rule.until) : '',
-      })
       setAttachments(
         Array.isArray(task.attachments)
           ? task.attachments.map((a) => ({
@@ -283,10 +272,9 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
       setStatus('pending')
       setStartLocal('')
       setDueLocal('')
-      setAssignedTo('')
+      setAssignedTo(!canAssignOthers && authUser?.id ? authUser.id : '')
       setSubtasks([])
       setReminders([])
-      setRecurrence({ freq: '', interval: 1, byweekday: [], until: '' })
       setAttachments([])
       setChosenLeadId('')
       setChosenLeadLabel('')
@@ -296,7 +284,7 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
     setCommentDraft('')
     setInternalDraft('')
     setAttachmentPreview(null)
-  }, [open, task])
+  }, [open, task, canAssignOthers, authUser?.id])
 
   const subPayload = useMemo(
     () =>
@@ -305,16 +293,6 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
         .map(({ title: t, done }) => ({ title: String(t).trim(), done: Boolean(done) })),
     [subtasks],
   )
-
-  const recurrencePayload = useMemo(() => {
-    if (!recurrence.freq) return null
-    const intervalNum = Number(recurrence.interval || 1)
-    const interval = Number.isFinite(intervalNum) && intervalNum > 0 ? Math.min(Math.floor(intervalNum), 365) : 1
-    const out = { freq: recurrence.freq, interval }
-    if (recurrence.until) out.until = dateInputToIso(recurrence.until)
-    if (recurrence.freq === 'weekly' && recurrence.byweekday?.length) out.byweekday = recurrence.byweekday
-    return out
-  }, [recurrence])
 
   const remindersPayload = useMemo(
     () =>
@@ -361,7 +339,6 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
       assignedTo: assignedTo || null,
       subtasks: subPayload,
       reminders: remindersPayload,
-      recurrenceRule: recurrencePayload,
       attachments,
     }
     try {
@@ -397,8 +374,8 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
       if (isInternal) setInternalDraft('')
       else setCommentDraft('')
       toast.success(isInternal ? 'Note added' : 'Comment added')
-    } catch {
-      toast.error('Could not add comment.')
+    } catch (err) {
+      toast.error(err?.data?.error?.message || 'Could not add comment.')
     }
   }
 
@@ -547,8 +524,10 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
             <div>
               <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-muted">Assign to</label>
               <select
-                className="h-11 w-full rounded-xl border border-surface-border bg-white px-3 text-sm outline-none ring-brand-500/20 focus:border-brand-400 focus:ring-2"
+                className="h-11 w-full rounded-xl border border-surface-border bg-white px-3 text-sm outline-none ring-brand-500/20 focus:border-brand-400 focus:ring-2 disabled:cursor-not-allowed disabled:bg-surface-subtle disabled:text-ink-faint"
                 value={assignedTo}
+                disabled={!canAssignOthers}
+                title={!canAssignOthers ? 'Tasks you create are always assigned to you' : undefined}
                 onChange={(e) => setAssignedTo(e.target.value)}
               >
                 <option value="">Unassigned</option>
@@ -682,90 +661,6 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
           >
             <Plus className="h-3.5 w-3.5" /> Add reminder
           </button>
-        </SectionCard>
-
-        <SectionCard
-          icon={Repeat}
-          title="Recurrence"
-          collapsible
-          defaultOpen={Boolean(task?.recurrenceRule?.freq || task?.recurrenceRule)}
-          badge={recurrence.freq ? RECURRENCE_FREQ_OPTIONS.find((o) => o.value === recurrence.freq)?.label : null}
-        >
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-muted">Repeat</label>
-              <select
-                className="h-11 w-full rounded-xl border border-surface-border bg-white px-3 text-sm outline-none ring-brand-500/20 focus:border-brand-400 focus:ring-2"
-                value={recurrence.freq}
-                onChange={(e) => setRecurrence((r) => ({ ...r, freq: e.target.value }))}
-              >
-                {RECURRENCE_FREQ_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {recurrence.freq ? (
-              <>
-                <div>
-                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-muted">Every</label>
-                  <input
-                    type="number"
-                    min={1}
-                    className="h-11 w-full rounded-xl border border-surface-border px-3 text-sm outline-none ring-brand-500/20 focus:border-brand-400 focus:ring-2"
-                    value={recurrence.interval}
-                    onChange={(e) => setRecurrence((r) => ({ ...r, interval: Math.max(1, Number(e.target.value) || 1) }))}
-                  />
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-muted">Until (optional)</label>
-                  <input
-                    type="date"
-                    className="h-11 w-full rounded-xl border border-surface-border px-3 text-sm outline-none ring-brand-500/20 focus:border-brand-400 focus:ring-2"
-                    value={recurrence.until}
-                    onChange={(e) => setRecurrence((r) => ({ ...r, until: e.target.value }))}
-                  />
-                </div>
-              </>
-            ) : null}
-          </div>
-          {recurrence.freq === 'weekly' ? (
-            <div className="mt-3">
-              <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-muted">Weekdays</span>
-              <div className="flex flex-wrap gap-1.5">
-                {WEEKDAY_LABELS.map((label, i) => {
-                  const active = recurrence.byweekday?.includes(i)
-                  return (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() =>
-                        setRecurrence((r) => {
-                          const next = new Set(r.byweekday || [])
-                          if (next.has(i)) next.delete(i)
-                          else next.add(i)
-                          return { ...r, byweekday: Array.from(next).sort((a, b) => a - b) }
-                        })
-                      }
-                      className={`h-8 w-8 rounded-full text-xs font-semibold transition ${
-                        active
-                          ? 'border border-brand-500 bg-slate-100 text-brand-700'
-                          : 'border border-surface-border bg-white text-ink-muted hover:border-brand-300'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          ) : null}
-          {recurrence.freq ? (
-            <p className="mt-2 text-[11px] text-ink-muted">
-              The next occurrence is created automatically when this task is marked completed.
-            </p>
-          ) : null}
         </SectionCard>
 
         <SectionCard
@@ -1132,25 +1027,6 @@ export function TaskOverdueBadge() {
   return (
     <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-700">
       <AlertTriangle className="h-3 w-3" /> Overdue
-    </span>
-  )
-}
-
-export function TaskRecurrenceIcon({ rule, className = '' }) {
-  if (!rule) return null
-  const interval = rule.interval || 1
-  const label =
-    rule.freq === 'daily'
-      ? interval === 1 ? 'Daily' : `Every ${interval} days`
-      : rule.freq === 'weekly'
-        ? interval === 1 ? 'Weekly' : `Every ${interval} weeks`
-        : rule.freq === 'monthly'
-          ? interval === 1 ? 'Monthly' : `Every ${interval} months`
-          : 'Recurring'
-  return (
-    <span title={label} className={`inline-flex items-center gap-1 text-[10px] font-semibold text-brand-700 ${className}`}>
-      <Repeat className="h-3 w-3" />
-      {label}
     </span>
   )
 }

@@ -19,7 +19,7 @@ function sectionMeta(groupBy, id) {
   return (groupBy === 'priority' ? PRIORITY_META[id] : STATUS_META[id]) || {}
 }
 
-function TaskCardBody({ task, interactive = false, onOpenTask }) {
+function TaskCardBody({ task, interactive = false, canUpdate = false, onOpenTask }) {
   const overdue = isTaskOverdueRow(task)
   const { pct, label } = computeTaskProgress(task)
   const subs = Array.isArray(task.subtasks) ? task.subtasks : []
@@ -45,7 +45,7 @@ function TaskCardBody({ task, interactive = false, onOpenTask }) {
         ) : (
           <p className="min-w-0 flex-1 text-xs font-semibold leading-snug text-gray-900">{task.title}</p>
         )}
-        {interactive ? (
+        {interactive && canUpdate ? (
           <button
             type="button"
             onPointerDown={(e) => e.stopPropagation()}
@@ -131,10 +131,11 @@ function TaskCardBody({ task, interactive = false, onOpenTask }) {
   )
 }
 
-function TaskBoardCard({ task, onOpenTask }) {
+function TaskBoardCard({ task, canUpdate, onOpenTask }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: task.id,
     data: { task },
+    disabled: !canUpdate,
   })
   const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined
 
@@ -142,19 +143,20 @@ function TaskBoardCard({ task, onOpenTask }) {
     <div
       ref={setNodeRef}
       style={style}
-      {...listeners}
-      {...attributes}
+      {...(canUpdate ? listeners : null)}
+      {...(canUpdate ? attributes : null)}
       className={cn(
-        'cursor-grab touch-none overflow-hidden rounded-lg border border-gray-200/90 bg-white shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing',
+        'overflow-hidden rounded-lg border border-gray-200/90 bg-white shadow-sm transition-shadow hover:shadow-md',
+        canUpdate ? 'cursor-grab touch-none active:cursor-grabbing' : 'cursor-default',
         isDragging && 'opacity-40 ring-2 ring-[var(--brand-primary)]/40',
       )}
     >
-      <TaskCardBody task={task} interactive onOpenTask={onOpenTask} />
+      <TaskCardBody task={task} interactive canUpdate={canUpdate} onOpenTask={onOpenTask} />
     </div>
   )
 }
 
-function TaskColumn({ section, groupBy, collapsed, onToggleCollapse, onOpenTask }) {
+function TaskColumn({ section, groupBy, collapsed, onToggleCollapse, onOpenTask, canUpdate }) {
   const droppableId = `col:${section.id}`
   const { setNodeRef, isOver } = useDroppable({ id: droppableId })
   const meta = sectionMeta(groupBy, section.id)
@@ -210,14 +212,14 @@ function TaskColumn({ section, groupBy, collapsed, onToggleCollapse, onOpenTask 
             No tasks
           </p>
         ) : (
-          section.tasks.map((task) => <TaskBoardCard key={task.id} task={task} onOpenTask={onOpenTask} />)
+          section.tasks.map((task) => <TaskBoardCard key={task.id} task={task} canUpdate={canUpdate} onOpenTask={onOpenTask} />)
         )}
       </div>
     </div>
   )
 }
 
-export function TaskBoardView({ tasks, groupBy, isLoading, onOpenTask, onMove }) {
+export function TaskBoardView({ tasks, groupBy, isLoading, onOpenTask, onMove, canUpdate = true }) {
   const [activeId, setActiveId] = useState(null)
   const [collapsedCols, setCollapsedCols] = useState({})
   // Optimistic local override: null means use server rows
@@ -269,6 +271,7 @@ export function TaskBoardView({ tasks, groupBy, isLoading, onOpenTask, onMove })
             collapsed={Boolean(collapsedCols[section.id])}
             onToggleCollapse={() => setCollapsedCols((c) => ({ ...c, [section.id]: !c[section.id] }))}
             onOpenTask={onOpenTask}
+            canUpdate={canUpdate}
           />
         ))}
       </div>

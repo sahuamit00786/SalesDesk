@@ -4,6 +4,8 @@ import { Download, Layers, Plus, ChevronDown } from '@/components/ui/icons';
 import toast from "react-hot-toast";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { PageShell } from "@/components/layout/PageShell";
+import { RequirePermission } from "@/components/auth/RequirePermission";
+import { usePermission } from "@/hooks/usePermission";
 import { PageStack } from "@/components/layout/PageStack";
 import { PageContentPanel } from "@/components/layout/PageContentPanel";
 import { Button } from "@/components/ui/Button";
@@ -29,7 +31,7 @@ import {
   useExportLeadsMutation,
   useGetLeadFormMetaQuery,
   useGetLeadsQuery,
-  useLazyGetLeadsQuery,
+  useLazyGetLeadIdsQuery,
   useImportLeadsMutation,
   usePatchLeadStatusMutation,
   useUpdateLeadMutation,
@@ -137,6 +139,9 @@ export function LeadsListPage({ variant = "leads" }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const isOpportunities = variant === "opportunities";
   const listPath = isOpportunities ? "/opportunities" : "/leads";
+  const permMenu = isOpportunities ? "main.opportunities" : "main.leads";
+  const hasUpdatePermission = usePermission(permMenu, "update");
+  const hasDeletePermission = usePermission(permMenu, "delete");
   const filters = useSelector(selectLeadFilters);
   const sort = useSelector(selectLeadSort);
   const pagination = useSelector(selectLeadPagination);
@@ -175,7 +180,7 @@ export function LeadsListPage({ variant = "leads" }) {
     isOpportunity: isOpportunities,
   });
   const { data, isLoading, refetch } = useGetLeadsQuery(query);
-  const [fetchLeadsPage] = useLazyGetLeadsQuery();
+  const [fetchLeadIds] = useLazyGetLeadIdsQuery();
   const { data: formMetaData } = useGetLeadFormMetaQuery();
   const [createLead] = useCreateLeadMutation();
   const [updateLead] = useUpdateLeadMutation();
@@ -192,6 +197,9 @@ export function LeadsListPage({ variant = "leads" }) {
   const total = data?.meta?.total || 0;
   const pages = Math.max(1, Math.ceil(total / pagination.limit));
   const users = formMetaData?.data?.users || [];
+  const filterAssigneeUsers = canSwitchWorkspace
+    ? users
+    : users.filter((u) => u.id === user?.id);
   const pipelineStatuses = formMetaData?.data?.pipelineStatuses || [];
   const stageOptions = pipelineStatuses.map((s) => ({
     value: s.id,
@@ -263,17 +271,12 @@ export function LeadsListPage({ variant = "leads" }) {
     if (!total) return;
     setSelectingAll(true);
     try {
-      const perPage = 100;
-      const totalPages = Math.ceil(total / perPage);
-      const allIds = [];
-      for (let p = 1; p <= totalPages; p++) {
-        const result = await fetchLeadsPage({ ...query, page: p, limit: perPage }).unwrap();
-        allIds.push(...coerceToLeadArray(result?.data ?? result).map((r) => r.id));
-      }
+      const result = await fetchLeadIds(query).unwrap();
+      const allIds = result?.data?.ids || [];
       dispatch(setSelected(allIds));
       toast.success(`Selected all ${allIds.length} ${isOpportunities ? 'opportunities' : 'leads'}`);
-    } catch {
-      toast.error("Could not select all records");
+    } catch (err) {
+      toast.error(err?.data?.error?.message || "Could not select all records");
     } finally {
       setSelectingAll(false);
     }
@@ -315,8 +318,8 @@ export function LeadsListPage({ variant = "leads" }) {
       setAssignLeads(await resolveSelectedLeads());
       setAssignUserIds([]);
       setAssignOpen(true);
-    } catch {
-      toast.error("Could not load selected leads");
+    } catch (err) {
+      toast.error(err?.data?.error?.message || "Could not load selected leads");
     }
   }
 
@@ -328,8 +331,8 @@ export function LeadsListPage({ variant = "leads" }) {
     try {
       setExportModalLeads(await resolveSelectedLeads());
       setExportOpen(true);
-    } catch {
-      toast.error("Could not load selected leads");
+    } catch (err) {
+      toast.error(err?.data?.error?.message || "Could not load selected leads");
     }
   }
 
@@ -351,8 +354,8 @@ export function LeadsListPage({ variant = "leads" }) {
       setExportOpen(false);
       setExportModalLeads([]);
       dispatch(clearSelected());
-    } catch {
-      toast.error("Export failed");
+    } catch (err) {
+      toast.error(err?.data?.error?.message || "Export failed");
     } finally {
       setExporting(false);
     }
@@ -384,8 +387,8 @@ export function LeadsListPage({ variant = "leads" }) {
       await handleBulk("delete");
       setDeleteConfirm(null);
       toast.success(isOpportunities ? "Opportunities deleted" : "Leads deleted");
-    } catch {
-      toast.error("Delete failed");
+    } catch (err) {
+      toast.error(err?.data?.error?.message || "Delete failed");
     } finally {
       setDeleting(false);
     }
@@ -399,8 +402,8 @@ export function LeadsListPage({ variant = "leads" }) {
       toast.success(isOpportunities ? "Opportunity deleted" : "Lead deleted");
       setDeleteConfirm(null);
       refetch();
-    } catch {
-      toast.error("Delete failed");
+    } catch (err) {
+      toast.error(err?.data?.error?.message || "Delete failed");
     } finally {
       setDeleting(false);
     }
@@ -415,8 +418,8 @@ export function LeadsListPage({ variant = "leads" }) {
     try {
       setBulkEmailLeads(await resolveSelectedLeads());
       setBulkEmailOpen(true);
-    } catch {
-      toast.error("Could not load selected leads");
+    } catch (err) {
+      toast.error(err?.data?.error?.message || "Could not load selected leads");
     } finally {
       setBulkEmailLoading(false);
     }
@@ -438,8 +441,8 @@ export function LeadsListPage({ variant = "leads" }) {
       setAssignUserIds([]);
       setAssignLeads([]);
       toast.success(isOpportunities ? "Opportunities assigned" : "Leads assigned");
-    } catch {
-      toast.error("Assign failed");
+    } catch (err) {
+      toast.error(err?.data?.error?.message || "Assign failed");
     } finally {
       setAssigning(false);
     }
@@ -463,7 +466,7 @@ export function LeadsListPage({ variant = "leads" }) {
             <FilterBuilder
               filters={filters}
               workspaceOptions={canSwitchWorkspace ? workspaceList : null}
-              users={users}
+              users={filterAssigneeUsers}
               stageOptions={stageOptions}
               isOpportunities={isOpportunities}
               onChange={(delta) => {
@@ -606,44 +609,48 @@ export function LeadsListPage({ variant = "leads" }) {
                 <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-muted" />
               </div>
 
-              <Button
-                type="button"
-                variant="secondary"
-                title={isOpportunities ? "Export filtered opportunities" : "Export filtered leads"}
-                onClick={() =>
-                  exportAndDownload(isOpportunities ? "opportunities" : "leads", {
-                    filters: {
-                      isOpportunity: isOpportunities,
-                      ...(filters.workspaceId ? { workspaceId: filters.workspaceId } : {}),
-                      ...(filters.status?.length ? { status: filters.status } : {}),
-                      ...(filters.assignedTo?.length ? { assignedTo: filters.assignedTo } : {}),
-                      ...(filters.search?.trim() ? { search: filters.search.trim() } : {}),
-                    },
-                  })
-                }
-                className="shrink-0"
-              >
-                <Download className="h-3.5 w-3.5" />
-              </Button>
-
-              {isOpportunities ? (
-                <Button type="button" onClick={() => setCreateOppOpen(true)} className="shrink-0 whitespace-nowrap">
-                  <Plus className="h-3.5 w-3.5" />
-                  New opportunity
-                </Button>
-              ) : (
+              <RequirePermission menu={permMenu} action="view">
                 <Button
                   type="button"
-                  onClick={() => {
-                    setEditLead(null);
-                    setAddOpen(true);
-                  }}
-                  className="shrink-0 whitespace-nowrap"
+                  variant="secondary"
+                  title={isOpportunities ? "Export filtered opportunities" : "Export filtered leads"}
+                  onClick={() =>
+                    exportAndDownload(isOpportunities ? "opportunities" : "leads", {
+                      filters: {
+                        isOpportunity: isOpportunities,
+                        ...(filters.workspaceId ? { workspaceId: filters.workspaceId } : {}),
+                        ...(filters.status?.length ? { status: filters.status } : {}),
+                        ...(filters.assignedTo?.length ? { assignedTo: filters.assignedTo } : {}),
+                        ...(filters.search?.trim() ? { search: filters.search.trim() } : {}),
+                      },
+                    })
+                  }
+                  className="shrink-0"
                 >
-                  <Plus className="h-3.5 w-3.5" />
-                  Add Lead
+                  <Download className="h-3.5 w-3.5" />
                 </Button>
-              )}
+              </RequirePermission>
+
+              <RequirePermission menu={permMenu} action="create">
+                {isOpportunities ? (
+                  <Button type="button" onClick={() => setCreateOppOpen(true)} className="shrink-0 whitespace-nowrap">
+                    <Plus className="h-3.5 w-3.5" />
+                    New opportunity
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      setEditLead(null);
+                      setAddOpen(true);
+                    }}
+                    className="shrink-0 whitespace-nowrap"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Add Lead
+                  </Button>
+                )}
+              </RequirePermission>
             </>
           }
         />
@@ -651,11 +658,11 @@ export function LeadsListPage({ variant = "leads" }) {
         <PageContentPanel flush>
         {viewMode === 'duplicates' ? (
           <div className="p-4">
-            <DuplicateLeadsTab />
+            <DuplicateLeadsTab search={filters.search || ""} />
           </div>
         ) : viewMode === 'archived' ? (
           <div className="p-4">
-            <ArchivedLeadsTab isOpportunity={isOpportunities} />
+            <ArchivedLeadsTab isOpportunity={isOpportunities} search={filters.search || ""} />
           </div>
         ) : isLoading ? (
           <div className="p-3">
@@ -688,6 +695,8 @@ export function LeadsListPage({ variant = "leads" }) {
                   }),
                 )
               }
+              canEdit={hasUpdatePermission}
+              canDelete={hasDeletePermission}
               onEdit={(lead) => {
                 setEditLead(lead);
                 setAddOpen(true);
@@ -730,6 +739,7 @@ export function LeadsListPage({ variant = "leads" }) {
       />
 
       <BulkActionsBar
+        menu={permMenu}
         count={selected.length}
         onBulkEmail={openBulkEmail}
         onEdit={() => setBulkEditOpen(true)}
@@ -766,6 +776,7 @@ export function LeadsListPage({ variant = "leads" }) {
         sources={formMetaData?.data?.sources || []}
         pipelineStatuses={pipelineStatuses}
         customFields={formMetaData?.data?.customFields || []}
+        users={users}
         isOpportunities={isOpportunities}
         onSubmit={submitBulkEdit}
         submitting={bulkEditing}

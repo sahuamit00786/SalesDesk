@@ -7,7 +7,7 @@ export const teamApi = baseApi.injectEndpoints({
       providesTags: [{ type: 'Team', id: 'ROLES' }],
     }),
     teamUsers: build.query({
-      query: () => '/team/users',
+      query: (workspaceId) => ({ url: '/team/users', params: workspaceId ? { workspaceId } : undefined }),
       providesTags: [{ type: 'Team', id: 'USERS' }],
     }),
     getTeamUser: build.query({
@@ -34,10 +34,10 @@ export const teamApi = baseApi.injectEndpoints({
       invalidatesTags: [{ type: 'Team', id: 'INVITES' }],
     }),
     patchUserRole: build.mutation({
-      query: ({ id, companyRoleId }) => ({
+      query: ({ id, companyRoleId, workspaceId }) => ({
         url: `/team/users/${id}/role`,
         method: 'PATCH',
-        body: { companyRoleId },
+        body: { companyRoleId, workspaceId },
       }),
       invalidatesTags: [{ type: 'Team', id: 'USERS' }],
     }),
@@ -54,14 +54,17 @@ export const teamApi = baseApi.injectEndpoints({
       providesTags: [{ type: 'Team', id: 'MENUS' }],
     }),
     getUserMenuPermissions: build.query({
-      query: (id) => `/team/users/${id}/menu-permissions`,
-      providesTags: (_res, _err, id) => [{ type: 'Team', id: `USER-PERMS-${id}` }],
+      query: ({ id, workspaceId }) => ({
+        url: `/team/users/${id}/menu-permissions`,
+        params: workspaceId ? { workspaceId } : undefined,
+      }),
+      providesTags: (_res, _err, { id }) => [{ type: 'Team', id: `USER-PERMS-${id}` }],
     }),
     putUserMenuPermissions: build.mutation({
-      query: ({ id, menuPermissions }) => ({
+      query: ({ id, menuPermissions, workspaceId }) => ({
         url: `/team/users/${id}/menu-permissions`,
         method: 'PUT',
-        body: { menuPermissions },
+        body: { menuPermissions, workspaceId },
       }),
       invalidatesTags: (_res, _err, { id }) => [{ type: 'Team', id: `USER-PERMS-${id}` }],
     }),
@@ -88,6 +91,17 @@ export const teamApi = baseApi.injectEndpoints({
         body: { workspaceIds },
       }),
       invalidatesTags: [{ type: 'Team', id: 'USERS' }],
+    }),
+    addUserWorkspace: build.mutation({
+      query: ({ userId, workspaceId, companyRoleId }) => ({
+        url: `/team/users/${userId}/workspaces`,
+        method: 'POST',
+        body: { workspaceId, companyRoleId },
+      }),
+      invalidatesTags: [{ type: 'Team', id: 'USERS' }],
+    }),
+    checkInvitationEmail: build.query({
+      query: (email) => ({ url: '/team/invitations/check-email', params: { email } }),
     }),
     deactivateUser: build.mutation({
       query: ({ id, reassignOwnerUserId = null }) => ({
@@ -155,6 +169,8 @@ export const {
   usePatchRoleMutation,
   useDeleteRoleMutation,
   useReplaceUserWorkspacesMutation,
+  useAddUserWorkspaceMutation,
+  useLazyCheckInvitationEmailQuery,
   useDeactivateUserMutation,
   useReactivateUserMutation,
   useCreateTeamMutation,

@@ -17,6 +17,7 @@ import toast from 'react-hot-toast'
 import { cn } from '@/utils/cn'
 import { SkeletonCards } from '@/components/shared/SkeletonLoader'
 import { useDeleteMeetingMutation, useGetMeetingQuery } from '@/features/meetings/meetingsApi'
+import { usePermission } from '@/hooks/usePermission'
 
 /** Google Meet–style mark (not an official Google asset). */
 function GoogleMeetLogo({ className }) {
@@ -155,25 +156,29 @@ function MeetingDetailCard({ meeting: meetingProp, channel, onEdit, onDelete, de
         <div className="flex items-start justify-between gap-2 border-b border-gray-100 pb-2.5">
           <h3 className="min-w-0 flex-1 line-clamp-2 text-sm font-semibold leading-snug text-gray-900">{meeting.title}</h3>
           <div className="flex shrink-0 items-center gap-0.5">
-            <button
-              type="button"
-              onClick={() => onEdit?.(meeting)}
-              className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-50 hover:text-brand-600"
-              title="Edit"
-              aria-label="Edit meeting"
-            >
-              <Pencil className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={handleDelete}
-              disabled={deleting}
-              className="rounded-lg p-1.5 text-gray-500 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
-              title="Delete"
-              aria-label="Delete meeting"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
+            {onEdit ? (
+              <button
+                type="button"
+                onClick={() => onEdit(meeting)}
+                className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-50 hover:text-brand-600"
+                title="Edit"
+                aria-label="Edit meeting"
+              >
+                <Pencil className="h-4 w-4" />
+              </button>
+            ) : null}
+            {onDelete ? (
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={deleting}
+                className="rounded-lg p-1.5 text-gray-500 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                title="Delete"
+                aria-label="Delete meeting"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            ) : null}
           </div>
         </div>
         {isVideo && meetLink ? (
@@ -288,6 +293,8 @@ function MeetingDetailCard({ meeting: meetingProp, channel, onEdit, onDelete, de
 export function MeetingsListPanel({ meetings, channel, isLoading, onEdit }) {
   const [deleteMeeting] = useDeleteMeetingMutation()
   const [deletingId, setDeletingId] = useState(null)
+  const canUpdateMeetings = usePermission('engage.meetings', 'update')
+  const canDeleteMeetings = usePermission('engage.meetings', 'delete')
 
   const handleDeleteMeeting = useCallback(
     async (id) => {
@@ -296,8 +303,8 @@ export function MeetingsListPanel({ meetings, channel, isLoading, onEdit }) {
       try {
         await deleteMeeting(id).unwrap()
         toast.success('Meeting removed')
-      } catch {
-        toast.error('Could not delete meeting')
+      } catch (err) {
+        toast.error(err?.data?.error?.message || 'Could not delete meeting')
       } finally {
         setDeletingId(null)
       }
@@ -330,8 +337,8 @@ export function MeetingsListPanel({ meetings, channel, isLoading, onEdit }) {
           key={m.id}
           meeting={m}
           channel={channel}
-          onEdit={onEdit}
-          onDelete={handleDeleteMeeting}
+          onEdit={canUpdateMeetings ? onEdit : undefined}
+          onDelete={canDeleteMeetings ? handleDeleteMeeting : undefined}
           deletingId={deletingId}
         />
       ))}

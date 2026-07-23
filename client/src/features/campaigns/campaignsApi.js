@@ -7,7 +7,7 @@ export const campaignsApi = baseApi.injectEndpoints({
       query: (params = {}) => ({ url: '/campaigns', params }),
       providesTags: (_r, _e, arg) => [{ type: 'Campaign', id: `LIST-${arg?.status || 'all'}` }, { type: 'Campaign', id: 'LIST' }],
       async onQueryStarted(_arg, { queryFulfilled }) {
-        try { await queryFulfilled } catch { toast.error('Could not load campaigns.') }
+        try { await queryFulfilled } catch (err) { toast.error(err?.error?.data?.error?.message || 'Could not load campaigns.') }
       },
     }),
     getCampaign: build.query({
@@ -22,7 +22,7 @@ export const campaignsApi = baseApi.injectEndpoints({
       query: (body) => ({ url: '/campaigns', method: 'POST', body }),
       invalidatesTags: [{ type: 'Campaign', id: 'LIST' }, { type: 'Lead', id: 'LIST' }],
       async onQueryStarted(_arg, { queryFulfilled }) {
-        try { await queryFulfilled; toast.success('Campaign created.') } catch { toast.error('Could not create campaign.') }
+        try { await queryFulfilled; toast.success('Campaign created.') } catch (err) { toast.error(err?.error?.data?.error?.message || 'Could not create campaign.') }
       },
     }),
     patchCampaign: build.mutation({
@@ -33,7 +33,7 @@ export const campaignsApi = baseApi.injectEndpoints({
         { type: 'Campaign', id: `${arg.id}-report` },
       ],
       async onQueryStarted(_arg, { queryFulfilled }) {
-        try { await queryFulfilled; toast.success('Campaign updated.') } catch { toast.error('Could not update campaign.') }
+        try { await queryFulfilled; toast.success('Campaign updated.') } catch (err) { toast.error(err?.error?.data?.error?.message || 'Could not update campaign.') }
       },
     }),
     patchCampaignLeadAmount: build.mutation({
@@ -49,7 +49,7 @@ export const campaignsApi = baseApi.injectEndpoints({
         { type: 'Campaign', id: 'LIST' },
       ],
       async onQueryStarted(_arg, { queryFulfilled }) {
-        try { await queryFulfilled } catch { toast.error('Could not update amount received.') }
+        try { await queryFulfilled } catch (err) { toast.error(err?.error?.data?.error?.message || 'Could not update amount received.') }
       },
     }),
     patchCampaignLeadStage: build.mutation({
@@ -65,7 +65,7 @@ export const campaignsApi = baseApi.injectEndpoints({
         { type: 'Campaign', id: 'LIST' },
       ],
       async onQueryStarted(_arg, { queryFulfilled }) {
-        try { await queryFulfilled } catch { toast.error('Could not update stage.') }
+        try { await queryFulfilled } catch (err) { toast.error(err?.error?.data?.error?.message || 'Could not update stage.') }
       },
     }),
     addCampaignLeads: build.mutation({
@@ -126,7 +126,7 @@ export const campaignsApi = baseApi.injectEndpoints({
         { type: 'Campaign', id: 'LIST' },
       ],
       async onQueryStarted(_arg, { queryFulfilled }) {
-        try { await queryFulfilled; toast.success('Stages updated.') } catch { toast.error('Could not update stages.') }
+        try { await queryFulfilled; toast.success('Stages updated.') } catch (err) { toast.error(err?.error?.data?.error?.message || 'Could not update stages.') }
       },
     }),
 
@@ -171,7 +171,7 @@ export const campaignsApi = baseApi.injectEndpoints({
         { type: 'Campaign', id: 'LIST' },
       ],
       async onQueryStarted(_arg, { queryFulfilled }) {
-        try { await queryFulfilled; toast.success('Payment recorded.') } catch { toast.error('Could not record payment.') }
+        try { await queryFulfilled; toast.success('Payment recorded.') } catch (err) { toast.error(err?.error?.data?.error?.message || 'Could not record payment.') }
       },
     }),
     patchCampaignPayment: build.mutation({
@@ -188,7 +188,7 @@ export const campaignsApi = baseApi.injectEndpoints({
         { type: 'Campaign', id: 'LIST' },
       ],
       async onQueryStarted(_arg, { queryFulfilled }) {
-        try { await queryFulfilled; toast.success('Payment updated.') } catch { toast.error('Could not update payment.') }
+        try { await queryFulfilled; toast.success('Payment updated.') } catch (err) { toast.error(err?.error?.data?.error?.message || 'Could not update payment.') }
       },
     }),
     deleteCampaignPayment: build.mutation({
@@ -204,7 +204,7 @@ export const campaignsApi = baseApi.injectEndpoints({
         { type: 'Campaign', id: 'LIST' },
       ],
       async onQueryStarted(_arg, { queryFulfilled }) {
-        try { await queryFulfilled; toast.success('Payment deleted.') } catch { toast.error('Could not delete payment.') }
+        try { await queryFulfilled; toast.success('Payment deleted.') } catch (err) { toast.error(err?.error?.data?.error?.message || 'Could not delete payment.') }
       },
     }),
   }),

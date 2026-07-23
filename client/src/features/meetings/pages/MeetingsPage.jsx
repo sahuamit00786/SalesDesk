@@ -5,6 +5,7 @@ import { CreateMeetingModal } from '@/features/meetings/components/CreateMeeting
 import { MeetingsListPanel } from '@/features/meetings/components/MeetingsListPanel'
 import { useGetMeetingsQuery } from '@/features/meetings/meetingsApi'
 import { useGetLeadFormMetaQuery } from '@/features/leads/leadsApi'
+import { RequirePermission } from '@/components/auth/RequirePermission'
 
 export function MeetingsPage() {
   const channel = 'video'
@@ -136,14 +137,16 @@ export function MeetingsPage() {
               <option value="completed">Completed</option>
               <option value="all">All</option>
             </select>
-            <button
-              type="button"
-              onClick={() => setCreatingMeeting(true)}
-              className="inline-flex items-center justify-center gap-1.5 self-stretch rounded-lg bg-[var(--brand-primary)] px-3 py-2 text-sm font-semibold cx-icon-inherit text-white shadow-sm transition hover:bg-[var(--brand-primary-dark)] sm:self-auto"
-            >
-              <Plus className="h-4 w-4" aria-hidden />
-              New meeting
-            </button>
+            <RequirePermission menu="engage.meetings" action="create">
+              <button
+                type="button"
+                onClick={() => setCreatingMeeting(true)}
+                className="inline-flex items-center justify-center gap-1.5 self-stretch rounded-lg bg-[var(--brand-primary)] px-3 py-2 text-sm font-semibold cx-icon-inherit text-white shadow-sm transition hover:bg-[var(--brand-primary-dark)] sm:self-auto"
+              >
+                <Plus className="h-4 w-4" aria-hidden />
+                New meeting
+              </button>
+            </RequirePermission>
           </div>
         </div>
 

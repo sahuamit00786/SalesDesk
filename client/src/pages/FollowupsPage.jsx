@@ -33,6 +33,7 @@ import {
   useDeleteLeadFollowupMutation,
 } from '@/features/leads/leadsApi'
 import { useTeamUsersQuery } from '@/features/team/teamApi'
+import { usePermission } from '@/hooks/usePermission'
 
 const STATUS_TABS = [
   { value: '', label: 'All' },
@@ -107,6 +108,8 @@ export function FollowupsPage() {
   const [clockMs, setClockMs] = useState(() => Date.now())
   const [addOpen, setAddOpen] = useState(false)
   const [addKey, setAddKey] = useState(0)
+  const canCreateFollowup = usePermission('engage.followups', 'create')
+  const canUpdateFollowup = usePermission('engage.followups', 'update')
 
   useEffect(() => {
     const id = setInterval(() => setClockMs(Date.now()), 30_000)
@@ -295,17 +298,19 @@ export function FollowupsPage() {
             <span className="text-xs text-ink-muted">
               Showing <span className="font-semibold text-ink">{rows.length}</span>
             </span>
-            <button
-              type="button"
-              onClick={() => {
-                setAddKey((k) => k + 1)
-                setAddOpen(true)
-              }}
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[var(--brand-primary)] px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-[var(--brand-primary-dark)]"
-            >
-              <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
-              Add follow-up
-            </button>
+            {canCreateFollowup ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setAddKey((k) => k + 1)
+                  setAddOpen(true)
+                }}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[var(--brand-primary)] px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-[var(--brand-primary-dark)]"
+              >
+                <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                Add follow-up
+              </button>
+            ) : null}
           </div>
         </PageFilterBar>
 
@@ -356,7 +361,7 @@ export function FollowupsPage() {
                       </span>
 
                       <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-                        {f.status === 'pending' ? (
+                        {f.status === 'pending' && canUpdateFollowup ? (
                           <>
                             <button
                               type="button"
@@ -378,14 +383,16 @@ export function FollowupsPage() {
                             </button>
                           </>
                         ) : null}
-                        <button
-                          type="button"
-                          title="Delete"
-                          onClick={() => handleDelete(f)}
-                          className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 transition hover:border-red-200 hover:bg-red-50/60 hover:text-red-700"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </button>
+                        {canUpdateFollowup ? (
+                          <button
+                            type="button"
+                            title="Delete"
+                            onClick={() => handleDelete(f)}
+                            className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 transition hover:border-red-200 hover:bg-red-50/60 hover:text-red-700"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        ) : null}
                       </div>
                     </div>
 

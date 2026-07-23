@@ -21,6 +21,7 @@ import {
   useReplaceUserWorkspacesMutation,
   useTeamRolesQuery,
 } from '@/features/team/teamApi'
+import { useAppSelector } from '@/app/hooks'
 import { cn } from '@/utils/cn'
 import { labelCompanyUserRoleKind } from '@/constants/companyUserRoleKind'
 import { IconInput, IconTextarea } from '@/components/ui/IconInput'
@@ -137,6 +138,8 @@ function workspaceChipClass(active, opts = {}) {
 }
 
 export function TeamMemberAccessDrawer({ open, user, onClose, onSaved }) {
+  const currentUserId = useAppSelector((s) => s.auth.user?.id)
+  const isSelf = Boolean(currentUserId) && Boolean(user?.id) && currentUserId === user.id
   const { data: rolesData } = useTeamRolesQuery(undefined, { skip: !open })
   const { data: wsData } = useWorkspacesQuery(undefined, { skip: !open })
   const [patchUserRole, { isLoading: patchingRole }] = usePatchUserRoleMutation()
@@ -361,7 +364,7 @@ export function TeamMemberAccessDrawer({ open, user, onClose, onSaved }) {
             <select
               value={roleId}
               onChange={(e) => setRoleId(e.target.value)}
-              disabled={busy || user?.isCompanyAdmin}
+              disabled={busy || user?.isCompanyAdmin || isSelf}
               className="h-10 w-full cursor-pointer appearance-none rounded-xl border border-surface-border bg-white pl-9 pr-3 text-sm outline-none transition-shadow focus:border-brand-400 focus:ring-2 focus:ring-brand-500/15 disabled:cursor-not-allowed disabled:bg-white disabled:text-ink-muted/70"
             >
               <option value="">Select role</option>
