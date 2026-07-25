@@ -29,10 +29,7 @@ import { ActivityReminder } from './ActivityReminder.js'
 import { ActivityBookingLink } from './ActivityBookingLink.js'
 import { CountryPhoneCode } from './CountryPhoneCode.js'
 import { UserWorkspace } from './UserWorkspace.js'
-import { MenuMaster } from './MenuMaster.js'
 import { CompanyRole } from './CompanyRole.js'
-import { CompanyRoleMenu } from './CompanyRoleMenu.js'
-import { UserMenuPermission } from './UserMenuPermission.js'
 import { Document } from './Document.js'
 import { DocumentLink } from './DocumentLink.js'
 import { Folder } from './Folder.js'
@@ -102,22 +99,6 @@ Company.hasMany(CompanyRole, { foreignKey: 'companyId', as: 'roles' })
 User.belongsTo(CompanyRole, { foreignKey: 'companyRoleId', as: 'companyRole' })
 CompanyRole.hasMany(User, { foreignKey: 'companyRoleId', as: 'users' })
 CompanyRole.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' })
-
-MenuMaster.belongsTo(MenuMaster, { foreignKey: 'parentId', as: 'parent' })
-MenuMaster.hasMany(MenuMaster, { foreignKey: 'parentId', as: 'children' })
-CompanyRoleMenu.belongsTo(CompanyRole, { foreignKey: 'companyRoleId', as: 'companyRole' })
-CompanyRole.hasMany(CompanyRoleMenu, { foreignKey: 'companyRoleId', as: 'menuLinks' })
-CompanyRoleMenu.belongsTo(MenuMaster, { foreignKey: 'menuId', as: 'menu' })
-MenuMaster.hasMany(CompanyRoleMenu, { foreignKey: 'menuId', as: 'roleLinks' })
-
-// Per-user menu-CRUD grants — the actual permission enforcement source of truth.
-// CompanyRoleMenu/menuLinks above is legacy (role no longer carries permissions).
-UserMenuPermission.belongsTo(User, { foreignKey: 'userId', as: 'user' })
-User.hasMany(UserMenuPermission, { foreignKey: 'userId', as: 'menuPermissions' })
-UserMenuPermission.belongsTo(MenuMaster, { foreignKey: 'menuId', as: 'menu' })
-MenuMaster.hasMany(UserMenuPermission, { foreignKey: 'menuId', as: 'userLinks' })
-// Per-workspace override scope (nullable — NULL rows are the global grant).
-UserMenuPermission.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
 
 Workspace.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
 Company.hasMany(Workspace, { foreignKey: 'companyId', as: 'workspaces' })
@@ -223,6 +204,9 @@ DealActivity.belongsTo(Deal, { foreignKey: 'dealId', as: 'deal' })
 
 Deal.hasMany(DealPayment, { foreignKey: 'dealId', as: 'payments' })
 DealPayment.belongsTo(Deal, { foreignKey: 'dealId', as: 'deal' })
+
+Deal.hasMany(LeadTask, { foreignKey: 'dealId', as: 'tasks' })
+LeadTask.belongsTo(Deal, { foreignKey: 'dealId', as: 'deal' })
 DealPayment.belongsTo(User, { foreignKey: 'createdByUserId', as: 'createdBy' })
 User.hasMany(DealPayment, { foreignKey: 'createdByUserId', as: 'dealPayments' })
 DealPayment.belongsTo(InvoicePayment, { foreignKey: 'invoicePaymentId', as: 'invoicePayment' })
@@ -527,10 +511,7 @@ export {
   User,
   Company,
   Workspace,
-  MenuMaster,
   CompanyRole,
-  CompanyRoleMenu,
-  UserMenuPermission,
   Team,
   TeamMember,
   UserWorkspace,

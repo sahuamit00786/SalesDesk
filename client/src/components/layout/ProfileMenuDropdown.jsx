@@ -31,7 +31,7 @@ export function ProfileMenuDropdown() {
   }, [])
 
   const initial = String(user?.name || 'U').charAt(0).toUpperCase()
-  const allowedRoutes = buildAllowedRouteSet(user?.allowedMenus, { isCompanyAdmin: user?.isCompanyAdmin })
+  const allowedRoutes = buildAllowedRouteSet(user)
   const canViewWorkspace = isMenuPathAllowed('/workspace', allowedRoutes)
 
   return (

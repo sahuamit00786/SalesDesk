@@ -1,4 +1,4 @@
-import { Company, Workspace, CompanyRole, UserWorkspace, UserMenuPermission, MenuMaster } from '../models/index.js'
+import { Company, Workspace, CompanyRole, UserWorkspace } from '../models/index.js'
 
 /** Workspaces nested under company (ordered oldest first = primary). */
 const workspacesUnderCompany = {
@@ -25,22 +25,6 @@ export const companyRoleInclude = {
   attributes: ['id', 'name', 'description', 'isDefault', 'userRoleKind', 'roleNo'],
 }
 
-/** Per-user menu-CRUD grants — the actual permission source of truth. */
-export const userMenuPermissionInclude = {
-  model: UserMenuPermission,
-  as: 'menuPermissions',
-  required: false,
-  attributes: ['menuId', 'canView', 'canEdit', 'canUpdate', 'canDelete'],
-  include: [
-    {
-      model: MenuMaster,
-      as: 'menu',
-      required: false,
-      attributes: ['id', 'key', 'label', 'route', 'parentId'],
-    },
-  ],
-}
-
 export const userWorkspaceMembershipInclude = {
   model: UserWorkspace,
   as: 'workspaceMemberships',
@@ -56,10 +40,9 @@ export const userWorkspaceMembershipInclude = {
   ],
 }
 
-/** Standard includes for session user payloads (company + workspaces + role + permissions). */
+/** Standard includes for session user payloads (company + workspaces + role). */
 export const userAuthIncludes = [
   userCompanyWithWorkspacesInclude,
   companyRoleInclude,
-  userMenuPermissionInclude,
   userWorkspaceMembershipInclude,
 ]

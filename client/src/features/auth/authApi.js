@@ -1,6 +1,5 @@
 import { baseApi } from '@/features/api/baseApi'
 import { setCredentials, logout } from '@/features/auth/authSlice'
-import { hasRealMenuAccess } from '@/utils/menuAccess'
 
 export const authApi = baseApi.injectEndpoints({
   endpoints: (build) => ({
@@ -13,10 +12,7 @@ export const authApi = baseApi.injectEndpoints({
       async onQueryStarted(_arg, { dispatch, queryFulfilled }) {
         try {
           const { data } = await queryFulfilled
-          // A user with zero real menu grants can't do anything in the app — keep them off
-          // the login page's session state entirely so no dashboard flash/redirect happens;
-          // LoginPage shows the "no permissions" toast instead.
-          if (data?.success && data?.data?.accessToken && hasRealMenuAccess(data.data.user)) {
+          if (data?.success && data?.data?.accessToken) {
             dispatch(
               setCredentials({
                 accessToken: data.data.accessToken,
@@ -101,6 +97,9 @@ export const authApi = baseApi.injectEndpoints({
       query: () => '/auth/me',
       providesTags: ['Auth'],
     }),
+    checkWorkspaceAccess: build.query({
+      query: (workspaceId) => ({ url: '/auth/workspace-access', params: { workspaceId } }),
+    }),
     logout: build.mutation({
       query: () => ({
         url: '/auth/logout',
@@ -145,6 +144,7 @@ export const {
   useRefreshMutation,
   useAcceptInvitationMutation,
   useMeQuery,
+  useLazyCheckWorkspaceAccessQuery,
   useLogoutMutation,
   useGetInvitationPreviewQuery,
   useForgotPasswordMutation,

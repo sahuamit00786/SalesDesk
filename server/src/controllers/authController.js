@@ -1,8 +1,9 @@
 import bcrypt from 'bcrypt'
-import { Company, sequelize, User } from '../models/index.js'
+import { Company, Workspace, sequelize, User } from '../models/index.js'
 import { userAuthIncludes } from '../queries/userIncludes.js'
 import { ensureCompanyWorkspace } from '../services/workspaceService.js'
 import { ensureCompanyDefaultRoles } from '../services/companyRoleService.js'
+import { allowedWorkspaceIdsForUser } from '../services/userWorkspaceService.js'
 import {
   signAccessToken,
   signRefreshToken,
@@ -642,6 +643,42 @@ export async function me(req, res, next) {
       data: userResponse(user),
       meta: {},
     })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+/**
+ * GET /auth/workspace-access?workspaceId=
+ * Self-check used by the workspace switcher: is the current user a member of the
+ * given workspace (or a company admin, who has access to all of them)?
+ */
+export async function checkWorkspaceAccess(req, res, next) {
+  try {
+    const workspaceId = typeof req.query.workspaceId === 'string' ? req.query.workspaceId.trim() : ''
+    if (!workspaceId) {
+      const err = new Error('workspaceId is required')
+      err.status = 400
+      err.code = 'VALIDATION'
+      err.publicMessage = 'workspaceId is required'
+      throw err
+    }
+    const workspace = await Workspace.findOne({
+      where: { id: workspaceId, companyId: req.user.companyId },
+      attributes: ['id'],
+    })
+    if (!workspace) {
+      const err = new Error('Workspace not found')
+      err.status = 404
+      err.code = 'NOT_FOUND'
+      err.publicMessage = 'Workspace not found in this company'
+      throw err
+    }
+    if (req.user.isCompanyAdmin) {
+      return res.json({ success: true, data: { hasAccess: true }, meta: {} })
+    }
+    const allowedIds = await allowedWorkspaceIdsForUser(req.user)
+    return res.json({ success: true, data: { hasAccess: allowedIds.includes(String(workspaceId)) }, meta: {} })
   } catch (e) {
     return next(e)
   }

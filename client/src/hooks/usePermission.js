@@ -1,14 +1,9 @@
-import { useMemo } from 'react'
-import { useAppSelector } from '@/app/hooks'
-import { buildPermissionMap, hasMenuPermission } from '@/utils/permissionAccess'
-
 /**
- * @param {string} menuKey e.g. 'manage.quotations'
- * @param {'view'|'create'|'update'|'delete'} action
- * @returns {boolean}
+ * Menu-level visibility is role-based now (see utils/menuAccess.js) — there is no more
+ * per-action (view/create/update/delete) grant to check, so any user who can see a menu
+ * has full access to it. Kept as a hook (rather than deleting its ~50 call sites) so
+ * existing `usePermission(menu, action)` / `<RequirePermission>` usages keep working.
  */
-export function usePermission(menuKey, action) {
-  const user = useAppSelector((s) => s.auth.user)
-  const permissionMap = useMemo(() => buildPermissionMap(user?.allowedMenus), [user?.allowedMenus])
-  return hasMenuPermission(permissionMap, menuKey, action, { isCompanyAdmin: Boolean(user?.isCompanyAdmin) })
+export function usePermission() {
+  return true
 }

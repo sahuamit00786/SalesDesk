@@ -5,12 +5,10 @@ import {
   CompanyRole,
   Invitation,
   Lead,
-  MenuMaster,
   sequelize,
   Team,
   TeamMember,
   User,
-  UserMenuPermission,
   UserWorkspace,
   Workspace,
 } from '../models/index.js'
@@ -32,8 +30,6 @@ import {
   patchCompanyRoleSchema,
   patchUserProfileSchema,
   patchUserRoleSchema,
-  putUserMenuPermissionsSchema,
-  getUserMenuPermissionsQuerySchema,
   addUserWorkspaceSchema,
   checkInvitationEmailSchema,
   replaceUserWorkspacesSchema,
@@ -46,6 +42,7 @@ import {
   addWorkspaceMembershipsForUser,
   setWorkspaceMembershipsForUser,
   scopedWorkspaceIdsForRequest,
+  allowedWorkspaceIdsForUser,
   setWorkspaceRoleOverride,
   getWorkspaceRoleOverrides,
 } from '../services/userWorkspaceService.js'
@@ -114,26 +111,6 @@ function invitationPrefillForUser(pref) {
   return out
 }
 
-function normalizeMenuPermissions(items) {
-  const seen = new Set()
-  const list = []
-  for (const item of Array.isArray(items) ? items : []) {
-    if (!item?.menuId || seen.has(item.menuId)) continue
-    seen.add(item.menuId)
-    const normalized = {
-      menuId: item.menuId,
-      canView: Boolean(item.canView),
-      canEdit: Boolean(item.canEdit),
-      canUpdate: Boolean(item.canUpdate),
-      canDelete: Boolean(item.canDelete),
-    }
-    if (normalized.canView || normalized.canEdit || normalized.canUpdate || normalized.canDelete) {
-      list.push(normalized)
-    }
-  }
-  return list
-}
-
 function requireCompanyAdmin(req) {
   if (!req.user?.isCompanyAdmin) {
     const err = new Error('Forbidden')
@@ -170,7 +147,7 @@ async function assertRoleNameAvailable({ companyId, name, excludeRoleId = null, 
   }
 }
 
-/** Role is a type/label (userRoleKind) only — menu permissions are per-user, see getUserMenuPermissions. */
+/** Role is a type/label (userRoleKind) only — it determines menu visibility (see menuAccess.js on the client), not per-action grants. */
 export async function listRoles(req, res, next) {
   try {
     const rows = await CompanyRole.findAll({
@@ -199,19 +176,6 @@ export async function listRoles(req, res, next) {
       })),
       meta: {},
     })
-  } catch (e) {
-    return next(e)
-  }
-}
-
-export async function listMenuMaster(_req, res, next) {
-  try {
-    const rows = await MenuMaster.findAll({
-      where: { isActive: true },
-      attributes: ['id', 'key', 'label', 'route', 'parentId', 'sortOrder'],
-      order: [['sortOrder', 'ASC']],
-    })
-    return res.json({ success: true, data: { items: rows }, meta: {} })
   } catch (e) {
     return next(e)
   }
@@ -359,167 +323,6 @@ export async function deleteCompanyRole(req, res, next) {
       await UserWorkspace.update({ companyRoleId: fallback.id }, { where: { companyRoleId: role.id } })
     }
     await role.destroy()
-    return res.json({ success: true, data: { ok: true }, meta: {} })
-  } catch (e) {
-    return next(e)
-  }
-}
-
-/**
- * GET /team/users/:id/menu-permissions
- * Returns every active menu with this specific user's own CRUD flags (all false if unset).
- */
-export async function getUserMenuPermissions(req, res, next) {
-  try {
-    const { error, value } = getUserMenuPermissionsQuerySchema.validate(req.query, {
-      abortEarly: false,
-      stripUnknown: true,
-    })
-    if (error) {
-      const err = new Error('Validation failed')
-      err.status = 400
-      err.code = 'VALIDATION'
-      err.publicMessage = joiPublicMessages(error)
-      throw err
-    }
-    const workspaceId = value.workspaceId || null
-
-    const user = await User.findOne({
-      where: { id: req.params.id, companyId: req.user.companyId },
-      attributes: ['id'],
-    })
-    if (!user) {
-      const err = new Error('User not found')
-      err.status = 404
-      err.code = 'NOT_FOUND'
-      err.publicMessage = 'User not found'
-      throw err
-    }
-
-    const [menus, overrideLinks] = await Promise.all([
-      MenuMaster.findAll({
-        where: { isActive: true },
-        attributes: ['id', 'key', 'label', 'route', 'parentId', 'sortOrder'],
-        order: [['sortOrder', 'ASC']],
-      }),
-      workspaceId
-        ? UserMenuPermission.findAll({
-            where: { userId: user.id, workspaceId },
-            attributes: ['menuId', 'canView', 'canEdit', 'canUpdate', 'canDelete'],
-          })
-        : Promise.resolve([]),
-    ])
-    // No override for this workspace yet — fall back to the global grant so the picker
-    // shows the effective permissions instead of a misleading blank slate.
-    const scope = workspaceId && overrideLinks.length ? 'workspace' : 'global'
-    const links =
-      scope === 'workspace'
-        ? overrideLinks
-        : await UserMenuPermission.findAll({
-            where: { userId: user.id, workspaceId: null },
-            attributes: ['menuId', 'canView', 'canEdit', 'canUpdate', 'canDelete'],
-          })
-    const byMenuId = new Map(links.map((l) => [l.menuId, l]))
-
-    return res.json({
-      success: true,
-      data: {
-        scope,
-        items: menus.map((m) => {
-          const l = byMenuId.get(m.id)
-          return {
-            menuId: m.id,
-            key: m.key,
-            label: m.label,
-            route: m.route,
-            parentId: m.parentId,
-            sortOrder: m.sortOrder,
-            canView: Boolean(l?.canView),
-            canEdit: Boolean(l?.canEdit),
-            canUpdate: Boolean(l?.canUpdate),
-            canDelete: Boolean(l?.canDelete),
-          }
-        }),
-      },
-      meta: {},
-    })
-  } catch (e) {
-    return next(e)
-  }
-}
-
-/**
- * PUT /team/users/:id/menu-permissions
- * Replace-all semantics for one user's menu-CRUD grants. Hard company-admin check (beyond
- * the route's settings.team:admin gate) because granting permissions to other users is
- * itself a privilege-escalation-sensitive action — a custom role that merely has
- * settings.team:admin should not be able to grant itself/others unlimited access.
- */
-export async function putUserMenuPermissions(req, res, next) {
-  try {
-    requireCompanyAdmin(req)
-    if (req.params.id === req.user.id) {
-      const err = new Error('Cannot change own menu permissions')
-      err.status = 400
-      err.code = 'SELF_PERMISSIONS'
-      err.publicMessage = 'Ask another admin to change your menu permissions'
-      throw err
-    }
-    const { error, value } = putUserMenuPermissionsSchema.validate(req.body, { abortEarly: false, stripUnknown: true })
-    if (error) {
-      const err = new Error('Validation failed')
-      err.status = 400
-      err.code = 'VALIDATION'
-      err.publicMessage = joiPublicMessages(error)
-      throw err
-    }
-    const user = await User.findOne({
-      where: { id: req.params.id, companyId: req.user.companyId },
-      attributes: ['id'],
-    })
-    if (!user) {
-      const err = new Error('User not found')
-      err.status = 404
-      err.code = 'NOT_FOUND'
-      err.publicMessage = 'User not found'
-      throw err
-    }
-
-    const menuPermissions = normalizeMenuPermissions(value.menuPermissions)
-    const menuIds = uniqueIds(menuPermissions.map((x) => x.menuId))
-    if (menuIds.length) {
-      const validMenus = await MenuMaster.findAll({ where: { id: { [Op.in]: menuIds }, isActive: true }, attributes: ['id'] })
-      if (validMenus.length !== menuIds.length) {
-        const err = new Error('Invalid menus')
-        err.status = 400
-        err.code = 'VALIDATION'
-        err.publicMessage = 'Select valid menus'
-        throw err
-      }
-    }
-
-    const workspaceId = value.workspaceId || null
-
-    await sequelize.transaction(async (t) => {
-      // Scoped to the exact same workspaceId being written — an unscoped destroy here
-      // would wipe the global baseline while saving a workspace override, or vice versa.
-      await UserMenuPermission.destroy({ where: { userId: user.id, workspaceId }, transaction: t })
-      if (menuPermissions.length) {
-        await UserMenuPermission.bulkCreate(
-          menuPermissions.map((p) => ({
-            userId: user.id,
-            menuId: p.menuId,
-            workspaceId,
-            canView: p.canView,
-            canEdit: p.canEdit,
-            canUpdate: p.canUpdate,
-            canDelete: p.canDelete,
-          })),
-          { transaction: t },
-        )
-      }
-    })
-
     return res.json({ success: true, data: { ok: true }, meta: {} })
   } catch (e) {
     return next(e)
@@ -949,6 +752,7 @@ export async function listCompanyUsers(req, res, next) {
   try {
     const companyId = req.user.companyId
     const scopedWorkspaceIds = await scopedWorkspaceIdsForRequest(req)
+    const allowedWorkspaceIds = await allowedWorkspaceIdsForUser(req.user)
     const selectedWorkspaceId = resolveListWorkspaceFilterId(req) || null
     const rows = await User.findAll({
       where: { companyId },
@@ -1018,7 +822,7 @@ export async function listCompanyUsers(req, res, next) {
                 : null,
               roleIsWorkspaceOverride: Boolean(roleOverride),
               isCompanyAdmin: false,
-              workspaces: (workspaceSummaryByUser.get(u.id) || []).filter((w) => scopedWorkspaceIds.includes(w.id)),
+              workspaces: (workspaceSummaryByUser.get(u.id) || []).filter((w) => allowedWorkspaceIds.includes(w.id)),
               createdAt: u.createdAt?.toISOString() ?? null,
             }
           }),
@@ -1326,8 +1130,8 @@ export async function replaceUserWorkspaces(req, res, next) {
  * Adds an existing company user (already a member of some other workspace) to ONE MORE
  * workspace, with an explicit role for that new membership — the "add from another
  * workspace" flow. Additive (uses addWorkspaceMembershipsForUser), never replaces the
- * user's existing workspace memberships. Hard company-admin check, same precedent as
- * putUserMenuPermissions: granting workspace access + a role is privilege-sensitive.
+ * user's existing workspace memberships. Hard company-admin check: granting workspace
+ * access + a role is privilege-sensitive.
  */
 export async function addUserWorkspace(req, res, next) {
   try {

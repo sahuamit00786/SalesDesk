@@ -7,9 +7,11 @@ import { gmailParserService } from '../services/gmailParserService.js'
 import { createDocumentWithLinks } from '../services/documentsService.js'
 import { allowedWorkspaceIdsForUser } from '../services/userWorkspaceService.js'
 
-async function companyMailboxToken(companyId) {
+/** Per-user connection, same as leadsController's companyGoogleEmailToken — must not
+ * fall back to companyId alone or every teammate shares whoever connected Gmail. */
+async function companyMailboxToken(companyId, userId) {
   return CompanyGoogleToken.findOne({
-    where: { companyId },
+    where: { companyId, userId },
     order: [['updatedAt', 'DESC']],
   })
 }
@@ -63,7 +65,7 @@ function guessMimeFromName(name) {
 
 export async function getMailboxInboxBadge(req, res, next) {
   try {
-    const tokenRow = await companyMailboxToken(req.user.companyId)
+    const tokenRow = await companyMailboxToken(req.user.companyId, req.user.id)
     if (!tokenRow?.refreshToken) {
       return res.json({ success: true, data: { unread: 0, connected: false, unreadApproximate: false }, meta: {} })
     }
@@ -88,7 +90,7 @@ export async function getMailboxInboxBadge(req, res, next) {
 
 export async function listMailboxThreads(req, res, next) {
   try {
-    const tokenRow = await companyMailboxToken(req.user.companyId)
+    const tokenRow = await companyMailboxToken(req.user.companyId, req.user.id)
     if (!tokenRow?.refreshToken) {
       return res.json({ success: true, data: [], meta: { total: 0, googleEmailConnected: false } })
     }
@@ -197,7 +199,7 @@ export async function listMailboxThreads(req, res, next) {
 
 export async function getMailboxThread(req, res, next) {
   try {
-    const tokenRow = await companyMailboxToken(req.user.companyId)
+    const tokenRow = await companyMailboxToken(req.user.companyId, req.user.id)
     if (!tokenRow?.refreshToken) {
       return res.json({ success: true, data: null, meta: { googleEmailConnected: false } })
     }
@@ -216,7 +218,7 @@ export async function getMailboxThread(req, res, next) {
 /** Remove UNREAD from all messages in the thread (same as opening in Gmail). */
 export async function markMailboxThreadRead(req, res, next) {
   try {
-    const tokenRow = await companyMailboxToken(req.user.companyId)
+    const tokenRow = await companyMailboxToken(req.user.companyId, req.user.id)
     if (!tokenRow?.refreshToken) {
       return res.status(400).json({ success: false, error: { code: 'GOOGLE_EMAIL_NOT_CONNECTED', message: 'Connect Google' } })
     }
@@ -238,7 +240,7 @@ export async function markMailboxThreadRead(req, res, next) {
 
 export async function downloadMailboxAttachment(req, res, next) {
   try {
-    const tokenRow = await companyMailboxToken(req.user.companyId)
+    const tokenRow = await companyMailboxToken(req.user.companyId, req.user.id)
     if (!tokenRow?.refreshToken) {
       return res.status(400).json({ success: false, error: { code: 'GOOGLE_EMAIL_NOT_CONNECTED', message: 'Connect Google' } })
     }
@@ -271,7 +273,7 @@ export async function saveMailboxAttachmentToLead(req, res, next) {
     const { error, value } = saveAttachmentSchema.validate(req.body || {}, { abortEarly: false, stripUnknown: true })
     if (error) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: error.message } })
 
-    const tokenRow = await companyMailboxToken(req.user.companyId)
+    const tokenRow = await companyMailboxToken(req.user.companyId, req.user.id)
     if (!tokenRow?.refreshToken) {
       return res.status(400).json({ success: false, error: { code: 'GOOGLE_EMAIL_NOT_CONNECTED', message: 'Connect Google' } })
     }

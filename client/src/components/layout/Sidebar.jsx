@@ -6,7 +6,7 @@ import { cn } from '@/utils/cn'
 import { NAV_SECTIONS } from '@/components/layout/navConfig'
 import { useAppSelector } from '@/app/hooks'
 import { useHrRole } from '@/features/hr/useHrRole'
-import { buildAllowedRouteSet, isMenuPathAllowed } from '@/utils/menuAccess'
+import { buildAllowedRouteSet, isElevatedRole, isMenuPathAllowed } from '@/utils/menuAccess'
 import { selectActiveWorkspaceName } from '@/features/workspace/workspaceSlice'
 import { useGetMailboxInboxBadgeQuery } from '@/features/email/emailApi'
 import { useGetGoogleEmailStatusQuery } from '@/features/leads/leadsApi'
@@ -118,10 +118,8 @@ export function Sidebar({ className, collapsed = false, onToggleCollapse, isMobi
     '/followups': fmtBadge(nb.followups),
   }
   const hrRole = useHrRole()
-  const allowedRoutes = buildAllowedRouteSet(user?.allowedMenus, {
-    isCompanyAdmin: user?.isCompanyAdmin,
-  })
-  const navSections = (user?.isCompanyAdmin
+  const allowedRoutes = buildAllowedRouteSet(user)
+  const navSections = (isElevatedRole(user)
     ? NAV_SECTIONS
     : NAV_SECTIONS.map((section) => ({
         ...section,

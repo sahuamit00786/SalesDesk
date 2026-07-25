@@ -34,9 +34,6 @@ Yes. Resetting your password invalidates all previously issued long-lived sessio
 **Q: Is two-factor authentication (2FA) available?**
 Yes. From your account settings you can enable 2FA using an authenticator app (Google Authenticator, Authy, 1Password, etc.). Setup shows a QR code (and a manual key you can copy) — scan it, then enter the 6-digit code it generates to confirm and turn 2FA on. Once enabled, every login will prompt for a 6-digit authenticator code after your password.
 
-**Q: What if my login has no menu access after signing in?**
-If your account has zero menu permissions assigned, the app blocks sign-in with "Your account has no menu permissions. Please contact your administrator for access." Ask your Company Admin to grant you access to at least one menu (see the Permissions section below).
-
 **Q: My account was deactivated — what happens if I try to log in?**
 You'll see "Your account has been deactivated. Contact your workspace admin." Only a Company Admin can reactivate you.
 
@@ -61,7 +58,6 @@ You'll see "Your account has been deactivated. Contact your workspace admin." On
 - **"Invalid credentials"** — your email/password combination doesn't match any account; double-check for typos, or use Forgot Password.
 - **"Verify your email before signing in"** — you registered but never completed the OTP step; go back to Register with `?verify=1` (the app does this automatically) and enter the code.
 - **"Your account has been deactivated"** — an admin turned off your access; contact them, only they can turn it back on.
-- **"Your account has no menu permissions"** — you're a legitimate user but haven't been granted access to any part of the app yet; contact your admin to set up your permissions (see below).
 
 ---
 
@@ -119,33 +115,23 @@ Membership is per-user. Creating a workspace doesn't add existing team members t
 ## 3. Team & Roles / Permissions
 
 ### Module overview
-This is where a Company Admin manages **who** has access to the CRM and **what** each person can do once inside. It covers three linked concepts: **Members** (the people in your company), **Roles** (a label describing someone's job function, like "Sales" or "Manager" — used mainly for filtering/reporting), and **Menu Permissions** (the actual, fine-grained control over which pages a specific person can view, create in, edit, or delete from). This module answers the classic business question: "Sarah just joined — how do I get her into the CRM with the right access, and how do I make sure she can't accidentally delete things she shouldn't touch?"
+This is where a Company Admin manages **who** has access to the CRM and **what** each person can do once inside. It covers two linked concepts: **Members** (the people in your company) and **Roles** (Sales, Manager, Workspace Admin, etc.) — the role someone is assigned is what directly determines which sidebar menus they see and, combined with lead/deal assignment, what records they can act on. This module answers the classic business question: "Sarah just joined — how do I get her into the CRM with the right access?"
 
 ### FAQ
 
-**Q: How is a "Role" different from "Permissions"?**
-A **Role** (e.g., Manager, Sales, Telecaller, Marketing, Finance, HR, Auditor, Support, Workspace Admin) is just a label — it's used for reporting, filtering the team list, and general classification of what someone's job is. It does **not** by itself control what a person can see or do in the app. **Menu permissions** are the real access control — they are set **per individual person**, not per role. So two people can have the same role ("Sales") but very different actual access, if their menu permissions differ.
+**Q: How does a "Role" control access?**
+A person's **Role** (e.g., Manager, Sales, Telecaller, Marketing, Finance, HR, Auditor, Support, Workspace Admin) directly determines what they can see:
+- **Workspace Admin** and **Manager** (and Company Admin, see below) see every menu in the sidebar and can act on every record in their workspace(s).
+- Every other role (Sales, Telecaller, Campaign Manager, Marketing, Finance, HR, Auditor, Support, Custom) sees a fixed set of menus: Dashboard, Leads, Opportunities, Deals, Deal Payments, Pipeline, the whole Engage section (Activities, Tasks, Calendar & Reminders, Follow-ups, Meetings, Calls, Email, Templates), the whole Manage section (Documents, Quotations, Invoices, Doc templates), the whole Automate section (Automation, Campaigns, Web forms), and Knowledge. They do **not** see AI Copilot, Lead distribution, Insights/Reports, Settings, or HR.
+- Within the menus they can see, a non-elevated role only ever sees leads, deals, and related records that are **assigned to them or that they own** — not the whole workspace's data. Workspace Admins, Managers, and Company Admins see everything in their workspace(s).
+
+There is no separate per-person permission grant anymore — once someone's role puts a menu in front of them, they have full access (view/create/edit/delete) to it, scoped to their own assigned records as described above.
 
 **Q: What roles are available?**
-The built-in role types are: Workspace admin, Manager, Sales, Telecaller, Campaign manager, Marketing, Finance, HR, Auditor, and Support (plus a legacy "Custom" type). Every company gets one role per type automatically created; you can rename them, add a description, or delete a non-default (custom) one.
+The built-in role types are: Workspace admin, Manager, Sales, Telecaller, Campaign manager, Marketing, Finance, HR, Auditor, and Support (plus a legacy "Custom" type). Every company gets one role per type automatically created; you can rename them, add a description, or delete a non-default (custom) one. Changing a role's **type** (e.g., from Sales to Manager) immediately changes what everyone assigned to it can see, since visibility is driven by the type.
 
 **Q: What does "Company Admin" mean, and how do you become one?**
-Whoever is the very first person to register for a company automatically becomes its Company Admin. Company Admins have unrestricted access to every page and action — the system treats them as having every permission ("wildcard admin"), bypassing the per-menu permission checks entirely. A company admin's role can't be changed or removed through the normal role-editing screens — it's a fixed, permanent designation.
-
-**Q: How do menu permissions actually work?**
-Every page/menu in the app (Leads, Deals, Team, Reports, etc.) has four possible access levels you can grant to a person, individually, per menu:
-- **View** — can see and open the page/list.
-- **Create** — can add new records there (this also implies View — you can't create something you're not allowed to see).
-- **Edit/Update** — can modify existing records there (also implies View).
-- **Delete** — can remove records there (also implies View).
-
-Granting Create, Edit, or Delete automatically includes View, but the reverse is not true, and these three don't imply each other — someone with only "Create" rights on Leads cannot edit or delete leads, only add new ones.
-
-**Q: Where do I set someone's menu permissions?**
-Go to Team → find the member → click the lock icon ("Manage menu permissions") or open their profile page. You'll see every visible menu grouped by section (Main, Engage, Manage, Automate, Insights, Settings), each with a "Select all" toggle plus individual View / Create / Edit / Delete checkboxes. Save to apply.
-
-**Q: Who can change someone else's menu permissions?**
-Only Company Admins. Even a custom role that has "Team admin" style access cannot grant itself or others unlimited permissions — this specific action is hard-locked to Company Admins only, as a safeguard against privilege escalation.
+Whoever is the very first person to register for a company automatically becomes its Company Admin. Company Admins have unrestricted access to every page, every action, and every record in every workspace. A company admin's status can't be changed or removed through the normal role-editing screens — it's a fixed, permanent designation.
 
 **Q: How do I invite a new team member?**
 Go to Team → Members tab → "Add user." Fill in their name (optional but recommended), email (required), role, and optionally job title, phone/WhatsApp numbers, address, and profile photo. Choose which workspace(s) they'll join (defaults to whichever workspace is currently active in your sidebar). Click "Send invitation." They receive an email with a secure link.
@@ -178,47 +164,42 @@ Click the "Reactivate" icon on their row — this restores their ability to log 
 Teams are smaller working groups within a specific workspace — a way to group a handful of people together (e.g., "North Region Callers") for organizational purposes, separate from roles or workspace membership. You create/manage these under Team → Teams (add members individually to a named team).
 
 **Q: Can I create a custom role?**
-Yes. Team → Roles tab → create with a name, description, and a role "type" (chosen from the fixed list above, since role type drives some reporting classifications). Note again: creating a role only creates a label — you still need to separately grant menu permissions to each person who has that role.
+Yes. Team → Roles tab → create with a name, description, and a role "type" (chosen from the fixed list above). The role's **type** is what matters for access: pick Workspace Admin or Manager if this role should see everything; pick any other type if it should be restricted to the standard menu set and to assigned records only.
 
 **Q: What happens to users if I delete a role that's in use?**
 You must first choose a "fallback role" to reassign all affected users to — the system blocks deletion until you do. Default (system-seeded) roles can never be deleted.
 
 ### Permissions — full explanation
-LeadNest's access model has three layers, and it helps to think of them separately:
+LeadNest's access model has two layers now:
 
-1. **Company Admin flag** — a single yes/no flag on a user. If set, that person can do absolutely everything, everywhere, and this cannot be edited via the role or permission screens (it's fixed to whoever created the company, or promoted through other means outside these screens).
-2. **Role (label)** — describes what kind of job the person does (Sales, Finance, HR, etc.). Useful for filtering the team list and for some reports, but grants **no actual access by itself**.
-3. **Per-person menu permissions** — the real access control. For every page in the CRM, an admin can grant that specific person View, Create, Edit, and/or Delete rights, independently of their role. If a user has no permissions at all recorded for a page, they simply cannot see it — it won't even appear in their sidebar navigation, and trying to open its URL directly will be blocked.
+1. **Company Admin flag** — a single yes/no flag on a user. If set, that person can do absolutely everything, everywhere, in every workspace. It's fixed to whoever created the company (or promoted through other means outside these screens) and can't be edited via the role screens.
+2. **Role type** — Workspace Admin and Manager get full sidebar visibility and see every record in their workspace(s). Every other role type (Sales, Telecaller, Campaign Manager, Marketing, Finance, HR, Auditor, Support, Custom) gets the standard restricted menu set (Dashboard, Leads, Opportunities, Deals, Deal Payments, Pipeline, Engage, Manage, Automate, Knowledge) and only sees leads/deals/records assigned to or owned by them.
 
-Because permissions are per-person rather than per-role, changing someone's role does **not** automatically change what they can access — you must also update their menu permissions if their new job requires different access.
+Because visibility is driven directly by role type, changing someone's role **immediately** changes what they can access — there's no separate permissions step to remember afterward.
 
 ### Step-by-step: Inviting a team member
 1. Go to **Team** → **Members** tab → click **Add user**.
 2. Fill in their email (required) and, ideally, name, job title, and contact details.
-3. Select their role from the dropdown.
+3. Select their role from the dropdown — this determines their menu access from the moment they accept.
 4. Confirm the workspace(s) they should join (pre-filled from your currently active workspace).
 5. Click **Send invitation**. They'll receive an email valid for 48 hours.
-6. Once they accept, go back to **Team** and set up their specific menu permissions via the lock icon on their row (invites don't automatically grant page access — that's a separate, deliberate step for security).
 
 ### Step-by-step: Setting up a custom role
 1. Go to **Team** → **Roles** tab → click to add a new role (via the role management UI).
-2. Give it a clear name and description, and pick the closest matching role "type" from the fixed list (this affects reporting classification only).
+2. Give it a clear name and description, and pick the closest matching role "type" from the fixed list — Workspace Admin/Manager for full access, any other type for the standard restricted menu set.
 3. Save.
-4. Assign this role to specific members from their access drawer (Team → Members → pencil icon).
-5. Separately, open each assigned member's menu permissions (lock icon) and grant exactly the pages/actions their job needs — don't assume the role name implies any access.
+4. Assign this role to specific members from their access drawer (Team → Members → pencil icon). Their sidebar updates immediately.
 
 ### Tips & best practices, and common mistakes
-- **Don't over-grant Delete permissions.** Delete is destructive and often unnecessary for day-to-day work — most team members only need View, and some need Create/Edit. Reserve Delete for a small number of trusted people.
-- **Common mistake: assuming a role grants permissions.** Renaming someone's role to "Manager" does nothing to their actual page access — you must still configure their menu permissions.
-- **Don't make everyone a Company Admin "to be safe."** Company Admin bypasses every permission check entirely and can't be limited — use it only for the people who truly need full, unrestricted access. Prefer granular menu permissions for everyone else.
-- **Review permissions when people change roles** (e.g., promoted from Sales to Manager) — the system won't do this automatically.
+- **Only use Workspace Admin/Manager for people who should see everything.** Those two role types (plus Company Admin) are the only ones with full sidebar and full-workspace record visibility — assign them deliberately.
+- **Common mistake: expecting a role rename to change access.** Only the role **type** (Workspace Admin, Manager, Sales, etc.) affects visibility — renaming a role's display name does nothing on its own.
+- **Don't make everyone a Company Admin "to be safe."** Company Admin has unrestricted access everywhere and can't be limited — use it only for the people who truly need it. Workspace Admin/Manager is usually the right choice for team leads instead.
 - **Use deactivation, not deletion, for departing employees** so their historical activity, leads, and records are preserved and their leads can be reassigned cleanly.
 - **Keep invitations tidy** — cancel invites you no longer need rather than letting them expire silently, especially if the email was mistyped.
 
 ### Troubleshooting
-- **"You do not have permission for this action"** — the logged-in user's menu permissions don't include the required action (view/create/update/delete) for that page. An admin needs to grant it via Team → member → menu permissions.
-- **"Only company admin can perform this action"** — certain actions (creating/editing/deleting roles, granting menu permissions, changing company settings) are hard-restricted to Company Admins regardless of any custom permission grants.
-- **A page is completely missing from the sidebar** — the user has no View permission on that menu; it won't render in navigation and direct URL access is blocked too.
+- **"Only company admin can perform this action"** — certain actions (creating/editing/deleting roles, changing company settings) are hard-restricted to Company Admins.
+- **A page is completely missing from the sidebar** — the user's role type isn't Workspace Admin/Manager/Company Admin, and that page isn't part of the standard restricted menu set; assign a different role type if they need it.
 - **"Ask another admin to change your role"** — you're trying to change your own role; have a different admin do it.
 - **Can't delete a role** — it's either a default system role (never deletable) or still assigned to users (pick a fallback role first).
 - **Invited user says the link doesn't work** — invitations expire after 48 hours, or a newer invite may have replaced the old one; send a fresh invite.
@@ -375,8 +356,7 @@ Yes, you can navigate back to any step you've already reached (but not skip ahea
 | **Company** | Your whole organization's account in LeadNest. Holds your billing profile, roles, and every team member. |
 | **Workspace** | A team or business-unit division inside your company (e.g., "APAC Sales"). You belong to one or more; you work "inside" one at a time via the workspace switcher. |
 | **Company Admin** | The special, unrestricted-access status held by whoever created the company (or was promoted). Can do anything, anywhere — bypasses all fine-grained permission checks. |
-| **Role** | A label describing someone's job function (Sales, Manager, Finance, etc.). Used for filtering/reporting — does **not** by itself grant any access. |
-| **Menu Permission** | The actual access control — set per individual person, per page, with four levels: View, Create, Edit, Delete. This is what really determines what someone can do. |
+| **Role** | Both a job-function label (Sales, Manager, Finance, etc.) and the direct source of access control — its **type** determines which sidebar menus a person sees and, for non-admin/manager roles, restricts them to records assigned to or owned by them. |
 | **Invitation** | An emailed link that lets someone join your company. Valid for 48 hours; includes their assigned role and workspace(s) ahead of time. |
 | **Access Token** | A short-lived pass (about 15 minutes) your browser uses to prove you're logged in on every request. |
 | **Refresh Token** | A longer-lived pass (about 7 days) used behind the scenes to silently get you a new access token when the short one expires — this is what "keeps you logged in" without asking for your password again every 15 minutes. When it finally expires (or you reset your password/log out), you're asked to sign in again. |

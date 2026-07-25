@@ -49,7 +49,15 @@ import {
 } from '@/features/leads/components/LeadTaskDrawer'
 import { TaskAttachmentIcons } from '@/features/leads/components/TaskAttachmentIcons'
 import { usePatchPipelineStatusMutation } from '@/features/opportunities/opportunitiesApi'
-import { useGetDealQuery, usePatchDealStageMutation, useGetDealActivitiesQuery, useCreateDealActivityMutation } from '@/features/deals/dealsApi'
+import {
+  useGetDealQuery,
+  usePatchDealStageMutation,
+  useGetDealActivitiesQuery,
+  useCreateDealActivityMutation,
+  useGetDealTasksQuery,
+  usePatchDealTaskMutation,
+  useDeleteDealTaskMutation,
+} from '@/features/deals/dealsApi'
 import { formatStageLabel } from '@/features/opportunities/components/OpportunitiesKanban'
 import { useGetDocumentsQuery, useUploadDocumentMutation } from '@/features/documents/documentsApi'
 import { usePermission } from '@/hooks/usePermission'
@@ -374,7 +382,10 @@ export function DealDetailPanel({ open, onClose, opp, pipelineStatuses = [], def
   const activityData = isDealEntity ? dealActivityData : leadActivityData
   const loadingActivities = isDealEntity ? loadingDealActivities : loadingLeadActivities
   const { data: notesData } = useGetLeadNotesQuery(leadApiId, { skip: skipLead })
-  const { data: tasksData } = useGetLeadTasksQuery(leadApiId, { skip: skipLead })
+  // Deal entities own their tasks (dealId-tagged rows); non-deal entities fall back to lead tasks.
+  const { data: dealTasksData } = useGetDealTasksQuery(dealId, { skip: !open || !dealId })
+  const { data: leadTasksData } = useGetLeadTasksQuery(leadApiId, { skip: skipLead || isDealEntity })
+  const tasksData = isDealEntity ? dealTasksData : leadTasksData
   const { data: quotationsData } = useGetDocumentsQuery(
     { leadId: leadApiId, fileType: 'Proposal' },
     { skip: skipLead },
@@ -386,8 +397,10 @@ export function DealDetailPanel({ open, onClose, opp, pipelineStatuses = [], def
 
   const [createNote, { isLoading: creatingNote }] = useCreateLeadNoteMutation()
   const [deleteNote] = useDeleteLeadNoteMutation()
-  const [patchTask] = usePatchLeadTaskMutation()
-  const [deleteTask] = useDeleteLeadTaskMutation()
+  const [patchLeadTask] = usePatchLeadTaskMutation()
+  const [deleteLeadTask] = useDeleteLeadTaskMutation()
+  const [patchDealTask] = usePatchDealTaskMutation()
+  const [deleteDealTask] = useDeleteDealTaskMutation()
   const [patchPipelineStatus, { isLoading: changingOppStage }] = usePatchPipelineStatusMutation()
   const [patchDealStage, { isLoading: changingDealStage }] = usePatchDealStageMutation()
   const [createDealActivity, { isLoading: loggingDealActivity }] = useCreateDealActivityMutation()
@@ -571,7 +584,11 @@ export function DealDetailPanel({ open, onClose, opp, pipelineStatuses = [], def
       return
     }
     try {
-      await patchTask({ id: leadApiId, taskId: task.id, status: 'completed' }).unwrap()
+      if (isDealEntity) {
+        await patchDealTask({ id: dealId, taskId: task.id, status: 'completed' }).unwrap()
+      } else {
+        await patchLeadTask({ id: leadApiId, taskId: task.id, status: 'completed' }).unwrap()
+      }
       toast.success('Task completed')
     } catch (err) {
       toast.error(err?.data?.error?.message || err?.error || 'Could not update task')
@@ -584,7 +601,11 @@ export function DealDetailPanel({ open, onClose, opp, pipelineStatuses = [], def
       return
     }
     try {
-      await deleteTask({ id: leadApiId, taskId: task.id }).unwrap()
+      if (isDealEntity) {
+        await deleteDealTask({ id: dealId, taskId: task.id }).unwrap()
+      } else {
+        await deleteLeadTask({ id: leadApiId, taskId: task.id }).unwrap()
+      }
       toast.success('Task deleted')
     } catch (err) {
       toast.error(err?.data?.error?.message || err?.error || 'Could not delete task')
@@ -597,11 +618,19 @@ export function DealDetailPanel({ open, onClose, opp, pipelineStatuses = [], def
       return
     }
     try {
-      await patchTask({
-        id: leadApiId,
-        taskId: task.id,
-        status: normalizeTaskStatusForApi(status),
-      }).unwrap()
+      if (isDealEntity) {
+        await patchDealTask({
+          id: dealId,
+          taskId: task.id,
+          status: normalizeTaskStatusForApi(status),
+        }).unwrap()
+      } else {
+        await patchLeadTask({
+          id: leadApiId,
+          taskId: task.id,
+          status: normalizeTaskStatusForApi(status),
+        }).unwrap()
+      }
       toast.success('Status updated')
     } catch (err) {
       toast.error(err?.data?.error?.message || err?.error || 'Could not update status')
@@ -960,6 +989,7 @@ export function DealDetailPanel({ open, onClose, opp, pipelineStatuses = [], def
 
       <LeadTaskDrawer
         open={taskDrawerOpen}
+        dealId={isDealEntity ? dealId : undefined}
         onClose={() => {
           setTaskDrawerOpen(false)
           setTaskDrawerTaskId(null)

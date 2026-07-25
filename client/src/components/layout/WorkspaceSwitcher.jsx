@@ -1,8 +1,10 @@
 import { useRef, useState } from 'react'
+import toast from 'react-hot-toast'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeftRight, Building2, Check, ChevronDown, Settings } from '@/components/ui/icons'
 import { useAppDispatch, useAppSelector } from '@/app/hooks'
 import { baseApi } from '@/features/api/baseApi'
+import { useLazyCheckWorkspaceAccessQuery } from '@/features/auth/authApi'
 import { useWorkspacesQuery } from '@/features/workspace/workspaceApi'
 import {
   selectActiveWorkspace,
@@ -12,6 +14,9 @@ import {
 import { useOutsideClick } from '@/hooks/useOutsideClick'
 import { usePermission } from '@/hooks/usePermission'
 import { cn } from '@/utils/cn'
+
+const NO_MENU_PERMISSIONS_MESSAGE =
+  'Your account has no menu permissions yet. Contact your workspace admin or company admin to get access.'
 
 function selectIsCompanyAdmin(state) {
   return state.auth.user?.isCompanyAdmin ?? false
@@ -30,6 +35,8 @@ export function WorkspaceSwitcher({ onWorkspaceSettingsClick }) {
   // skip the live call so it doesn't 403 on every page for them.
   const canViewWorkspaces = usePermission('settings.workspace', 'view')
   const { data } = useWorkspacesQuery(undefined, { skip: !canViewWorkspaces })
+  const [triggerCheckWorkspaceAccess] = useLazyCheckWorkspaceAccessQuery()
+  const [switchingId, setSwitchingId] = useState(null)
 
   const liveItems = Array.isArray(data?.data?.items) ? data.data.items : Array.isArray(data?.data) ? data.data : []
   const liveWorkspaces = liveItems
@@ -42,6 +49,34 @@ export function WorkspaceSwitcher({ onWorkspaceSettingsClick }) {
   const active = workspaces.find((w) => w.id === activeId) ?? fallbackActive
 
   useOutsideClick(rootRef, () => setOpen(false), open)
+
+  async function selectWorkspace(w) {
+    if (w.id === activeId) {
+      setOpen(false)
+      return
+    }
+    // Company admins bypass every permission check server-side — no point round-tripping.
+    if (!isCompanyAdmin) {
+      setSwitchingId(w.id)
+      try {
+        const res = await triggerCheckWorkspaceAccess(w.id).unwrap()
+        if (!res?.data?.hasAccess) {
+          toast.error(NO_MENU_PERMISSIONS_MESSAGE)
+          return
+        }
+      } catch {
+        // Access check itself failed (network/server error) — fail closed, same as a denial,
+        // rather than switching into a workspace we couldn't verify.
+        toast.error(NO_MENU_PERMISSIONS_MESSAGE)
+        return
+      } finally {
+        setSwitchingId(null)
+      }
+    }
+    dispatch(setActiveWorkspace(w.id))
+    dispatch(baseApi.util.resetApiState())
+    setOpen(false)
+  }
 
   return (
     <div className="relative shrink-0" ref={rootRef}>
@@ -77,13 +112,10 @@ export function WorkspaceSwitcher({ onWorkspaceSettingsClick }) {
                   type="button"
                   role="option"
                   aria-selected={w.id === activeId}
-                  onClick={() => {
-                    dispatch(setActiveWorkspace(w.id))
-                    dispatch(baseApi.util.resetApiState())
-                    setOpen(false)
-                  }}
+                  disabled={switchingId === w.id}
+                  onClick={() => selectWorkspace(w)}
                   className={cn(
-                    'flex h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm text-ink transition-colors duration-150 hover:bg-surface-muted',
+                    'flex h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm text-ink transition-colors duration-150 hover:bg-surface-muted disabled:cursor-wait disabled:opacity-60',
                     w.id === activeId && 'bg-surface-subtle font-medium',
                   )}
                 >

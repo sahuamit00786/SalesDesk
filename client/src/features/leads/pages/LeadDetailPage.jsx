@@ -51,7 +51,7 @@ import { LeadEmailComposeModal } from '@/features/leads/components/LeadEmailComp
 import { AddLeadModal } from '@/features/leads/components/AddLeadModal'
 import { TaskAttachmentIcons } from '@/features/leads/components/TaskAttachmentIcons'
 import { LeadFollowupsTab } from '@/features/leads/components/LeadFollowupsTab'
-import { LeadTabEmptyState, LeadTabSectionHeader } from '@/features/leads/components/LeadTabSectionHeader'
+import { LeadTabEmptyState, LeadTabLockedState, LeadTabSectionHeader } from '@/features/leads/components/LeadTabSectionHeader'
 import { LeadRichNotesEditor } from '@/features/leads/components/LeadRichNotesEditor'
 import {
   LeadTaskDrawer,
@@ -628,10 +628,12 @@ export function LeadDetailPage() {
   /** Refreshes meeting status badges / join affordance without calling Date.now() during render. */
   const [meetingListNow, setMeetingListNow] = useState(() => Date.now())
 
+  const canViewTasks = usePermission('engage.tasks', 'view')
+
   const { data, isLoading } = useGetLeadQuery(id)
   const { data: formMetaData } = useGetLeadFormMetaQuery()
   const { data: activityData } = useGetLeadActivitiesQuery({ id, page: 1, limit: 100 }, { skip: !id })
-  const { data: taskData } = useGetLeadTasksQuery(id, { skip: !id })
+  const { data: taskData } = useGetLeadTasksQuery(id, { skip: !id || !canViewTasks })
   const { data: googleEmailStatus, isFetching: fetchingGoogleStatus } = useGetGoogleEmailStatusQuery()
   const googleEmailConnected = Boolean(googleEmailStatus?.data?.connected)
   const emailsTabActive = activeTab === 'emails'
@@ -681,6 +683,7 @@ export function LeadDetailPage() {
   const canUpdateOpportunity = usePermission('main.opportunities', 'update')
   const canCreateTasks = usePermission('engage.tasks', 'create')
   const canUpdateTasks = usePermission('engage.tasks', 'update')
+  const canViewFollowups = usePermission('engage.followups', 'view')
   const canCreateMeetings = usePermission('engage.meetings', 'create')
   const canUpdateMeetings = usePermission('engage.meetings', 'update')
   const canDeleteMeetings = usePermission('engage.meetings', 'delete')
@@ -1438,6 +1441,9 @@ export function LeadDetailPage() {
               </div>
             )
           ) : activeTab === 'tasks' ? (
+            !canViewTasks ? (
+              <LeadTabLockedState label="Tasks" />
+            ) : (
             <div className="mt-4 space-y-4">
               <LeadTabSectionHeader
                 title="Tasks"
@@ -1713,6 +1719,7 @@ export function LeadDetailPage() {
               ) : null}
               </div>
             </div>
+            )
 
           ) : activeTab === 'meetings' ? (
   <div className="mt-4 space-y-4">
@@ -1890,7 +1897,11 @@ export function LeadDetailPage() {
   </div>
 
           ) : activeTab === 'followups' ? (
-            <LeadFollowupsTab leadId={id} />
+            canViewFollowups ? (
+              <LeadFollowupsTab leadId={id} />
+            ) : (
+              <LeadTabLockedState label="Follow-ups" />
+            )
           ) : activeTab === 'notes' ? (
             <div className="mt-4 space-y-8">
               {(() => {

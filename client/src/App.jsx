@@ -11,7 +11,6 @@ import { RegisterPage } from '@/pages/RegisterPage'
 import { ForgotPasswordPage } from '@/pages/ForgotPasswordPage'
 import { TeamPage } from '@/pages/TeamPage'
 import { TeamMemberProfilePage } from '@/features/team/pages/TeamMemberProfilePage'
-import { TeamMemberPermissionsPage } from '@/features/team/pages/TeamMemberPermissionsPage'
 import { IntegrationsPage } from '@/pages/IntegrationsPage'
 import { AcceptInvitePage } from '@/pages/AcceptInvitePage'
 import { LeadsPage } from '@/pages/LeadsPage'
@@ -84,8 +83,8 @@ export default function App() {
       <Route element={<RequireAuth />}>
         <Route element={<SessionSync />}>
         <Route path="/onboarding" element={<OnboardingPage />} />
-        {/* Outside RequireOnboarded: that guard bounces non-admins off any path
-            missing from allowedMenus, and the picker is not a menu. */}
+        {/* Outside RequireOnboarded: that guard bounces non-elevated roles off any path
+            outside their allowed route set, and the picker is not a menu. */}
         <Route path="/select-workspace" element={<SelectWorkspacePage />} />
         <Route element={<RequireOnboarded />}>
           <Route element={<RequireWorkspace />}>
@@ -137,7 +136,6 @@ export default function App() {
             <Route path="/team" element={<TeamPage />} />
             <Route path="/my-profile" element={<TeamMemberProfilePage />} />
             <Route path="/team/:userId" element={<TeamMemberProfilePage />} />
-            <Route path="/team/:userId/permissions" element={<TeamMemberPermissionsPage />} />
             <Route path="/integrations" element={<IntegrationsPage />} />
             <Route path="/knowledge-base" element={<KnowledgeBasePage />} />
             <Route path="/documents" element={<DocumentsPage />} />

@@ -8,7 +8,6 @@ import {
   Flag,
   Hash,
   Home,
-  Lock,
   Mail,
   PencilLine,
   ShieldCheck,
@@ -272,7 +271,11 @@ export function TeamPage() {
   })
   const [inviteForm, setInviteForm] = useState(() => ({ ...EMPTY_INVITE_FORM }))
   const [addMemberTab, setAddMemberTab] = useState('invite')
-  const [existingDraft, setExistingDraft] = useState({ otherWorkspaceId: '', existingUserId: '', existingRoleId: '' })
+  const [existingDraft, setExistingDraft] = useState({
+    otherWorkspaceId: '',
+    existingUserId: '',
+    existingRoleId: '',
+  })
   const debouncedInviteEmail = useDebounce(inviteForm.email.trim().toLowerCase(), 400)
   const [roleForm, setRoleForm] = useState({
     name: '',
@@ -326,17 +329,6 @@ export function TeamPage() {
     if (!inviteDrawerOpen || addMemberTab !== 'invite' || !emailLooksValid) return
     triggerCheckEmail(debouncedInviteEmail)
   }, [inviteDrawerOpen, addMemberTab, emailLooksValid, debouncedInviteEmail, triggerCheckEmail])
-
-  function switchToExistingWorkspaceTab() {
-    const match = emailCheckData?.data
-    const preferredWorkspaceId = (match?.workspaces || []).find((w) => w.id !== inviteWorkspace?.id)?.id || ''
-    setAddMemberTab('existing')
-    setExistingDraft({
-      otherWorkspaceId: preferredWorkspaceId,
-      existingUserId: preferredWorkspaceId ? match?.userId || '' : '',
-      existingRoleId: '',
-    })
-  }
 
   async function submitExistingMember(e) {
     e.preventDefault()
@@ -491,15 +483,6 @@ export function TeamPage() {
                 <UserCheck className="h-3.5 w-3.5" />
               </button>
             ) : null}
-            <button
-              type="button"
-              onClick={() => navigate(`/team/${u.id}/permissions`)}
-              aria-label="Menu permissions"
-              title="Manage menu permissions"
-              className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-brand-200 bg-white text-brand-700 shadow-sm hover:bg-white"
-            >
-              <Lock className="h-3.5 w-3.5" />
-            </button>
           </div>
         ),
       },
@@ -1297,14 +1280,7 @@ export function TeamPage() {
                 <div className="mt-1.5 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50/60 px-3 py-2 text-xs text-amber-800">
                   <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2} />
                   <span>
-                    This person already has an account in your company.{' '}
-                    <button
-                      type="button"
-                      onClick={switchToExistingWorkspaceTab}
-                      className="font-semibold underline underline-offset-2"
-                    >
-                      Use "From another workspace" instead.
-                    </button>
+                    This person already has an account in your company. Use "From another workspace" instead.
                   </span>
                 </div>
               ) : checkingEmail ? (
@@ -1450,7 +1426,11 @@ export function TeamPage() {
                 <select
                   value={existingDraft.otherWorkspaceId}
                   onChange={(e) =>
-                    setExistingDraft({ otherWorkspaceId: e.target.value, existingUserId: '', existingRoleId: '' })
+                    setExistingDraft({
+                      otherWorkspaceId: e.target.value,
+                      existingUserId: '',
+                      existingRoleId: '',
+                    })
                   }
                   disabled={addingUserWorkspace}
                   className="h-10 w-full cursor-pointer appearance-none rounded-xl border border-surface-border bg-white pl-9 pr-3 text-sm outline-none transition-shadow focus:border-brand-400 focus:ring-2 focus:ring-brand-500/15 disabled:opacity-70"
@@ -1490,6 +1470,12 @@ export function TeamPage() {
                   ))}
                 </select>
               </div>
+              {existingDraft.existingUserId ? (
+                <div className="mt-1.5 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50/60 px-3 py-2 text-xs text-amber-800">
+                  <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+                  <span>This person already has an account in your company.</span>
+                </div>
+              ) : null}
             </div>
             <div>
               <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">

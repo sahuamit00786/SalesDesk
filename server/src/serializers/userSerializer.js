@@ -1,29 +1,3 @@
-/**
- * Dashboard is available to every company user regardless of role menu matrix.
- * `synthetic: true` marks this as a fallback (not a real grant) so callers — e.g. the
- * login gate that blocks users with zero real menu permissions — can tell it apart from
- * an actual UserMenuPermission row for the dashboard menu.
- */
-const DASHBOARD_ALLOWED_MENU = {
-  key: 'main.dashboard',
-  route: '/',
-  label: 'Dashboard',
-  parentId: null,
-  canView: true,
-  canCreate: true,
-  canUpdate: true,
-  canDelete: true,
-  synthetic: true,
-}
-
-const ADMIN_MENU_PERMS = { canView: true, canCreate: true, canUpdate: true, canDelete: true }
-
-function withDashboardMenuAlways(allowedMenus) {
-  const base = Array.isArray(allowedMenus) ? [...allowedMenus] : []
-  if (base.some((m) => m && (m.route === '/' || m.key === 'main.dashboard'))) return base
-  return [DASHBOARD_ALLOWED_MENU, ...base]
-}
-
 export function serializeUser(user) {
   const c = user.company
   const companyRole = user.companyRole
@@ -32,27 +6,6 @@ export function serializeUser(user) {
   const needsOnboarding = Boolean(
     user.isCompanyAdmin && user.companyId && (!c || !c.onboardingCompletedAt),
   )
-  // Permissions are per-user (UserMenuPermission), not role-scoped — companyRole is a label only.
-  let allowedMenus = Array.isArray(user.menuPermissions)
-    ? user.menuPermissions
-        .filter((l) => l.menu)
-        .map((l) => ({
-          key: l.menu.key,
-          route: l.menu.route,
-          label: l.menu.label,
-          parentId: l.menu.parentId || null,
-          // canEdit=Create, canUpdate=Update per the CRUD-flag semantics — see UserMenuPermission.
-          canView: Boolean(l.canView),
-          canCreate: Boolean(l.canEdit),
-          canUpdate: Boolean(l.canUpdate),
-          canDelete: Boolean(l.canDelete),
-        }))
-    : []
-  if (user.isCompanyAdmin) {
-    allowedMenus = allowedMenus.length
-      ? allowedMenus.map((m) => ({ ...m, ...ADMIN_MENU_PERMS }))
-      : [DASHBOARD_ALLOWED_MENU]
-  }
   const memberWorkspaces = memberships
     .map((m) => m.workspace)
     .filter(Boolean)
@@ -127,6 +80,5 @@ export function serializeUser(user) {
     needsOnboarding,
     emailVerified: Boolean(user.emailVerified),
     isActive: user.isActive !== false,
-    allowedMenus: withDashboardMenuAlways(allowedMenus),
   }
 }

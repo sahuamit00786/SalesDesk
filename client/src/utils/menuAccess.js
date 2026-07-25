@@ -1,19 +1,17 @@
+import { NAV_SECTIONS } from '@/components/layout/navConfig'
 import { DASHBOARD_PATH, menuRouteFromPathname } from '@/constants/appRoutes'
+import { COMPANY_USER_ROLE_KIND } from '@/constants/companyUserRoleKind'
 
-/**
- * Whether a logged-in user has at least one real (non-synthetic) menu grant, or is a
- * company admin. `allowedMenus` always carries a synthetic dashboard-only fallback entry
- * (see withDashboardMenuAlways in userSerializer.js), so checking array length alone is
- * never a valid "has permissions" test.
- */
-export function hasRealMenuAccess(user) {
+/** Company admin, workspace_admin, and manager see every sidebar menu; everyone else gets
+ * the fixed `restricted: true` subset from NAV_SECTIONS (see navConfig.js). */
+export function isElevatedRole(user) {
   if (!user) return false
   if (user.isCompanyAdmin) return true
-  const menus = Array.isArray(user.allowedMenus) ? user.allowedMenus : []
-  return menus.some((m) => !m?.synthetic && (m.canView || m.canCreate || m.canUpdate || m.canDelete))
+  const kind = user.companyRole?.userRoleKind
+  return kind === COMPANY_USER_ROLE_KIND.WORKSPACE_ADMIN || kind === COMPANY_USER_ROLE_KIND.MANAGER
 }
 
-/** Normalize menu route values from API / nav config. */
+/** Normalize menu route values from nav config. */
 export function normalizeMenuRoute(route) {
   if (!route || typeof route !== 'string') return null
   const trimmed = route.trim()
@@ -22,26 +20,28 @@ export function normalizeMenuRoute(route) {
   return trimmed.startsWith('/') ? trimmed : `/${trimmed}`
 }
 
-/** Build a Set of allowed menu routes (includes `/dashboard` alias for `/`). */
-export function buildAllowedRouteSet(allowedMenus, { isCompanyAdmin = false } = {}) {
-  if (isCompanyAdmin) return null
+/**
+ * Build the Set of routes `user` may access. Returns `null` for elevated roles (meaning
+ * "everything allowed"); otherwise the fixed set of `restricted: true` NAV_SECTIONS routes,
+ * plus the personal profile page (never role-gated).
+ */
+export function buildAllowedRouteSet(user) {
+  if (isElevatedRole(user)) return null
   const allowed = new Set()
-  for (const m of allowedMenus || []) {
-    const route = normalizeMenuRoute(m?.route)
-    if (route) allowed.add(route)
+  for (const section of NAV_SECTIONS) {
+    for (const item of section.items) {
+      if (!item.restricted) continue
+      const route = normalizeMenuRoute(item.to)
+      if (route) allowed.add(route)
+    }
   }
   allowed.add('/')
   allowed.add(DASHBOARD_PATH)
-  // The Knowledge Base is a help resource, not a permission-gated feature — every
-  // authenticated user can open it regardless of their menu permission matrix.
-  allowed.add('/knowledge-base')
-  // The topbar "Profile" link always points at the viewer's own personal page, not the
-  // Team & roles admin feature, so it's exempt from the Team menu grant the same way.
   allowed.add('/my-profile')
   return allowed
 }
 
-/** Whether the current pathname is allowed for this user's menu matrix. */
+/** Whether the current pathname is allowed for this user's route set. */
 export function isMenuPathAllowed(pathname, allowedRoutes) {
   if (!allowedRoutes) return true
   const menuPath = menuRouteFromPathname(pathname)

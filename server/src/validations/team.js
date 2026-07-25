@@ -87,8 +87,8 @@ export const replaceUserWorkspacesSchema = Joi.object({
   workspaceIds: Joi.array().items(Joi.string().uuid()).min(1).required(),
 })
 
-// Role is a type/label only now — no menuPermissions here. See putUserMenuPermissionsSchema
-// for per-user menu-CRUD grants.
+// Role is a type/label only — it drives menu visibility on the client (see menuAccess.js),
+// not per-action grants.
 export const createCompanyRoleSchema = Joi.object({
   name: Joi.string().min(2).max(120).required(),
   description: Joi.string().max(255).allow('', null).optional(),
@@ -108,28 +108,6 @@ export const patchCompanyRoleSchema = Joi.object({
 
 export const deleteCompanyRoleSchema = Joi.object({
   fallbackCompanyRoleId: Joi.string().uuid().allow(null).optional(),
-})
-
-/** Per-user menu-CRUD grants — replace-all payload. Empty array means "revoke everything".
- * Optional `workspaceId` scopes the replace to that workspace's override instead of the
- * user's global grant. */
-export const putUserMenuPermissionsSchema = Joi.object({
-  menuPermissions: Joi.array()
-    .items(
-      Joi.object({
-        menuId: Joi.string().uuid().required(),
-        canView: Joi.boolean().required(),
-        canEdit: Joi.boolean().required(),
-        canUpdate: Joi.boolean().required(),
-        canDelete: Joi.boolean().required(),
-      }),
-    )
-    .required(),
-  workspaceId: Joi.string().uuid().optional(),
-})
-
-export const getUserMenuPermissionsQuerySchema = Joi.object({
-  workspaceId: Joi.string().uuid().optional(),
 })
 
 /** Adds an existing company user (already in some other workspace) to one more workspace,
