@@ -41,7 +41,16 @@ app.use(
     credentials: true,
   }),
 )
-app.use(express.json({ limit: '5mb' }))
+app.use(
+  express.json({
+    limit: '5mb',
+    // Stash raw bytes for routes that must verify a provider signature over the
+    // exact request body (e.g. the WhatsApp webhook's X-Hub-Signature-256).
+    verify: (req, res, buf) => {
+      req.rawBody = buf
+    },
+  }),
+)
 app.use(cookieParser())
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'))
 const staticAssetHeaders = helmet.crossOriginResourcePolicy({ policy: 'cross-origin' })

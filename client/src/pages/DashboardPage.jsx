@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useSelector } from 'react-redux'
-import { Phone, FileText, Mail, Video, CheckSquare2, TrendingUp, ChevronLeft, ChevronRight } from '@/components/ui/icons'
+import { Phone, FileText, Mail, Video, CheckSquare2, ChevronLeft, ChevronRight } from '@/components/ui/icons'
 import { useGetCalendarEventsQuery } from '@/features/calendar/calendarApi'
 import {
   Bar,
@@ -35,6 +35,8 @@ import {
   isExpiringTask,
   sortExpiringTasks,
 } from '@/features/dashboard/components/DashboardExpiringTasks'
+import { buildDashboardKpiCards } from '@/features/dashboard/dashboardKpiCards'
+import { ReportKpiCard } from '@/features/analytics/components/ReportKpiCard'
 
 const SK_BASE = '#F9F7FC'
 const SK_BLOCK = '#DDD5F0'
@@ -266,7 +268,6 @@ export function DashboardPage() {
   const canViewCalendar = usePermission('engage.calendar', 'view')
   // Card "view all" links below only navigate where the target page won't just bounce the
   // user back out (RequireOnboarded's route guard) — no query attached, just gates the Link.
-  const canViewLeads = usePermission('main.leads', 'view')
   const canManageLeadSetup = usePermission('main.leads', 'admin')
 
   // ── Date range for chart API ──
@@ -344,14 +345,14 @@ export function DashboardPage() {
     return sortExpiringTasks(rows.filter(isExpiringTask)).slice(0, DASHBOARD_EXPIRING_TASK_LIMIT)
   }, [tasksData])
 
-  // Stat-card totals — sourced from the ungated dashboard-charts KPI block, not the
-  // permission-gated /leads, /calls, /meetings list endpoints (see gate comment above).
-  const totalLeads = cd?.kpis?.totalLeads
-  const totalOpportunities = cd?.kpis?.totalOpps
-  const callsTotal = cd?.kpis?.callsTotal
-  const meetingsTotal = cd?.kpis?.meetingsTotal
-  const emailsTotal = cd?.kpis?.emailsTotal
   const loadingTop = chartsLoading
+
+  // Role-aware KPI card configs — sourced from the ungated dashboard-charts KPI block, not the
+  // permission-gated /leads, /calls, /meetings list endpoints (see gate comment above).
+  const kpiCards = useMemo(
+    () => buildDashboardKpiCards({ authUser, kpis: cd?.kpis, chartDateRange: { from, to } }),
+    [authUser, cd?.kpis, from, to],
+  )
 
   return (
     <PageShell fullWidth>
@@ -364,95 +365,38 @@ export function DashboardPage() {
           </section>
         ) : (
           <section aria-label="Summary totals and activity" className="mt-3 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
-            <StatDeltaCard label="Total leads" value={String(totalLeads ?? 0)} hint="All leads you can access" compact />
-            <StatDeltaCard label="Total opportunities" value={String(totalOpportunities ?? 0)} hint="Open pipeline records" compact />
-            <StatDeltaCard
-              label="New leads"
-              value={String(totalLeads ?? 0)}
-              hint="Since account start"
-              compact
-            />
-            <StatDeltaCard label="Calls" value={String(callsTotal ?? 0)} hint="All-time activity" compact />
-            <StatDeltaCard label="Meetings" value={String(meetingsTotal ?? 0)} hint="All-time activity" compact />
-            <StatDeltaCard label="Emails" value={String(emailsTotal ?? 0)} hint="All-time activity" compact />
+            {kpiCards.topRow.map((card) => (
+              <Link key={card.key} to={card.href} className="block">
+                <StatDeltaCard label={card.label} value={String(card.value ?? 0)} hint={card.hint} compact />
+              </Link>
+            ))}
           </section>
         )}
 
-        {/* ── Revenue Forecast + Upcoming Meetings ── */}
-        <section aria-label="Revenue forecast and upcoming meetings" className="mt-6 grid gap-4 lg:grid-cols-2">
+        {/* ── Task quick-glance cards ── */}
+        {!loadingTop && (
+          <section aria-label="Task quick glance" className="mt-3 grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+            {kpiCards.secondRow.map((card) => (
+              <Link key={card.key} to={card.href}>
+                <ReportKpiCard label={card.label} value={String(card.value ?? 0)} hint={card.hint} />
+              </Link>
+            ))}
+          </section>
+        )}
 
-          {/* Revenue Forecast */}
+        {/* ── Tasks expiring soon + Calendar ── */}
+        <section aria-label="Tasks expiring soon and upcoming meetings" className="mt-6 grid gap-4 lg:grid-cols-2">
           <div className="lg:col-span-1 h-full">
-            <DashboardChartCard
-              title="Revenue forecast"
-              subtitle="Open pipeline value by stage"
-              className="h-full"
-            >
-              {chartsLoading ? (
-                <ChartSkeleton height={200} />
-              ) : (
-                <div>
-                  <div className="mb-5 grid grid-cols-3 gap-3 border-b border-surface-border pb-5">
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-widest text-ink-faint">Pipeline</p>
-                      <p className="mt-1.5 text-lg font-bold tabular-nums text-ink">{formatChartCurrency(cd?.kpis?.pipelineValue || 0)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-widest text-ink-faint">Won</p>
-                      <p className="mt-1.5 text-lg font-bold tabular-nums text-emerald-600">{formatChartCurrency(cd?.kpis?.wonValue || 0)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-widest text-ink-faint">Win rate</p>
-                      <p className="mt-1.5 text-lg font-bold tabular-nums text-ink">
-                        {(() => {
-                          const p = cd?.kpis?.pipelineValue || 0
-                          const w = cd?.kpis?.wonValue || 0
-                          return p + w > 0 ? `${Math.round((w / (p + w)) * 100)}%` : '—'
-                        })()}
-                      </p>
-                    </div>
-                  </div>
-                  {(charts.pipelineByStage || []).length > 0 ? (() => {
-                    const stageSlice = (charts.pipelineByStage || []).slice(0, 6)
-                    const maxVal = Math.max(...stageSlice.map((s) => s.value), 1)
-                    return (
-                    <div className="space-y-3">
-                      {stageSlice.map((stage) => {
-                        const pct = Math.round((stage.value / maxVal) * 100)
-                        return (
-                          <div key={stage.name}>
-                            <div className="mb-1 flex items-center justify-between text-xs">
-                              <span className="font-medium text-ink">{stage.name}</span>
-                              <span className="tabular-nums text-ink-muted">
-                                {formatChartCurrency(stage.value)} · {stage.count} deal{stage.count !== 1 ? 's' : ''}
-                              </span>
-                            </div>
-                            <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-subtle">
-                              <div
-                                className="h-full rounded-full bg-brand-500 transition-all duration-500"
-                                style={{ width: `${pct}%` }}
-                              />
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                    )
-                  })() : (
-                    <div className="flex h-28 items-center justify-center">
-                      <div className="text-center">
-                        <TrendingUp className="mx-auto mb-2 h-7 w-7 text-ink-faint" />
-                        <p className="text-sm text-ink-muted">No open pipeline data</p>
-                        <DisabledNavLink to="/pipeline" allowed={canViewLeads} className="mt-1 text-xs font-semibold text-brand-600 hover:underline">Add opportunities →</DisabledNavLink>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
+            <DashboardChartCard title="Tasks expiring soon" subtitle={`Overdue or due within ${EXPIRING_HORIZON_DAYS} days`} className="h-full" fill>
+              <div className="mb-3 flex justify-end">
+                <DisabledNavLink to="/tasks" allowed={canViewTasks} className="text-xs font-semibold text-brand-600 hover:text-brand-700">View all tasks →</DisabledNavLink>
+              </div>
+              <div className="max-h-[380px] overflow-y-auto pr-1">
+                <DashboardExpiringTasks tasks={expiringTasks} loading={tasksLoading} error={tasksError} noAccess={!canViewTasks} compact />
+              </div>
             </DashboardChartCard>
           </div>
 
-          {/* Calendar */}
           <div className="lg:col-span-1 h-full">
             <DashboardChartCard title="Calendar" subtitle="Meetings by day" fill>
               <MiniCalendar
@@ -464,20 +408,6 @@ export function DashboardPage() {
               />
             </DashboardChartCard>
           </div>
-        </section>
-
-        {/* ── Expiring tasks ── */}
-        <section aria-label="Tasks expiring soon" className="mt-10">
-          <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h2 className="text-base font-semibold text-ink">Tasks expiring soon</h2>
-              <p className="text-sm text-ink-muted">
-                Up to {DASHBOARD_EXPIRING_TASK_LIMIT} open tasks overdue or due within {EXPIRING_HORIZON_DAYS} days.
-              </p>
-            </div>
-            <DisabledNavLink to="/tasks" allowed={canViewTasks} className="text-sm font-semibold text-brand-600 hover:text-brand-700">View all tasks →</DisabledNavLink>
-          </div>
-          <DashboardExpiringTasks tasks={expiringTasks} loading={tasksLoading} error={tasksError} noAccess={!canViewTasks} />
         </section>
 
         {/* ── Trends & breakdowns ── */}

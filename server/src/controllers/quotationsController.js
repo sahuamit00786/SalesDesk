@@ -17,6 +17,9 @@ import { buildCustomerSnapshotFromLead, mergeBillingIntoPaymentSnapshot } from '
 import { recordQuotationCreatedOnLead, recordInvoiceCreatedOnLead } from '../services/leadSalesDocActivity.js'
 import { resolveLeadAndDealForSalesDoc } from '../services/salesDocLeadDealResolve.js'
 import { enrichSalesDocListRow } from '../services/salesDocListSerialize.js'
+import { renderAuthenticatedPageToPdf } from '../services/pdfRenderService.js'
+import { buildSalesDocFilename } from '../services/salesDocFilename.js'
+import { pdfRenderOrigin } from '../config/corsOrigins.js'
 
 const listIncludes = [
   { model: Lead, as: 'lead', attributes: ['id', 'title', 'contactName', 'company', 'email'], required: false },
@@ -189,6 +192,31 @@ export async function getQuotation(req, res, next) {
     })
     if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Not found' } })
     return res.json({ success: true, data: serializeQuotation(row, row.items), meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function downloadQuotationPdf(req, res, next) {
+  try {
+    const workspaceId = req.workspaceId
+    const row = await Quotation.findOne({
+      where: { id: req.params.id, workspaceId, companyId: req.user.companyId },
+    })
+    if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Not found' } })
+
+    const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '')
+    const pdfBuffer = await renderAuthenticatedPageToPdf({
+      url: `${pdfRenderOrigin}/quotations/${row.id}/print`,
+      accessToken: token,
+      workspaceId,
+      readySelector: '[data-pdf-ready="true"]',
+    })
+
+    const filename = buildSalesDocFilename({ customerSnapshot: row.customerSnapshot, docNumber: row.quotationNumber })
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+    return res.send(pdfBuffer)
   } catch (e) {
     return next(e)
   }

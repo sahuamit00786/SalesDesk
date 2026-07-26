@@ -26,6 +26,7 @@ const SCOPE_DIRS = {
   leave: 'leave',
   webforms: 'webforms',
   leads: 'leads',
+  whatsapp: 'whatsapp',
 }
 
 /**

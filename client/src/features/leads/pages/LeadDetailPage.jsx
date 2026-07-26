@@ -103,6 +103,7 @@ import { AddDealDrawer } from '@/features/deals/components/AddDealDrawer'
 import { DealDetailPanel } from '@/features/deals/components/DealDetailPanel'
 import { DealQuotationsPanel, DealInvoicesPanel } from '@/features/deals/components/DealSalesDocsTabs'
 import { LeadPaymentsTab } from '@/features/leads/components/LeadPaymentsTab'
+import { LeadWhatsAppTab } from '@/features/whatsapp/LeadWhatsAppTab'
 import { formatDealMoney } from '@/features/deals/dealCurrencies'
 import { useGetDealsQuery, useDeleteDealMutation } from '@/features/deals/dealsApi'
 import { useGetCallsQuery, CALL_OUTCOMES } from '@/features/calls/callsApi'
@@ -741,6 +742,7 @@ export function LeadDetailPage() {
       { id: 'activity', label: 'Activity' },
       { id: 'calls', label: 'Calls' },
       { id: 'emails', label: 'Emails' },
+      { id: 'whatsapp', label: 'WhatsApp' },
       { id: 'tasks', label: 'Tasks' },
       { id: 'followups', label: 'Follow-ups' },
       { id: 'notes', label: 'Notes' },
@@ -1300,7 +1302,11 @@ export function LeadDetailPage() {
           </section>
         </aside>
 
-        <section className="flex flex-col rounded-2xl border border-surface-border bg-white p-4 sm:p-5">
+        <section
+          className={`flex flex-col rounded-2xl border border-surface-border bg-white p-4 sm:p-5 ${
+            activeTab === 'whatsapp' ? 'lg:self-start' : ''
+          }`}
+        >
           <div className="flex flex-col gap-3 border-b border-surface-border pb-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
             <div className="-mx-1 flex min-w-0 flex-1 items-center gap-1 overflow-x-auto px-1">
               {tabs.map((tab) => (
@@ -2052,6 +2058,8 @@ export function LeadDetailPage() {
             </div>
           ) : activeTab === 'payments' ? (
             <LeadPaymentsTab leadId={id} />
+          ) : activeTab === 'whatsapp' ? (
+            <LeadWhatsAppTab leadId={id} lead={lead} />
           ) : activeTab === 'deal' ? (
             <div className="mt-4 space-y-4">
               <LeadTabSectionHeader

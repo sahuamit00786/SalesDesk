@@ -33,8 +33,11 @@ import * as invoicesController from '../../controllers/invoicesController.js'
 import * as salesDocTemplatesController from '../../controllers/salesDocTemplatesController.js'
 import * as emailTrackingController from '../../controllers/emailTrackingController.js'
 import * as emailReportsController from '../../controllers/emailReportsController.js'
+import * as emailStatusController from '../../controllers/emailStatusController.js'
 import documentsRoutes from './documents.js'
 import webFormsRoutes from '../webFormsRoutes.js'
+import whatsappRoutes from '../whatsappRoutes.js'
+import { verifyWhatsAppWebhook, receiveWhatsAppWebhook } from '../../controllers/whatsappWebhookController.js'
 import * as googleController from '../../controllers/googleController.js'
 import * as mailboxController from '../../controllers/mailboxController.js'
 import * as leaveController from '../../controllers/leaveController.js'
@@ -117,6 +120,19 @@ router.post('/webhooks/gmail-pubsub', (req, res, next) => {
 
 /** Browser OAuth redirect — must stay public (no Authorization header on redirect). */
 router.get('/google/callback', apiLimiter, googleController.googleCallback)
+
+/**
+ * WhatsApp Cloud API webhook. Each company owns its own Meta App/subscription
+ * and pastes back a callback URL containing its own companyId, so — unlike the
+ * single shared gmail-pubsub topic above — company identification here is a
+ * direct primary-key lookup, not a scan. Public: Meta can't send our bearer token.
+ */
+router.get('/webhooks/whatsapp/:companyId', (req, res, next) => {
+  verifyWhatsAppWebhook(req, res).catch(next)
+})
+router.post('/webhooks/whatsapp/:companyId', (req, res, next) => {
+  receiveWhatsAppWebhook(req, res).catch(next)
+})
 
 router.use(
   '/meetings',
@@ -347,6 +363,13 @@ router.get(
   requireCompany, workspaceContext,
   quotationsController.getQuotation,
 )
+router.get(
+  '/quotations/:id/pdf',
+  requireAuth,
+  apiLimiter,
+  requireCompany, workspaceContext,
+  quotationsController.downloadQuotationPdf,
+)
 router.patch(
   '/quotations/:id',
   requireAuth,
@@ -396,6 +419,13 @@ router.get(
   apiLimiter,
   requireCompany, workspaceContext,
   invoicesController.getInvoice,
+)
+router.get(
+  '/invoices/:id/pdf',
+  requireAuth,
+  apiLimiter,
+  requireCompany, workspaceContext,
+  invoicesController.downloadInvoicePdf,
 )
 router.patch(
   '/invoices/:id',
@@ -621,6 +651,13 @@ router.use(
   apiLimiter,
   requireCompany, workspaceContext,
   webFormsRoutes,
+)
+router.use(
+  '/whatsapp',
+  requireAuth,
+  apiLimiter,
+  requireCompany, workspaceContext,
+  whatsappRoutes,
 )
 
 router.get(
@@ -1175,6 +1212,7 @@ router.get('/track/open', emailTrackingController.trackOpen)
 router.get('/track/click', emailTrackingController.trackClick)
 router.get('/unsubscribe', emailTrackingController.unsubscribe)
 router.get('/email/tracking/reports', requireAuth, apiLimiter, requireCompany, workspaceContext, emailReportsController.getEmailTrackingReport)
+router.get('/email/status', requireAuth, apiLimiter, requireCompany, workspaceContext, emailStatusController.listEmailStatus)
 
 // —— Audit Logs (admin only) ——
 router.get('/audit-logs', requireAuth, apiLimiter, requireCompany, auditLogController.getAuditLogs)

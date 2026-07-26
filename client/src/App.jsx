@@ -22,6 +22,7 @@ import { ActivitiesPage } from '@/pages/ActivitiesPage'
 import { TasksPage } from '@/pages/TasksPage'
 import { FollowupsPage } from '@/pages/FollowupsPage'
 import { EmailPage } from '@/pages/EmailPage'
+import { WhatsAppPage } from '@/pages/WhatsAppPage'
 import { CopilotPage } from '@/pages/CopilotPage'
 import { OpportunitiesPage } from '@/pages/OpportunitiesPage'
 import { PipelinePage } from '@/pages/PipelinePage'
@@ -148,7 +149,7 @@ export default function App() {
             <Route path="/settings" element={<Navigate to="/workspace" replace />} />
             <Route path="/contacts" element={<Navigate to="/leads" replace />} />
             <Route path="/companies" element={<Navigate to="/leads" replace />} />
-            <Route path="/whatsapp" element={<Navigate to="/email" replace />} />
+            <Route path="/whatsapp" element={<WhatsAppPage />} />
             <Route path="/calls" element={<CallsPage />} />
           </Route>
         </Route>

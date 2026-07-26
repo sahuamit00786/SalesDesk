@@ -90,6 +90,10 @@ import { CompanyEmailSettings } from './CompanyEmailSettings.js'
 import { RoleNotificationPreference } from './RoleNotificationPreference.js'
 import { UserNotificationPreference } from './UserNotificationPreference.js'
 import { SystemEmailTemplate } from './SystemEmailTemplate.js'
+import { CompanyWhatsAppSettings } from './CompanyWhatsAppSettings.js'
+import { WhatsAppConversation } from './WhatsAppConversation.js'
+import { WhatsAppMessage } from './WhatsAppMessage.js'
+import { WhatsAppTemplate } from './WhatsAppTemplate.js'
 
 User.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
 Company.hasMany(User, { foreignKey: 'companyId', as: 'users' })
@@ -506,6 +510,23 @@ SystemEmailTemplate.belongsTo(Company, { foreignKey: 'companyId', as: 'company' 
 Company.hasMany(SystemEmailTemplate, { foreignKey: 'companyId', as: 'systemEmailTemplates' })
 SystemEmailTemplate.belongsTo(User, { foreignKey: 'updatedBy', as: 'updater' })
 
+// WhatsApp Business API integration
+CompanyWhatsAppSettings.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
+Company.hasOne(CompanyWhatsAppSettings, { foreignKey: 'companyId', as: 'whatsappSettings' })
+
+WhatsAppConversation.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
+Company.hasMany(WhatsAppConversation, { foreignKey: 'companyId', as: 'whatsappConversations' })
+WhatsAppConversation.belongsTo(Lead, { foreignKey: 'leadId', as: 'lead' })
+WhatsAppConversation.hasMany(WhatsAppMessage, { foreignKey: 'conversationId', as: 'messages' })
+
+WhatsAppMessage.belongsTo(WhatsAppConversation, { foreignKey: 'conversationId', as: 'conversation' })
+WhatsAppMessage.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
+WhatsAppMessage.belongsTo(User, { foreignKey: 'sentByUserId', as: 'sentBy' })
+
+WhatsAppTemplate.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
+Company.hasMany(WhatsAppTemplate, { foreignKey: 'companyId', as: 'whatsappTemplates' })
+WhatsAppTemplate.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' })
+
 export {
   sequelize,
   User,
@@ -598,4 +619,8 @@ export {
   RoleNotificationPreference,
   UserNotificationPreference,
   SystemEmailTemplate,
+  CompanyWhatsAppSettings,
+  WhatsAppConversation,
+  WhatsAppMessage,
+  WhatsAppTemplate,
 }

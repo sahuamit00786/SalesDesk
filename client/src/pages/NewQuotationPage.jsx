@@ -234,7 +234,8 @@ function NewQuotationEditor({ templateId, quotationId = '', initialLeadId = '', 
   useEffect(() => {
     if (isEditingExisting || savedId) return
     if (!activeDealId || !dealCard) return
-    applyDealSelection(activeDealId)
+    setDealLeadId(activeDealId)
+    setClientLeadId(dealCard.parentOpportunityLeadId || '')
   }, [activeDealId, dealCard, isEditingExisting, savedId])
 
   useEffect(() => {
@@ -297,6 +298,11 @@ function NewQuotationEditor({ templateId, quotationId = '', initialLeadId = '', 
     if (activeDealId && dealParentLead) return dealParentLead
     return leads.find((l) => l.id === clientLeadId)
   }, [leads, clientLeadId, activeDealId, dealParentLead])
+
+  const billToOptions = useMemo(() => {
+    if (selectedLead && !leads.some((l) => l.id === selectedLead.id)) return [selectedLead, ...leads]
+    return leads
+  }, [leads, selectedLead])
 
   const customerSnapshot = useMemo(() => {
     const base = buildCustomerSnapshotFromLead(selectedLead)
@@ -510,7 +516,7 @@ function NewQuotationEditor({ templateId, quotationId = '', initialLeadId = '', 
                     onChange={(e) => applyClientSelection(e.target.value)}
                   >
                     <option value="">Select client…</option>
-                    {leads.map((l) => (
+                    {billToOptions.map((l) => (
                       <option key={l.id} value={l.id}>
                         {(l.contactName || l.title || 'Lead').trim()} · {(l.company || '').trim() || '—'}
                       </option>
@@ -595,14 +601,6 @@ function NewQuotationEditor({ templateId, quotationId = '', initialLeadId = '', 
                 </label>
 
                 <div className="sde-field-grid">
-                  <label className="block text-xs font-medium text-neutral-600">
-                    Reference
-                    <input
-                      className="mt-1 w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm"
-                      value={reference}
-                      onChange={(e) => setReference(e.target.value)}
-                    />
-                  </label>
                   <label className="block text-xs font-medium text-neutral-600">
                     PO number
                     <input

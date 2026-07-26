@@ -20,6 +20,9 @@ import { buildCustomerSnapshotFromLead, mergeBillingIntoPaymentSnapshot } from '
 import { recordInvoiceCreatedOnLead } from '../services/leadSalesDocActivity.js'
 import { resolveLeadAndDealForSalesDoc } from '../services/salesDocLeadDealResolve.js'
 import { enrichSalesDocListRow } from '../services/salesDocListSerialize.js'
+import { renderAuthenticatedPageToPdf } from '../services/pdfRenderService.js'
+import { buildSalesDocFilename } from '../services/salesDocFilename.js'
+import { pdfRenderOrigin } from '../config/corsOrigins.js'
 
 const listIncludes = [
   { model: Lead, as: 'lead', attributes: ['id', 'title', 'contactName', 'company', 'email'], required: false },
@@ -250,6 +253,31 @@ export async function getInvoice(req, res, next) {
       data: serializeInvoice(row, row.items, row.payments),
       meta: {},
     })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function downloadInvoicePdf(req, res, next) {
+  try {
+    const workspaceId = req.workspaceId
+    const row = await Invoice.findOne({
+      where: { id: req.params.id, workspaceId, companyId: req.user.companyId },
+    })
+    if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Not found' } })
+
+    const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '')
+    const pdfBuffer = await renderAuthenticatedPageToPdf({
+      url: `${pdfRenderOrigin}/invoices/${row.id}/print`,
+      accessToken: token,
+      workspaceId,
+      readySelector: '[data-pdf-ready="true"]',
+    })
+
+    const filename = buildSalesDocFilename({ customerSnapshot: row.customerSnapshot, docNumber: row.invoiceNumber })
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+    return res.send(pdfBuffer)
   } catch (e) {
     return next(e)
   }

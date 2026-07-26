@@ -19,6 +19,7 @@ import {
   MailOpen,
   Map,
   Megaphone,
+  MessageCircle,
   Phone,
   PhoneCall,
   Puzzle,
@@ -106,6 +107,10 @@ export const ROUTE_META = {
   '/email': {
     title: 'Email',
     sub: 'Send, receive, and track emails without leaving the CRM — full inbox inside the app',
+  },
+  '/whatsapp': {
+    title: 'WhatsApp',
+    sub: 'Send, receive, and track WhatsApp messages without leaving the CRM — full inbox inside the app',
   },
   '/templates': {
     title: 'Templates',
@@ -261,6 +266,7 @@ export const NAV_SECTIONS = [
       { to: '/meetings', label: 'Meetings', icon: Phone, restricted: true },
       { to: '/calls', label: 'Calls', icon: PhoneCall, restricted: true },
       { to: '/email', label: 'Email', icon: Mail, restricted: true },
+      { to: '/whatsapp', label: 'WhatsApp', icon: MessageCircle, restricted: true },
       { to: '/templates', label: 'Templates', icon: FileStack, restricted: true },
     ],
   },

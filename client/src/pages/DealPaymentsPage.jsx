@@ -1,17 +1,20 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { BadgeDollarSign, CheckCircle2, Clock, Filter, X, XCircle } from '@/components/ui/icons'
+import toast from 'react-hot-toast'
+import { BadgeDollarSign, CheckCircle2, Clock, Filter, Trash2, X, XCircle } from '@/components/ui/icons'
 import { PageShell } from '@/components/layout/PageShell'
 import { PageStack } from '@/components/layout/PageStack'
 import { DataGrid } from '@/components/shared/DataGrid'
 import { SkeletonTable } from '@/components/shared/SkeletonLoader'
-import { useListAllPaymentsQuery } from '@/features/deals/dealPaymentsApi'
+import { useListAllPaymentsQuery, useDeleteDealPaymentMutation } from '@/features/deals/dealPaymentsApi'
 import { useGetLeadFormMetaQuery } from '@/features/leads/leadsApi'
 import { DealDetailPanel } from '@/features/deals/components/DealDetailPanel'
 import { inputFieldClassName } from '@/components/ui/Input'
 import { TablePaginationBar } from '@/components/ui/TablePaginationBar'
 import { cn } from '@/utils/cn'
 import { usePermission } from '@/hooks/usePermission'
+import { useAppSelector } from '@/app/hooks'
+import { isElevatedRole } from '@/utils/menuAccess'
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200]
 
@@ -67,6 +70,10 @@ export function DealPaymentsPage() {
 
   const canViewPayments = usePermission('main.deal_payments', 'view')
   const { data, isLoading, isFetching, isError, refetch } = useListAllPaymentsQuery(query, { skip: !canViewPayments })
+  const [deletePayment] = useDeleteDealPaymentMutation()
+  const user = useAppSelector((s) => s.auth.user)
+  // Deleting a payment is restricted to company admins, workspace admins, and managers.
+  const canDeletePayments = isElevatedRole(user)
   const { data: formMetaData } = useGetLeadFormMetaQuery()
   const users = formMetaData?.data?.users || []
   const rawDealStatuses = formMetaData?.data?.dealStatuses || []
@@ -92,6 +99,18 @@ export function DealPaymentsPage() {
     setDateTo('')
     setCreatedByUserId('')
     setPage(1)
+  }
+
+  async function handleDeletePayment(row) {
+    if (!row?.dealId) return
+    if (!window.confirm('Delete this payment? This cannot be undone.')) return
+    try {
+      await deletePayment({ dealId: row.dealId, paymentId: row.id }).unwrap()
+      toast.success('Payment deleted')
+      refetch()
+    } catch (err) {
+      toast.error(err?.data?.error?.message || 'Could not delete payment')
+    }
   }
 
   const pageReceivedTotal = useMemo(
@@ -124,6 +143,25 @@ export function DealPaymentsPage() {
                 {row.deal.name}
               </button>
             </div>
+          ) : (
+            <span className="text-xs text-ink-muted">—</span>
+          ),
+      },
+      {
+        field: 'leadName',
+        headerName: 'Lead name',
+        flex: 1,
+        minWidth: 160,
+        sortable: false,
+        renderCell: ({ row }) =>
+          row.leadName ? (
+            <Link
+              to={`/leads/${row.leadId}`}
+              className="truncate text-sm text-ink hover:text-brand-600 hover:underline"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {row.leadName}
+            </Link>
           ) : (
             <span className="text-xs text-ink-muted">—</span>
           ),
@@ -175,12 +213,6 @@ export function DealPaymentsPage() {
         ),
       },
       {
-        field: 'reference',
-        headerName: 'Reference',
-        width: 130,
-        valueGetter: (_v, row) => row.reference || '—',
-      },
-      {
         field: 'notes',
         headerName: 'Notes',
         flex: 1,
@@ -204,8 +236,28 @@ export function DealPaymentsPage() {
             <span className="text-xs text-ink-muted">—</span>
           ),
       },
+      ...(canDeletePayments
+        ? [
+            {
+              field: 'actions',
+              headerName: 'Actions',
+              width: 90,
+              sortable: false,
+              renderCell: ({ row }) => (
+                <button
+                  type="button"
+                  title="Delete payment"
+                  onClick={(e) => { e.stopPropagation(); handleDeletePayment(row) }}
+                  className="rounded-lg p-1.5 text-ink-muted hover:bg-rose-50 hover:text-rose-600"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              ),
+            },
+          ]
+        : []),
     ],
-    [],
+    [canDeletePayments],
   )
 
   const paymentsFilterBar = (

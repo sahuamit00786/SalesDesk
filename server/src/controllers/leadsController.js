@@ -21,6 +21,7 @@ import {
   LeadTaskSubtask,
   LeadTaskComment,
   LeadFollowup,
+  LeadTag,
   LeadSource,
   PipelineStatus,
   DealStatus,
@@ -274,7 +275,7 @@ async function clearLeadListCache(workspaceId) {
   }
 }
 
-function buildListWhere(query) {
+async function buildListWhere(query, companyId) {
   const where = { isDeleted: false }
   const status = parseCsvList(query.status).filter((v) => statusValues.includes(v))
   const source = parseCsvList(query.source).filter((v) => sourceValues.includes(v))
@@ -348,6 +349,22 @@ function buildListWhere(query) {
     where.closingDate = {}
     if (closingFrom) where.closingDate[Op.gte] = closingFrom
     if (closingTo) where.closingDate[Op.lte] = closingTo
+  }
+
+  const tagNames = parseCsvList(query.tags).map((t) => String(t).trim()).filter(Boolean)
+  if (tagNames.length) {
+    const tagRows = await Tag.findAll({
+      where: { companyId, name: { [Op.in]: tagNames } },
+      attributes: ['id'],
+      raw: true,
+    })
+    const tagIds = tagRows.map((t) => t.id)
+    const leadIds = tagIds.length
+      ? await LeadTag.findAll({ where: { tagId: { [Op.in]: tagIds } }, attributes: ['leadId'], raw: true }).then((rows) => [
+          ...new Set(rows.map((r) => r.leadId)),
+        ])
+      : []
+    where.id = leadIds.length ? { [Op.in]: leadIds } : { [Op.eq]: null }
   }
 
   return where
@@ -732,7 +749,7 @@ export async function list(req, res, next) {
       throw e
     }
 
-    const flatWhere = buildListWhere(req.query)
+    const flatWhere = await buildListWhere(req.query, req.user.companyId)
     const advancedWhere = buildAdvancedListWhere(parseFiltersParam(req.query.filters), LEAD_FILTER_FIELDS)
     let where = { ...accessWhere, ...flatWhere }
     if (advancedWhere) {
@@ -826,7 +843,7 @@ export async function listIds(req, res, next) {
       throw e
     }
 
-    const flatWhere = buildListWhere(req.query)
+    const flatWhere = await buildListWhere(req.query, req.user.companyId)
     const advancedWhere = buildAdvancedListWhere(parseFiltersParam(req.query.filters), LEAD_FILTER_FIELDS)
     let where = { ...accessWhere, ...flatWhere }
     if (advancedWhere) {
@@ -2313,12 +2330,27 @@ export async function listLeadEmailThreads(req, res, next) {
     for (const row of filteredRows) {
       const threadKey = row.threadId || `single:${row.id}`
       if (!threadsMap.has(threadKey)) {
-        threadsMap.set(threadKey, { threadId: row.threadId || null, subject: row.subject || '(No subject)', lastMessageAt: row.sentAt || row.createdAt, lastFromEmail: row.fromEmail || null, lastDirection: row.direction, count: 0, preview: row.bodyText || row.bodyHtml || '', status: row.status, hasInbound: false, messages: [] })
+        threadsMap.set(threadKey, {
+          threadId: row.threadId || null, subject: row.subject || '(No subject)', lastMessageAt: row.sentAt || row.createdAt, lastFromEmail: row.fromEmail || null, lastDirection: row.direction, count: 0, preview: row.bodyText || row.bodyHtml || '', status: row.status, hasInbound: false, messages: [],
+          outboundStatus: null, outboundOpenedAt: null, outboundClickedAt: null, outboundOpenCount: 0, outboundClickCount: 0, _lastOutboundAt: null,
+        })
       }
       const current = threadsMap.get(threadKey)
       current.count += 1
       current.messages.push(row)
-      if (row.direction === 'inbound') current.hasInbound = true
+      if (row.direction === 'inbound') {
+        current.hasInbound = true
+      } else {
+        const rowOutboundAt = row.sentAt || row.createdAt
+        if (!current._lastOutboundAt || new Date(rowOutboundAt).getTime() >= new Date(current._lastOutboundAt).getTime()) {
+          current._lastOutboundAt = rowOutboundAt
+          current.outboundStatus = row.status
+          current.outboundOpenedAt = row.openedAt
+          current.outboundClickedAt = row.clickedAt
+          current.outboundOpenCount = row.openCount
+          current.outboundClickCount = row.clickCount
+        }
+      }
       if (new Date(row.sentAt || row.createdAt).getTime() > new Date(current.lastMessageAt).getTime()) {
         current.lastMessageAt = row.sentAt || row.createdAt
         current.lastFromEmail = row.fromEmail || null
@@ -2327,7 +2359,9 @@ export async function listLeadEmailThreads(req, res, next) {
         current.status = row.status
       }
     }
-    const threads = Array.from(threadsMap.values()).sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime())
+    const threads = Array.from(threadsMap.values())
+      .map(({ _lastOutboundAt, ...t }) => t)
+      .sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime())
     return res.json({ success: true, data: threads, meta: {} })
   } catch (e) {
     return next(e)

@@ -149,6 +149,7 @@ export const baseApi = createApi({
     'NotificationDeliveryHistory',
     'FilterPreset',
     'CopilotSession',
+    'Whatsapp',
   ],
   endpoints: () => ({}),
 })

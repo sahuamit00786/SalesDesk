@@ -1405,6 +1405,9 @@ export async function dashboardCharts(req, res, next) {
       ? { leadId: { [Op.in]: allLeadIds }, createdAt: { [Op.between]: [from, to] } }
       : { leadId: null }
 
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
+    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
+
     // Phase 2 — parallel aggregate queries
     const [
       leadStatusDist,
@@ -1422,6 +1425,10 @@ export async function dashboardCharts(req, res, next) {
       kpiWonValue,
       kpiOpenTasks,
       kpiOverdueTasks,
+      kpiNewLeadsPeriod,
+      kpiTasksDueToday,
+      kpiFollowupsToday,
+      kpiMeetingsToday,
       kpiCallsTotal,
       kpiMeetingsTotal,
       kpiEmailsTotal,
@@ -1548,6 +1555,24 @@ export async function dashboardCharts(req, res, next) {
         where: { ...taskBase, status: { [Op.notIn]: ['completed', 'cancelled'] }, dueAt: { [Op.lt]: now } },
       }),
 
+      // New leads created within the selected chart range (distinct from all-time totalLeads).
+      Lead.count({ where: { ...periodLeadBase, isOpportunity: false } }),
+
+      // Open tasks due today (same today-range convention as navBadges' tasksToday).
+      LeadTask.count({
+        where: { ...taskBase, status: { [Op.in]: ['pending', 'in_progress'] }, dueAt: { [Op.gte]: todayStart, [Op.lte]: todayEnd } },
+      }),
+
+      // Pending follow-ups scheduled today (mirrors navBadges' followupsToday).
+      LeadFollowup.count({
+        where: { companyId, workspaceId, status: 'pending', scheduledAt: { [Op.gte]: todayStart, [Op.lte]: todayEnd }, ...(isSales ? { createdBy: userId } : {}) },
+      }),
+
+      // Meetings scheduled today (mirrors navBadges' meetingsToday).
+      Meeting.count({
+        where: { workspaceId, scheduledStart: { [Op.gte]: todayStart, [Op.lte]: todayEnd }, ...(isSales ? { ownerUserId: userId } : {}) },
+      }),
+
       // All-time calls total (dashboard summary — sales reps see calls they own or that
       // sit on a lead visible to them, mirroring callService.getCalls' visibility rule).
       CallLog.count({
@@ -1562,8 +1587,9 @@ export async function dashboardCharts(req, res, next) {
           : { companyId, workspaceId },
       }),
 
-      // All-time meetings total (workspace-scoped, matches meetingService.listMeetings).
-      Meeting.count({ where: { workspaceId } }),
+      // All-time meetings total (workspace-scoped, matches meetingService.listMeetings;
+      // narrows to the user's own meetings under isSales/scope=mine like every sibling KPI).
+      Meeting.count({ where: { workspaceId, ...(isSales ? { ownerUserId: userId } : {}) } }),
 
       // All-time emails total (Activity log entries of type 'email' on leads visible to this user).
       allLeadIds.length
@@ -1657,7 +1683,7 @@ export async function dashboardCharts(req, res, next) {
           const leads = leadsMap[uid] || 0
           const tasks = doneMap[uid] || 0
           const activities = actMap[uid] || 0
-          return { name: m.user.name, leadsOwned: leads, tasksCompleted: tasks, activities, score: leads * 3 + tasks * 2 + activities }
+          return { id: uid, name: m.user.name, leadsOwned: leads, tasksCompleted: tasks, activities, score: leads * 3 + tasks * 2 + activities }
         })
         .sort((a, b) => b.score - a.score)
         .slice(0, 4)
@@ -1673,6 +1699,10 @@ export async function dashboardCharts(req, res, next) {
           wonValue: Number(kpiWonValue[0]?.total || 0),
           openTasks: kpiOpenTasks,
           overdueTasks: kpiOverdueTasks,
+          newLeadsPeriod: kpiNewLeadsPeriod,
+          tasksDueToday: kpiTasksDueToday,
+          followupsToday: kpiFollowupsToday,
+          meetingsToday: kpiMeetingsToday,
           callsTotal: kpiCallsTotal,
           meetingsTotal: kpiMeetingsTotal,
           emailsTotal: kpiEmailsTotal,

@@ -19,6 +19,7 @@ export function buildLeadsListQueryParams({ filters, sort, pagination, isOpportu
   if (filters.status?.length) params.status = filters.status.join(',')
   if (filters.source?.length) params.source = filters.source.join(',')
   if (filters.assignedTo?.length) params.assignedTo = filters.assignedTo.join(',')
+  if (filters.tags?.length) params.tags = filters.tags.join(',')
   if (filters.unassignedOnly) params.unassignedOnly = true
   if (filters.scoreMin != null && filters.scoreMin !== '') params.scoreMin = filters.scoreMin
   if (filters.scoreMax != null && filters.scoreMax !== '') params.scoreMax = filters.scoreMax

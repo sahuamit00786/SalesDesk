@@ -79,6 +79,10 @@ export const emailApi = baseApi.injectEndpoints({
       query: (params = {}) => ({ url: '/email/tracking/reports', params }),
       providesTags: [{ type: 'Email', id: 'TRACKING_REPORT' }],
     }),
+    getEmailStatusList: build.query({
+      query: (params = {}) => ({ url: '/email/status', params }),
+      providesTags: [{ type: 'Email', id: 'STATUS_LIST' }],
+    }),
   }),
 })
 
@@ -94,4 +98,5 @@ export const {
   useUploadEmailAttachmentsMutation,
   useSendEmailForLeadMutation,
   useGetEmailTrackingReportQuery,
+  useGetEmailStatusListQuery,
 } = emailApi

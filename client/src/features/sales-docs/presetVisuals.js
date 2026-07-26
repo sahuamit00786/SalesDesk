@@ -172,13 +172,13 @@ function invoiceSurface(p, hasAccent) {
 export function billToSectionClass(variant) {
   switch (variant) {
     case 'boxedBlue':
-      return 'mx-8 mt-5 rounded-xl border border-brand-200/90 bg-brand-50/50 px-4 py-4 shadow-inner print:bg-brand-50/80'
+      return 'mx-8 mt-5 mb-6 rounded-xl border border-brand-200/90 bg-brand-50/50 px-4 py-4 shadow-inner print:bg-brand-50/80'
     case 'boxedEmerald':
-      return 'mx-8 mt-5 rounded-lg border border-emerald-200 bg-emerald-50/40 px-4 py-4 print:bg-emerald-50/70'
+      return 'mx-8 mt-5 mb-6 rounded-lg border border-emerald-200 bg-emerald-50/40 px-4 py-4 print:bg-emerald-50/70'
     case 'inset':
-      return 'mx-8 mt-5 rounded-lg bg-neutral-50 px-4 py-3 ring-1 ring-neutral-200/80 print:bg-neutral-50'
+      return 'mx-8 mt-5 mb-6 rounded-lg bg-neutral-50 px-4 py-3 ring-1 ring-neutral-200/80 print:bg-neutral-50'
     case 'plainBorder':
-      return 'mx-8 mt-5 border-l-4 border-neutral-400 py-2 pl-4'
+      return 'mx-8 mt-5 mb-6 border-l-4 border-neutral-400 py-2 pl-4'
     default:
       return 'border-t border-neutral-200 px-8 py-6'
   }

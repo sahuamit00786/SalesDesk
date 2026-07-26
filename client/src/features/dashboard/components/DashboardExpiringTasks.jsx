@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom'
 import {
   AlertTriangle,
-  ArrowRight,
   CalendarClock,
   CheckCircle2,
   Clock,
@@ -13,11 +12,13 @@ import { cn } from '@/utils/cn'
 export const DASHBOARD_EXPIRING_TASK_LIMIT = 6
 export const EXPIRING_HORIZON_DAYS = 7
 
+// Only urgent/high priorities get a colored, emphasized chip — medium/low render as plain text
+// so the card isn't competing for attention on multiple fronts (due-badge already carries urgency).
 const PRIORITY_META = {
-  urgent: { label: 'Urgent', flag: 'text-rose-600', chip: 'bg-rose-50 text-rose-800 ring-rose-200' },
-  high: { label: 'High', flag: 'text-red-500', chip: 'bg-red-50 text-red-700 ring-red-200' },
-  medium: { label: 'Medium', flag: 'text-amber-500', chip: 'bg-amber-50 text-amber-900 ring-amber-200' },
-  low: { label: 'Low', flag: 'text-emerald-600', chip: 'bg-emerald-50 text-emerald-800 ring-emerald-200' },
+  urgent: { label: 'Urgent', flag: 'text-rose-600', chip: 'bg-rose-50 text-rose-800 ring-rose-200', emphasize: true },
+  high: { label: 'High', flag: 'text-red-500', chip: 'bg-red-50 text-red-700 ring-red-200', emphasize: true },
+  medium: { label: 'Medium', flag: 'text-ink-faint', chip: '', emphasize: false },
+  low: { label: 'Low', flag: 'text-ink-faint', chip: '', emphasize: false },
 }
 
 const STATUS_META = {
@@ -137,26 +138,26 @@ function initials(name) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
 
-export function DashboardExpiringTasksSkeleton() {
+export function DashboardExpiringTasksSkeleton({ compact = false }) {
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-      {[...Array(6)].map((_, i) => (
+    <div className={compact ? 'flex flex-col gap-3' : 'grid gap-3 sm:grid-cols-2 xl:grid-cols-3'}>
+      {[...Array(compact ? 4 : 6)].map((_, i) => (
         <div
           key={i}
-          className="animate-pulse rounded-2xl border border-surface-border bg-white p-4 shadow-sm"
+          className="animate-pulse rounded-xl border border-surface-border bg-white p-2.5 shadow-sm"
           style={{ animationDelay: `${i * 70}ms` }}
         >
-          <div className="flex items-start justify-between gap-3">
-            <div className="h-6 w-24 rounded-full bg-surface-subtle" />
-            <div className="h-10 w-10 rounded-full bg-surface-subtle" />
+          <div className="flex items-start justify-between gap-2">
+            <div className="h-5 w-20 rounded-full bg-surface-subtle" />
+            <div className="h-8 w-8 rounded-full bg-surface-subtle" />
           </div>
-          <div className="mt-4 h-4 w-4/5 rounded bg-surface-subtle" />
-          <div className="mt-2 h-3 w-1/2 rounded bg-surface-subtle" />
-          <div className="mt-4 flex gap-2">
-            <div className="h-6 w-16 rounded-md bg-surface-subtle" />
-            <div className="h-6 w-20 rounded-md bg-surface-subtle" />
+          <div className="mt-2.5 h-4 w-4/5 rounded bg-surface-subtle" />
+          <div className="mt-1.5 h-3 w-1/2 rounded bg-surface-subtle" />
+          <div className="mt-2 flex gap-2">
+            <div className="h-5 w-14 rounded-md bg-surface-subtle" />
+            <div className="h-5 w-16 rounded-md bg-surface-subtle" />
           </div>
-          <div className="mt-4 h-9 w-full rounded-xl bg-surface-subtle" />
+          <div className="mt-2 h-6 w-full rounded-lg bg-surface-subtle" />
         </div>
       ))}
     </div>
@@ -177,7 +178,7 @@ function ExpiringTaskCard({ task }) {
     <Link
       to={href}
       className={cn(
-        'group relative flex h-full flex-col overflow-hidden rounded-2xl border bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md',
+        'group relative flex h-full flex-col overflow-hidden rounded-xl border bg-white p-2.5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md',
         overdue ? 'border-rose-200/80 ring-1 ring-rose-100' : 'border-surface-border hover:border-brand-200',
       )}
     >
@@ -193,76 +194,77 @@ function ExpiringTaskCard({ task }) {
         aria-hidden
       />
 
-      <div className="flex items-start justify-between gap-3 pl-2">
-        <span className={cn('inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1', due.badge)}>
-          {overdue ? <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden /> : <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden />}
+      <div className="flex items-start justify-between gap-2 pl-2">
+        <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1', due.badge)}>
+          {overdue ? <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden /> : <Clock className="h-3 w-3 shrink-0" aria-hidden />}
           {due.label}
         </span>
         {progress ? (
           <div className="relative shrink-0">
-            <ProgressRing value={progress.pct} />
-            <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-ink-muted">
+            <ProgressRing value={progress.pct} size={30} stroke={2.5} />
+            <span className="absolute inset-0 flex items-center justify-center text-[8px] font-bold text-ink-muted">
               {progress.label}
             </span>
           </div>
         ) : null}
       </div>
 
-      <div className="mt-3 min-w-0 flex-1 pl-2">
-        <p className="line-clamp-2 text-sm font-semibold leading-snug text-ink group-hover:text-brand-700">
+      <div className="mt-1.5 min-w-0 flex-1 pl-2">
+        <p className="line-clamp-1 text-sm font-semibold leading-snug text-ink group-hover:text-brand-700">
           {task.title || 'Untitled task'}
         </p>
         {leadLabel ? (
-          <p className="mt-1.5 truncate text-xs text-ink-muted">
+          <p className="mt-0.5 truncate text-xs text-ink-muted">
             <span className="font-medium text-ink-faint">Lead · </span>
             {leadLabel}
           </p>
         ) : null}
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-1.5 pl-2">
-        <span className={cn('inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-semibold ring-1', priority.chip)}>
-          <Flag className={cn('h-3 w-3 fill-current', priority.flag)} strokeWidth={1.5} aria-hidden />
-          {priority.label}
-        </span>
-        <span className={cn('rounded-md px-2 py-0.5 text-[10px] font-semibold', status.chip)}>{status.label}</span>
+      <div className="mt-1.5 flex flex-wrap items-center gap-1.5 pl-2">
+        {priority.emphasize ? (
+          <span className={cn('inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ring-1', priority.chip)}>
+            <Flag className={cn('h-2.5 w-2.5 fill-current', priority.flag)} strokeWidth={1.5} aria-hidden />
+            {priority.label}
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-ink-faint">
+            <Flag className="h-2.5 w-2.5" strokeWidth={1.5} aria-hidden />
+            {priority.label}
+          </span>
+        )}
+        <span className={cn('rounded-md px-1.5 py-0.5 text-[10px] font-semibold', status.chip)}>{status.label}</span>
       </div>
 
-      <div className="mt-4 flex items-center justify-between gap-3 border-t border-surface-border/80 pt-3 pl-2">
-        <div className="flex min-w-0 items-center gap-2 text-xs text-ink-muted">
+      <div className="mt-1.5 flex items-center justify-between gap-2 border-t border-surface-border/80 pt-1.5 pl-2">
+        <div className="flex min-w-0 items-center gap-1.5 text-xs text-ink-muted">
           {assigneeName ? (
             <>
-              <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-100 to-brand-200 text-[10px] font-bold text-brand-800">
+              <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-100 to-brand-200 text-[9px] font-bold text-brand-800">
                 {initials(assigneeName)}
               </span>
               <span className="truncate">{assigneeName}</span>
             </>
           ) : (
             <>
-              <User className="h-4 w-4 shrink-0 text-ink-faint" aria-hidden />
+              <User className="h-3.5 w-3.5 shrink-0 text-ink-faint" aria-hidden />
               <span>Unassigned</span>
             </>
           )}
         </div>
-        <div className="flex shrink-0 flex-col items-end text-right">
-          {due.sub ? (
-            <span className="flex items-center gap-1 text-[11px] font-medium text-ink-muted">
-              <CalendarClock className="h-3.5 w-3.5" aria-hidden />
-              {due.sub}
-            </span>
-          ) : null}
-          <span className="mt-0.5 inline-flex items-center gap-0.5 text-[11px] font-semibold text-brand-600 opacity-0 transition-opacity group-hover:opacity-100">
-            Open
-            <ArrowRight className="h-3 w-3" aria-hidden />
+        {due.sub ? (
+          <span className="flex shrink-0 items-center gap-1 text-[10px] font-medium text-ink-muted">
+            <CalendarClock className="h-3 w-3" aria-hidden />
+            {due.sub}
           </span>
-        </div>
+        ) : null}
       </div>
     </Link>
   )
 }
 
-export function DashboardExpiringTasks({ tasks, loading, error, noAccess }) {
-  if (loading) return <DashboardExpiringTasksSkeleton />
+export function DashboardExpiringTasks({ tasks, loading, error, noAccess, compact = false }) {
+  if (loading) return <DashboardExpiringTasksSkeleton compact={compact} />
 
   if (noAccess) {
     return (
@@ -296,7 +298,7 @@ export function DashboardExpiringTasks({ tasks, loading, error, noAccess }) {
   }
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+    <div className={compact ? 'flex flex-col gap-3' : 'grid gap-3 sm:grid-cols-2 xl:grid-cols-3'}>
       {tasks.map((task) => (
         <ExpiringTaskCard key={task.id} task={task} />
       ))}

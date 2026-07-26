@@ -827,6 +827,12 @@
     background: white !important;
   }
 
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
   .sales-doc-a4-sheet {
     max-width: none !important;
     width: 100% !important;
@@ -906,4 +912,67 @@
 .PhoneInput.PhoneInput--connexify.PhoneInput--compact .PhoneInputCountryIcon {
   width: 1.1rem;
   height: 1.1rem;
+}
+
+/* WhatsApp inbox theme — scoped so it never leaks into the rest of the CRM's own palette. */
+.lf-wa-theme {
+  --wa-header: #008069;
+  --wa-header-dark: #075e54;
+  --wa-accent: #00a884;
+  --wa-green: #25d366;
+  --wa-chat-bg: #efeae2;
+  --wa-bubble-out: #d9fdd3;
+  --wa-bubble-in: #ffffff;
+  --wa-panel: #f0f2f5;
+  --wa-border: #d1d7db;
+  --wa-tick-read: #53bdeb;
+  --wa-ink: #111b21;
+  --wa-ink-muted: #667781;
+}
+/* Small repeating line-art doodle tile (original design, not Meta's wallpaper asset) —
+ * mirrors the "minimal scattered icons" feel of WhatsApp's own chat background at a
+ * light, low-opacity scale so bubbles stay the visual focus. */
+.lf-wa-chat-bg {
+  background-color: var(--wa-chat-bg);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='90' height='90' viewBox='0 0 90 90'%3E%3Cg fill='none' stroke='%23d9cfc0' stroke-width='1.1' stroke-linecap='round'%3E%3Ccircle cx='12' cy='14' r='2.6'/%3E%3Cpath d='M33 10l3.4 3.4M36.4 10L33 13.4'/%3E%3Cpath d='M58 12q4 -7 8 0q4 7 8 0'/%3E%3Crect x='14' y='40' width='5' height='5' transform='rotate(45 16.5 42.5)'/%3E%3Cpath d='M48 38q2 -8 6 -2q2 5 -2 6q-5 2 -4 -4z'/%3E%3Ccircle cx='76' cy='42' r='1.8'/%3E%3Cpath d='M6 63l3.4 3.4M9.4 63L6 66.4'/%3E%3Cpath d='M27 68q3.5 -6 7 0q3.5 6 7 0' stroke='%23bfe3d4'/%3E%3Ccircle cx='63' cy='70' r='2.2' stroke='%23bfe3d4'/%3E%3Cpath d='M80 66q2 -6 4.5 -1.5q1.5 3.5 -1.5 4.5q-3.5 1.5 -3 -3z'/%3E%3C/g%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 90px 90px;
+}
+
+/* WhatsApp inbox micro-animations */
+@keyframes lf-wa-message-in {
+  0% { opacity: 0; transform: translateY(6px) scale(0.98); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.lf-wa-message-in {
+  animation: lf-wa-message-in 180ms ease-out;
+}
+
+@keyframes lf-wa-reaction-pop {
+  0% { transform: scale(0.4); }
+  60% { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+.lf-wa-reaction-pop {
+  animation: lf-wa-reaction-pop 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes lf-wa-thread-in {
+  0% { opacity: 0; transform: translateX(8px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+.lf-wa-thread-in {
+  animation: lf-wa-thread-in 160ms ease-out;
+}
+
+@keyframes lf-wa-ripple {
+  0% { transform: scale(0); opacity: 0.35; }
+  100% { transform: scale(1); opacity: 0; }
+}
+.lf-wa-ripple-span {
+  position: absolute;
+  border-radius: 9999px;
+  background: currentColor;
+  pointer-events: none;
+  animation: lf-wa-ripple 500ms ease-out;
 }

@@ -10,6 +10,7 @@ import { buildAllowedRouteSet, isElevatedRole, isMenuPathAllowed } from '@/utils
 import { selectActiveWorkspaceName } from '@/features/workspace/workspaceSlice'
 import { useGetMailboxInboxBadgeQuery } from '@/features/email/emailApi'
 import { useGetGoogleEmailStatusQuery } from '@/features/leads/leadsApi'
+import { useGetWhatsAppSettingsQuery, useGetWhatsAppUnreadBadgeQuery } from '@/features/whatsapp/whatsappApi'
 import { useGetNavBadgesQuery } from '@/features/analytics/analyticsApi'
 import { LeadNestLogo } from '@/components/shared/LeadNestLogo'
 
@@ -99,6 +100,15 @@ export function Sidebar({ className, collapsed = false, onToggleCollapse, isMobi
   const emailUnreadApprox = Boolean(mailboxBadgeRes?.data?.unreadApproximate)
   const emailNavBadge =
     emailUnread > 0 ? (emailUnreadApprox ? `${emailUnread}+` : String(emailUnread)) : null
+
+  const { data: whatsappSettingsRes } = useGetWhatsAppSettingsQuery(undefined, { skip: !accessToken })
+  const whatsappConnected = whatsappSettingsRes?.data?.status === 'verified'
+  const { data: whatsappBadgeRes } = useGetWhatsAppUnreadBadgeQuery(undefined, {
+    skip: !accessToken || !whatsappConnected,
+    pollingInterval: 45000,
+  })
+  const whatsappUnread = Number(whatsappBadgeRes?.data?.unread || 0)
+  const whatsappNavBadge = whatsappUnread > 0 ? String(whatsappUnread) : null
 
   const { data: navBadgesRes } = useGetNavBadgesQuery(undefined, {
     skip: !accessToken,
@@ -251,9 +261,12 @@ export function Sidebar({ className, collapsed = false, onToggleCollapse, isMobi
             ) : null}
             <div className="flex flex-col">
               {section.items.map(({ to, label, icon: Icon, badge, badgeVariant, end }) => {
-                const liveBadge = to === '/email' ? emailNavBadge : navBadgeMap[to] ?? null
+                const liveBadge =
+                  to === '/email' ? emailNavBadge : to === '/whatsapp' ? whatsappNavBadge : navBadgeMap[to] ?? null
                 const resolvedBadge = liveBadge !== null ? liveBadge : badge
-                const resolvedVariant = to === '/email' && emailNavBadge ? 'default' : badgeVariant
+                const resolvedVariant =
+                  (to === '/email' && emailNavBadge) || (to === '/whatsapp' && whatsappNavBadge) ? 'default' : badgeVariant
+                const collapsedDotCount = to === '/email' ? emailUnread : to === '/whatsapp' ? whatsappUnread : 0
                 return narrow ? (
                   <div
                     key={to}
@@ -262,9 +275,9 @@ export function Sidebar({ className, collapsed = false, onToggleCollapse, isMobi
                     onMouseEnter={(e) => openPeek(to, label, resolvedBadge, resolvedVariant, e.currentTarget)}
                     onMouseLeave={schedulePeekClose}
                   >
-                    {to === '/email' && emailUnread > 0 ? (
+                    {collapsedDotCount > 0 ? (
                       <span className="pointer-events-none absolute right-0.5 top-0.5 z-[1] flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 bg-red-500 px-[5px] text-[9px] font-bold leading-none text-white shadow-sm">
-                        {emailUnread > 99 ? '99+' : emailUnread}
+                        {collapsedDotCount > 99 ? '99+' : collapsedDotCount}
                       </span>
                     ) : null}
                     <NavLink

@@ -30,6 +30,16 @@ export const quotationsApi = baseApi.injectEndpoints({
         { type: 'Quotation', id: arg.id },
       ],
     }),
+    downloadQuotationPdf: build.query({
+      query: (id) => ({
+        url: `/quotations/${id}/pdf`,
+        responseHandler: async (response) => {
+          const disposition = response.headers.get('content-disposition') || ''
+          const match = /filename="?([^"]+)"?/i.exec(disposition)
+          return { blob: await response.blob(), filename: match?.[1] || 'quotation.pdf' }
+        },
+      }),
+    }),
   }),
 })
 
@@ -40,4 +50,5 @@ export const {
   usePatchQuotationMutation,
   useDeleteQuotationMutation,
   useConvertQuotationToInvoiceMutation,
+  useLazyDownloadQuotationPdfQuery,
 } = quotationsApi

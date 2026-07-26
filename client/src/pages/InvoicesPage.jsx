@@ -18,6 +18,7 @@ import { DealDetailPanel } from '@/features/deals/components/DealDetailPanel'
 import { useGetLeadFormMetaQuery, useGetLeadsQuery } from '@/features/leads/leadsApi'
 import { SalesDocFiltersModal } from '@/features/sales-docs/components/SalesDocFiltersModal'
 import { usePermission } from '@/hooks/usePermission'
+import { useEffectiveCurrency } from '@/hooks/useEffectiveCurrency'
 
 export function InvoicesPage() {
   const [params] = useSearchParams()
@@ -85,6 +86,7 @@ export function InvoicesPage() {
 
   const rows = data?.data?.items ?? data?.items ?? []
   const summary = data?.meta?.summary
+  const currency = useEffectiveCurrency()
 
   const statCards = useMemo(() => {
     if (!summary) return []
@@ -94,21 +96,21 @@ export function InvoicesPage() {
       {
         key: 'invoiced',
         label: 'Total invoiced',
-        value: formatDocMoney(summary.totalValue),
+        value: formatDocMoney(summary.totalValue, currency),
         tone: 'brand',
       },
-      { key: 'collected', label: 'Collected', value: formatDocMoney(summary.totalPaid), tone: 'emerald' },
-      { key: 'outstanding', label: 'Outstanding', value: formatDocMoney(summary.totalOutstanding), tone: 'amber' },
+      { key: 'collected', label: 'Collected', value: formatDocMoney(summary.totalPaid, currency), tone: 'emerald' },
+      { key: 'outstanding', label: 'Outstanding', value: formatDocMoney(summary.totalOutstanding, currency), tone: 'amber' },
       {
         key: 'overdue',
         label: 'Overdue',
-        value: formatDocMoney(Math.max(0, overdue.total - overdue.paid)),
+        value: formatDocMoney(Math.max(0, overdue.total - overdue.paid), currency),
         sub: `${overdue.count} invoice${overdue.count === 1 ? '' : 's'}`,
         tone: 'red',
       },
       { key: 'paid', label: 'Paid in full', value: by.paid?.count || 0, tone: 'emerald' },
     ]
-  }, [summary])
+  }, [summary, currency])
 
   async function confirmDelete() {
     if (!deleteTarget?.id) return

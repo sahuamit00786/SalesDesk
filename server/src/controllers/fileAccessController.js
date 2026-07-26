@@ -86,6 +86,17 @@ async function authorizeLeave(user, resolved) {
   return userCanAccessWorkspace(user, resolved.workspaceId)
 }
 
+/**
+ * WhatsApp media is company-wide (one Business number per company), not
+ * workspace-scoped, so it doesn't go through userCanAccessWorkspace like the
+ * other scopes. `resolved.workspaceId` here is really just the tenant-id path
+ * segment (storageService's field name is positional, not type-checked) — for
+ * this scope it holds the companyId the file was stored under.
+ */
+async function authorizeWhatsapp(user, resolved) {
+  return Boolean(user?.companyId) && resolved.workspaceId === user.companyId
+}
+
 export async function serveFile(req, res, next) {
   try {
     const ref = String(req.query.ref || '').trim()
@@ -98,6 +109,7 @@ export async function serveFile(req, res, next) {
     if (resolved.scope === 'documents') allowed = await authorizeDocuments(req.user, resolved)
     else if (resolved.scope === 'email' || resolved.scope === 'webforms' || resolved.scope === 'leads') allowed = await authorizeLeadFile(req.user, resolved)
     else if (resolved.scope === 'leave') allowed = await authorizeLeave(req.user, resolved)
+    else if (resolved.scope === 'whatsapp') allowed = await authorizeWhatsapp(req.user, resolved)
 
     if (!allowed) {
       return res.status(403).json({
