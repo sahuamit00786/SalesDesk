@@ -604,6 +604,7 @@ export function LeadDetailPage() {
   const [draft, setDraft] = useState('')
   const [taskDrawerOpen, setTaskDrawerOpen] = useState(false)
   const [taskDrawerTaskId, setTaskDrawerTaskId] = useState(null)
+  const [taskStatusFilter, setTaskStatusFilter] = useState('all')
   const [noteTitle, setNoteTitle] = useState('')
   const [isComposeOpen, setIsComposeOpen] = useState(false)
   const [selectedThreadId, setSelectedThreadId] = useState(null)
@@ -696,12 +697,31 @@ export function LeadDetailPage() {
   const summary = data?.meta?.summary || {}
   const activities = activityData?.data || []
   const tasks = taskData?.data || []
+  const taskStatusCounts = useMemo(() => {
+    const counts = { all: tasks.length, pending: 0, in_progress: 0, completed: 0, cancelled: 0, overdue: 0 }
+    for (const t of tasks) {
+      const status = String(t.status || '').toLowerCase()
+      if (counts[status] != null) counts[status] += 1
+      const dueAt = t.dueAt ? new Date(t.dueAt).getTime() : null
+      if (dueAt && status !== 'completed' && status !== 'cancelled' && dueAt < meetingListNow) counts.overdue += 1
+    }
+    return counts
+  }, [tasks, meetingListNow])
   const tasksSortedForList = useMemo(() => {
-    const list = [...tasks]
     const isTerminal = (s) => {
       const x = String(s || '').toLowerCase()
       return x === 'completed' || x === 'cancelled'
     }
+    const isOverdueTask = (t) => {
+      const status = String(t.status || '').toLowerCase()
+      const dueAt = t.dueAt ? new Date(t.dueAt).getTime() : null
+      return Boolean(dueAt && status !== 'completed' && status !== 'cancelled' && dueAt < meetingListNow)
+    }
+    const list = tasks.filter((t) => {
+      if (taskStatusFilter === 'all') return true
+      if (taskStatusFilter === 'overdue') return isOverdueTask(t)
+      return String(t.status || '').toLowerCase() === taskStatusFilter
+    })
     list.sort((a, b) => {
       const ta = isTerminal(a.status)
       const tb = isTerminal(b.status)
@@ -712,7 +732,7 @@ export function LeadDetailPage() {
       return String(a.title || '').localeCompare(String(b.title || ''), undefined, { sensitivity: 'base' })
     })
     return list
-  }, [tasks])
+  }, [tasks, taskStatusFilter, meetingListNow])
   const emailThreads = emailThreadsData?.data || []
   const selectedThread = threadData?.data || []
   const notes = notesData?.data || []
@@ -1470,6 +1490,31 @@ export function LeadDetailPage() {
                   ) : null
                 }
               />
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { id: 'all', label: 'All', count: taskStatusCounts.all, ring: 'ring-slate-200', bg: 'bg-slate-50', text: 'text-slate-800' },
+                  { id: 'pending', label: 'Pending', count: taskStatusCounts.pending, ring: 'ring-violet-200', bg: 'bg-violet-50', text: 'text-violet-800' },
+                  { id: 'in_progress', label: 'In progress', count: taskStatusCounts.in_progress, ring: 'ring-amber-200', bg: 'bg-amber-50', text: 'text-amber-900' },
+                  { id: 'overdue', label: 'Overdue', count: taskStatusCounts.overdue, ring: 'ring-red-200', bg: 'bg-red-50', text: 'text-red-700' },
+                  { id: 'completed', label: 'Completed', count: taskStatusCounts.completed, ring: 'ring-emerald-200', bg: 'bg-emerald-50', text: 'text-emerald-900' },
+                  { id: 'cancelled', label: 'Cancelled', count: taskStatusCounts.cancelled, ring: 'ring-gray-200', bg: 'bg-gray-50', text: 'text-gray-800' },
+                ].map((f) => {
+                  const active = taskStatusFilter === f.id
+                  return (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => setTaskStatusFilter(f.id)}
+                      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 transition ${
+                        active ? `${f.bg} ${f.text} ${f.ring}` : 'bg-white text-ink-muted ring-surface-border hover:bg-surface-muted'
+                      }`}
+                    >
+                      {f.label}
+                      <span className="tabular-nums">{f.count}</span>
+                    </button>
+                  )
+                })}
+              </div>
               <div className="space-y-3">
               {tasksSortedForList.map((task) => {
                 const subs = task.subtasks || []
@@ -1701,6 +1746,11 @@ export function LeadDetailPage() {
                   </div>
                 )
               })}
+              {tasks.length > 0 && tasksSortedForList.length === 0 ? (
+                <p className="rounded-2xl border border-dashed border-surface-border bg-white px-4 py-6 text-center text-sm text-ink-muted">
+                  No tasks match this filter.
+                </p>
+              ) : null}
               {tasks.length === 0 ? (
                 <LeadTabEmptyState
                   icon={CheckSquare}
