@@ -6,6 +6,7 @@ export const LeadTask = sequelize.define(
   {
     id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
     leadId: { type: DataTypes.UUID, allowNull: false, field: 'lead_id' },
+    dealId: { type: DataTypes.UUID, allowNull: true, field: 'deal_id' },
     workspaceId: { type: DataTypes.UUID, allowNull: false, field: 'workspace_id' },
     companyId: { type: DataTypes.UUID, allowNull: false, field: 'company_id' },
     title: { type: DataTypes.STRING(255), allowNull: false },

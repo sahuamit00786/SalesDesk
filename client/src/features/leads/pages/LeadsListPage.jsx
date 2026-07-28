@@ -103,6 +103,7 @@ function filtersToParams(filters) {
   if (filters.status?.length) params.status = filters.status.join(',')
   if (filters.stage?.length) params.stage = filters.stage.join(',')
   if (filters.assignedTo?.length) params.assignedTo = filters.assignedTo.join(',')
+  if (filters.tags?.length) params.tags = filters.tags.join(',')
   if (filters.source?.length) params.source = filters.source.join(',')
   if (filters.workspaceId) params.workspaceId = filters.workspaceId
   if (filters.createdFrom) params.createdFrom = filters.createdFrom
@@ -117,6 +118,7 @@ function paramsToFilters(searchParams) {
   const status = searchParams.get('status')
   const stage = searchParams.get('stage')
   const assignedTo = searchParams.get('assignedTo')
+  const tags = searchParams.get('tags')
   const source = searchParams.get('source')
   const workspaceId = searchParams.get('workspaceId')
   const createdFrom = searchParams.get('createdFrom')
@@ -125,6 +127,7 @@ function paramsToFilters(searchParams) {
   if (status) filters.status = status.split(',').filter(Boolean)
   if (stage) filters.stage = stage.split(',').filter(Boolean)
   if (assignedTo) filters.assignedTo = assignedTo.split(',').filter(Boolean)
+  if (tags) filters.tags = tags.split(',').filter(Boolean)
   if (source) filters.source = source.split(',').filter(Boolean)
   if (workspaceId) filters.workspaceId = workspaceId
   if (createdFrom) filters.createdFrom = createdFrom
@@ -205,6 +208,7 @@ export function LeadsListPage({ variant = "leads" }) {
     value: s.id,
     label: s.name || "Status",
   }));
+  const availableTags = formMetaData?.data?.tags || [];
   const advancedRuleCount = countActiveRules(filters.filterTree);
   const filterCount = advancedRuleCount ||
     (filters.status?.length || 0) +
@@ -608,6 +612,29 @@ export function LeadsListPage({ variant = "leads" }) {
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-muted" />
               </div>
+
+              {/* Tags quick filter */}
+              {availableTags.length > 0 && (
+                <div className="relative shrink-0">
+                  <select
+                    value={filters.tags?.length === 1 ? filters.tags[0] : ""}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const delta = { tags: val ? [val] : [] }
+                      dispatch(setFilters(delta));
+                      setSearchParams(filtersToParams({ ...filters, ...delta }))
+                      dispatch(setPagination({ page: 1 }));
+                    }}
+                    className="h-9 w-32 appearance-none rounded-xl border border-surface-border bg-white pl-3 pr-8 text-xs font-medium text-ink outline-none focus:border-brand-400"
+                  >
+                    <option value="">All tags</option>
+                    {availableTags.map((t) => (
+                      <option key={t.id} value={t.name}>{t.name}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-muted" />
+                </div>
+              )}
 
               <RequirePermission menu={permMenu} action="view">
                 <Button

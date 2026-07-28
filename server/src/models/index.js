@@ -29,10 +29,7 @@ import { ActivityReminder } from './ActivityReminder.js'
 import { ActivityBookingLink } from './ActivityBookingLink.js'
 import { CountryPhoneCode } from './CountryPhoneCode.js'
 import { UserWorkspace } from './UserWorkspace.js'
-import { MenuMaster } from './MenuMaster.js'
 import { CompanyRole } from './CompanyRole.js'
-import { CompanyRoleMenu } from './CompanyRoleMenu.js'
-import { UserMenuPermission } from './UserMenuPermission.js'
 import { Document } from './Document.js'
 import { DocumentLink } from './DocumentLink.js'
 import { Folder } from './Folder.js'
@@ -74,10 +71,6 @@ import { WorkflowVersion } from './WorkflowVersion.js'
 import { WorkflowRun } from './WorkflowRun.js'
 import { WorkflowRunStep } from './WorkflowRunStep.js'
 import { DuplicateLead } from './DuplicateLead.js'
-import { LeaveType } from './LeaveType.js'
-import { LeaveBalance } from './LeaveBalance.js'
-import { LeaveRequest } from './LeaveRequest.js'
-import { PublicHoliday } from './PublicHoliday.js'
 import { Notification } from './Notification.js'
 import { NotificationDeliveryLog } from './NotificationDeliveryLog.js'
 import { FilterPreset } from './FilterPreset.js'
@@ -93,6 +86,10 @@ import { CompanyEmailSettings } from './CompanyEmailSettings.js'
 import { RoleNotificationPreference } from './RoleNotificationPreference.js'
 import { UserNotificationPreference } from './UserNotificationPreference.js'
 import { SystemEmailTemplate } from './SystemEmailTemplate.js'
+import { CompanyWhatsAppSettings } from './CompanyWhatsAppSettings.js'
+import { WhatsAppConversation } from './WhatsAppConversation.js'
+import { WhatsAppMessage } from './WhatsAppMessage.js'
+import { WhatsAppTemplate } from './WhatsAppTemplate.js'
 
 User.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
 Company.hasMany(User, { foreignKey: 'companyId', as: 'users' })
@@ -102,22 +99,6 @@ Company.hasMany(CompanyRole, { foreignKey: 'companyId', as: 'roles' })
 User.belongsTo(CompanyRole, { foreignKey: 'companyRoleId', as: 'companyRole' })
 CompanyRole.hasMany(User, { foreignKey: 'companyRoleId', as: 'users' })
 CompanyRole.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' })
-
-MenuMaster.belongsTo(MenuMaster, { foreignKey: 'parentId', as: 'parent' })
-MenuMaster.hasMany(MenuMaster, { foreignKey: 'parentId', as: 'children' })
-CompanyRoleMenu.belongsTo(CompanyRole, { foreignKey: 'companyRoleId', as: 'companyRole' })
-CompanyRole.hasMany(CompanyRoleMenu, { foreignKey: 'companyRoleId', as: 'menuLinks' })
-CompanyRoleMenu.belongsTo(MenuMaster, { foreignKey: 'menuId', as: 'menu' })
-MenuMaster.hasMany(CompanyRoleMenu, { foreignKey: 'menuId', as: 'roleLinks' })
-
-// Per-user menu-CRUD grants — the actual permission enforcement source of truth.
-// CompanyRoleMenu/menuLinks above is legacy (role no longer carries permissions).
-UserMenuPermission.belongsTo(User, { foreignKey: 'userId', as: 'user' })
-User.hasMany(UserMenuPermission, { foreignKey: 'userId', as: 'menuPermissions' })
-UserMenuPermission.belongsTo(MenuMaster, { foreignKey: 'menuId', as: 'menu' })
-MenuMaster.hasMany(UserMenuPermission, { foreignKey: 'menuId', as: 'userLinks' })
-// Per-workspace override scope (nullable — NULL rows are the global grant).
-UserMenuPermission.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
 
 Workspace.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
 Company.hasMany(Workspace, { foreignKey: 'companyId', as: 'workspaces' })
@@ -223,6 +204,9 @@ DealActivity.belongsTo(Deal, { foreignKey: 'dealId', as: 'deal' })
 
 Deal.hasMany(DealPayment, { foreignKey: 'dealId', as: 'payments' })
 DealPayment.belongsTo(Deal, { foreignKey: 'dealId', as: 'deal' })
+
+Deal.hasMany(LeadTask, { foreignKey: 'dealId', as: 'tasks' })
+LeadTask.belongsTo(Deal, { foreignKey: 'dealId', as: 'deal' })
 DealPayment.belongsTo(User, { foreignKey: 'createdByUserId', as: 'createdBy' })
 User.hasMany(DealPayment, { foreignKey: 'createdByUserId', as: 'dealPayments' })
 DealPayment.belongsTo(InvoicePayment, { foreignKey: 'invoicePaymentId', as: 'invoicePayment' })
@@ -435,33 +419,10 @@ Workflow.hasMany(WorkflowRun, { foreignKey: 'workflowId', as: 'runs' })
 WorkflowRunStep.belongsTo(WorkflowRun, { foreignKey: 'runId', as: 'run' })
 WorkflowRun.hasMany(WorkflowRunStep, { foreignKey: 'runId', as: 'steps' })
 
-Company.hasMany(LeaveType, { foreignKey: 'companyId', as: 'leaveTypes' })
-Company.hasMany(LeaveBalance, { foreignKey: 'companyId', as: 'leaveBalances' })
-Company.hasMany(LeaveRequest, { foreignKey: 'companyId', as: 'leaveRequests' })
-Company.hasMany(PublicHoliday, { foreignKey: 'companyId', as: 'publicHolidays' })
 Company.hasMany(Notification, { foreignKey: 'companyId', as: 'notifications' })
 
-User.hasMany(LeaveBalance, { foreignKey: 'userId', as: 'leaveBalances' })
-User.hasMany(LeaveRequest, { foreignKey: 'userId', as: 'leaveRequests' })
 User.hasMany(Notification, { foreignKey: 'userId', as: 'notifications' })
 
-LeaveType.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
-LeaveType.hasMany(LeaveBalance, { foreignKey: 'leaveTypeId', as: 'balances' })
-LeaveType.hasMany(LeaveRequest, { foreignKey: 'leaveTypeId', as: 'requests' })
-LeaveBalance.belongsTo(User, { foreignKey: 'userId', as: 'user' })
-LeaveBalance.belongsTo(LeaveType, { foreignKey: 'leaveTypeId', as: 'leaveType' })
-LeaveBalance.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
-LeaveBalance.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
-Workspace.hasMany(LeaveBalance, { foreignKey: 'workspaceId', as: 'leaveBalances' })
-
-LeaveRequest.belongsTo(User, { foreignKey: 'userId', as: 'user' })
-LeaveRequest.belongsTo(LeaveType, { foreignKey: 'leaveTypeId', as: 'leaveType' })
-LeaveRequest.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
-LeaveRequest.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
-Workspace.hasMany(LeaveRequest, { foreignKey: 'workspaceId', as: 'leaveRequests' })
-LeaveRequest.belongsTo(User, { foreignKey: 'approvedBy', as: 'approver' })
-
-PublicHoliday.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
 Notification.belongsTo(User, { foreignKey: 'userId', as: 'user' })
 Notification.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
 Notification.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
@@ -522,15 +483,29 @@ SystemEmailTemplate.belongsTo(Company, { foreignKey: 'companyId', as: 'company' 
 Company.hasMany(SystemEmailTemplate, { foreignKey: 'companyId', as: 'systemEmailTemplates' })
 SystemEmailTemplate.belongsTo(User, { foreignKey: 'updatedBy', as: 'updater' })
 
+// WhatsApp Business API integration
+CompanyWhatsAppSettings.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
+Company.hasOne(CompanyWhatsAppSettings, { foreignKey: 'companyId', as: 'whatsappSettings' })
+
+WhatsAppConversation.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
+Company.hasMany(WhatsAppConversation, { foreignKey: 'companyId', as: 'whatsappConversations' })
+WhatsAppConversation.belongsTo(Lead, { foreignKey: 'leadId', as: 'lead' })
+WhatsAppConversation.hasMany(WhatsAppMessage, { foreignKey: 'conversationId', as: 'messages' })
+
+WhatsAppMessage.belongsTo(WhatsAppConversation, { foreignKey: 'conversationId', as: 'conversation' })
+WhatsAppMessage.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
+WhatsAppMessage.belongsTo(User, { foreignKey: 'sentByUserId', as: 'sentBy' })
+
+WhatsAppTemplate.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
+Company.hasMany(WhatsAppTemplate, { foreignKey: 'companyId', as: 'whatsappTemplates' })
+WhatsAppTemplate.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' })
+
 export {
   sequelize,
   User,
   Company,
   Workspace,
-  MenuMaster,
   CompanyRole,
-  CompanyRoleMenu,
-  UserMenuPermission,
   Team,
   TeamMember,
   UserWorkspace,
@@ -600,10 +575,6 @@ export {
   WorkflowVersion,
   WorkflowRun,
   WorkflowRunStep,
-  LeaveType,
-  LeaveBalance,
-  LeaveRequest,
-  PublicHoliday,
   Notification,
   NotificationDeliveryLog,
   DuplicateLead,
@@ -617,4 +588,8 @@ export {
   RoleNotificationPreference,
   UserNotificationPreference,
   SystemEmailTemplate,
+  CompanyWhatsAppSettings,
+  WhatsAppConversation,
+  WhatsAppMessage,
+  WhatsAppTemplate,
 }

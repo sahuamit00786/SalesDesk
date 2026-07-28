@@ -11,7 +11,6 @@ import { RegisterPage } from '@/pages/RegisterPage'
 import { ForgotPasswordPage } from '@/pages/ForgotPasswordPage'
 import { TeamPage } from '@/pages/TeamPage'
 import { TeamMemberProfilePage } from '@/features/team/pages/TeamMemberProfilePage'
-import { TeamMemberPermissionsPage } from '@/features/team/pages/TeamMemberPermissionsPage'
 import { IntegrationsPage } from '@/pages/IntegrationsPage'
 import { AcceptInvitePage } from '@/pages/AcceptInvitePage'
 import { LeadsPage } from '@/pages/LeadsPage'
@@ -23,6 +22,7 @@ import { ActivitiesPage } from '@/pages/ActivitiesPage'
 import { TasksPage } from '@/pages/TasksPage'
 import { FollowupsPage } from '@/pages/FollowupsPage'
 import { EmailPage } from '@/pages/EmailPage'
+import { WhatsAppPage } from '@/pages/WhatsAppPage'
 import { CopilotPage } from '@/pages/CopilotPage'
 import { OpportunitiesPage } from '@/pages/OpportunitiesPage'
 import { PipelinePage } from '@/pages/PipelinePage'
@@ -55,13 +55,6 @@ import { PrivacyPolicyPage } from '@/pages/PrivacyPolicyPage'
 import { TermsOfServicePage } from '@/pages/TermsOfServicePage'
 import { AboutPage } from '@/pages/AboutPage'
 import { ContactPage } from '@/pages/ContactPage'
-// HR modules disabled
-// import { AttendancePage } from '@/pages/AttendancePage'
-// import { LeavePage } from '@/pages/LeavePage'
-// import { LeaveRequestsPage } from '@/pages/LeaveRequestsPage'
-// import { LeaveApprovalPage } from '@/pages/LeaveApprovalPage'
-// import { LeaveConfigPage } from '@/pages/LeaveConfigPage'
-// import { HRDashboardPage } from '@/pages/HRDashboardPage'
 import { AnalyticsPage } from '@/pages/AnalyticsPage'
 import { ReportDetailPage } from '@/pages/ReportDetailPage'
 import { DealPaymentsPage } from '@/pages/DealPaymentsPage'
@@ -84,8 +77,8 @@ export default function App() {
       <Route element={<RequireAuth />}>
         <Route element={<SessionSync />}>
         <Route path="/onboarding" element={<OnboardingPage />} />
-        {/* Outside RequireOnboarded: that guard bounces non-admins off any path
-            missing from allowedMenus, and the picker is not a menu. */}
+        {/* Outside RequireOnboarded: that guard bounces non-elevated roles off any path
+            outside their allowed route set, and the picker is not a menu. */}
         <Route path="/select-workspace" element={<SelectWorkspacePage />} />
         <Route element={<RequireOnboarded />}>
           <Route element={<RequireWorkspace />}>
@@ -126,18 +119,9 @@ export default function App() {
             <Route path="/sales-docs/templates" element={<SalesDocTemplatesPage />} />
             <Route path="/document-settings" element={<DocumentSettingsPage />} />
             <Route path="/lead-configuration" element={<LeadConfigurationPage />} />
-            {/* HR modules disabled */}
-            {/* <Route path="/hr" element={<HRDashboardPage />} /> */}
-            {/* <Route path="/hr/reports" element={<Navigate to="/reports/leave" replace />} /> */}
-            {/* <Route path="/attendance" element={<AttendancePage />} /> */}
-            {/* <Route path="/leave" element={<LeavePage />} /> */}
-            {/* <Route path="/leave/requests" element={<LeaveRequestsPage />} /> */}
-            {/* <Route path="/leave/approval" element={<LeaveApprovalPage />} /> */}
-            {/* <Route path="/leave/config" element={<LeaveConfigPage />} /> */}
             <Route path="/team" element={<TeamPage />} />
             <Route path="/my-profile" element={<TeamMemberProfilePage />} />
             <Route path="/team/:userId" element={<TeamMemberProfilePage />} />
-            <Route path="/team/:userId/permissions" element={<TeamMemberPermissionsPage />} />
             <Route path="/integrations" element={<IntegrationsPage />} />
             <Route path="/knowledge-base" element={<KnowledgeBasePage />} />
             <Route path="/documents" element={<DocumentsPage />} />
@@ -150,7 +134,7 @@ export default function App() {
             <Route path="/settings" element={<Navigate to="/workspace" replace />} />
             <Route path="/contacts" element={<Navigate to="/leads" replace />} />
             <Route path="/companies" element={<Navigate to="/leads" replace />} />
-            <Route path="/whatsapp" element={<Navigate to="/email" replace />} />
+            <Route path="/whatsapp" element={<WhatsAppPage />} />
             <Route path="/calls" element={<CallsPage />} />
           </Route>
         </Route>

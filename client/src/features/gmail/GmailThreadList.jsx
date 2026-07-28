@@ -5,6 +5,7 @@ import { IconInput } from '@/components/ui/IconInput'
 import { SkeletonEmailList } from '@/components/shared/SkeletonLoader'
 import GmailAvatar from '@/features/gmail/GmailAvatar'
 import { formatEmailDateTime } from '@/features/gmail/gmailParserUtils'
+import { getEmailTrackingBadge } from '@/features/gmail/emailTrackingBadge'
 
 function ThreadListItem({ thread, isActive, onClick }) {
   const senderName =
@@ -55,6 +56,26 @@ function ThreadListItem({ thread, isActive, onClick }) {
           {thread.hasAttachments ? (
             <span className="inline-flex items-center gap-0.5 rounded border border-surface-border bg-white px-1.5 py-0.5 text-[10px] font-medium text-ink-muted">
               <Paperclip size={9} /> Files
+            </span>
+          ) : null}
+          {thread.outboundStatus ? (
+            <span
+              className={cn(
+                'rounded px-1.5 py-0.5 text-[10px] font-semibold',
+                getEmailTrackingBadge({
+                  status: thread.outboundStatus,
+                  openedAt: thread.outboundOpenedAt,
+                  clickedAt: thread.outboundClickedAt,
+                }).className,
+              )}
+            >
+              {
+                getEmailTrackingBadge({
+                  status: thread.outboundStatus,
+                  openedAt: thread.outboundOpenedAt,
+                  clickedAt: thread.outboundClickedAt,
+                }).label
+              }
             </span>
           ) : null}
           {leadLabel ? (

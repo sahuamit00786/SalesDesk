@@ -16,7 +16,6 @@ import {
   Users,
   CircleDollarSign,
   CalendarDays,
-  Umbrella,
   Info,
   AlertTriangle,
   CheckCircle2,
@@ -30,7 +29,6 @@ const TYPE_ICONS = {
   lead: Users,
   deal: CircleDollarSign,
   meeting: CalendarDays,
-  leave: Umbrella,
   warning: AlertTriangle,
   success: CheckCircle2,
   info: Info,
@@ -111,7 +109,6 @@ export default function NotificationsScreen({ navigation }) {
     if (!item.isRead) markRead.mutate(item.id);
     const type = String(item.resourceType || '').toLowerCase();
     if (type === 'lead' && item.resourceId) navigation.navigate(ROUTES.LEAD_DETAIL, { leadId: item.resourceId, id: item.resourceId });
-    else if (type === 'leave') navigation.navigate(ROUTES.LEAVE);
     else if (type === 'meeting') navigation.navigate(ROUTES.MEETINGS, { title: 'Meetings' });
   };
 

@@ -6,7 +6,6 @@ import {
   Phone,
   Video,
   CalendarDays,
-  // CalendarCheck, Umbrella, // Attendance/Leave — commented out for now, keep imports for quick re-enable
   FileStack,
   Bell,
   Users,
@@ -50,8 +49,6 @@ function SectionLabel({ children }) {
 export default function HomeSidebarMenu({ navigation, onNavigate }) {
   const can = {
     documents: useCan(ROUTE_PERMISSIONS[ROUTES.DOCUMENTS]),
-    // attendance: useCan(ROUTE_PERMISSIONS[ROUTES.ATTENDANCE]), // commented out with the Attendance row below
-    // leave: useCan(ROUTE_PERMISSIONS[ROUTES.LEAVE]), // commented out with the Leave row below
     meetings: useCan(ROUTE_PERMISSIONS[ROUTES.MEETINGS]),
     calendar: useCan(ROUTE_PERMISSIONS[ROUTES.CALENDAR]),
     team: useCan(ROUTE_PERMISSIONS[ROUTES.TEAM_LIST]),
@@ -84,9 +81,6 @@ export default function HomeSidebarMenu({ navigation, onNavigate }) {
     { label: 'Campaigns', icon: Megaphone, visible: can.campaigns, onPress: () => go(ROUTES.CAMPAIGNS) },
     { label: 'Reports', icon: BarChart3, visible: can.reports, onPress: () => go(ROUTES.REPORTS) },
     { label: 'Copilot', icon: Sparkles, visible: can.copilot, onPress: () => go(ROUTES.COPILOT) },
-    // Attendance and Leave — disabled for now (not removed, just hidden from the sidebar).
-    // { label: 'Attendance', icon: CalendarCheck, visible: can.attendance, onPress: () => go(ROUTES.ATTENDANCE) },
-    // { label: 'Leave', icon: Umbrella, visible: can.leave, onPress: () => go(ROUTES.LEAVE) },
   ].filter((item) => item.visible !== false);
 
   const adminItems = [

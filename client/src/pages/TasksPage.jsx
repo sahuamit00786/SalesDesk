@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   AlertTriangle,
   ArrowUpDown,
@@ -39,13 +40,13 @@ import { TasksSortPopover } from '@/features/tasks/components/TasksSortPopover'
 import { cn } from '@/utils/cn'
 
 const VIEWS = [
-  { id: 'list', label: 'List', icon: List },
   { id: 'board', label: 'Board', icon: SquareKanban },
+  { id: 'list', label: 'List', icon: List },
   { id: 'calendar', label: 'Calendar', icon: CalendarDays },
 ]
 
 export function TasksPage() {
-  const [activeView, setActiveView] = useState('list')
+  const [activeView, setActiveView] = useState('board')
   const [listGroupBy, setListGroupBy] = useState('status')
   const [dueQuickFilter, setDueQuickFilter] = useState('all')
   const [openSections, setOpenSections] = useState(() => ({ ...DEFAULT_OPEN }))
@@ -64,6 +65,14 @@ export function TasksPage() {
   const [appliedFilters, setAppliedFilters] = useState({
     leadId: '', leadLabel: '', assigneeId: '', dueFrom: '', dueTo: '',
   })
+
+  const [searchParams] = useSearchParams()
+  // Pre-apply the "due" quick filter when arriving via a deep link (e.g. dashboard KPI cards).
+  useEffect(() => {
+    const due = searchParams.get('due')
+    if (due && DUE_QUICK_FILTERS.some((f) => f.id === due)) setDueQuickFilter(due)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const sortBtnRef = useRef(null)
 

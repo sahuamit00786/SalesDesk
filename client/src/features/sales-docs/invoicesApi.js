@@ -30,6 +30,16 @@ export const invoicesApi = baseApi.injectEndpoints({
       query: ({ id, paymentId }) => ({ url: `/invoices/${id}/payments/${paymentId}`, method: 'DELETE' }),
       invalidatesTags: (_r, _e, arg) => [{ type: 'Invoice', id: arg.id }, { type: 'Invoice', id: 'LIST' }, 'DealPayment'],
     }),
+    downloadInvoicePdf: build.query({
+      query: (id) => ({
+        url: `/invoices/${id}/pdf`,
+        responseHandler: async (response) => {
+          const disposition = response.headers.get('content-disposition') || ''
+          const match = /filename="?([^"]+)"?/i.exec(disposition)
+          return { blob: await response.blob(), filename: match?.[1] || 'invoice.pdf' }
+        },
+      }),
+    }),
   }),
 })
 
@@ -41,4 +51,5 @@ export const {
   useDeleteInvoiceMutation,
   useRecordInvoicePaymentMutation,
   useDeleteInvoicePaymentMutation,
+  useLazyDownloadInvoicePdfQuery,
 } = invoicesApi

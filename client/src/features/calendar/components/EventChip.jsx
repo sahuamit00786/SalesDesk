@@ -309,7 +309,7 @@ export function EventChip({ event, onClick, view = 'week' }) {
                   'fixed z-[130] flex min-h-0 w-[min(380px,calc(100vw-24px))] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-2xl transition-[opacity,transform] duration-200 ease-out will-change-[opacity,transform]',
                   exiting ? 'pointer-events-none opacity-0 scale-[0.97] translate-y-1' : 'opacity-100 scale-100 translate-y-0',
                 )}
-                style={{ top: p.top, left: p.left, maxHeight: p.maxCardHeight }}
+                style={{ top: p.top, bottom: p.bottom, left: p.left, maxHeight: p.maxCardHeight }}
               >
                 <div className="border-b border-gray-100 bg-gradient-to-r from-gray-50 to-slate-50 px-3 py-2.5">
                   <span className="inline-flex rounded-md bg-gray-200/80 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-700 ring-1 ring-gray-300/80">

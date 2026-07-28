@@ -204,6 +204,12 @@ export function parseStoredThread(storedThread = []) {
         dateFormatted: formatEmailDate(date),
         bodyHtml: msg.bodyHtml || '',
         bodyText: msg.bodyText || '',
+        direction: msg.direction,
+        status: msg.status,
+        openedAt: msg.openedAt || null,
+        clickedAt: msg.clickedAt || null,
+        openCount: msg.openCount || 0,
+        clickCount: msg.clickCount || 0,
         snippet: decodeHtmlEntities((msg.bodyText || msg.bodyHtml || '').slice(0, 180)),
         attachments: (msg.attachments || []).map((att) => ({
           id: att.id || `${msg.id}-${att.fileName}`,

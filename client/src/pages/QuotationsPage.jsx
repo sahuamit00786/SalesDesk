@@ -21,6 +21,7 @@ import { DealDetailPanel } from '@/features/deals/components/DealDetailPanel'
 import { useGetLeadFormMetaQuery, useGetLeadsQuery } from '@/features/leads/leadsApi'
 import { SalesDocFiltersModal } from '@/features/sales-docs/components/SalesDocFiltersModal'
 import { usePermission } from '@/hooks/usePermission'
+import { useEffectiveCurrency } from '@/hooks/useEffectiveCurrency'
 
 export function QuotationsPage() {
   const navigate = useNavigate()
@@ -119,6 +120,7 @@ export function QuotationsPage() {
 
   const rows = data?.data?.items ?? data?.items ?? []
   const summary = data?.meta?.summary
+  const currency = useEffectiveCurrency()
 
   const statCards = useMemo(() => {
     if (!summary) return []
@@ -128,7 +130,7 @@ export function QuotationsPage() {
       {
         key: 'total',
         label: 'Total value',
-        value: formatDocMoney(summary.totalValue),
+        value: formatDocMoney(summary.totalValue, currency),
         tone: 'brand',
       },
       { key: 'draft', label: 'Draft', value: count('draft'), tone: 'neutral' },
@@ -136,7 +138,7 @@ export function QuotationsPage() {
       { key: 'accepted', label: 'Accepted', value: count('accepted'), tone: 'emerald' },
       { key: 'converted', label: 'Converted', value: count('converted'), tone: 'emerald' },
     ]
-  }, [summary])
+  }, [summary, currency])
 
   return (
     <PageShell fullWidth>

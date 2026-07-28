@@ -348,8 +348,6 @@ export function subjectForEvent(eventType, payload) {
     case 'security_password_changed':
     case 'security_email_changed':
       return `${app} — Security alert`
-    case 'leave_decided':
-      return payload.status === 'approved' ? `${app} — Leave approved` : `${app} — Leave rejected`
     default:
       return `${app} — Team notification`
   }

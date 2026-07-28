@@ -21,6 +21,7 @@ import {
   useSyncEmailRepliesMutation,
 } from '@/features/email/emailApi'
 import { EmailComposerDrawer } from '@/features/email/EmailComposerDrawer'
+import { EmailStatusView } from '@/features/email/status/EmailStatusView'
 import { useGetGoogleEmailStatusQuery, useGetLeadsQuery, useSyncLeadEmailsMutation } from '@/features/leads/leadsApi'
 import { readAuthFromStorage } from '@/features/auth/authSlice'
 import { useAppSelector } from '@/app/hooks'
@@ -34,7 +35,9 @@ export function EmailPage() {
   const workspaceId = useAppSelector(selectResolvedActiveWorkspaceId)
   const [searchParams, setSearchParams] = useSearchParams()
   const selectedThreadId = searchParams.get('threadId')
-  const box = searchParams.get('box') === 'sent' ? 'sent' : 'inbox'
+  const boxParam = searchParams.get('box')
+  const box = boxParam === 'sent' || boxParam === 'status' ? boxParam : 'inbox'
+  const isStatusView = box === 'status'
 
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
@@ -68,7 +71,7 @@ export function EmailPage() {
     [setSearchParams],
   )
   const selectThread = useCallback((id) => setUrlState({ threadId: id || null }), [setUrlState])
-  const changeBox = useCallback((nextBox) => setUrlState({ box: nextBox === 'sent' ? 'sent' : null, threadId: null }), [setUrlState])
+  const changeBox = useCallback((nextBox) => setUrlState({ box: nextBox === 'inbox' ? null : nextBox, threadId: null }), [setUrlState])
 
   const { data: googleEmailStatus } = useGetGoogleEmailStatusQuery()
   const googleEmailConnected = Boolean(googleEmailStatus?.data?.connected)
@@ -110,7 +113,7 @@ export function EmailPage() {
     error: mailboxErrorDetail,
     refetch: refetchMailbox,
   } = useGetMailboxThreadsQuery(mailboxParams, {
-    skip: skipMailboxApi || crmMode,
+    skip: skipMailboxApi || crmMode || isStatusView,
     pollingInterval: box === 'inbox' && pageIndex === 0 ? 20000 : 0,
     refetchOnFocus: true,
     refetchOnReconnect: true,
@@ -121,7 +124,7 @@ export function EmailPage() {
     [debouncedSearch, leadId, hasAttachments],
   )
   const { data: crmThreadsRes, isFetching: loadingCrmThreads, refetch: refetchCrm } = useGetEmailThreadsQuery(crmQuery, {
-    skip: !googleEmailConnected || !crmMode,
+    skip: !googleEmailConnected || !crmMode || isStatusView,
   })
 
   const rawMailboxThreads = useMemo(() => (Array.isArray(mailboxRes?.data) ? mailboxRes.data : []), [mailboxRes?.data])
@@ -395,7 +398,7 @@ export function EmailPage() {
     <PageShell fullWidth>
       <div className="h-full px-2 py-2.5 lg:px-3">
         <section className="flex h-[calc(100dvh-88px)] min-h-0 flex-col overflow-hidden rounded-xl border border-surface-border bg-white shadow-sm">
-          {!googleEmailConnected ? (
+          {!googleEmailConnected && !isStatusView ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
               <p className="max-w-md text-sm font-semibold text-ink">Connect Google in Google Settings</p>
               <p className="max-w-lg text-sm text-ink-muted">
@@ -413,73 +416,79 @@ export function EmailPage() {
             <div className="flex min-h-0 flex-1">
               <EmailSidebar {...sidebarProps} mobileOpen={sidebarOpen} onMobileClose={() => setSidebarOpen(false)} />
               <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-                {googleInboxScopeMissing ? (
-                  <div className="border-b border-amber-200/80 bg-amber-50/90 px-4 py-2 text-xs text-amber-950">
-                    Google is connected without Gmail read permission — live Inbox/Sent mail won&apos;t load, but CRM-linked lead emails still will.{' '}
-                    <button type="button" className="font-semibold underline" onClick={() => navigate('/integrations?tab=google')}>
-                      Reconnect Google
-                    </button>{' '}
-                    to fix.
-                  </div>
-                ) : mailboxError ? (
-                  <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-xs text-red-900">{mailboxErrorMessage}</div>
-                ) : null}
-
-                {selectedThreadId ? (
-                  <EmailThreadPane
-                    thread={parsedThread}
-                    loading={loadingThread}
-                    onBack={() => selectThread(null)}
-                    viewLeadId={viewLeadId}
-                    mailboxMode={isMailboxThread}
-                    onOpenAttachment={isMailboxThread ? openAttachmentPreview : undefined}
-                    onSaveAttachmentToLead={isMailboxThread ? openSaveModal : undefined}
-                    myEmail={myEmail}
-                    leads={leads}
-                    leadByEmail={leadByEmail}
-                    onSent={() => {}}
-                  />
+                {isStatusView ? (
+                  <EmailStatusView />
                 ) : (
                   <>
-                    <div className="shrink-0 border-b border-surface-border px-2.5 py-2 sm:px-3">
-                      <IconInput
-                        icon={Search}
-                        type="text"
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        placeholder="Search mail…"
-                        className="h-10 min-h-0 rounded-full bg-surface-muted/40 text-sm"
-                        aria-label="Search mail"
+                    {googleInboxScopeMissing ? (
+                      <div className="border-b border-amber-200/80 bg-amber-50/90 px-4 py-2 text-xs text-amber-950">
+                        Google is connected without Gmail read permission — live Inbox/Sent mail won&apos;t load, but CRM-linked lead emails still will.{' '}
+                        <button type="button" className="font-semibold underline" onClick={() => navigate('/integrations?tab=google')}>
+                          Reconnect Google
+                        </button>{' '}
+                        to fix.
+                      </div>
+                    ) : mailboxError ? (
+                      <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-xs text-red-900">{mailboxErrorMessage}</div>
+                    ) : null}
+
+                    {selectedThreadId ? (
+                      <EmailThreadPane
+                        thread={parsedThread}
+                        loading={loadingThread}
+                        onBack={() => selectThread(null)}
+                        viewLeadId={viewLeadId}
+                        mailboxMode={isMailboxThread}
+                        onOpenAttachment={isMailboxThread ? openAttachmentPreview : undefined}
+                        onSaveAttachmentToLead={isMailboxThread ? openSaveModal : undefined}
+                        myEmail={myEmail}
+                        leads={leads}
+                        leadByEmail={leadByEmail}
+                        onSent={() => {}}
                       />
-                    </div>
-                    <EmailListToolbar
-                      allChecked={allChecked}
-                      someChecked={checkedIds.size > 0}
-                      onToggleAll={toggleAll}
-                      checkedCount={checkedIds.size}
-                      onBulkMarkRead={bulkMarkRead}
-                      markingRead={bulkMarking}
-                      showBulkMarkRead={!crmMode && !googleInboxScopeMissing}
-                      onRefresh={handleRefresh}
-                      refreshing={loadingList || syncing}
-                      rangeLabel={rangeLabel}
-                      onPrev={goPrev}
-                      onNext={goNext}
-                      prevDisabled={crmMode || pageIndex === 0}
-                      nextDisabled={crmMode || !nextPageToken}
-                      onOpenSidebar={() => setSidebarOpen(true)}
-                    />
-                    <EmailRowList
-                      rows={rows}
-                      box={box}
-                      checkedIds={checkedIds}
-                      onToggleChecked={toggleChecked}
-                      onOpen={selectThread}
-                      onMarkRead={!crmMode && !googleInboxScopeMissing ? (id) => markMailboxThreadRead(id).catch(() => {}) : undefined}
-                      loading={loadingList}
-                      emptyHint={emptyHint}
-                      emptyAction={emptyAction}
-                    />
+                    ) : (
+                      <>
+                        <div className="shrink-0 border-b border-surface-border px-2.5 py-2 sm:px-3">
+                          <IconInput
+                            icon={Search}
+                            type="text"
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            placeholder="Search mail…"
+                            className="h-10 min-h-0 rounded-full bg-surface-muted/40 text-sm"
+                            aria-label="Search mail"
+                          />
+                        </div>
+                        <EmailListToolbar
+                          allChecked={allChecked}
+                          someChecked={checkedIds.size > 0}
+                          onToggleAll={toggleAll}
+                          checkedCount={checkedIds.size}
+                          onBulkMarkRead={bulkMarkRead}
+                          markingRead={bulkMarking}
+                          showBulkMarkRead={!crmMode && !googleInboxScopeMissing}
+                          onRefresh={handleRefresh}
+                          refreshing={loadingList || syncing}
+                          rangeLabel={rangeLabel}
+                          onPrev={goPrev}
+                          onNext={goNext}
+                          prevDisabled={crmMode || pageIndex === 0}
+                          nextDisabled={crmMode || !nextPageToken}
+                          onOpenSidebar={() => setSidebarOpen(true)}
+                        />
+                        <EmailRowList
+                          rows={rows}
+                          box={box}
+                          checkedIds={checkedIds}
+                          onToggleChecked={toggleChecked}
+                          onOpen={selectThread}
+                          onMarkRead={!crmMode && !googleInboxScopeMissing ? (id) => markMailboxThreadRead(id).catch(() => {}) : undefined}
+                          loading={loadingList}
+                          emptyHint={emptyHint}
+                          emptyAction={emptyAction}
+                        />
+                      </>
+                    )}
                   </>
                 )}
               </div>

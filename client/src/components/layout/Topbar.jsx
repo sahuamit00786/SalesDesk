@@ -8,7 +8,6 @@ import { WorkspaceSwitcher } from '@/components/layout/WorkspaceSwitcher'
 import { WorkspaceManagementModal } from '@/components/layout/WorkspaceManagementModal'
 import { NotificationBell } from '@/features/notifications/components/NotificationBell'
 import { ProfileMenuDropdown } from '@/components/layout/ProfileMenuDropdown'
-import { useHrRole } from '@/features/hr/useHrRole'
 import { useNotificationsSocket } from '@/features/notifications/useNotificationsSocket'
 
 function selectIsCompanyAdmin(state) {
@@ -18,7 +17,6 @@ function selectIsCompanyAdmin(state) {
 export function Topbar({ onMenu }) {
   const { pathname } = useLocation()
   const meta = getRouteMeta(pathname)
-  const hrRole = useHrRole()
   const isCompanyAdmin = useAppSelector(selectIsCompanyAdmin)
   const [workspaceModalOpen, setWorkspaceModalOpen] = useState(false)
   useNotificationsSocket()

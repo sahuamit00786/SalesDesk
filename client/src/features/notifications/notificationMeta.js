@@ -38,9 +38,6 @@ const TYPE_TO_CATEGORY = {
 
   approval_requested: 'approvals',
   approval_decided: 'approvals',
-  leave: 'approvals',
-  leave_requested: 'approvals',
-  leave_decided: 'approvals',
 
   invoice_created: 'finance',
   invoice_payment_received: 'finance',

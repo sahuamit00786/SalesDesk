@@ -295,17 +295,6 @@ export function exportPayments({ data, from, to }) {
   saveWorkbook(wb, `connexify-payments-${from}-${to}.xlsx`)
 }
 
-export function exportLeave({ data, from, to }) {
-  const wb = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(wb, kpiSheet(data?.kpis || {}), 'KPIs')
-  const rows = data?.tables?.requests || []
-  XLSX.utils.book_append_sheet(wb, buildSheet(
-    ['Employee', 'Leave type', 'From', 'To', 'Days', 'Status'],
-    rows.map((r) => [r.employee, r.leaveType, r.fromDate, r.toDate, r.days, r.status]),
-  ), 'Requests')
-  saveWorkbook(wb, `connexify-leave-${from}-${to}.xlsx`)
-}
-
 export function exportEmployeeMonthly({ data, from, to }) {
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, kpiSheet(data?.kpis || {}), 'KPIs')

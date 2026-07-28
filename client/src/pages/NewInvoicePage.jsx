@@ -234,6 +234,13 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
   }, [activeDealId, dealCard, isEditingExisting, savedId, templateId])
 
   useEffect(() => {
+    if (isEditingExisting || savedId) return
+    if (!activeDealId || !dealCard) return
+    setDealLeadId(activeDealId)
+    setClientLeadId(dealCard.parentOpportunityLeadId || '')
+  }, [activeDealId, dealCard, isEditingExisting, savedId])
+
+  useEffect(() => {
     if (!invoiceId || !existingInvoice) return
     if (hydratedInvoiceIdRef.current === invoiceId) return
     hydratedInvoiceIdRef.current = invoiceId
@@ -293,6 +300,11 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
     if (activeDealId && dealParentLead) return dealParentLead
     return leads.find((l) => l.id === clientLeadId)
   }, [leads, clientLeadId, activeDealId, dealParentLead])
+
+  const billToOptions = useMemo(() => {
+    if (selectedLead && !leads.some((l) => l.id === selectedLead.id)) return [selectedLead, ...leads]
+    return leads
+  }, [leads, selectedLead])
 
   const customerSnapshot = useMemo(() => {
     const base = buildCustomerSnapshotFromLead(selectedLead)
@@ -505,7 +517,7 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
                     onChange={(e) => applyClientSelection(e.target.value)}
                   >
                     <option value="">Select client…</option>
-                    {leads.map((l) => (
+                    {billToOptions.map((l) => (
                       <option key={l.id} value={l.id}>
                         {(l.contactName || l.title || 'Lead').trim()} · {(l.company || '').trim() || '—'}
                       </option>
@@ -595,14 +607,6 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
                 </label>
 
                 <div className="sde-field-grid">
-                  <label className="block text-xs font-medium text-neutral-600">
-                    Reference
-                    <input
-                      className="mt-1 w-full rounded-lg border border-neutral-200 px-2.5 py-1.5 text-xs"
-                      value={reference}
-                      onChange={(e) => setReference(e.target.value)}
-                    />
-                  </label>
                   <label className="block text-xs font-medium text-neutral-600">
                     PO number
                     <input

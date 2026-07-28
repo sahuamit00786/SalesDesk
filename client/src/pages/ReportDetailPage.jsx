@@ -19,7 +19,6 @@ import { FollowupsTab } from '@/features/analytics/components/FollowupsTab'
 import { SalesDocsTab } from '@/features/analytics/components/SalesDocsTab'
 import { PaymentsTab } from '@/features/analytics/components/PaymentsTab'
 import { EmployeeMonthlyTab } from '@/features/analytics/components/EmployeeMonthlyTab'
-import { LeaveTab } from '@/features/analytics/components/LeaveTab'
 import { DataHealthTab } from '@/features/analytics/components/DataHealthTab'
 import { CampaignsTab } from '@/features/analytics/components/CampaignsTab'
 import { EmailReportTab } from '@/features/analytics/components/EmailReportTab'
@@ -35,17 +34,15 @@ import {
   exportOverview, exportLeads, exportDeals, exportActivities,
   exportMeetings, exportTasks, exportTeam,
   exportOpportunities, exportFollowups, exportSalesDocs, exportPayments,
-  exportLeave, exportEmployeeMonthly, exportDataHealth,
+  exportEmployeeMonthly, exportDataHealth,
 } from '@/features/analytics/exportXlsx'
 import {
   useGetLeadsReportQuery, useGetDealsReportQuery, useGetActivitiesReportQuery,
   useGetMeetingsReportQuery, useGetTasksReportQuery, useGetTeamReportQuery,
   useGetOpportunitiesReportQuery, useGetFollowupsReportQuery, useGetSalesDocsReportQuery,
-  useGetPaymentsReportQuery, useGetLeaveReportQuery, useGetEmployeeMonthlyReportQuery,
+  useGetPaymentsReportQuery, useGetEmployeeMonthlyReportQuery,
   useGetDataHealthReportQuery,
 } from '@/features/analytics/analyticsApi'
-
-const LEAVE_STATUS_OPTIONS = ['pending', 'approved', 'rejected', 'cancelled']
 
 function capitalize(s) {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : s
@@ -65,7 +62,6 @@ const TAB_MAP = {
   meetings: MeetingsTab,
   'employee-monthly': EmployeeMonthlyTab,
   team: TeamTab,
-  leave: LeaveTab,
   email: EmailReportTab,
   campaigns: CampaignsTab,
   'data-health': DataHealthTab,
@@ -101,9 +97,6 @@ export function ReportDetailPage() {
     if (type === 'leads' || type === 'opportunities') {
       return LEAD_STATUS_OPTIONS.map((s) => ({ value: s, label: capitalize(s) }))
     }
-    if (type === 'leave') {
-      return LEAVE_STATUS_OPTIONS.map((s) => ({ value: s, label: capitalize(s) }))
-    }
     return []
   }, [type])
 
@@ -122,7 +115,6 @@ export function ReportDetailPage() {
   const { data: followupsData, refetch: refetchFollowups } = useGetFollowupsReportQuery(filters.queryParams)
   const { data: salesDocsData, refetch: refetchSalesDocs } = useGetSalesDocsReportQuery(filters.queryParams)
   const { data: paymentsData, refetch: refetchPayments } = useGetPaymentsReportQuery(filters.queryParams)
-  const { data: leaveData, refetch: refetchLeave } = useGetLeaveReportQuery(filters.queryParams)
   const { data: empMonthlyData, refetch: refetchEmpMonthly } = useGetEmployeeMonthlyReportQuery(filters.queryParams)
   const { data: dataHealthData, refetch: refetchDataHealth } = useGetDataHealthReportQuery(filters.queryParams)
 
@@ -132,13 +124,13 @@ export function ReportDetailPage() {
     overview: leadsData, leads: leadsData, deals: dealsData, activities: actData,
     meetings: meetingsData, tasks: tasksData, team: teamReportData, opportunities: oppsData,
     followups: followupsData, 'sales-docs': salesDocsData, payments: paymentsData,
-    leave: leaveData, 'employee-monthly': empMonthlyData, 'data-health': dataHealthData,
+    'employee-monthly': empMonthlyData, 'data-health': dataHealthData,
   }
   const REFETCH_BY_TYPE = {
     overview: refetchLeads, leads: refetchLeads, deals: refetchDeals, activities: refetchAct,
     meetings: refetchMeetings, tasks: refetchTasks, team: refetchTeam, opportunities: refetchOpps,
     followups: refetchFollowups, 'sales-docs': refetchSalesDocs, payments: refetchPayments,
-    leave: refetchLeave, 'employee-monthly': refetchEmpMonthly, 'data-health': refetchDataHealth,
+    'employee-monthly': refetchEmpMonthly, 'data-health': refetchDataHealth,
   }
   const hasData = Boolean(DATA_BY_TYPE[type]?.data)
   const handleRefresh = () => REFETCH_BY_TYPE[type]?.()
@@ -146,7 +138,7 @@ export function ReportDetailPage() {
 
   const EXPORTABLE = new Set([
     'overview', 'leads', 'deals', 'activities', 'meetings', 'tasks', 'team',
-    'opportunities', 'followups', 'sales-docs', 'payments', 'leave', 'employee-monthly', 'data-health',
+    'opportunities', 'followups', 'sales-docs', 'payments', 'employee-monthly', 'data-health',
   ])
 
   function handleExportXlsx() {
@@ -162,7 +154,6 @@ export function ReportDetailPage() {
     else if (type === 'followups') exportFollowups({ data: followupsData?.data, ...p })
     else if (type === 'sales-docs') exportSalesDocs({ data: salesDocsData?.data, ...p })
     else if (type === 'payments') exportPayments({ data: paymentsData?.data, ...p })
-    else if (type === 'leave') exportLeave({ data: leaveData?.data, ...p })
     else if (type === 'employee-monthly') exportEmployeeMonthly({ data: empMonthlyData?.data, ...p })
     else if (type === 'data-health') exportDataHealth({ data: dataHealthData?.data, ...p })
   }

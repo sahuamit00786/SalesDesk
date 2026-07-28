@@ -70,21 +70,6 @@ export const keys = {
     all: (ws) => [ws, 'reminders'],
     list: (ws, params) => [ws, 'reminders', 'list', params],
   },
-  attendance: {
-    all: (ws) => [ws, 'attendance'],
-    today: (ws) => [ws, 'attendance', 'today'],
-    me: (ws, params) => [ws, 'attendance', 'me', params],
-    team: (ws, params) => [ws, 'attendance', 'team', params],
-    member: (ws, id, params) => [ws, 'attendance', 'member', id, params],
-  },
-  leave: {
-    all: (ws) => [ws, 'leave'],
-    types: (ws) => [ws, 'leave', 'types'],
-    balance: (ws) => [ws, 'leave', 'balance'],
-    mine: (ws, params) => [ws, 'leave', 'mine', params],
-    approvals: (ws, params) => [ws, 'leave', 'approvals', params],
-    holidays: (ws) => [ws, 'leave', 'holidays'],
-  },
   campaigns: {
     all: (ws) => [ws, 'campaigns'],
     list: (ws, params) => [ws, 'campaigns', 'list', params],

@@ -1,6 +1,8 @@
 import { Lead, WebForm, WebFormEmailTemplate, WebFormField, WebFormSubmission } from '../models/index.js'
 import { generateUniquePublicToken, listWorkspaceForms, replaceFormFields, sanitizeFormInput } from '../services/formBuilderService.js'
 import { generateWebFormEmailTemplate } from '../services/openAiService.js'
+import { checkAndHandleDuplicate } from '../services/duplicateCheckService.js'
+import { createLeadFromSubmission } from '../services/leadCaptureService.js'
 
 function requireWorkspace(req) {
   const workspaceId = req.headers['x-workspace-id']
@@ -36,6 +38,51 @@ export async function getOne(req, res, next) {
       order: [['submittedAt', 'DESC']],
     })
     return res.json({ success: true, data: { form, submissions }, meta: {} })
+  } catch (error) {
+    return next(error)
+  }
+}
+
+export async function convertSubmissionsToLeads(req, res, next) {
+  try {
+    const workspaceId = requireWorkspace(req)
+    const form = await WebForm.findOne({
+      where: { id: req.params.id, workspaceId },
+      include: [{ model: WebFormField, as: 'fields' }],
+    })
+    if (!form) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Form not found' } })
+
+    const submissionIds = Array.isArray(req.body?.submissionIds) ? req.body.submissionIds : []
+    if (!submissionIds.length) {
+      return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'submissionIds is required' } })
+    }
+
+    const submissions = await WebFormSubmission.findAll({ where: { id: submissionIds, formId: form.id } })
+
+    const created = []
+    const skipped = []
+    for (const submission of submissions) {
+      if (submission.leadId) {
+        skipped.push(submission.id)
+        continue
+      }
+      const { isDuplicate, existingLead } = await checkAndHandleDuplicate(submission.data, form, workspaceId)
+      const lead = isDuplicate
+        ? existingLead
+        : await createLeadFromSubmission({ data: submission.data }, form, workspaceId, req.user?.companyId || null, {
+            utmSource: submission.utmSource || null,
+            landingUrl: submission.landingUrl || null,
+            actorUserId: req.user?.id || null,
+          })
+      await submission.update({
+        leadId: lead?.id || null,
+        isDuplicate,
+        duplicateLeadId: isDuplicate ? existingLead?.id || null : null,
+      })
+      created.push({ submissionId: submission.id, leadId: lead?.id || null, isDuplicate })
+    }
+
+    return res.json({ success: true, data: { created, skipped }, meta: {} })
   } catch (error) {
     return next(error)
   }

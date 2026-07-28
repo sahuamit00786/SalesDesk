@@ -14,9 +14,8 @@ import { emitToUser } from './realtime/socketHub.js'
  *   - if the socket layer is down or the user is offline, nothing is lost:
  *     the DB row remains the source of truth and polling still works.
  *
- * Every existing call site (leave approvals, notificationEmailQueue, etc.)
- * gains realtime delivery automatically — no other file needs to change to
- * emit notifications.
+ * Every existing call site (notificationEmailQueue, etc.) gains realtime
+ * delivery automatically — no other file needs to change to emit notifications.
  */
 
 export const REALTIME_EVENTS = {

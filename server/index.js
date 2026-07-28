@@ -26,6 +26,7 @@ import { startDailyDigestJob } from './src/jobs/dailyDigestJob.js'
 import { startPeriodicDigestJob } from './src/jobs/periodicDigestJob.js'
 import { startNotificationEmailWorker } from './src/queues/notificationEmailQueue.js'
 import { startEmailSequenceWorker } from './src/queues/emailSequenceQueue.js'
+import { startWhatsAppMediaWorker } from './src/queues/whatsappMediaQueue.js'
 import { getRedis } from './src/config/redis.js'
 import { bullmqConnectionFromEnv } from './src/queues/connection.js'
 
@@ -163,6 +164,7 @@ function startBackgroundJobs() {
   startNotificationEmailWorker()
   startWorkflowTriggerWorker()
   startEmailSequenceWorker()
+  startWhatsAppMediaWorker()
   if (bullConn) {
     // eslint-disable-next-line no-console
     console.log('BullMQ workers: email templates, workflows')

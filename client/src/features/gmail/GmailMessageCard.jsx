@@ -5,6 +5,7 @@ import GmailEmailBody from '@/features/gmail/GmailEmailBody'
 import GmailAttachmentChip from '@/features/gmail/GmailAttachmentChip'
 import GmailAvatar from '@/features/gmail/GmailAvatar'
 import { formatEmailDateTime } from '@/features/gmail/gmailParserUtils'
+import { getEmailTrackingBadge } from '@/features/gmail/emailTrackingBadge'
 
 export default function GmailMessageCard({
   message,
@@ -36,6 +37,11 @@ export default function GmailMessageCard({
           )}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
+          {!mailboxMode && message.direction === 'outbound' ? (
+            <span className={cn('rounded px-1.5 py-0.5 text-[10px] font-semibold', getEmailTrackingBadge(message).className)}>
+              {getEmailTrackingBadge(message).label}
+            </span>
+          ) : null}
           <span className="whitespace-nowrap text-[10px] text-ink-muted" title={formatEmailDateTime(message.date)}>
             {message.dateFormatted}
           </span>

@@ -28,7 +28,7 @@ export function OpportunityEventHoverCard({ event, anchorRect, onMouseEnter, onM
     assignedTo: event?.ownerUserId,
   }
 
-  const { top, left, maxCardHeight } = useMemo(
+  const { top, bottom, left, maxCardHeight } = useMemo(
     () => computeCalendarPopoverPosition(anchorRect),
     [anchorRect?.top, anchorRect?.bottom, anchorRect?.left, anchorRect?.right, anchorRect?.width, anchorRect?.height],
   )
@@ -77,7 +77,7 @@ export function OpportunityEventHoverCard({ event, anchorRect, onMouseEnter, onM
         'fixed z-[130] flex min-h-0 w-[min(380px,calc(100vw-24px))] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-2xl transition-[opacity,transform] duration-200 ease-out will-change-[opacity,transform]',
         exiting ? 'pointer-events-none opacity-0 scale-[0.97] translate-y-1' : 'opacity-100 scale-100 translate-y-0',
       )}
-      style={{ top, left, maxHeight: maxCardHeight }}
+      style={{ top, bottom, left, maxHeight: maxCardHeight }}
     >
       <div className="flex items-start justify-between gap-2 border-b border-violet-100 bg-gradient-to-r from-violet-50 to-fuchsia-50 px-3 py-2.5">
         <div className="min-w-0 flex-1">

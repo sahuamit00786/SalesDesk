@@ -31,6 +31,12 @@ import {
   useGetLeadTaskTimelineQuery,
   usePatchLeadTaskMutation,
 } from '@/features/leads/leadsApi'
+import {
+  useCreateDealTaskCommentMutation,
+  useCreateDealTaskMutation,
+  useGetDealTaskTimelineQuery,
+  usePatchDealTaskMutation,
+} from '@/features/deals/dealsApi'
 import { PRIORITY_META, STATUS_META } from '@/features/tasks/taskConstants'
 
 export const LEAD_TASK_TYPE_OPTIONS = [
@@ -181,9 +187,10 @@ function leadInitials(label) {
   )
 }
 
-export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTitle, onSaved }) {
+export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, dealId, task, leadTitle, onSaved }) {
   const isEdit = Boolean(task?.id)
-  const isLeadPreset = Boolean(leadIdProp)
+  const isDealMode = Boolean(dealId)
+  const isLeadPreset = Boolean(leadIdProp) || isDealMode
   const [chosenLeadId, setChosenLeadId] = useState('')
   const [chosenLeadLabel, setChosenLeadLabel] = useState('')
   const [leadSearch, setLeadSearch] = useState('')
@@ -208,9 +215,15 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
     return arr
   }, [leadsRes])
 
-  const [createTask, { isLoading: creating }] = useCreateLeadTaskMutation()
-  const [patchTask, { isLoading: patching }] = usePatchLeadTaskMutation()
-  const [addComment, { isLoading: commenting }] = useCreateLeadTaskCommentMutation()
+  const [createLeadTask, { isLoading: creatingLeadTask }] = useCreateLeadTaskMutation()
+  const [patchLeadTask, { isLoading: patchingLeadTask }] = usePatchLeadTaskMutation()
+  const [addLeadComment, { isLoading: commentingLead }] = useCreateLeadTaskCommentMutation()
+  const [createDealTask, { isLoading: creatingDealTask }] = useCreateDealTaskMutation()
+  const [patchDealTask, { isLoading: patchingDealTask }] = usePatchDealTaskMutation()
+  const [addDealComment, { isLoading: commentingDeal }] = useCreateDealTaskCommentMutation()
+  const creating = isDealMode ? creatingDealTask : creatingLeadTask
+  const patchingTask = isDealMode ? patchingDealTask : patchingLeadTask
+  const commenting = isDealMode ? commentingDeal : commentingLead
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -229,7 +242,7 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
   const [commentDraft, setCommentDraft] = useState('')
   const [internalDraft, setInternalDraft] = useState('')
 
-  const saving = creating || patching
+  const saving = creating || patchingTask
 
   useEffect(() => {
     if (!open) return
@@ -343,11 +356,15 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
     }
     try {
       if (isEdit) {
-        const res = await patchTask({ id: effectiveLeadId, taskId: task.id, ...base, status }).unwrap()
+        const res = isDealMode
+          ? await patchDealTask({ id: dealId, taskId: task.id, ...base, status }).unwrap()
+          : await patchLeadTask({ id: effectiveLeadId, taskId: task.id, ...base, status }).unwrap()
         toast.success('Task updated')
         onSaved?.(res?.data)
       } else {
-        const res = await createTask({ id: effectiveLeadId, ...base, status }).unwrap()
+        const res = isDealMode
+          ? await createDealTask({ id: dealId, ...base, status }).unwrap()
+          : await createLeadTask({ id: effectiveLeadId, ...base, status }).unwrap()
         toast.success('Task created')
         onSaved?.(res?.data)
       }
@@ -368,9 +385,13 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
 
   async function handleAddComment(isInternal) {
     const text = (isInternal ? internalDraft : commentDraft).trim()
-    if (!text || !task?.id || !effectiveLeadId) return
+    if (!text || !task?.id || (!isDealMode && !effectiveLeadId)) return
     try {
-      await addComment({ id: effectiveLeadId, taskId: task.id, body: text, isInternal: Boolean(isInternal) }).unwrap()
+      if (isDealMode) {
+        await addDealComment({ id: dealId, taskId: task.id, body: text, isInternal: Boolean(isInternal) }).unwrap()
+      } else {
+        await addLeadComment({ id: effectiveLeadId, taskId: task.id, body: text, isInternal: Boolean(isInternal) }).unwrap()
+      }
       if (isInternal) setInternalDraft('')
       else setCommentDraft('')
       toast.success(isInternal ? 'Note added' : 'Comment added')
@@ -797,6 +818,7 @@ export function LeadTaskDrawer({ open, onClose, leadId: leadIdProp, task, leadTi
           <ActivitySection
             taskId={task.id}
             leadId={effectiveLeadId}
+            dealId={dealId}
             tab={activityTab}
             onTab={setActivityTab}
             commentDraft={commentDraft}
@@ -872,6 +894,7 @@ function SectionCard({ icon: Icon, title, hint, badge, collapsible = false, defa
 function ActivitySection({
   taskId,
   leadId,
+  dealId,
   tab,
   onTab,
   commentDraft,
@@ -881,10 +904,17 @@ function ActivitySection({
   onAddComment,
   commenting,
 }) {
-  const { data: timelineRes, isFetching } = useGetLeadTaskTimelineQuery(
+  const isDealMode = Boolean(dealId)
+  const { data: leadTimelineRes, isFetching: fetchingLeadTimeline } = useGetLeadTaskTimelineQuery(
     { id: leadId, taskId },
-    { skip: !leadId || !taskId },
+    { skip: isDealMode || !leadId || !taskId },
   )
+  const { data: dealTimelineRes, isFetching: fetchingDealTimeline } = useGetDealTaskTimelineQuery(
+    { id: dealId, taskId },
+    { skip: !isDealMode || !dealId || !taskId },
+  )
+  const timelineRes = isDealMode ? dealTimelineRes : leadTimelineRes
+  const isFetching = isDealMode ? fetchingDealTimeline : fetchingLeadTimeline
   const items = useMemo(() => (Array.isArray(timelineRes?.data) ? timelineRes.data : []), [timelineRes])
   const comments = useMemo(() => items.filter((it) => it.kind === 'comment'), [items])
   const notes = useMemo(() => items.filter((it) => it.kind === 'note'), [items])

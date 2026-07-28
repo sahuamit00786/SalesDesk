@@ -158,6 +158,10 @@ export function LeadDistributionPage() {
   const [hoverAnchor, setHoverAnchor] = useState(null)
   const { data: formMeta } = useGetLeadFormMetaQuery()
   const users = formMeta?.data?.users || []
+  const availableTags = formMeta?.data?.tags || []
+  const [tagFilter, setTagFilter] = useState(() => [])
+  const [tagDropdownOpen, setTagDropdownOpen] = useState(false)
+  const tagDropdownRef = useRef(null)
 
   const listFilterParams = useMemo(() => {
     const p = {
@@ -171,8 +175,11 @@ export function LeadDistributionPage() {
     if (statusFilter.length > 0) {
       p.status = [...statusFilter].sort().join(',')
     }
+    if (tagFilter.length > 0) {
+      p.tags = [...tagFilter].sort().join(',')
+    }
     return p
-  }, [debouncedSearch, recordType, statusFilter])
+  }, [debouncedSearch, recordType, statusFilter, tagFilter])
 
   const listParams = useMemo(
     () => ({ ...listFilterParams, page, limit }),
@@ -194,10 +201,11 @@ export function LeadDistributionPage() {
   }, [search])
 
   const statusFilterKey = statusFilter.slice().sort().join(',')
+  const tagFilterKey = tagFilter.slice().sort().join(',')
 
   useEffect(() => {
     setPage(1)
-  }, [debouncedSearch, recordType, statusFilterKey])
+  }, [debouncedSearch, recordType, statusFilterKey, tagFilterKey])
 
   useEffect(() => {
     if (!statusDropdownOpen) return
@@ -218,6 +226,25 @@ export function LeadDistributionPage() {
     return () => window.removeEventListener('keydown', onKey)
   }, [statusDropdownOpen])
 
+  useEffect(() => {
+    if (!tagDropdownOpen) return
+    function onDocMouseDown(e) {
+      const el = tagDropdownRef.current
+      if (el && !el.contains(e.target)) setTagDropdownOpen(false)
+    }
+    document.addEventListener('mousedown', onDocMouseDown)
+    return () => document.removeEventListener('mousedown', onDocMouseDown)
+  }, [tagDropdownOpen])
+
+  useEffect(() => {
+    if (!tagDropdownOpen) return
+    function onKey(e) {
+      if (e.key === 'Escape') setTagDropdownOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [tagDropdownOpen])
+
   function toggleStatusOption(id) {
     setStatusFilter((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
   }
@@ -228,6 +255,25 @@ export function LeadDistributionPage() {
 
   function selectAllStatuses() {
     setStatusFilter(STATUS_OPTIONS.map((o) => o.id))
+  }
+
+  function toggleTagOption(name) {
+    setTagFilter((prev) => (prev.includes(name) ? prev.filter((x) => x !== name) : [...prev, name]))
+  }
+
+  function clearTagFilter() {
+    setTagFilter([])
+  }
+
+  function selectAllTags() {
+    setTagFilter(availableTags.map((t) => t.name))
+  }
+
+  function formatTagFilterSummary(names) {
+    if (!names.length || names.length >= availableTags.length) return 'All tags'
+    if (names.length === 1) return names[0]
+    if (names.length === 2) return `${names[0]}, ${names[1]}`
+    return `${names.length} selected`
   }
 
   useEffect(() => {
@@ -545,6 +591,84 @@ export function LeadDistributionPage() {
                 </div>
               ) : null}
             </div>
+            {availableTags.length > 0 ? (
+              <>
+                <span className="mx-0.5 h-5 w-px shrink-0 bg-surface-border" aria-hidden />
+                <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-ink-muted">Tags</span>
+                <div className="relative shrink-0" ref={tagDropdownRef}>
+                  <button
+                    type="button"
+                    id="lead-dist-tag-trigger"
+                    aria-haspopup="listbox"
+                    aria-expanded={tagDropdownOpen}
+                    aria-controls="lead-dist-tag-listbox"
+                    onClick={() => setTagDropdownOpen((o) => !o)}
+                    className={cn(
+                      'inline-flex h-8 max-w-[11rem] items-center gap-1.5 rounded-lg border px-2.5 py-1 text-left text-[11px] font-semibold transition sm:h-9 sm:max-w-[14rem] sm:px-3 sm:text-xs',
+                      tagFilter.length > 0
+                        ? 'border-brand-300 bg-brand-50 text-brand-900'
+                        : 'border-surface-border bg-white text-ink-muted hover:border-brand-200 hover:bg-brand-50/40 hover:text-ink',
+                    )}
+                  >
+                    <span className="min-w-0 flex-1 truncate">{formatTagFilterSummary(tagFilter)}</span>
+                    <ChevronDown
+                      className={cn('h-3.5 w-3.5 shrink-0 opacity-60 transition', tagDropdownOpen && 'rotate-180')}
+                      aria-hidden
+                    />
+                  </button>
+                  {tagDropdownOpen ? (
+                    <div
+                      id="lead-dist-tag-listbox"
+                      role="listbox"
+                      aria-labelledby="lead-dist-tag-trigger"
+                      aria-multiselectable="true"
+                      className="absolute left-0 top-[calc(100%+4px)] z-50 w-[min(calc(100vw-2rem),16rem)] rounded-xl border border-surface-border bg-white py-1 shadow-lg ring-1 ring-black/5"
+                      onMouseDown={(e) => e.preventDefault()}
+                    >
+                      <div className="flex items-center justify-between gap-2 border-b border-surface-border px-2 py-1.5">
+                        <button
+                          type="button"
+                          className="text-[11px] font-semibold text-brand-700 hover:underline"
+                          onClick={selectAllTags}
+                        >
+                          Select all
+                        </button>
+                        <button
+                          type="button"
+                          className="text-[11px] font-semibold text-ink-muted hover:text-ink"
+                          onClick={clearTagFilter}
+                        >
+                          Clear
+                        </button>
+                      </div>
+                      <ul className="max-h-56 overflow-y-auto py-1">
+                        {availableTags.map((tag) => {
+                          const checked = tagFilter.includes(tag.name)
+                          return (
+                            <li key={tag.id} role="option" aria-selected={checked}>
+                              <label className="flex cursor-pointer items-center gap-2.5 px-3 py-2 text-sm hover:bg-surface-subtle">
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => toggleTagOption(tag.name)}
+                                  className="h-3.5 w-3.5 rounded border-surface-border text-brand-600 focus:ring-brand-500"
+                                />
+                                <span
+                                  className="h-2.5 w-2.5 shrink-0 rounded-full"
+                                  style={{ backgroundColor: tag.color || '#3b73f5' }}
+                                  aria-hidden
+                                />
+                                <span className="truncate text-ink">{tag.name}</span>
+                              </label>
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    </div>
+                  ) : null}
+                </div>
+              </>
+            ) : null}
             <span className="mx-0.5 h-5 w-px shrink-0 bg-surface-border" aria-hidden />
             <p className="shrink-0 whitespace-nowrap pl-0.5 text-[11px] text-ink-muted sm:text-xs">
               <span className="font-semibold text-ink">{isLoading ? '—' : total}</span> unassigned

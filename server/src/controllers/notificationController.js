@@ -32,9 +32,6 @@ export async function getNotifications(req, res, next) {
       userId: req.user.id,
       companyId: req.user.companyId,
       workspaceId: req.workspaceId,
-      // HR/attendance module isn't in use — hide stray attendance notifications
-      // (e.g. leftover "Marked absent" rows from before the module was parked).
-      type: { [Op.ne]: 'attendance' },
     }
     if (unreadOnly) where.isRead = false
 
@@ -80,7 +77,6 @@ export async function getNotificationSummary(req, res, next) {
       userId: req.user.id,
       companyId: req.user.companyId,
       workspaceId: req.workspaceId,
-      type: { [Op.ne]: 'attendance' },
     }
 
     const [rows, totalUnread, todayCount] = await Promise.all([
@@ -210,7 +206,6 @@ export async function getUnreadCount(req, res, next) {
         companyId: req.user.companyId,
         workspaceId: req.workspaceId,
         isRead: false,
-        type: { [Op.ne]: 'attendance' },
       },
     })
 

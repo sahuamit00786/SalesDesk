@@ -1,7 +1,7 @@
 import { Op, fn, col, literal } from 'sequelize'
 import {
   Lead, LeadFollowup, LeadTask, Activity, Meeting, Deal, DealPayment,
-  User, UserWorkspace, Invoice, Quotation, InvoicePayment, LeaveRequest, LeaveType,
+  User, UserWorkspace, Invoice, Quotation, InvoicePayment,
   DuplicateLead, Campaign, CampaignLead, PipelineStatus,
 } from '../models/index.js'
 
@@ -439,92 +439,6 @@ export async function paymentsReport(req, res, next) {
           byStatus: dealByStatus.map((r) => ({ status: capitalize(r.status), count: Number(r.count), value: Number(r.total) })),
         },
         tables: { ledger },
-      },
-    })
-  } catch (e) {
-    return next(e)
-  }
-}
-
-// ─── leave report ─────────────────────────────────────────────────────────────
-
-export async function leaveReport(req, res, next) {
-  try {
-    const ctx = getContext(req)
-    const { from, to } = parseRange(req.query)
-    const { companyId } = ctx
-    const where = { companyId, fromDate: { [Op.lte]: to }, toDate: { [Op.gte]: from } }
-    if (req.query.userId) where.userId = req.query.userId
-    if (req.query.status) where.status = req.query.status
-
-    const [requests, byTypeRaw, byUserRaw] = await Promise.all([
-      LeaveRequest.findAll({
-        where,
-        include: [
-          { model: User, as: 'user', attributes: ['id', 'name', 'email'], required: true },
-          { model: LeaveType, as: 'leaveType', attributes: ['id', 'name', 'color'], required: true },
-        ],
-        order: [['fromDate', 'DESC']],
-        limit: 200,
-      }),
-      LeaveRequest.findAll({
-        where: { ...where, status: 'approved' },
-        attributes: ['leaveTypeId', [fn('SUM', col('days')), 'totalDays'], [fn('COUNT', col('id')), 'count']],
-        group: ['leaveTypeId'],
-        raw: true,
-      }),
-      LeaveRequest.findAll({
-        where,
-        attributes: ['userId', 'leaveTypeId', 'status', [fn('SUM', col('days')), 'totalDays']],
-        group: ['userId', 'leaveTypeId', 'status'],
-        raw: true,
-      }),
-    ])
-
-    const typeIds = [...new Set(byTypeRaw.map((r) => r.leaveTypeId))]
-    const types = typeIds.length ? await LeaveType.findAll({ where: { id: { [Op.in]: typeIds } }, attributes: ['id', 'name'], raw: true }) : []
-    const typeMap = Object.fromEntries(types.map((t) => [t.id, t.name]))
-
-    const userIds = [...new Set(byUserRaw.map((r) => r.userId))]
-    const users = userIds.length ? await User.findAll({ where: { id: { [Op.in]: userIds } }, attributes: ['id', 'name'], raw: true }) : []
-    const userMap = Object.fromEntries(users.map((u) => [u.id, u.name]))
-
-    const approved = requests.filter((r) => r.status === 'approved')
-    const pending = requests.filter((r) => r.status === 'pending')
-
-    return res.json({
-      success: true,
-      data: {
-        kpis: {
-          totalRequests: requests.length,
-          approvedDays: approved.reduce((s, r) => s + Number(r.days), 0),
-          pendingRequests: pending.length,
-          rejected: requests.filter((r) => r.status === 'rejected').length,
-        },
-        charts: {
-          byType: byTypeRaw.map((r) => ({ name: typeMap[r.leaveTypeId] || 'Unknown', days: Number(r.totalDays), count: Number(r.count) })),
-          byEmployee: Object.values(
-            byUserRaw.reduce((acc, r) => {
-              const key = r.userId
-              if (!acc[key]) acc[key] = { name: userMap[r.userId] || 'Unknown', approved: 0, pending: 0 }
-              if (r.status === 'approved') acc[key].approved += Number(r.totalDays)
-              if (r.status === 'pending') acc[key].pending += Number(r.totalDays)
-              return acc
-            }, {}),
-          ),
-        },
-        tables: {
-          requests: requests.map((r) => ({
-            id: r.id,
-            employee: r.user?.name || '—',
-            leaveType: r.leaveType?.name || '—',
-            fromDate: r.fromDate,
-            toDate: r.toDate,
-            days: Number(r.days),
-            status: r.status,
-            reason: r.reason,
-          })),
-        },
       },
     })
   } catch (e) {

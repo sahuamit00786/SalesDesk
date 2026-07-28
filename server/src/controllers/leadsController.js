@@ -21,6 +21,7 @@ import {
   LeadTaskSubtask,
   LeadTaskComment,
   LeadFollowup,
+  LeadTag,
   LeadSource,
   PipelineStatus,
   DealStatus,
@@ -95,19 +96,19 @@ const LEAD_TASK_STATUSES = ['pending', 'in_progress', 'completed', 'cancelled']
 // (still reachable via an explicit status=completed filter).
 const COMPLETED_TASKS_VISIBLE_DAYS = 7
 
-function normalizeLeadTaskType(value) {
+export function normalizeLeadTaskType(value) {
   const t = String(value || '').trim()
   return LEAD_TASK_TYPES.includes(t) ? t : 'follow_up'
 }
 
-function normalizeLeadTaskStatus(value) {
+export function normalizeLeadTaskStatus(value) {
   const t = String(value || '').trim().toLowerCase()
   if (t === 'open') return 'pending'
   if (LEAD_TASK_STATUSES.includes(t)) return t
   return null
 }
 
-function normalizeLeadTaskPriority(value) {
+export function normalizeLeadTaskPriority(value) {
   const t = String(value || '').trim().toLowerCase()
   return LEAD_TASK_PRIORITIES.includes(t) ? t : null
 }
@@ -122,7 +123,7 @@ function isOverdueTask(row) {
   return t < Date.now()
 }
 
-function sanitizeAttachmentsInput(value) {
+export function sanitizeAttachmentsInput(value) {
   if (value === undefined) return undefined
   if (value === null) return null
   if (!Array.isArray(value)) return null
@@ -181,7 +182,7 @@ function sanitizeReminderInput(item) {
   }
 }
 
-async function syncTaskReminders({ task, remindersInput, actorUserId, workspaceId, companyId }) {
+export async function syncTaskReminders({ task, remindersInput, actorUserId, workspaceId, companyId }) {
   if (remindersInput === undefined) return
   const list = Array.isArray(remindersInput) ? remindersInput.map(sanitizeReminderInput).filter(Boolean) : []
   // Replace strategy: soft-delete all existing task reminders, then recreate.
@@ -210,7 +211,7 @@ async function syncTaskReminders({ task, remindersInput, actorUserId, workspaceI
   }
 }
 
-async function replaceLeadTaskSubtasks(leadTaskId, subtasksInput, transaction) {
+export async function replaceLeadTaskSubtasks(leadTaskId, subtasksInput, transaction) {
   await LeadTaskSubtask.destroy({ where: { leadTaskId }, transaction })
   const list = Array.isArray(subtasksInput) ? subtasksInput : []
   const rows = list
@@ -274,7 +275,7 @@ async function clearLeadListCache(workspaceId) {
   }
 }
 
-function buildListWhere(query) {
+async function buildListWhere(query, companyId) {
   const where = { isDeleted: false }
   const status = parseCsvList(query.status).filter((v) => statusValues.includes(v))
   const source = parseCsvList(query.source).filter((v) => sourceValues.includes(v))
@@ -348,6 +349,22 @@ function buildListWhere(query) {
     where.closingDate = {}
     if (closingFrom) where.closingDate[Op.gte] = closingFrom
     if (closingTo) where.closingDate[Op.lte] = closingTo
+  }
+
+  const tagNames = parseCsvList(query.tags).map((t) => String(t).trim()).filter(Boolean)
+  if (tagNames.length) {
+    const tagRows = await Tag.findAll({
+      where: { companyId, name: { [Op.in]: tagNames } },
+      attributes: ['id'],
+      raw: true,
+    })
+    const tagIds = tagRows.map((t) => t.id)
+    const leadIds = tagIds.length
+      ? await LeadTag.findAll({ where: { tagId: { [Op.in]: tagIds } }, attributes: ['leadId'], raw: true }).then((rows) => [
+          ...new Set(rows.map((r) => r.leadId)),
+        ])
+      : []
+    where.id = leadIds.length ? { [Op.in]: leadIds } : { [Op.eq]: null }
   }
 
   return where
@@ -732,7 +749,7 @@ export async function list(req, res, next) {
       throw e
     }
 
-    const flatWhere = buildListWhere(req.query)
+    const flatWhere = await buildListWhere(req.query, req.user.companyId)
     const advancedWhere = buildAdvancedListWhere(parseFiltersParam(req.query.filters), LEAD_FILTER_FIELDS)
     let where = { ...accessWhere, ...flatWhere }
     if (advancedWhere) {
@@ -826,7 +843,7 @@ export async function listIds(req, res, next) {
       throw e
     }
 
-    const flatWhere = buildListWhere(req.query)
+    const flatWhere = await buildListWhere(req.query, req.user.companyId)
     const advancedWhere = buildAdvancedListWhere(parseFiltersParam(req.query.filters), LEAD_FILTER_FIELDS)
     let where = { ...accessWhere, ...flatWhere }
     if (advancedWhere) {
@@ -2088,9 +2105,12 @@ export async function deleteNote(req, res, next) {
   }
 }
 
-async function companyGoogleEmailToken(companyId) {
+/** Google email is a per-user connection (each user connects their own account) — never
+ * scope this lookup by companyId alone, or every user in the company would be handed
+ * whichever teammate's mailbox/token row happens to match first. */
+async function companyGoogleEmailToken(companyId, userId) {
   return CompanyGoogleToken.findOne({
-    where: { companyId },
+    where: { companyId, userId },
     order: [['updatedAt', 'DESC']],
   })
 }
@@ -2140,7 +2160,7 @@ function isInvalidGrant(err) {
 
 export async function getGoogleEmailAuthStatus(req, res, next) {
   try {
-    const token = await companyGoogleEmailToken(req.user.companyId)
+    const token = await companyGoogleEmailToken(req.user.companyId, req.user.id)
     const connected = hasGoogleMailboxRefreshToken(token)
     const readMailbox = connected ? googleTokenAllowsMailboxRead(token?.scope) : null
     const calendarConnected = connected ? googleTokenAllowsCalendar(token?.scope) : false
@@ -2244,7 +2264,7 @@ export async function connectGoogleEmailCallback(req, res, next) {
     const oauth2 = google.oauth2({ auth: oauth2Client, version: 'v2' })
     const profile = await oauth2.userinfo.get()
     const email = profile.data?.email || null
-    const existing = await CompanyGoogleToken.findOne({ where: { companyId: state.companyId } })
+    const existing = await CompanyGoogleToken.findOne({ where: { companyId: state.companyId, userId: state.userId } })
     const payload = {
       companyId: state.companyId,
       userId: state.userId,
@@ -2257,7 +2277,7 @@ export async function connectGoogleEmailCallback(req, res, next) {
     }
     if (existing) await existing.update(payload)
     else await CompanyGoogleToken.create(payload)
-    const row = await CompanyGoogleToken.findOne({ where: { companyId: state.companyId }, order: [['updatedAt', 'DESC']] })
+    const row = await CompanyGoogleToken.findOne({ where: { companyId: state.companyId, userId: state.userId }, order: [['updatedAt', 'DESC']] })
     if (row) {
       registerGmailWatchForTokenRow(row).catch(() => {})
     }
@@ -2275,7 +2295,7 @@ export async function listLeadEmails(req, res, next) {
   try {
     const lead = await findCompanyLead(req, req.params.id)
     if (!lead) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Lead not found' } })
-    const tokenRow = await companyGoogleEmailToken(req.user.companyId)
+    const tokenRow = await companyGoogleEmailToken(req.user.companyId, req.user.id)
     if (!hasGoogleMailboxRefreshToken(tokenRow)) {
       return res.json({ success: true, data: [], meta: { googleEmailConnected: false } })
     }
@@ -2296,7 +2316,7 @@ export async function listLeadEmailThreads(req, res, next) {
   try {
     const lead = await findCompanyLead(req, req.params.id)
     if (!lead) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Lead not found' } })
-    const tokenRow = await companyGoogleEmailToken(req.user.companyId)
+    const tokenRow = await companyGoogleEmailToken(req.user.companyId, req.user.id)
     if (!hasGoogleMailboxRefreshToken(tokenRow)) {
       return res.json({ success: true, data: [], meta: { googleEmailConnected: false } })
     }
@@ -2310,12 +2330,27 @@ export async function listLeadEmailThreads(req, res, next) {
     for (const row of filteredRows) {
       const threadKey = row.threadId || `single:${row.id}`
       if (!threadsMap.has(threadKey)) {
-        threadsMap.set(threadKey, { threadId: row.threadId || null, subject: row.subject || '(No subject)', lastMessageAt: row.sentAt || row.createdAt, lastFromEmail: row.fromEmail || null, lastDirection: row.direction, count: 0, preview: row.bodyText || row.bodyHtml || '', status: row.status, hasInbound: false, messages: [] })
+        threadsMap.set(threadKey, {
+          threadId: row.threadId || null, subject: row.subject || '(No subject)', lastMessageAt: row.sentAt || row.createdAt, lastFromEmail: row.fromEmail || null, lastDirection: row.direction, count: 0, preview: row.bodyText || row.bodyHtml || '', status: row.status, hasInbound: false, messages: [],
+          outboundStatus: null, outboundOpenedAt: null, outboundClickedAt: null, outboundOpenCount: 0, outboundClickCount: 0, _lastOutboundAt: null,
+        })
       }
       const current = threadsMap.get(threadKey)
       current.count += 1
       current.messages.push(row)
-      if (row.direction === 'inbound') current.hasInbound = true
+      if (row.direction === 'inbound') {
+        current.hasInbound = true
+      } else {
+        const rowOutboundAt = row.sentAt || row.createdAt
+        if (!current._lastOutboundAt || new Date(rowOutboundAt).getTime() >= new Date(current._lastOutboundAt).getTime()) {
+          current._lastOutboundAt = rowOutboundAt
+          current.outboundStatus = row.status
+          current.outboundOpenedAt = row.openedAt
+          current.outboundClickedAt = row.clickedAt
+          current.outboundOpenCount = row.openCount
+          current.outboundClickCount = row.clickCount
+        }
+      }
       if (new Date(row.sentAt || row.createdAt).getTime() > new Date(current.lastMessageAt).getTime()) {
         current.lastMessageAt = row.sentAt || row.createdAt
         current.lastFromEmail = row.fromEmail || null
@@ -2324,7 +2359,9 @@ export async function listLeadEmailThreads(req, res, next) {
         current.status = row.status
       }
     }
-    const threads = Array.from(threadsMap.values()).sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime())
+    const threads = Array.from(threadsMap.values())
+      .map(({ _lastOutboundAt, ...t }) => t)
+      .sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime())
     return res.json({ success: true, data: threads, meta: {} })
   } catch (e) {
     return next(e)
@@ -2335,7 +2372,7 @@ export async function getLeadEmailThread(req, res, next) {
   try {
     const lead = await findCompanyLead(req, req.params.id)
     if (!lead) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Lead not found' } })
-    const tokenRow = await companyGoogleEmailToken(req.user.companyId)
+    const tokenRow = await companyGoogleEmailToken(req.user.companyId, req.user.id)
     if (!hasGoogleMailboxRefreshToken(tokenRow)) {
       return res.json({ success: true, data: [], meta: { googleEmailConnected: false } })
     }
@@ -2370,7 +2407,7 @@ export async function sendLeadEmail(req, res, next) {
       return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'At least one recipient is required' } })
     }
 
-    const tokenRow = await CompanyGoogleToken.findOne({ where: { companyId: req.user.companyId } })
+    const tokenRow = await CompanyGoogleToken.findOne({ where: { companyId: req.user.companyId, userId: req.user.id } })
     if (!tokenRow?.refreshToken) {
       return res.status(400).json({
         success: false,
@@ -2483,7 +2520,7 @@ export async function syncLeadEmailReplies(req, res, next) {
     if (!lead) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Lead not found' } })
     if (!lead.email) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Lead email is required to sync replies' } })
 
-    const tokenRow = await CompanyGoogleToken.findOne({ where: { companyId: req.user.companyId } })
+    const tokenRow = await CompanyGoogleToken.findOne({ where: { companyId: req.user.companyId, userId: req.user.id } })
     if (!tokenRow?.refreshToken) {
       return res.status(400).json({
         success: false,
@@ -2512,7 +2549,7 @@ export async function listEmailThreads(req, res, next) {
   try {
     const workspaceIds = await allowedWorkspaceIdsForUser(req.user)
     if (!workspaceIds.length) return res.json({ success: true, data: [], meta: { total: 0 } })
-    const tokenRow = await companyGoogleEmailToken(req.user.companyId)
+    const tokenRow = await companyGoogleEmailToken(req.user.companyId, req.user.id)
     if (!hasGoogleMailboxRefreshToken(tokenRow)) {
       const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50))
       return res.json({
@@ -2581,7 +2618,7 @@ export async function getEmailThread(req, res, next) {
   try {
     const workspaceIds = await allowedWorkspaceIdsForUser(req.user)
     if (!workspaceIds.length) return res.json({ success: true, data: [], meta: {} })
-    const tokenRow = await companyGoogleEmailToken(req.user.companyId)
+    const tokenRow = await companyGoogleEmailToken(req.user.companyId, req.user.id)
     if (!hasGoogleMailboxRefreshToken(tokenRow)) {
       return res.json({ success: true, data: [], meta: { googleEmailConnected: false } })
     }
@@ -2614,7 +2651,7 @@ export async function syncEmailReplies(req, res, next) {
   try {
     const workspaceIds = await allowedWorkspaceIdsForUser(req.user)
     if (!workspaceIds.length) return res.json({ success: true, data: { created: 0 }, meta: {} })
-    const tokenRow = await CompanyGoogleToken.findOne({ where: { companyId: req.user.companyId } })
+    const tokenRow = await CompanyGoogleToken.findOne({ where: { companyId: req.user.companyId, userId: req.user.id } })
     if (!tokenRow?.refreshToken) {
       return res.status(400).json({
         success: false,
@@ -2675,7 +2712,7 @@ export async function uploadEmailAttachments(req, res, next) {
   }
 }
 
-function decorateTaskRow(row) {
+export function decorateTaskRow(row) {
   if (!row) return row
   const json = typeof row.toJSON === 'function' ? row.toJSON() : { ...row }
   json.attachments = attachmentsArray(json.attachments)

@@ -4,7 +4,6 @@ import toast from 'react-hot-toast'
 import { BarChart3, Kanban, ShieldCheck } from '@/components/ui/icons'
 import { useLoginMutation } from '@/features/auth/authApi'
 import { useAppSelector } from '@/app/hooks'
-import { hasRealMenuAccess } from '@/utils/menuAccess'
 import { AuthScreenShell, authLinkClassName } from '@/components/auth/AuthScreenShell'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -82,16 +81,7 @@ export function LoginPage() {
       return
     }
     try {
-      const result = await login(parsed.data).unwrap()
-
-      // authApi's onQueryStarted already withholds setCredentials for zero-permission
-      // users (no token ever lands in the store, so no dashboard flash/redirect) — this
-      // just surfaces the toast explaining why nothing happened.
-      if (!hasRealMenuAccess(result?.data?.user)) {
-        toast.error('Your account has no menu permissions yet. Contact your workspace admin or company admin to get access.')
-        return
-      }
-
+      await login(parsed.data).unwrap()
       toast.success('Welcome back')
     } catch (err) {
       const code = err?.data?.error?.code

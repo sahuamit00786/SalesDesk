@@ -1,3 +1,5 @@
+import { Lock } from '@/components/ui/icons'
+
 /**
  * Shared heading row for lead / opportunity detail tabs (title + subtitle + optional actions).
  */
@@ -21,6 +23,19 @@ export function LeadTabEmptyState({ icon: Icon, title, description, action = nul
       <p className="mt-3 text-sm font-medium text-ink">{title}</p>
       {description ? <p className="mx-auto mt-1 max-w-md text-xs text-ink-muted">{description}</p> : null}
       {action ? <div className="mt-5 flex flex-wrap items-center justify-center gap-2">{action}</div> : null}
+    </div>
+  )
+}
+
+/** Shown instead of a tab's content when the role isn't granted view access to that menu. */
+export function LeadTabLockedState({ label }) {
+  return (
+    <div className="rounded-2xl border border-dashed border-amber-200 bg-amber-50/60 px-6 py-12 text-center">
+      <Lock className="mx-auto h-10 w-10 text-amber-400" aria-hidden />
+      <p className="mt-3 text-sm font-medium text-ink">Permission not given for {label}</p>
+      <p className="mx-auto mt-1 max-w-md text-xs text-ink-muted">
+        Ask your Company Admin, Manager, or Workspace Admin to grant {label} access.
+      </p>
     </div>
   )
 }

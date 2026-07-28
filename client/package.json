@@ -20,6 +20,7 @@
     "@radix-ui/react-accordion": "^1.2.12",
     "@reduxjs/toolkit": "^2.11.2",
     "@tanstack/react-table": "^8.21.3",
+    "@tanstack/react-virtual": "^3.14.8",
     "@xyflow/react": "^12.10.2",
     "animejs": "^4.4.1",
     "axios": "^1.15.2",

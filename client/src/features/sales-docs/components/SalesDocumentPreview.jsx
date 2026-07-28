@@ -406,7 +406,7 @@ export function SalesDocumentPreview({
   const balanceDueFromPayments = Math.max(0, Number(grandTotal ?? 0) - totalPaid)
 
   const inner = (
-    <div className={cn(shell, pageMinH, 'relative flex flex-col')} style={shellFont}>
+    <div className={cn(shell, pageMinH, 'print:min-h-0', 'relative flex flex-col')} style={shellFont}>
       {accent ? <div className="h-1 w-full shrink-0 print:h-0.5" style={accentBarStyle} aria-hidden /> : null}
 
       {/* Draft watermark */}

@@ -11,6 +11,8 @@ import {
 } from '@/features/deals/dealPaymentsApi'
 import { SkeletonList } from '@/components/shared/SkeletonLoader'
 import { usePermission } from '@/hooks/usePermission'
+import { useAppSelector } from '@/app/hooks'
+import { isElevatedRole } from '@/utils/menuAccess'
 
 const MODES = [
   { value: 'bank_transfer', label: 'Bank Transfer' },
@@ -218,7 +220,9 @@ export function DealPaymentsTab({ dealId, dealValue, dealCurrency }) {
   const [editId, setEditId] = useState(null)
   const canCreate = usePermission('main.deal_payments', 'create')
   const canUpdate = usePermission('main.deal_payments', 'update')
-  const canDelete = usePermission('main.deal_payments', 'delete')
+  const user = useAppSelector((s) => s.auth.user)
+  // Deletion is further restricted to company admins, workspace admins, and managers.
+  const canDelete = usePermission('main.deal_payments', 'delete') && isElevatedRole(user)
 
   const payments = useMemo(() => data?.data || [], [data?.data])
 

@@ -115,7 +115,7 @@ Click the **Export** button (download icon) in the top-right of any report page.
 The Export button is disabled until the report has finished loading data.
 
 **Q: Can every report be exported?**
-Most can — Overview, Leads, Deals, Activities, Meetings, Tasks, Team, Opportunities, Follow-ups, Sales Docs, Payments, Leave, Employee Monthly, and Data Health all support Excel export. Email Performance and Campaigns currently support Print/PDF only (no Excel export button).
+Most can — Overview, Leads, Deals, Activities, Meetings, Tasks, Team, Opportunities, Follow-ups, Sales Docs, Payments, Employee Monthly, and Data Health all support Excel export. Email Performance and Campaigns currently support Print/PDF only (no Excel export button).
 
 **Q: What do the KPI cards on the Reports home page (Total Leads, Pipeline Value, Open Tasks, Win Rate) mean?**
 Quick totals pulled from the Leads, Deals, and Tasks reports for your current filter range — a preview before you dive into an individual report.

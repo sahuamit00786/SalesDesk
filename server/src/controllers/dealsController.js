@@ -1,9 +1,33 @@
 import Joi from 'joi'
 import { Op, fn, col, where as sqlWhere } from 'sequelize'
-import { DealActivity, Deal, DealStatus, Lead, OpportunityStage, User } from '../models/index.js'
+import {
+  DealActivity,
+  Deal,
+  DealStatus,
+  Lead,
+  OpportunityStage,
+  User,
+  LeadTask,
+  LeadTaskSubtask,
+  LeadTaskComment,
+  Reminder,
+} from '../models/index.js'
 import { allowedWorkspaceIdsForUser } from '../services/userWorkspaceService.js'
 import { leadAccessWhere } from '../services/leadVisibility.js'
-import { notifyDealStageChanged } from '../services/notification/teamNotificationService.js'
+import { notifyDealStageChanged, notifyTaskAssigned, notifyTaskCommentAdded } from '../services/notification/teamNotificationService.js'
+import {
+  maybePromotePendingTaskFromSubtasks,
+  promotePendingTasksByDueOrStartMany,
+} from '../services/leadTaskAutoStatusService.js'
+import {
+  normalizeLeadTaskType,
+  normalizeLeadTaskStatus,
+  normalizeLeadTaskPriority,
+  sanitizeAttachmentsInput,
+  syncTaskReminders,
+  replaceLeadTaskSubtasks,
+  decorateTaskRow,
+} from './leadsController.js'
 
 const dealIncludes = [
   {
@@ -528,6 +552,365 @@ export async function remove(req, res, next) {
     }
     await deal.update({ isDeleted: true })
     return res.json({ success: true, data: { id: deal.id }, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+// --- Deal-scoped task endpoints ---
+// Tasks created here tag `dealId` on the shared `lead_tasks` table (see LeadTask
+// model) so they show only on this deal's Tasks tab, not the parent lead's.
+
+async function findScopedDeal(req) {
+  const workspaceId = req.headers['x-workspace-id']
+  if (!workspaceId) {
+    const err = new Error('workspaceId is required')
+    err.status = 400
+    err.code = 'VALIDATION'
+    throw err
+  }
+  return Deal.findOne({
+    where: { id: req.params.id, workspaceId: String(workspaceId), isDeleted: false },
+    attributes: ['id', 'companyId', 'workspaceId', 'opportunityLeadId'],
+  })
+}
+
+function dealNotFound(res) {
+  return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Deal not found' } })
+}
+
+export async function listTasks(req, res, next) {
+  try {
+    const deal = await findScopedDeal(req)
+    if (!deal) return dealNotFound(res)
+    const rows = await LeadTask.findAll({
+      where: { dealId: deal.id, companyId: req.user.companyId },
+      include: [
+        { model: User, as: 'creator', attributes: ['id', 'name', 'email'], required: false },
+        { model: User, as: 'assignee', attributes: ['id', 'name', 'email'], required: false },
+        {
+          model: LeadTaskSubtask,
+          as: 'subtasks',
+          required: false,
+          separate: true,
+          order: [
+            ['position', 'ASC'],
+            ['createdAt', 'ASC'],
+          ],
+        },
+        {
+          model: LeadTaskComment,
+          as: 'comments',
+          required: false,
+          include: [{ model: User, as: 'author', attributes: ['id', 'name', 'email'], required: false }],
+          separate: true,
+          order: [['createdAt', 'ASC']],
+        },
+      ],
+      order: [['dueAt', 'ASC'], ['createdAt', 'DESC']],
+    })
+    await promotePendingTasksByDueOrStartMany(rows)
+    const taskIds = rows.map((r) => r.id)
+    const reminderRows = taskIds.length
+      ? await Reminder.findAll({
+          where: { companyId: req.user.companyId, targetType: 'task', targetId: { [Op.in]: taskIds } },
+          attributes: ['id', 'targetId', 'remindAt', 'channelPush', 'channelEmail', 'status'],
+          order: [['remindAt', 'ASC']],
+        })
+      : []
+    const reminderByTask = new Map()
+    for (const r of reminderRows) {
+      const list = reminderByTask.get(r.targetId) || []
+      list.push(r)
+      reminderByTask.set(r.targetId, list)
+    }
+    const decorated = rows.map((row) => {
+      const json = decorateTaskRow(row)
+      json.reminders = reminderByTask.get(row.id) || []
+      return json
+    })
+    return res.json({ success: true, data: decorated, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function createTask(req, res, next) {
+  try {
+    const deal = await findScopedDeal(req)
+    if (!deal) return dealNotFound(res)
+    const title = String(req.body?.title || '').trim()
+    if (!title) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Task title is required' } })
+    if (!req.body?.startAt) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Start date is required' } })
+    if (!req.body?.dueAt) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'End date is required' } })
+    const startAt = new Date(req.body.startAt)
+    const dueAt = new Date(req.body.dueAt)
+    if (Number.isNaN(startAt.getTime())) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Invalid start date' } })
+    if (Number.isNaN(dueAt.getTime())) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Invalid end date' } })
+    if (dueAt < startAt) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'End date must be on or after the start date' } })
+
+    const status = normalizeLeadTaskStatus(req.body?.status) || 'pending'
+    const priority = normalizeLeadTaskPriority(req.body?.priority) || 'medium'
+    const attachments = sanitizeAttachmentsInput(req.body?.attachments)
+
+    const row = await LeadTask.create({
+      leadId: deal.opportunityLeadId,
+      dealId: deal.id,
+      workspaceId: deal.workspaceId,
+      companyId: deal.companyId,
+      title,
+      taskType: normalizeLeadTaskType(req.body?.taskType),
+      description: req.body?.description || null,
+      startAt,
+      dueAt,
+      priority,
+      status,
+      completedAt: status === 'completed' ? new Date() : null,
+      createdBy: req.user.id,
+      assignedTo: req.body?.assignedTo || null,
+      attachments: attachments === undefined ? [] : attachments || [],
+    })
+    await replaceLeadTaskSubtasks(row.id, req.body?.subtasks)
+    await maybePromotePendingTaskFromSubtasks(row)
+    await row.reload()
+    await syncTaskReminders({
+      task: row,
+      remindersInput: req.body?.reminders,
+      actorUserId: req.user.id,
+      workspaceId: deal.workspaceId,
+      companyId: deal.companyId,
+    })
+
+    const actorName = await resolveActorDisplayName(req.user.id, req.user.email)
+    await DealActivity.create({
+      type: 'task',
+      body: `Task created: ${row.title} by ${actorName}`,
+      metadata: { action: 'task_created', taskId: row.id, title: row.title, actorUserId: req.user.id },
+      dealId: deal.id,
+      userId: req.user.id,
+    })
+    if (row.assignedTo && String(row.assignedTo) !== String(req.user.id)) {
+      notifyTaskAssigned({
+        companyId: deal.companyId,
+        workspaceId: deal.workspaceId,
+        recipientUserId: row.assignedTo,
+        actorUserId: req.user.id,
+        tasks: [{ title: row.title }],
+      }).catch(() => {})
+    }
+    return res.status(201).json({ success: true, data: decorateTaskRow(row), meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function patchTask(req, res, next) {
+  try {
+    const row = await LeadTask.findOne({
+      where: { id: req.params.taskId, dealId: req.params.id, companyId: req.user.companyId },
+    })
+    if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Task not found' } })
+    const before = {
+      status: row.status,
+      priority: row.priority,
+      assignedTo: row.assignedTo,
+    }
+    const payload = {}
+    if ('title' in req.body) {
+      const nextTitle = String(req.body.title || '').trim()
+      if (!nextTitle) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Task title is required' } })
+      payload.title = nextTitle
+    }
+    if ('taskType' in req.body) payload.taskType = normalizeLeadTaskType(req.body.taskType)
+    if ('description' in req.body) payload.description = req.body.description || null
+    if ('startAt' in req.body) {
+      if (!req.body.startAt) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Start date is required' } })
+      const startAt = new Date(req.body.startAt)
+      if (Number.isNaN(startAt.getTime())) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Invalid start date' } })
+      payload.startAt = startAt
+    }
+    if ('dueAt' in req.body) {
+      if (!req.body.dueAt) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'End date is required' } })
+      const dueAt = new Date(req.body.dueAt)
+      if (Number.isNaN(dueAt.getTime())) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Invalid end date' } })
+      payload.dueAt = dueAt
+    }
+    {
+      const effectiveStart = payload.startAt ?? row.startAt
+      const effectiveDue = payload.dueAt ?? row.dueAt
+      if (effectiveStart && effectiveDue && new Date(effectiveDue) < new Date(effectiveStart)) {
+        return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'End date must be on or after the start date' } })
+      }
+    }
+    if ('priority' in req.body) {
+      const p = normalizeLeadTaskPriority(req.body.priority)
+      if (p) payload.priority = p
+    }
+    if ('status' in req.body) {
+      const s = normalizeLeadTaskStatus(req.body.status)
+      if (s) {
+        payload.status = s
+        payload.completedAt = s === 'completed' ? new Date() : null
+        if (s === 'pending') payload.skipTimeAutoInProgress = true
+        else payload.skipTimeAutoInProgress = false
+      }
+    }
+    if ('assignedTo' in req.body) payload.assignedTo = req.body.assignedTo || null
+    if ('attachments' in req.body) {
+      const sanitized = sanitizeAttachmentsInput(req.body.attachments)
+      payload.attachments = sanitized === undefined ? [] : sanitized || []
+    }
+    if (Object.keys(payload).length) await row.update(payload)
+    if ('subtasks' in req.body) {
+      await replaceLeadTaskSubtasks(row.id, req.body.subtasks)
+      await maybePromotePendingTaskFromSubtasks(row)
+    }
+    await row.reload()
+    if ('reminders' in req.body) {
+      await syncTaskReminders({
+        task: row,
+        remindersInput: req.body.reminders,
+        actorUserId: req.user.id,
+        workspaceId: row.workspaceId,
+        companyId: row.companyId,
+      })
+    }
+
+    const after = { status: row.status, priority: row.priority, assignedTo: row.assignedTo }
+    const actorName = await resolveActorDisplayName(req.user.id, req.user.email)
+    if (before.status !== after.status) {
+      await DealActivity.create({
+        type: 'task',
+        body: after.status === 'completed' ? `Task completed: ${row.title}` : `Task status: ${after.status} (${row.title})`,
+        metadata: { action: 'task_status_changed', taskId: row.id, title: row.title, fromStatus: before.status, toStatus: after.status },
+        dealId: row.dealId,
+        userId: req.user.id,
+      })
+    }
+    if (before.assignedTo !== after.assignedTo) {
+      await DealActivity.create({
+        type: 'task',
+        body: after.assignedTo ? `Task reassigned: ${row.title} by ${actorName}` : `Task unassigned: ${row.title}`,
+        metadata: { action: 'task_assigned', taskId: row.id, title: row.title, fromUserId: before.assignedTo, toUserId: after.assignedTo },
+        dealId: row.dealId,
+        userId: req.user.id,
+      })
+      if (after.assignedTo && String(after.assignedTo) !== String(req.user.id)) {
+        notifyTaskAssigned({
+          companyId: row.companyId,
+          workspaceId: row.workspaceId,
+          recipientUserId: after.assignedTo,
+          actorUserId: req.user.id,
+          tasks: [{ title: row.title }],
+        }).catch(() => {})
+      }
+    }
+    return res.json({ success: true, data: decorateTaskRow(row), meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function deleteTask(req, res, next) {
+  try {
+    const row = await LeadTask.findOne({
+      where: { id: req.params.taskId, dealId: req.params.id, companyId: req.user.companyId },
+    })
+    if (!row) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Task not found' } })
+    await Reminder.destroy({ where: { companyId: row.companyId, targetType: 'task', targetId: row.id } })
+    await row.destroy()
+    return res.json({ success: true, data: { ok: true }, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function addTaskComment(req, res, next) {
+  try {
+    const task = await LeadTask.findOne({
+      where: { id: req.params.taskId, dealId: req.params.id, companyId: req.user.companyId },
+    })
+    if (!task) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Task not found' } })
+    const body = String(req.body?.body || '').trim()
+    if (!body) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Comment cannot be empty' } })
+    const isInternal = Boolean(req.body?.isInternal)
+    const row = await LeadTaskComment.create({
+      leadTaskId: task.id,
+      userId: req.user.id,
+      body: body.slice(0, 8000),
+      isInternal,
+    })
+    const full = await LeadTaskComment.findByPk(row.id, {
+      include: [{ model: User, as: 'author', attributes: ['id', 'name', 'email'], required: false }],
+    })
+    const commentTargets = new Set()
+    if (task.assignedTo) commentTargets.add(String(task.assignedTo))
+    if (task.createdBy) commentTargets.add(String(task.createdBy))
+    commentTargets.delete(String(req.user.id))
+    for (const uid of commentTargets) {
+      notifyTaskCommentAdded({
+        companyId: req.user.companyId,
+        workspaceId: task.workspaceId,
+        recipientUserId: uid,
+        actorUserId: req.user.id,
+        taskId: task.id,
+        taskTitle: task.title,
+        leadId: task.leadId,
+      }).catch(() => {})
+    }
+    return res.status(201).json({ success: true, data: full, meta: {} })
+  } catch (e) {
+    return next(e)
+  }
+}
+
+export async function getTaskTimeline(req, res, next) {
+  try {
+    const task = await LeadTask.findOne({
+      where: { id: req.params.taskId, dealId: req.params.id, companyId: req.user.companyId },
+    })
+    if (!task) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Task not found' } })
+
+    const comments = await LeadTaskComment.findAll({
+      where: { leadTaskId: task.id },
+      include: [{ model: User, as: 'author', attributes: ['id', 'name', 'email'], required: false }],
+      order: [['createdAt', 'ASC']],
+    })
+
+    const activities = await DealActivity.findAll({
+      where: { dealId: task.dealId, type: 'task' },
+      include: [{ model: User, as: 'user', attributes: ['id', 'name', 'email'], required: false }],
+      order: [['created_at', 'ASC']],
+    })
+    const taskActivities = activities.filter((a) => {
+      const meta = a.metadata || {}
+      return meta && meta.taskId === task.id
+    })
+
+    const items = []
+    for (const c of comments) {
+      items.push({
+        id: c.id,
+        kind: c.isInternal ? 'note' : 'comment',
+        createdAt: c.createdAt,
+        body: c.body,
+        author: c.author ? { id: c.author.id, name: c.author.name, email: c.author.email } : null,
+        isInternal: Boolean(c.isInternal),
+      })
+    }
+    for (const a of taskActivities) {
+      items.push({
+        id: a.id,
+        kind: 'event',
+        createdAt: a.createdAt,
+        body: a.body,
+        author: a.user ? { id: a.user.id, name: a.user.name, email: a.user.email } : null,
+        action: a.metadata?.action || null,
+      })
+    }
+    items.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+
+    return res.json({ success: true, data: items, meta: {} })
   } catch (e) {
     return next(e)
   }

@@ -3,8 +3,6 @@ import {
   BellRing,
   BookOpen,
   Briefcase,
-  Building2,
-  CalendarCheck,
   CalendarDays,
   CheckSquare,
   Banknote,
@@ -19,16 +17,15 @@ import {
   MailOpen,
   Map,
   Megaphone,
+  MessageCircle,
   Phone,
   PhoneCall,
   Puzzle,
   Receipt,
-  ScrollText,
   SlidersHorizontal,
   Settings2,
   Shuffle,
   Sparkles,
-  Umbrella,
   Users,
   Workflow,
 } from '@/components/ui/icons'
@@ -107,6 +104,10 @@ export const ROUTE_META = {
     title: 'Email',
     sub: 'Send, receive, and track emails without leaving the CRM — full inbox inside the app',
   },
+  '/whatsapp': {
+    title: 'WhatsApp',
+    sub: 'Send, receive, and track WhatsApp messages without leaving the CRM — full inbox inside the app',
+  },
   '/templates': {
     title: 'Templates',
     sub: 'Create and manage email templates with merge tags, delivery safeguards, and send history',
@@ -137,7 +138,7 @@ export const ROUTE_META = {
   },
   '/reports': {
     title: 'Reports & analytics',
-    sub: 'One-stop admin analytics — leads, deals, tasks, follow-ups, payments, leave, and more',
+    sub: 'One-stop admin analytics — leads, deals, tasks, follow-ups, payments, and more',
   },
   '/email-tracking': {
     title: 'Email tracking',
@@ -158,34 +159,6 @@ export const ROUTE_META = {
   '/integrations': {
     title: 'Integrations & API',
     sub: 'Connect your CRM to every other tool your company uses',
-  },
-  '/hr': {
-    title: 'HR Overview',
-    sub: 'Attendance status, leave balances, and pending HR actions at a glance',
-  },
-  '/hr/reports': {
-    title: 'Leave & Attendance',
-    sub: 'Leave by employee and type — now under Reports → Leave',
-  },
-  '/attendance': {
-    title: 'Attendance',
-    sub: 'Check-in, team calendar, and monthly attendance reports',
-  },
-  '/leave': {
-    title: 'Leave',
-    sub: 'Apply for leave and view your balance',
-  },
-  '/leave/requests': {
-    title: 'Leave requests',
-    sub: 'Track pending, approved, and past leave applications',
-  },
-  '/leave/approval': {
-    title: 'Leave approval',
-    sub: 'Review and approve team leave requests',
-  },
-  '/leave/config': {
-    title: 'Leave settings',
-    sub: 'Leave types, holidays, and balance adjustments',
   },
   '/knowledge-base': {
     title: 'Knowledge Base',
@@ -221,60 +194,53 @@ export function getRouteMeta(pathname) {
   return DEFAULT_META
 }
 
+// `restricted: true` marks items visible to every role, including non-elevated ones
+// (see isElevatedRole/buildAllowedRouteSet in utils/menuAccess.js). Elevated roles
+// (company admin, workspace_admin, manager) always see the full NAV_SECTIONS list
+// regardless of this flag — it only matters for filtering everyone else's sidebar.
 export const NAV_SECTIONS = [
   {
     label: 'Main',
     items: [
-      { to: '/dashboard', label: 'Dashboard', icon: LayoutGrid, end: true },
+      { to: '/dashboard', label: 'Dashboard', icon: LayoutGrid, end: true, restricted: true },
       { to: '/copilot', label: 'AI Copilot', icon: Sparkles },
-      { to: '/leads', label: 'Leads', icon: Users },
+      { to: '/leads', label: 'Leads', icon: Users, restricted: true },
       { to: '/lead-distribution', label: 'Lead distribution', icon: Shuffle },
-      { to: '/opportunities', label: 'Opportunities', icon: Briefcase },
-      { to: '/pipeline', label: 'Pipeline', icon: Kanban, end: true },
-      { to: '/deals', label: 'Deals', icon: CircleDollarSign },
-      { to: '/deal-payments', label: 'Deal Payments', icon: Banknote },
+      { to: '/opportunities', label: 'Opportunities', icon: Briefcase, restricted: true },
+      { to: '/pipeline', label: 'Pipeline', icon: Kanban, end: true, restricted: true },
+      { to: '/deals', label: 'Deals', icon: CircleDollarSign, restricted: true },
+      { to: '/deal-payments', label: 'Deal Payments', icon: Banknote, restricted: true },
     ],
   },
-  // HR modules disabled
-  // {
-  //   label: 'HR',
-  //   items: [
-  //     { to: '/hr', label: 'HR Overview', icon: Building2, end: true },
-  //     { to: '/attendance', label: 'Attendance', icon: CalendarCheck },
-  //     { to: '/leave', label: 'Leave', icon: Umbrella, end: true },
-  //     { to: '/leave/requests', label: 'My requests', icon: ScrollText },
-  //     { to: '/leave/approval', label: 'Approval queue', icon: ClipboardList },
-  //     { to: '/leave/config', label: 'Leave settings', icon: SlidersHorizontal },
-  //   ],
-  // },
   {
     label: 'Engage',
     items: [
-      { to: '/activities', label: 'Activities', icon: CheckSquare },
-      { to: '/tasks', label: 'Tasks', icon: ListTodo },
-      { to: '/calendar', label: 'Calendar & Reminders', icon: CalendarDays },
-      { to: '/followups', label: 'Follow-ups', icon: BellRing },
-      { to: '/meetings', label: 'Meetings', icon: Phone },
-      { to: '/calls', label: 'Calls', icon: PhoneCall },
-      { to: '/email', label: 'Email', icon: Mail },
-      { to: '/templates', label: 'Templates', icon: FileStack },
+      { to: '/activities', label: 'Activities', icon: CheckSquare, restricted: true },
+      { to: '/tasks', label: 'Tasks', icon: ListTodo, restricted: true },
+      { to: '/calendar', label: 'Calendar & Reminders', icon: CalendarDays, restricted: true },
+      { to: '/followups', label: 'Follow-ups', icon: BellRing, restricted: true },
+      { to: '/meetings', label: 'Meetings', icon: Phone, restricted: true },
+      { to: '/calls', label: 'Calls', icon: PhoneCall, restricted: true },
+      { to: '/email', label: 'Email', icon: Mail, restricted: true },
+      { to: '/whatsapp', label: 'WhatsApp', icon: MessageCircle, restricted: true },
+      { to: '/templates', label: 'Templates', icon: FileStack, restricted: true },
     ],
   },
   {
     label: 'Manage',
     items: [
-      { to: '/documents', label: 'Documents', icon: FileStack },
-      { to: '/quotations', label: 'Quotations', icon: FileText, end: true },
-      { to: '/invoices', label: 'Invoices', icon: Receipt, end: true },
-      { to: '/sales-docs/templates', label: 'Doc templates', icon: ClipboardList },
+      { to: '/documents', label: 'Documents', icon: FileStack, restricted: true },
+      { to: '/quotations', label: 'Quotations', icon: FileText, end: true, restricted: true },
+      { to: '/invoices', label: 'Invoices', icon: Receipt, end: true, restricted: true },
+      { to: '/sales-docs/templates', label: 'Doc templates', icon: ClipboardList, restricted: true },
     ],
   },
   {
     label: 'Automate',
     items: [
-      { to: '/automation', label: 'Automation', icon: Workflow },
-      { to: '/campaigns', label: 'Campaigns', icon: Megaphone },
-      { to: '/forms', label: 'Web forms / lead capture', icon: ClipboardList },
+      { to: '/automation', label: 'Automation', icon: Workflow, restricted: true },
+      { to: '/campaigns', label: 'Campaigns', icon: Megaphone, restricted: true },
+      { to: '/forms', label: 'Web forms / lead capture', icon: ClipboardList, restricted: true },
     ],
   },
   {
@@ -296,8 +262,8 @@ export const NAV_SECTIONS = [
   {
     label: 'Knowledge',
     items: [
-      { to: '/knowledge-base', label: 'Knowledge Base', icon: BookOpen },
-      { to: '/systemworkflow', label: 'System Workflow', icon: Map },
+      { to: '/knowledge-base', label: 'Knowledge Base', icon: BookOpen, restricted: true },
+      { to: '/systemworkflow', label: 'System Workflow', icon: Map, restricted: true },
     ],
   },
 ]

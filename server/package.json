@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "node --watch index.js",
     "start": "node index.js",
+    "redis:up": "docker start connexify-redis || docker run -d --name connexify-redis --restart unless-stopped -p 6379:6379 redis:7-alpine",
+    "redis:down": "docker stop connexify-redis",
     "db:migrate": "sequelize-cli db:migrate",
     "db:migrate:undo": "sequelize-cli db:migrate:undo",
     "db:purge-draft-sales": "node scripts/deleteDraftSalesData.js",
@@ -15,6 +17,8 @@
     "qa:audit": "node scripts/qa/staticCodeAudit.js"
   },
   "dependencies": {
+    "@bull-board/api": "^8.3.0",
+    "@bull-board/express": "^8.3.0",
     "bcrypt": "^6.0.0",
     "bullmq": "^5.76.6",
     "cookie-parser": "^1.4.7",
@@ -37,6 +41,7 @@
     "nodemailer": "^8.0.6",
     "openai": "^6.34.0",
     "pdfkit": "^0.18.0",
+    "puppeteer": "^25.3.0",
     "sequelize": "^6.37.7",
     "socket.io": "^4.8.3"
   },

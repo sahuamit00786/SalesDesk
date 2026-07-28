@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { X, ZoomIn, ZoomOut, RotateCcw, FileText, Download, Loader2 } from '@/components/ui/icons'
 import { formatSize, getFileUrl, getPreviewMode } from '@/features/documents/documentUtils'
 
@@ -70,7 +71,7 @@ export function DocumentPreviewDialog({ document: doc, onClose, zOverlayClass = 
     )
   }
 
-  return (
+  return createPortal(
     <div className={`fixed inset-0 ${zOverlayClass} flex items-center justify-center p-4`}>
       <button type="button" onClick={onClose} className="absolute inset-0 bg-ink/60 backdrop-blur-[2px]" aria-label="Close preview" />
       <div
@@ -156,6 +157,7 @@ export function DocumentPreviewDialog({ document: doc, onClose, zOverlayClass = 
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

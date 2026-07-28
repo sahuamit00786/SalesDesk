@@ -43,6 +43,10 @@ const STATUS_TABS = [
   { value: 'cancelled', label: 'Cancelled' },
 ]
 
+function ymd(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 function fmtDateTime(value) {
   if (!value) return '—'
   const d = new Date(value)
@@ -105,6 +109,8 @@ export function FollowupsPage() {
   const [statusFilter, setStatusFilter] = useState('')
   const [employeeId, setEmployeeId] = useState('')
   const [search, setSearch] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
   const [clockMs, setClockMs] = useState(() => Date.now())
   const [addOpen, setAddOpen] = useState(false)
   const [addKey, setAddKey] = useState(0)
@@ -162,13 +168,21 @@ export function FollowupsPage() {
         return leadName.includes(q) || remark.includes(q)
       })
     }
+    if (startDate) {
+      const startMs = new Date(startDate).setHours(0, 0, 0, 0)
+      list = list.filter((f) => new Date(f.scheduledAt).getTime() >= startMs)
+    }
+    if (endDate) {
+      const endMs = new Date(endDate).setHours(23, 59, 59, 999)
+      list = list.filter((f) => new Date(f.scheduledAt).getTime() <= endMs)
+    }
     const statusRank = { pending: 0, done: 1, cancelled: 2 }
     return [...list].sort((a, b) => {
       const d = (statusRank[a.status] ?? 9) - (statusRank[b.status] ?? 9)
       if (d !== 0) return d
       return new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime()
     })
-  }, [allRows, statusFilter, search, clockMs])
+  }, [allRows, statusFilter, search, startDate, endDate, clockMs])
 
   async function handlePatch(row, patch) {
     try {
@@ -186,7 +200,13 @@ export function FollowupsPage() {
     }
   }
 
-  const activeFilterCount = [Boolean(statusFilter), Boolean(employeeId), Boolean(search.trim())].filter(Boolean).length
+  const activeFilterCount = [
+    Boolean(statusFilter),
+    Boolean(employeeId),
+    Boolean(search.trim()),
+    Boolean(startDate),
+    Boolean(endDate),
+  ].filter(Boolean).length
 
   return (
     <PageShell fullWidth mainClassName="pt-2 pb-4">
@@ -276,6 +296,50 @@ export function FollowupsPage() {
               />
             </div>
 
+            <div className="flex items-center gap-1.5">
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                max={endDate || undefined}
+                aria-label="Start date"
+                className="h-9 rounded-lg border border-surface-border bg-white px-2 text-xs text-ink shadow-sm outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
+              />
+              <span className="text-xs text-ink-faint">to</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                min={startDate || undefined}
+                aria-label="End date"
+                className="h-9 rounded-lg border border-surface-border bg-white px-2 text-xs text-ink shadow-sm outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const today = ymd(new Date())
+                  setStartDate(today)
+                  setEndDate(today)
+                }}
+                className="inline-flex h-9 items-center rounded-lg border border-surface-border bg-white px-2.5 text-xs font-semibold text-ink-muted transition hover:border-brand-200 hover:text-ink"
+              >
+                Today
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const now = new Date()
+                  const future = new Date(now)
+                  future.setDate(future.getDate() + 7)
+                  setStartDate(ymd(now))
+                  setEndDate(ymd(future))
+                }}
+                className="inline-flex h-9 items-center rounded-lg border border-surface-border bg-white px-2.5 text-xs font-semibold text-ink-muted transition hover:border-brand-200 hover:text-ink"
+              >
+                In 7 days
+              </button>
+            </div>
+
             {activeFilterCount > 0 ? (
               <button
                 type="button"
@@ -283,6 +347,8 @@ export function FollowupsPage() {
                   setStatusFilter('')
                   setEmployeeId('')
                   setSearch('')
+                  setStartDate('')
+                  setEndDate('')
                 }}
                 className="inline-flex h-9 items-center gap-1 rounded-lg border border-surface-border bg-white px-2.5 text-xs text-ink-muted hover:bg-surface-subtle"
               >

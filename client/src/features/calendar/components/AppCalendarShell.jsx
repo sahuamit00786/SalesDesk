@@ -19,7 +19,6 @@ import { useAppSelector } from '@/app/hooks'
 
 /**
  * Shared Calendar & Meetings shell (react-big-calendar + sidebars).
- * Used by workspace calendar, attendance, and leave.
  */
 export function AppCalendarShell({
   className,
@@ -46,9 +45,6 @@ export function AppCalendarShell({
   syncPeriod,
   onPeriodChange,
   onDateRangeChange,
-  highlightAttendanceStatus = false,
-  dayStatusByDate: externalDayStatusByDate = null,
-  weeklyOffDays = [],
   searchPlaceholder = 'Search title, lead, notes…',
 }) {
   const [currentDate, setCurrentDate] = useState(() =>
@@ -184,20 +180,6 @@ export function AppCalendarShell({
     })
   }, [displayedEvents, hasCustomRange, selectedRange.start, selectedRange.end])
 
-  const attendanceStatusByDate = useMemo(() => {
-    if (externalDayStatusByDate) return externalDayStatusByDate
-    if (!highlightAttendanceStatus) return {}
-    const map = {}
-    for (const event of normalizedEvents) {
-      if (event.kind !== 'attendance' && event.kind !== 'attendance_team') continue
-      const key = format(startOfDay(event.start instanceof Date ? event.start : new Date(event.start)), 'yyyy-MM-dd')
-      const status = String(event.status || '').toLowerCase()
-      if (status === 'absent') map[key] = 'absent'
-      else if (!map[key] && status) map[key] = status
-    }
-    return map
-  }, [normalizedEvents, highlightAttendanceStatus, externalDayStatusByDate])
-
   const isDateInSelectedRange = useCallback(
     (date) => {
       if (!hasCustomRange) return true
@@ -332,7 +314,6 @@ export function AppCalendarShell({
     <OpportunityPanelProvider value={onOpenOpportunity}>
     <div className={cn(
       'flex min-h-0 overflow-hidden bg-white',
-      highlightAttendanceStatus && 'calendar-attendance-mode',
       className,
     )}>
       <div className="flex w-72 shrink-0 flex-col overflow-hidden border-r border-surface-border bg-white">
@@ -343,7 +324,6 @@ export function AppCalendarShell({
               selectedDate={selectedDate}
               rangeStart={selectedRange.start}
               rangeEnd={selectedRange.end}
-              dayStatusByDate={highlightAttendanceStatus ? attendanceStatusByDate : null}
               onChange={(date) => {
                 setCurrentDate(date)
                 setSelectedDate(date)
@@ -531,24 +511,12 @@ export function AppCalendarShell({
               style: { backgroundColor: 'transparent', border: 'none', padding: 0 },
             })}
             dayPropGetter={(date) => {
-              const dateKey = format(date, 'yyyy-MM-dd')
               const classes = []
               const style = {}
-              const isAbsent = highlightAttendanceStatus && attendanceStatusByDate[dateKey] === 'absent'
               const isExcluded = hasCustomRange && !isDateInSelectedRange(date)
-              const isWeekOff = weeklyOffDays.length > 0 && weeklyOffDays.includes(date.getDay())
 
-              if (isAbsent && !isExcluded) {
-                classes.push('rbc-day-absent')
-                // Lighter rose so white chip text is readable
-                style.backgroundColor = '#ffe4e6'
-                style.backgroundImage = 'none'
-              } else if (isExcluded) {
+              if (isExcluded) {
                 classes.push('rbc-day-excluded')
-              } else if (isWeekOff && !isExcluded) {
-                classes.push('rbc-day-weekoff')
-                style.backgroundColor = '#fefce8'
-                style.backgroundImage = 'none'
               } else if (isSameDay(date, selectedDate)) {
                 style.backgroundColor = '#eef2ff'
               }

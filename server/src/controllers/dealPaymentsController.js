@@ -1,11 +1,16 @@
 import Joi from 'joi'
 import { Op } from 'sequelize'
-import { Deal, DealActivity, DealPayment, Activity, User, InvoicePayment, Invoice } from '../models/index.js'
+import { Deal, DealActivity, DealPayment, Activity, User, InvoicePayment, Invoice, Lead } from '../models/index.js'
 import { leadAccessWhere } from '../services/leadVisibility.js'
 import { notifyInvoicePayment } from '../services/notification/teamNotificationService.js'
 
 const MODES = ['bank_transfer', 'cash', 'cheque', 'upi', 'card', 'crypto', 'other']
 const STATUSES = ['pending', 'received', 'failed', 'refunded']
+
+/** Deleting a payment is restricted to company admins, workspace admins, and managers. */
+function canDeletePayments(user) {
+  return Boolean(user?.isCompanyAdmin) || user?.userRoleKind === 'workspace_admin' || user?.userRoleKind === 'manager'
+}
 
 const createSchema = Joi.object({
   amount: Joi.number().positive().required(),
@@ -126,8 +131,11 @@ export async function listAll(req, res, next) {
         {
           model: Deal,
           as: 'deal',
-          attributes: ['id', 'name', 'stage', 'value', 'value_currency'],
+          attributes: ['id', 'name', 'stage', 'value', 'value_currency', 'opportunityLeadId'],
           required: false,
+          include: [
+            { model: Lead, as: 'opportunity', attributes: ['id', 'title', 'contactName', 'company'], required: false },
+          ],
         },
       ],
       order: [['payment_date', 'DESC'], ['created_at', 'DESC']],
@@ -141,8 +149,11 @@ export async function listAll(req, res, next) {
       const base = serializePayment(p)
       const plain = p.get({ plain: true })
       base.deal = plain.deal
-        ? { id: plain.deal.id, name: plain.deal.name, stage: plain.deal.stage }
+        ? { id: plain.deal.id, name: plain.deal.name, stage: plain.deal.stage, parentOpportunityLeadId: plain.deal.opportunityLeadId || null }
         : null
+      const lead = plain.deal?.opportunity
+      base.leadId = lead?.id || null
+      base.leadName = lead ? (lead.title || lead.contactName || lead.company || null) : null
       return base
     })
 
@@ -274,6 +285,13 @@ export async function patch(req, res, next) {
 // DELETE /deals/:id/payments/:paymentId
 export async function remove(req, res, next) {
   try {
+    if (!canDeletePayments(req.user)) {
+      return res.status(403).json({
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Only company admins, workspace admins, and managers can delete payments' },
+      })
+    }
+
     const workspaceId = req.headers['x-workspace-id']
     if (!workspaceId) return res.status(400).json({ success: false, error: { message: 'workspaceId required' } })
 

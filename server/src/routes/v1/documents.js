@@ -1,7 +1,6 @@
 import { Router } from 'express'
 import multer from 'multer'
 import * as documentsController from '../../controllers/documentsController.js'
-import { requirePermission } from '../../middleware/requirePermission.js'
 
 const router = Router()
 const upload = multer({
@@ -12,22 +11,22 @@ const upload = multer({
 router.get('/', documentsController.listAllDocuments)
 router.get('/folder-tree', documentsController.folderTree)
 router.get('/lead-summaries', documentsController.listLeadDocumentSummariesHandler)
-router.post('/folders', requirePermission('manage.documents', 'create'), documentsController.createFolder)
+router.post('/folders', documentsController.createFolder)
 router.get('/folders/:id/info', documentsController.getFolderInfo)
-router.delete('/folders/:id', requirePermission('manage.documents', 'delete'), documentsController.deleteFolderWithContents)
-router.post('/email-attachments/save', requirePermission('manage.documents', 'create'), documentsController.saveEmailAttachmentToDocuments)
-router.patch('/:id', requirePermission('manage.documents', 'update'), documentsController.patchDocument)
-router.delete('/:id', requirePermission('manage.documents', 'delete'), documentsController.deleteDocument)
+router.delete('/folders/:id', documentsController.deleteFolderWithContents)
+router.post('/email-attachments/save', documentsController.saveEmailAttachmentToDocuments)
+router.patch('/:id', documentsController.patchDocument)
+router.delete('/:id', documentsController.deleteDocument)
 router.get('/:id/viewer-meta', documentsController.getDocumentViewerMeta)
 router.get('/:id/versions', documentsController.listVersions)
-router.post('/:id/versions/:versionId/restore', requirePermission('manage.documents', 'update'), documentsController.restoreDocumentVersion)
+router.post('/:id/versions/:versionId/restore', documentsController.restoreDocumentVersion)
 router.get('/:id/shares', documentsController.listDocumentShareLinks)
-router.post('/:id/share', requirePermission('manage.documents', 'update'), documentsController.createDocumentShareLink)
-router.post('/:id/esign/request', requirePermission('manage.documents', 'update'), documentsController.requestDocumentESign)
-router.post('/:id/links', requirePermission('manage.documents', 'update'), documentsController.linkDocument)
-router.post('/:id/folders', requirePermission('manage.documents', 'update'), documentsController.linkDocumentFolders)
-router.delete('/:id/folders/:folderId', requirePermission('manage.documents', 'update'), documentsController.removeDocumentFolder)
-router.post('/:id/move-folder', requirePermission('manage.documents', 'update'), documentsController.moveDocumentFolder)
-router.post('/', requirePermission('manage.documents', 'create'), upload.single('file'), documentsController.createDocument)
+router.post('/:id/share', documentsController.createDocumentShareLink)
+router.post('/:id/esign/request', documentsController.requestDocumentESign)
+router.post('/:id/links', documentsController.linkDocument)
+router.post('/:id/folders', documentsController.linkDocumentFolders)
+router.delete('/:id/folders/:folderId', documentsController.removeDocumentFolder)
+router.post('/:id/move-folder', documentsController.moveDocumentFolder)
+router.post('/', upload.single('file'), documentsController.createDocument)
 
 export default router

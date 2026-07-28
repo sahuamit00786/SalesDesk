@@ -1,4 +1,4 @@
-import { Inbox, Paperclip, Pencil, Send, X } from '@/components/ui/icons'
+import { Activity, Inbox, Paperclip, Pencil, Send, X } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 import { Select } from '@/components/ui/Select'
 
@@ -49,6 +49,8 @@ function SidebarBody({
         onClick={() => onBoxChange('inbox')} />
       <NavItem icon={Send} label="Sent" active={box === 'sent' && filterMode === 'all'}
         onClick={() => onBoxChange('sent')} />
+      <NavItem icon={Activity} label="Email Status" active={box === 'status'}
+        onClick={() => onBoxChange('status')} />
 
       <p className="mb-1 mt-4 px-5 text-[10px] font-semibold uppercase tracking-wider text-ink-muted">CRM filters</p>
       <NavItem

@@ -5,6 +5,7 @@ import GmailEmailBody from '@/features/gmail/GmailEmailBody'
 import GmailAttachmentChip from '@/features/gmail/GmailAttachmentChip'
 import GmailAvatar from '@/features/gmail/GmailAvatar'
 import { formatEmailDateTime } from '@/features/gmail/gmailParserUtils'
+import { getEmailTrackingBadge } from '@/features/gmail/emailTrackingBadge'
 
 /**
  * One message in the inbox thread timeline: avatar rail on the left (with a
@@ -48,6 +49,11 @@ export default function InboxMessageCard({
             <span className="mt-0.5 truncate text-[12px] text-ink-muted">{message.snippet}</span>
           )}
         </div>
+        {!mailboxMode && message.direction === 'outbound' ? (
+          <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold', getEmailTrackingBadge(message).className)}>
+            {getEmailTrackingBadge(message).label}
+          </span>
+        ) : null}
         <span className="shrink-0 whitespace-nowrap text-[11px] tabular-nums text-ink-muted" title={formatEmailDateTime(message.date)}>
           {formatEmailDateTime(message.date)}
         </span>

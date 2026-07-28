@@ -1,19 +1,35 @@
 import { useParams } from 'react-router-dom'
+import toast from 'react-hot-toast'
 import { useGetBillingProfileQuery } from '@/features/sales-docs/billingProfileApi'
-import { useGetQuotationQuery } from '@/features/sales-docs/quotationsApi'
+import { useGetQuotationQuery, useLazyDownloadQuotationPdfQuery } from '@/features/sales-docs/quotationsApi'
 import { SalesDocumentPreview } from '@/features/sales-docs/components/SalesDocumentPreview'
 
 export default function QuotationPrintPage() {
   const { id } = useParams()
   const { data: qRes, isLoading } = useGetQuotationQuery(id)
-  const { data: billRes } = useGetBillingProfileQuery()
+  const { data: billRes, isLoading: billLoading } = useGetBillingProfileQuery()
+  const [downloadPdf, { isFetching: downloading }] = useLazyDownloadQuotationPdfQuery()
 
   const qPayload = qRes?.data
   const q = qPayload?.data ?? qPayload
   const billPayload = billRes?.data
   const billing = billPayload?.data ?? billPayload
 
-  if (isLoading || !q) {
+  async function handleDownloadPdf() {
+    try {
+      const { blob, filename } = await downloadPdf(id).unwrap()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      toast.error('Could not generate PDF')
+    }
+  }
+
+  if (isLoading || billLoading || !q) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center bg-neutral-100 text-sm text-neutral-500">
         Loading…
@@ -22,14 +38,22 @@ export default function QuotationPrintPage() {
   }
 
   return (
-    <div className="min-h-screen bg-neutral-100 px-4 py-8 print:bg-white print:p-0">
+    <div className="min-h-screen bg-neutral-100 px-4 py-8 print:bg-white print:p-0" data-pdf-ready="true">
       <div className="no-print mb-4 flex w-full justify-end gap-2">
         <button
           type="button"
           className="rounded-lg border border-neutral-200 bg-white px-4 py-2 text-sm font-medium shadow-sm hover:bg-neutral-50"
           onClick={() => window.print()}
         >
-          Print / Save as PDF
+          Print
+        </button>
+        <button
+          type="button"
+          disabled={downloading}
+          className="rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[var(--brand-primary-dark)] disabled:opacity-50"
+          onClick={handleDownloadPdf}
+        >
+          {downloading ? 'Generating…' : 'Download PDF'}
         </button>
       </div>
       <SalesDocumentPreview

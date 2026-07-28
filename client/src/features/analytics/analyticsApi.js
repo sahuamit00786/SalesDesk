@@ -62,10 +62,6 @@ export const analyticsApi = baseApi.injectEndpoints({
       query: (params) => ({ url: '/analytics/payments-report', params }),
       providesTags: [{ type: 'Analytics', id: 'PAYMENTS_REPORT' }],
     }),
-    getLeaveReport: build.query({
-      query: (params) => ({ url: '/analytics/leave-report', params }),
-      providesTags: [{ type: 'Analytics', id: 'LEAVE_REPORT' }],
-    }),
     getEmployeeMonthlyReport: build.query({
       query: (params) => ({ url: '/analytics/employee-monthly-report', params }),
       providesTags: [{ type: 'Analytics', id: 'EMPLOYEE_MONTHLY_REPORT' }],
@@ -97,7 +93,6 @@ export const {
   useGetFollowupsReportQuery,
   useGetSalesDocsReportQuery,
   useGetPaymentsReportQuery,
-  useGetLeaveReportQuery,
   useGetEmployeeMonthlyReportQuery,
   useGetDataHealthReportQuery,
   useGetCampaignsReportQuery,

@@ -64,7 +64,6 @@ export const GOAL_OPTIONS = [
   { id: 'meeting_notes', label: 'Meeting notes', icon: Briefcase },
   { id: 'reporting', label: 'Reporting', icon: Database },
   { id: 'team_collaboration', label: 'Team collaboration', icon: Users },
-  { id: 'hr_attendance', label: 'HR / Attendance', icon: Heart },
   { id: 'other', label: 'Other', icon: MoreHorizontal },
 ]
 
