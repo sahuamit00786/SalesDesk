@@ -1,7 +1,10 @@
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { ArrowLeft, LayoutTemplate, X } from '@/components/ui/icons'
+import { ArrowLeft, LayoutTemplate, User, X } from '@/components/ui/icons'
 import { useGetWhatsAppTemplatesQuery, useSendWhatsAppTemplateMessageMutation } from '@/features/whatsapp/whatsappApi'
+import { useGetLeadQuery } from '@/features/leads/leadsApi'
+import { parseCustomFieldClientValue } from '@/features/leads/customFieldTypes'
 
 function extractVariableIndices(text) {
   const matches = [...String(text || '').matchAll(/\{\{(\d+)\}\}/g)].map((m) => Number(m[1]))
@@ -15,18 +18,64 @@ function substituteVariables(text, values) {
   })
 }
 
+const STANDARD_LEAD_FIELDS = [
+  { key: 'title', label: 'Lead name' },
+  { key: 'contactName', label: 'Contact name' },
+  { key: 'company', label: 'Company' },
+  { key: 'designation', label: 'Designation' },
+  { key: 'email', label: 'Email' },
+  { key: 'phone', label: 'Phone' },
+  { key: 'altPhone', label: 'Alt phone' },
+  { key: 'city', label: 'City' },
+  { key: 'state', label: 'State' },
+  { key: 'country', label: 'Country' },
+  { key: 'status', label: 'Status' },
+]
+
+/** Resolves a "std:<key>" / "custom:<key>" dropdown token against a full lead record. */
+function resolveLeadFieldValue(lead, token) {
+  if (!lead || !token) return ''
+  if (token.startsWith('std:')) {
+    const raw = lead[token.slice(4)]
+    return raw === null || raw === undefined ? '' : String(raw)
+  }
+  if (token.startsWith('custom:')) {
+    const key = token.slice(7)
+    const row = (lead.customFieldValues || []).find((r) => r.customField?.key === key)
+    if (!row) return ''
+    const parsed = parseCustomFieldClientValue(row.customField?.type, row.value)
+    if (row.customField?.type === 'checkbox') return parsed ? 'Yes' : 'No'
+    if (row.customField?.type === 'multiselect') return Array.isArray(parsed) ? parsed.join(', ') : ''
+    return parsed === null || parsed === undefined ? '' : String(parsed)
+  }
+  return ''
+}
+
 /** Picker + variable form for sending an approved template — the only way to message
  * a customer outside the 24h window (see WhatsAppComposer). */
-export function TemplatePickerModal({ conversationId, onClose, onSent }) {
+export function TemplatePickerModal({ conversationId, leadId, onClose, onSent }) {
+  const navigate = useNavigate()
   const { data, isLoading } = useGetWhatsAppTemplatesQuery()
   const [sendTemplate, { isLoading: sending }] = useSendWhatsAppTemplateMessageMutation()
+  const { data: leadRes, isFetching: leadLoading } = useGetLeadQuery(leadId, { skip: !leadId })
+  const lead = leadRes?.data || null
   const [selected, setSelected] = useState(null)
   const [headerValues, setHeaderValues] = useState([])
   const [bodyValues, setBodyValues] = useState([])
+  const [headerFieldSel, setHeaderFieldSel] = useState([])
+  const [bodyFieldSel, setBodyFieldSel] = useState([])
 
   const approvedTemplates = useMemo(
     () => (Array.isArray(data?.data) ? data.data.filter((t) => t.status === 'approved') : []),
     [data?.data],
+  )
+
+  const customFieldOptions = useMemo(
+    () =>
+      (lead?.customFieldValues || [])
+        .filter((r) => r.customField?.key)
+        .map((r) => ({ key: r.customField.key, label: r.customField.label || r.customField.key })),
+    [lead],
   )
 
   const headerVars = selected?.headerType === 'text' ? extractVariableIndices(selected.headerText) : []
@@ -34,8 +83,32 @@ export function TemplatePickerModal({ conversationId, onClose, onSent }) {
 
   function selectTemplate(t) {
     setSelected(t)
-    setBodyValues(extractVariableIndices(t.bodyText).map(() => ''))
-    setHeaderValues(t.headerType === 'text' ? extractVariableIndices(t.headerText).map(() => '') : [])
+    const bodyIdx = extractVariableIndices(t.bodyText)
+    const headerIdx = t.headerType === 'text' ? extractVariableIndices(t.headerText) : []
+    setBodyValues(bodyIdx.map(() => ''))
+    setBodyFieldSel(bodyIdx.map(() => ''))
+    setHeaderValues(headerIdx.map(() => ''))
+    setHeaderFieldSel(headerIdx.map(() => ''))
+  }
+
+  function applyHeaderField(i, token) {
+    setHeaderFieldSel((prev) => prev.map((v, idx) => (idx === i ? token : v)))
+    if (token) setHeaderValues((prev) => prev.map((v, idx) => (idx === i ? resolveLeadFieldValue(lead, token) : v)))
+  }
+
+  function editHeaderValue(i, val) {
+    setHeaderValues((prev) => prev.map((v, idx) => (idx === i ? val : v)))
+    setHeaderFieldSel((prev) => prev.map((v, idx) => (idx === i ? '' : v)))
+  }
+
+  function applyBodyField(i, token) {
+    setBodyFieldSel((prev) => prev.map((v, idx) => (idx === i ? token : v)))
+    if (token) setBodyValues((prev) => prev.map((v, idx) => (idx === i ? resolveLeadFieldValue(lead, token) : v)))
+  }
+
+  function editBodyValue(i, val) {
+    setBodyValues((prev) => prev.map((v, idx) => (idx === i ? val : v)))
+    setBodyFieldSel((prev) => prev.map((v, idx) => (idx === i ? '' : v)))
   }
 
   async function handleSend() {
@@ -107,26 +180,101 @@ export function TemplatePickerModal({ conversationId, onClose, onSent }) {
             )
           ) : (
             <div className="space-y-3">
+              {leadId ? (
+                <div className="flex items-center gap-2 rounded-lg border border-surface-border bg-surface-muted px-3 py-2">
+                  <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-emerald-100 text-emerald-700">
+                    <User size={14} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    {leadLoading ? (
+                      <p className="text-xs text-ink-muted">Loading lead…</p>
+                    ) : lead ? (
+                      <>
+                        <p className="truncate text-xs font-semibold text-ink">{lead.title || lead.contactName}</p>
+                        <p className="truncate text-[11px] text-ink-muted">
+                          {[lead.contactName, lead.company].filter(Boolean).join(' · ') || lead.email || lead.phone || '—'}
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-xs text-ink-muted">Lead not found</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className="shrink-0 text-[11px] font-semibold text-emerald-700 hover:underline"
+                    onClick={() => navigate(`/leads/${leadId}`)}
+                  >
+                    View
+                  </button>
+                </div>
+              ) : null}
+
               {headerVars.map((v, i) => (
                 <label key={`h${v}`} className="block">
                   <span className="text-[11px] font-medium text-ink-muted">Header {'{{' + v + '}}'}</span>
-                  <input
-                    type="text"
-                    className="mt-1 h-8 w-full rounded-md border border-surface-border px-2 text-xs"
-                    value={headerValues[i] || ''}
-                    onChange={(e) => setHeaderValues((prev) => prev.map((val, idx) => (idx === i ? e.target.value : val)))}
-                  />
+                  <div className="mt-1 flex gap-1.5">
+                    {leadId ? (
+                      <select
+                        className="h-8 w-32 shrink-0 rounded-md border border-surface-border bg-surface-muted px-1.5 text-[11px] text-ink-muted"
+                        value={headerFieldSel[i] || ''}
+                        onChange={(e) => applyHeaderField(i, e.target.value)}
+                      >
+                        <option value="">Manual</option>
+                        <optgroup label="Lead field">
+                          {STANDARD_LEAD_FIELDS.map((f) => (
+                            <option key={f.key} value={`std:${f.key}`}>{f.label}</option>
+                          ))}
+                        </optgroup>
+                        {customFieldOptions.length ? (
+                          <optgroup label="Custom field">
+                            {customFieldOptions.map((f) => (
+                              <option key={f.key} value={`custom:${f.key}`}>{f.label}</option>
+                            ))}
+                          </optgroup>
+                        ) : null}
+                      </select>
+                    ) : null}
+                    <input
+                      type="text"
+                      className="h-8 min-w-0 flex-1 rounded-md border border-surface-border px-2 text-xs"
+                      value={headerValues[i] || ''}
+                      onChange={(e) => editHeaderValue(i, e.target.value)}
+                    />
+                  </div>
                 </label>
               ))}
               {bodyVars.map((v, i) => (
                 <label key={`b${v}`} className="block">
                   <span className="text-[11px] font-medium text-ink-muted">Body {'{{' + v + '}}'}</span>
-                  <input
-                    type="text"
-                    className="mt-1 h-8 w-full rounded-md border border-surface-border px-2 text-xs"
-                    value={bodyValues[i] || ''}
-                    onChange={(e) => setBodyValues((prev) => prev.map((val, idx) => (idx === i ? e.target.value : val)))}
-                  />
+                  <div className="mt-1 flex gap-1.5">
+                    {leadId ? (
+                      <select
+                        className="h-8 w-32 shrink-0 rounded-md border border-surface-border bg-surface-muted px-1.5 text-[11px] text-ink-muted"
+                        value={bodyFieldSel[i] || ''}
+                        onChange={(e) => applyBodyField(i, e.target.value)}
+                      >
+                        <option value="">Manual</option>
+                        <optgroup label="Lead field">
+                          {STANDARD_LEAD_FIELDS.map((f) => (
+                            <option key={f.key} value={`std:${f.key}`}>{f.label}</option>
+                          ))}
+                        </optgroup>
+                        {customFieldOptions.length ? (
+                          <optgroup label="Custom field">
+                            {customFieldOptions.map((f) => (
+                              <option key={f.key} value={`custom:${f.key}`}>{f.label}</option>
+                            ))}
+                          </optgroup>
+                        ) : null}
+                      </select>
+                    ) : null}
+                    <input
+                      type="text"
+                      className="h-8 min-w-0 flex-1 rounded-md border border-surface-border px-2 text-xs"
+                      value={bodyValues[i] || ''}
+                      onChange={(e) => editBodyValue(i, e.target.value)}
+                    />
+                  </div>
                 </label>
               ))}
 

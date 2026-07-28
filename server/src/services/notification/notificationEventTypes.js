@@ -44,11 +44,6 @@ export const NOTIFICATION_EVENT_TYPES = {
   // Documents
   DOCUMENT_SHARED: 'document_shared',
 
-  // HR
-  LEAVE_REQUESTED: 'leave_requested',
-  LEAVE_DECIDED: 'leave_decided',
-  ATTENDANCE_ALERT: 'attendance_alert',
-
   // Security (mandatory)
   SECURITY_NEW_DEVICE_LOGIN: 'security_new_device_login',
   SECURITY_PASSWORD_CHANGED: 'security_password_changed',
@@ -83,7 +78,6 @@ export const EVENT_MODULE_GROUPS = [
   { module: 'Approvals', events: ['approval_requested', 'approval_decided'] },
   { module: 'Finance', events: ['invoice_created', 'invoice_payment_received'] },
   { module: 'Documents', events: ['document_shared'] },
-  { module: 'HR', events: ['leave_requested', 'leave_decided', 'attendance_alert'] },
   { module: 'Digests', events: ['digest_daily', 'digest_weekly'] },
   { module: 'Campaigns & Email', events: ['campaign_leads_added', 'lead_email_reply'] },
 ]

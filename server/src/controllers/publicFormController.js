@@ -260,6 +260,17 @@ export async function hostedFormPage(req, res, next) {
     if (!form) return res.status(404).send('Form not found')
     const safeToken = String(token).replace(/[^a-zA-Z0-9_-]/g, '')
     const scriptUrl = `${req.protocol}://${req.get('host')}/embed/form.js?token=${safeToken}`
+
+    // This page is meant to be iframed on external sites. Helmet's global
+    // X-Frame-Options: SAMEORIGIN + CSP frame-ancestors 'self' would block that,
+    // so replace both for this response only, scoped to the form's allowed domains.
+    res.removeHeader('X-Frame-Options')
+    const domains = Array.isArray(form.allowedDomains) ? form.allowedDomains : []
+    const frameAncestors = domains.length
+      ? domains.flatMap((d) => [`https://${d}`, `http://${d}`]).join(' ')
+      : '*'
+    res.setHeader('Content-Security-Policy', `frame-ancestors ${frameAncestors}`)
+
     return res.send(`<!doctype html>
 <html>
   <head>

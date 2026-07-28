@@ -36,7 +36,6 @@ const LINK_INVALIDATION = [
   { match: /^\/tasks/, key: (ws) => keys.tasks?.all?.(ws) },
   { match: /^\/meetings/, key: (ws) => keys.meetings?.all?.(ws) },
   { match: /^\/calls/, key: (ws) => keys.calls?.all?.(ws) },
-  { match: /^\/leave/, key: (ws) => keys.leave?.all?.(ws) },
 ];
 
 export default function RealtimeProvider({ children }) {

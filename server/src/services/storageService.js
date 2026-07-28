@@ -23,7 +23,6 @@ const UPLOADS_ROOT = path.join(appRoot, 'uploads')
 const SCOPE_DIRS = {
   documents: 'documents',
   email: 'email',
-  leave: 'leave',
   webforms: 'webforms',
   leads: 'leads',
   whatsapp: 'whatsapp',

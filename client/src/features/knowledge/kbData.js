@@ -3,7 +3,6 @@ import engage from './content/02-engage.md?raw'
 import documents from './content/03-documents-billing.md?raw'
 import automation from './content/04-automation.md?raw'
 import accountTeam from './content/05-account-team.md?raw'
-import hr from './content/06-hr.md?raw'
 import analytics from './content/07-analytics.md?raw'
 
 export const KB_SECTIONS = [
@@ -41,13 +40,6 @@ export const KB_SECTIONS = [
     icon: 'Building2',
     description: 'Getting started, workspaces, team & roles, company settings, integrations, onboarding',
     content: accountTeam,
-  },
-  {
-    id: 'hr',
-    label: 'HR: Attendance & Leave',
-    icon: 'CalendarCheck',
-    description: 'Attendance, leave requests, approvals, leave settings, HR reports',
-    content: hr,
   },
   {
     id: 'analytics',

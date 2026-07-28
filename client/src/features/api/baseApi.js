@@ -142,8 +142,6 @@ export const baseApi = createApi({
     'Campaign',
     'Workflow',
     'WorkflowRun',
-    'Attendance',
-    'Leave',
     'Notification',
     'NotificationSettings',
     'NotificationDeliveryHistory',

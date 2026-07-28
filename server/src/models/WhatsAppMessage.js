@@ -30,6 +30,8 @@ export const WhatsAppMessage = sequelize.define(
       defaultValue: 'unknown',
     },
     textBody: { type: DataTypes.TEXT, allowNull: true, field: 'text_body' },
+    /** Set only for type: 'template' — the Meta template name this message was sent from. */
+    templateName: { type: DataTypes.STRING(255), allowNull: true, field: 'template_name' },
     mediaId: { type: DataTypes.STRING(128), allowNull: true, field: 'media_id' },
     /** Our stored ref once downloaded: /uploads/whatsapp/<companyId>/<file>. */
     mediaUrl: { type: DataTypes.STRING(500), allowNull: true, field: 'media_url' },

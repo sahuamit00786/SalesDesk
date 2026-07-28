@@ -648,23 +648,7 @@
   );
 }
 
-.rbc-day-bg.rbc-day-absent,
-.calendar-attendance-mode .rbc-month-view .rbc-day-bg.rbc-day-absent {
-  background-color: #fca5a5 !important;
-  background-image: none !important;
-}
-
-.rbc-day-bg.rbc-today.rbc-day-absent,
-.calendar-attendance-mode .rbc-month-view .rbc-day-bg.rbc-today.rbc-day-absent {
-  background-color: #fca5a5 !important;
-  background-image: none !important;
-}
-
-.rbc-day-bg.rbc-day-excluded.rbc-day-absent {
-  background-color: #f9fafb !important;
-}
-
-.rbc-today:not(.rbc-day-absent) {
+.rbc-today {
   background-color: #eef2ff !important;
 }
 

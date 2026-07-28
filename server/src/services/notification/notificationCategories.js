@@ -27,7 +27,7 @@ export const NOTIFICATION_CATEGORIES = [
   {
     id: 'approvals',
     label: 'Approvals',
-    types: ['approval_requested', 'approval_decided', 'leave', 'leave_requested', 'leave_decided'],
+    types: ['approval_requested', 'approval_decided'],
   },
   {
     id: 'finance',
@@ -52,7 +52,6 @@ export const NOTIFICATION_CATEGORIES = [
       'security_email_changed',
       'digest_daily',
       'digest_weekly',
-      'attendance_alert',
       'info',
     ],
   },

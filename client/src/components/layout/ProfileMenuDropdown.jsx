@@ -4,18 +4,10 @@ import { ChevronDown, LogOut, Settings, User } from '@/components/ui/icons'
 import { useAppDispatch, useAppSelector } from '@/app/hooks'
 import { logout } from '@/features/auth/authSlice'
 import { useLogoutMutation } from '@/features/auth/authApi'
-import { useHrRole } from '@/features/hr/useHrRole'
 import { buildAllowedRouteSet, isMenuPathAllowed } from '@/utils/menuAccess'
-
-function roleLabel(role) {
-  if (role === 'admin') return 'Admin'
-  if (role === 'manager') return 'Manager'
-  return 'Employee'
-}
 
 export function ProfileMenuDropdown() {
   const user = useAppSelector((s) => s.auth.user)
-  const hrRole = useHrRole()
   const dispatch = useAppDispatch()
   const navigate = useNavigate()
   const [logoutApi] = useLogoutMutation()
@@ -46,7 +38,6 @@ export function ProfileMenuDropdown() {
         </span>
         <span className="hidden max-w-[120px] truncate text-left text-sm sm:block">
           <span className="block font-medium text-ink">{user?.name}</span>
-          <span className="block text-[10px] text-ink-muted">{roleLabel(hrRole)}</span>
         </span>
         <ChevronDown className="hidden h-4 w-4 text-ink-muted sm:block" />
       </button>

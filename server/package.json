@@ -17,6 +17,8 @@
     "qa:audit": "node scripts/qa/staticCodeAudit.js"
   },
   "dependencies": {
+    "@bull-board/api": "^8.3.0",
+    "@bull-board/express": "^8.3.0",
     "bcrypt": "^6.0.0",
     "bullmq": "^5.76.6",
     "cookie-parser": "^1.4.7",

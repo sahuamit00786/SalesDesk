@@ -1,7 +1,7 @@
 import {
   Activity, AlertTriangle, BarChart2, Briefcase, CalendarCheck, CheckSquare,
   CreditCard, FileText, Mail, Megaphone, Receipt, Target, TrendingUp,
-  Umbrella, UserCircle, Users, Video,
+  UserCircle, Users, Video,
 } from '@/components/ui/icons'
 
 export const REPORT_CATEGORIES = [
@@ -27,7 +27,7 @@ export const REPORT_CATEGORIES = [
     id: 'people',
     label: 'People & HR',
     desc: 'Team performance & monthly digest',
-    reports: ['employee-monthly', 'team'], // 'leave' disabled (HR module)
+    reports: ['employee-monthly', 'team'],
   },
   {
     id: 'communications',
@@ -119,14 +119,6 @@ export const REPORT_META = {
     icon: Users,
     category: 'people',
   },
-  // HR modules disabled
-  // leave: {
-  //   label: 'Leave & Attendance',
-  //   desc: 'Leave taken by employee and leave type',
-  //   icon: Umbrella,
-  //   category: 'people',
-  //   filters: ['userId', 'status'],
-  // },
   email: {
     label: 'Email Performance',
     desc: 'Sent, opens, clicks & reply rates',

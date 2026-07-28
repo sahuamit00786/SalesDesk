@@ -5,7 +5,6 @@ import { ChevronLeft, ChevronRight } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
 import { NAV_SECTIONS } from '@/components/layout/navConfig'
 import { useAppSelector } from '@/app/hooks'
-import { useHrRole } from '@/features/hr/useHrRole'
 import { buildAllowedRouteSet, isElevatedRole, isMenuPathAllowed } from '@/utils/menuAccess'
 import { selectActiveWorkspaceName } from '@/features/workspace/workspaceSlice'
 import { useGetMailboxInboxBadgeQuery } from '@/features/email/emailApi'
@@ -127,19 +126,12 @@ export function Sidebar({ className, collapsed = false, onToggleCollapse, isMobi
     '/tasks': fmtBadge(nb.tasks),
     '/followups': fmtBadge(nb.followups),
   }
-  const hrRole = useHrRole()
   const allowedRoutes = buildAllowedRouteSet(user)
   const navSections = (isElevatedRole(user)
     ? NAV_SECTIONS
     : NAV_SECTIONS.map((section) => ({
         ...section,
-        items: section.items.filter((item) => {
-          if (section.label === 'HR') {
-            if (item.to === '/leave/config' && hrRole !== 'admin') return false
-            if (item.to === '/leave/approval' && hrRole !== 'admin' && hrRole !== 'manager') return false
-          }
-          return isMenuPathAllowed(item.to, allowedRoutes)
-        }),
+        items: section.items.filter((item) => isMenuPathAllowed(item.to, allowedRoutes)),
       })).filter((section) => section.items.length > 0)
   ).filter((section) => !section.hidden)
   const narrow = collapsed && !isMobile

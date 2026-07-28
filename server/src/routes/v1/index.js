@@ -6,7 +6,6 @@ import { rateLimit } from '../../middleware/rateLimit.js'
 import { requireAuth } from '../../middleware/auth.js'
 import { requireCompany } from '../../middleware/requireCompany.js'
 import { workspaceContext } from '../../middleware/workspaceContext.js'
-import { requireHrRole } from '../../middleware/requireHrRole.js'
 import * as authController from '../../controllers/authController.js'
 import * as analyticsController from '../../controllers/analyticsController.js'
 import * as analyticsReportsExtended from '../../controllers/analyticsReportsExtended.js'
@@ -40,7 +39,6 @@ import whatsappRoutes from '../whatsappRoutes.js'
 import { verifyWhatsAppWebhook, receiveWhatsAppWebhook } from '../../controllers/whatsappWebhookController.js'
 import * as googleController from '../../controllers/googleController.js'
 import * as mailboxController from '../../controllers/mailboxController.js'
-import * as leaveController from '../../controllers/leaveController.js'
 import * as duplicateLeadsController from '../../controllers/duplicateLeadsController.js'
 import * as callController from '../../controllers/callController.js'
 import * as notificationSettingsController from '../../controllers/notificationSettingsController.js'
@@ -65,24 +63,11 @@ import * as scoringRulesController from '../../controllers/scoringRulesControlle
 const router = Router()
 const emailUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 24 * 1024 * 1024, files: 12 } })
 
-const leaveUploadDir = path.resolve(process.cwd(), 'uploads', 'leave')
-mkdirSync(leaveUploadDir, { recursive: true })
-const leaveUpload = multer({
-  storage: multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, leaveUploadDir),
-    filename: (_req, file, cb) => {
-      const safe = String(file.originalname || 'document').replace(/[^\w.\-]+/g, '_')
-      cb(null, `${Date.now()}_${safe}`)
-    },
-  }),
-  limits: { fileSize: 8 * 1024 * 1024, files: 1 },
-})
-
 const leadFileUploadDir = path.resolve(process.cwd(), 'uploads', 'leads')
 mkdirSync(leadFileUploadDir, { recursive: true })
 const leadFileUpload = multer({
   storage: multer.diskStorage({
-    // Workspace-scoped subdir, matching the documents/leave/webforms convention
+    // Workspace-scoped subdir, matching the documents/webforms convention
     // (uploads/<scope>/<workspaceId>/<file>) so these files are also servable
     // through the Phase 6 authenticated /files route.
     destination: (req, _file, cb) => {
@@ -277,7 +262,6 @@ router.get('/analytics/opportunities-report', requireAuth, apiLimiter, requireCo
 router.get('/analytics/followups-report', requireAuth, apiLimiter, requireCompany, workspaceContext, requireAnalyticsView, analyticsReportsExtended.followupsReport)
 router.get('/analytics/sales-docs-report', requireAuth, apiLimiter, requireCompany, workspaceContext, requireAnalyticsView, analyticsReportsExtended.salesDocsReport)
 router.get('/analytics/payments-report', requireAuth, apiLimiter, requireCompany, workspaceContext, requireAnalyticsView, analyticsReportsExtended.paymentsReport)
-router.get('/analytics/leave-report', requireAuth, apiLimiter, requireCompany, workspaceContext, requireAnalyticsView, analyticsReportsExtended.leaveReport)
 router.get('/analytics/employee-monthly-report', requireAuth, apiLimiter, requireCompany, workspaceContext, requireTeamAnalytics, analyticsReportsExtended.employeeMonthlyReport)
 router.get('/analytics/data-health-report', requireAuth, apiLimiter, requireCompany, workspaceContext, requireAnalyticsAdmin, analyticsReportsExtended.dataHealthReport)
 router.get('/analytics/campaigns-report', requireAuth, apiLimiter, requireCompany, workspaceContext, requireAnalyticsView, analyticsReportsExtended.campaignsReport)
@@ -1169,35 +1153,6 @@ router.get(
   requireCompany, workspaceContext,
   templatesController.leadEmailHistory,
 )
-
-// —— HR: Leave ——
-router.get('/leave/types', requireAuth, apiLimiter, requireCompany, workspaceContext, leaveController.getLeaveTypes)
-router.post('/leave/types', requireAuth, apiLimiter, requireCompany, workspaceContext, requireHrRole('admin'), leaveController.createLeaveType)
-router.put('/leave/types/:id', requireAuth, apiLimiter, requireCompany, workspaceContext, requireHrRole('admin'), leaveController.updateLeaveType)
-router.delete('/leave/types/:id', requireAuth, apiLimiter, requireCompany, workspaceContext, requireHrRole('admin'), leaveController.deleteLeaveType)
-router.get('/leave/balance/me', requireAuth, apiLimiter, requireCompany, workspaceContext, leaveController.getMyLeaveBalance)
-router.get('/leave/balance/:userId', requireAuth, apiLimiter, requireCompany, workspaceContext, requireHrRole('manager'), leaveController.getUserLeaveBalance)
-router.post('/leave/balance/adjust', requireAuth, apiLimiter, requireCompany, workspaceContext, requireHrRole('admin'), leaveController.adjustLeaveBalance)
-router.get('/leave/preview-days', requireAuth, apiLimiter, requireCompany, workspaceContext, leaveController.previewLeaveDays)
-router.get('/leave/settings', requireAuth, apiLimiter, requireCompany, workspaceContext, leaveController.getLeaveSettings)
-router.put('/leave/settings', requireAuth, apiLimiter, requireCompany, workspaceContext, requireHrRole('admin'), leaveController.updateLeaveSettings)
-router.post('/leave/requests', requireAuth, apiLimiter, requireCompany, workspaceContext, leaveUpload.single('document'), leaveController.applyLeave)
-router.get('/leave/requests/me', requireAuth, apiLimiter, requireCompany, workspaceContext, leaveController.getMyLeaves)
-router.get('/leave/requests/all', requireAuth, apiLimiter, requireCompany, workspaceContext, requireHrRole('manager'), leaveController.getAllLeaves)
-router.post('/leave/requests/bulk-approve', requireAuth, apiLimiter, requireCompany, workspaceContext, requireHrRole('manager'), leaveController.bulkApproveLeaves)
-router.post('/leave/requests/:id/approve', requireAuth, apiLimiter, requireCompany, workspaceContext, requireHrRole('manager'), leaveController.approveLeave)
-router.post('/leave/requests/:id/reject', requireAuth, apiLimiter, requireCompany, workspaceContext, requireHrRole('manager'), leaveController.rejectLeave)
-router.post('/leave/requests/:id/cancel', requireAuth, apiLimiter, requireCompany, workspaceContext, leaveController.cancelLeave)
-router.get('/leave/calendar', requireAuth, apiLimiter, requireCompany, workspaceContext, leaveController.getTeamLeaveCalendar)
-router.get('/leave/holidays', requireAuth, apiLimiter, requireCompany, workspaceContext, leaveController.getPublicHolidays)
-router.post('/leave/holidays', requireAuth, apiLimiter, requireCompany, workspaceContext, requireHrRole('admin'), leaveController.createHoliday)
-router.put('/leave/holidays/:id', requireAuth, apiLimiter, requireCompany, workspaceContext, requireHrRole('admin'), leaveController.updateHoliday)
-router.delete('/leave/holidays/:id', requireAuth, apiLimiter, requireCompany, workspaceContext, requireHrRole('admin'), leaveController.deleteHoliday)
-
-// —— HR: Leave — Manager Approval ——
-router.get('/leave/pending-approvals', requireAuth, apiLimiter, requireCompany, workspaceContext, requireHrRole('manager'), leaveController.getPendingApprovals)
-router.post('/leave/:id/approve', requireAuth, apiLimiter, requireCompany, workspaceContext, requireHrRole('manager'), leaveController.managerApproveLeave)
-router.post('/leave/:id/reject', requireAuth, apiLimiter, requireCompany, workspaceContext, requireHrRole('manager'), leaveController.managerRejectLeave)
 
 // —— Notifications —— (self-service personal inbox, intentionally no module gate)
 // Static paths must come before /:id param routes to avoid param matching

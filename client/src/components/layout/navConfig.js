@@ -3,8 +3,6 @@ import {
   BellRing,
   BookOpen,
   Briefcase,
-  Building2,
-  CalendarCheck,
   CalendarDays,
   CheckSquare,
   Banknote,
@@ -24,12 +22,10 @@ import {
   PhoneCall,
   Puzzle,
   Receipt,
-  ScrollText,
   SlidersHorizontal,
   Settings2,
   Shuffle,
   Sparkles,
-  Umbrella,
   Users,
   Workflow,
 } from '@/components/ui/icons'
@@ -142,7 +138,7 @@ export const ROUTE_META = {
   },
   '/reports': {
     title: 'Reports & analytics',
-    sub: 'One-stop admin analytics — leads, deals, tasks, follow-ups, payments, leave, and more',
+    sub: 'One-stop admin analytics — leads, deals, tasks, follow-ups, payments, and more',
   },
   '/email-tracking': {
     title: 'Email tracking',
@@ -163,34 +159,6 @@ export const ROUTE_META = {
   '/integrations': {
     title: 'Integrations & API',
     sub: 'Connect your CRM to every other tool your company uses',
-  },
-  '/hr': {
-    title: 'HR Overview',
-    sub: 'Attendance status, leave balances, and pending HR actions at a glance',
-  },
-  '/hr/reports': {
-    title: 'Leave & Attendance',
-    sub: 'Leave by employee and type — now under Reports → Leave',
-  },
-  '/attendance': {
-    title: 'Attendance',
-    sub: 'Check-in, team calendar, and monthly attendance reports',
-  },
-  '/leave': {
-    title: 'Leave',
-    sub: 'Apply for leave and view your balance',
-  },
-  '/leave/requests': {
-    title: 'Leave requests',
-    sub: 'Track pending, approved, and past leave applications',
-  },
-  '/leave/approval': {
-    title: 'Leave approval',
-    sub: 'Review and approve team leave requests',
-  },
-  '/leave/config': {
-    title: 'Leave settings',
-    sub: 'Leave types, holidays, and balance adjustments',
   },
   '/knowledge-base': {
     title: 'Knowledge Base',
@@ -244,18 +212,6 @@ export const NAV_SECTIONS = [
       { to: '/deal-payments', label: 'Deal Payments', icon: Banknote, restricted: true },
     ],
   },
-  // HR modules disabled
-  // {
-  //   label: 'HR',
-  //   items: [
-  //     { to: '/hr', label: 'HR Overview', icon: Building2, end: true },
-  //     { to: '/attendance', label: 'Attendance', icon: CalendarCheck },
-  //     { to: '/leave', label: 'Leave', icon: Umbrella, end: true },
-  //     { to: '/leave/requests', label: 'My requests', icon: ScrollText },
-  //     { to: '/leave/approval', label: 'Approval queue', icon: ClipboardList },
-  //     { to: '/leave/config', label: 'Leave settings', icon: SlidersHorizontal },
-  //   ],
-  // },
   {
     label: 'Engage',
     items: [

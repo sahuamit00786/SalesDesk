@@ -12,6 +12,7 @@ import * as publicFormController from './controllers/publicFormController.js'
 import { errorHandler } from './middleware/errorHandler.js'
 import { auditLog } from './middleware/auditLog.js'
 import { allowedOrigins as _allowedOrigins } from './config/corsOrigins.js'
+import { mountQueueBoard } from './adminQueues.js'
 
 const app = express()
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -31,6 +32,7 @@ app.use((req, res, next) => {
 app.use(helmet())
 
 app.use(
+  '/api/v1',
   cors({
     origin: (origin, callback) => {
       // No origin = server-to-server / same-origin request — always allow
@@ -64,6 +66,8 @@ app.use(
     path.join(appRoot, 'pdfs')
   )
 )
+
+mountQueueBoard(app)
 
 app.use('/api/v1', auditLog, v1)
 app.use('/api/public', cors({ origin: true, credentials: false }), publicRoutes)

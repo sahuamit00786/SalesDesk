@@ -146,6 +146,7 @@ export async function sendTemplate({ companyId, conversation, template, variable
     direction: 'outbound',
     type: 'template',
     textBody,
+    templateName: template.name,
     status: 'queued',
     sentByUserId,
     waTimestamp: new Date(),

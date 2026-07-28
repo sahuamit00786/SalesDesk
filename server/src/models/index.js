@@ -71,10 +71,6 @@ import { WorkflowVersion } from './WorkflowVersion.js'
 import { WorkflowRun } from './WorkflowRun.js'
 import { WorkflowRunStep } from './WorkflowRunStep.js'
 import { DuplicateLead } from './DuplicateLead.js'
-import { LeaveType } from './LeaveType.js'
-import { LeaveBalance } from './LeaveBalance.js'
-import { LeaveRequest } from './LeaveRequest.js'
-import { PublicHoliday } from './PublicHoliday.js'
 import { Notification } from './Notification.js'
 import { NotificationDeliveryLog } from './NotificationDeliveryLog.js'
 import { FilterPreset } from './FilterPreset.js'
@@ -423,33 +419,10 @@ Workflow.hasMany(WorkflowRun, { foreignKey: 'workflowId', as: 'runs' })
 WorkflowRunStep.belongsTo(WorkflowRun, { foreignKey: 'runId', as: 'run' })
 WorkflowRun.hasMany(WorkflowRunStep, { foreignKey: 'runId', as: 'steps' })
 
-Company.hasMany(LeaveType, { foreignKey: 'companyId', as: 'leaveTypes' })
-Company.hasMany(LeaveBalance, { foreignKey: 'companyId', as: 'leaveBalances' })
-Company.hasMany(LeaveRequest, { foreignKey: 'companyId', as: 'leaveRequests' })
-Company.hasMany(PublicHoliday, { foreignKey: 'companyId', as: 'publicHolidays' })
 Company.hasMany(Notification, { foreignKey: 'companyId', as: 'notifications' })
 
-User.hasMany(LeaveBalance, { foreignKey: 'userId', as: 'leaveBalances' })
-User.hasMany(LeaveRequest, { foreignKey: 'userId', as: 'leaveRequests' })
 User.hasMany(Notification, { foreignKey: 'userId', as: 'notifications' })
 
-LeaveType.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
-LeaveType.hasMany(LeaveBalance, { foreignKey: 'leaveTypeId', as: 'balances' })
-LeaveType.hasMany(LeaveRequest, { foreignKey: 'leaveTypeId', as: 'requests' })
-LeaveBalance.belongsTo(User, { foreignKey: 'userId', as: 'user' })
-LeaveBalance.belongsTo(LeaveType, { foreignKey: 'leaveTypeId', as: 'leaveType' })
-LeaveBalance.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
-LeaveBalance.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
-Workspace.hasMany(LeaveBalance, { foreignKey: 'workspaceId', as: 'leaveBalances' })
-
-LeaveRequest.belongsTo(User, { foreignKey: 'userId', as: 'user' })
-LeaveRequest.belongsTo(LeaveType, { foreignKey: 'leaveTypeId', as: 'leaveType' })
-LeaveRequest.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
-LeaveRequest.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
-Workspace.hasMany(LeaveRequest, { foreignKey: 'workspaceId', as: 'leaveRequests' })
-LeaveRequest.belongsTo(User, { foreignKey: 'approvedBy', as: 'approver' })
-
-PublicHoliday.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
 Notification.belongsTo(User, { foreignKey: 'userId', as: 'user' })
 Notification.belongsTo(Company, { foreignKey: 'companyId', as: 'company' })
 Notification.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace' })
@@ -602,10 +575,6 @@ export {
   WorkflowVersion,
   WorkflowRun,
   WorkflowRunStep,
-  LeaveType,
-  LeaveBalance,
-  LeaveRequest,
-  PublicHoliday,
   Notification,
   NotificationDeliveryLog,
   DuplicateLead,

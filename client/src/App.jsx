@@ -55,13 +55,6 @@ import { PrivacyPolicyPage } from '@/pages/PrivacyPolicyPage'
 import { TermsOfServicePage } from '@/pages/TermsOfServicePage'
 import { AboutPage } from '@/pages/AboutPage'
 import { ContactPage } from '@/pages/ContactPage'
-// HR modules disabled
-// import { AttendancePage } from '@/pages/AttendancePage'
-// import { LeavePage } from '@/pages/LeavePage'
-// import { LeaveRequestsPage } from '@/pages/LeaveRequestsPage'
-// import { LeaveApprovalPage } from '@/pages/LeaveApprovalPage'
-// import { LeaveConfigPage } from '@/pages/LeaveConfigPage'
-// import { HRDashboardPage } from '@/pages/HRDashboardPage'
 import { AnalyticsPage } from '@/pages/AnalyticsPage'
 import { ReportDetailPage } from '@/pages/ReportDetailPage'
 import { DealPaymentsPage } from '@/pages/DealPaymentsPage'
@@ -126,14 +119,6 @@ export default function App() {
             <Route path="/sales-docs/templates" element={<SalesDocTemplatesPage />} />
             <Route path="/document-settings" element={<DocumentSettingsPage />} />
             <Route path="/lead-configuration" element={<LeadConfigurationPage />} />
-            {/* HR modules disabled */}
-            {/* <Route path="/hr" element={<HRDashboardPage />} /> */}
-            {/* <Route path="/hr/reports" element={<Navigate to="/reports/leave" replace />} /> */}
-            {/* <Route path="/attendance" element={<AttendancePage />} /> */}
-            {/* <Route path="/leave" element={<LeavePage />} /> */}
-            {/* <Route path="/leave/requests" element={<LeaveRequestsPage />} /> */}
-            {/* <Route path="/leave/approval" element={<LeaveApprovalPage />} /> */}
-            {/* <Route path="/leave/config" element={<LeaveConfigPage />} /> */}
             <Route path="/team" element={<TeamPage />} />
             <Route path="/my-profile" element={<TeamMemberProfilePage />} />
             <Route path="/team/:userId" element={<TeamMemberProfilePage />} />

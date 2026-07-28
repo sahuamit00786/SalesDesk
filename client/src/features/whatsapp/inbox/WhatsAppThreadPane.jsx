@@ -478,6 +478,7 @@ export function WhatsAppThreadPane({ conversation, onBack, initialJumpMessageId,
 
       <WhatsAppComposer
         conversationId={conversation.id}
+        leadId={conversation.lead?.id}
         replyingTo={replyingTo}
         onCancelReply={() => setReplyingTo(null)}
         onSent={() => setDividerDismissed(true)}
@@ -487,6 +488,7 @@ export function WhatsAppThreadPane({ conversation, onBack, initialJumpMessageId,
       {bannerTemplateOpen ? (
         <TemplatePickerModal
           conversationId={conversation.id}
+          leadId={conversation.lead?.id}
           onClose={() => setBannerTemplateOpen(false)}
           onSent={() => setDividerDismissed(true)}
         />

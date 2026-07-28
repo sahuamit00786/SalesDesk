@@ -32,7 +32,7 @@ function formatTime(value) {
 
 function previewTextFor(message) {
   if (!message) return ''
-  if (message.type === 'text') return message.textBody || ''
+  if (message.type === 'text' || message.type === 'template') return message.textBody || ''
   if (message.type === 'location') return message.locationName || 'Location'
   return message.caption || `[${message.type}]`
 }
@@ -70,6 +70,32 @@ function MessageBody({ message, outbound, timeText }) {
             <MessageMeta message={message} outbound={outbound} timeText={timeText} />
           </span>
         </p>
+      )
+    case 'template':
+      if (!message.templateName) {
+        return (
+          <p className="whitespace-pre-wrap break-words pr-1 text-sm">
+            <WhatsAppFormattedText text={message.textBody} />
+            <span className="invisible ml-2 align-bottom">
+              <MessageMeta message={message} outbound={outbound} timeText={timeText} />
+            </span>
+          </p>
+        )
+      }
+      return (
+        <div>
+          <p className="whitespace-pre-wrap break-words pr-1 text-sm">
+            <WhatsAppFormattedText text={message.textBody} />
+          </p>
+          {/* Very small template name tag — the invisible meta twin now lives here since
+              this is the bubble's actual last line, so the fixed meta below still has room. */}
+          <p className="mt-1 whitespace-pre-wrap break-words pr-1 text-[9px] italic text-ink-muted">
+            Template: {message.templateName}
+            <span className="invisible ml-2 align-bottom">
+              <MessageMeta message={message} outbound={outbound} timeText={timeText} />
+            </span>
+          </p>
+        </div>
       )
     case 'image':
       return (
@@ -225,7 +251,7 @@ export function WhatsAppMessageBubble({
 
         <MessageBody message={message} outbound={outbound} timeText={timeText} />
 
-        {message.type === 'text' ? (
+        {message.type === 'text' || message.type === 'template' ? (
           // Fixed to the bubble's last row, bottom-right — the invisible twin inside
           // MessageBody already reserved this exact amount of space in the text flow.
           <span className="pointer-events-none absolute bottom-1.5 right-2.5">
@@ -290,7 +316,7 @@ export function WhatsAppMessageBubble({
             <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-muted" onClick={() => { setMenuOpen(false); onReply?.(message) }}>
               <CornerUpLeft size={14} className="text-ink-muted" /> Reply
             </button>
-            {message.type === 'text' ? (
+            {message.type === 'text' || message.type === 'template' ? (
               <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-muted" onClick={copyText}>
                 <Copy size={14} className="text-ink-muted" /> Copy
               </button>

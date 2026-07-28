@@ -8,7 +8,7 @@ function inferResource(req) {
     leads: 'lead', deals: 'deal', opportunities: 'opportunity',
     meetings: 'meeting', tasks: 'task', invoices: 'invoice',
     quotations: 'quotation', campaigns: 'campaign', workflows: 'workflow',
-    users: 'user', leave: 'leave_request', documents: 'document',
+    users: 'user', documents: 'document',
   }
   const type = resourceMap[parts[0]] || parts[0]
   const id = parts[1] && /^[0-9a-f-]{36}$/i.test(parts[1]) ? parts[1] : null

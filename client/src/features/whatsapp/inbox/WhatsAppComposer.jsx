@@ -31,7 +31,7 @@ function previewTextFor(message) {
   return message.caption || `[${message.type}]`
 }
 
-export function WhatsAppComposer({ conversationId, disabled, replyingTo, onCancelReply, onSent, windowOpen = true }) {
+export function WhatsAppComposer({ conversationId, leadId, disabled, replyingTo, onCancelReply, onSent, windowOpen = true }) {
   const [text, setText] = useState('')
   const [sendMessage, { isLoading: sending }] = useSendWhatsAppMessageMutation()
   const [uploadMedia, { isLoading: uploading }] = useUploadWhatsAppMediaMutation()
@@ -199,6 +199,7 @@ export function WhatsAppComposer({ conversationId, disabled, replyingTo, onCance
       {templatePickerOpen ? (
         <TemplatePickerModal
           conversationId={conversationId}
+          leadId={leadId}
           onClose={() => setTemplatePickerOpen(false)}
           onSent={() => onSent?.()}
         />

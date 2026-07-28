@@ -427,15 +427,4 @@ export async function notifySecurityChange({ companyId, recipientUserId, kind })
   })
 }
 
-// 11 — Leave request approved/rejected (Phase 2: routes leave decisions through
-// the standard pipeline instead of a hardcoded direct email, so preferences/
-// quiet-hours/digestOnly and the realtime socket apply here too).
-export async function notifyLeaveDecided({ companyId, workspaceId, recipientUserId, status, fromDate, toDate, reason }) {
-  if (!recipientUserId) return
-  return enqueueSimple(NOTIFICATION_EVENT_TYPES.LEAVE_DECIDED, {
-    companyId, workspaceId, recipientUserId, actorUserId: null,
-    payload: { status, fromDate, toDate, reason },
-  })
-}
-
 export { NOTIFICATION_EVENT_TYPES }

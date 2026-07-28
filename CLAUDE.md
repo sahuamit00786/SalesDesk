@@ -1,6 +1,6 @@
 # Connexify — LeadFlow CRM
 
-Enterprise CRM with sales automation, team collaboration, meeting AI, and HR features.
+Enterprise CRM with sales automation, team collaboration, and meeting AI.
 
 ## Architecture
 
@@ -107,7 +107,7 @@ services/         Business logic
   openAiService.js
   workflowRunner.js
 queues/           BullMQ job definitions
-jobs/             Cron jobs (reminderJob, attendanceJob)
+jobs/             Cron jobs (reminderJob, campaignExpiryJob, dailyDigestJob, periodicDigestJob, taskDigestNotificationJob)
 middleware/       auth.js, requirePermission.js, errorHandler.js
 config/           db.js (Sequelize), env.js (Joi validation)
 migrations/       Sequelize migration files
@@ -128,8 +128,6 @@ features/         Feature modules (one per domain)
   campaigns/      Campaign management
   documents/      Doc management, quotations, invoices
   webforms/       Form builder + submissions + embed
-  attendance/     HR attendance tracking
-  leave/          HR leave requests and balances
   team/           Users, roles, permissions, workspaces
   calendar/       Google Calendar sync
   analytics/      Dashboard stats
@@ -163,8 +161,6 @@ utils/            Helpers
 - `/email` — mailbox threads
 - `/calendar` — Google Calendar events
 - `/campaigns` — lead staging
-- `/attendance` — check-in/out
-- `/leave` — requests, balance, types, holidays
 - `/analytics/dashboard` — dashboard stats
 - `/webhooks/gmail-pubsub` — Gmail push (public)
 - `/track/open`, `/track/click` — email tracking (public)
@@ -185,7 +181,6 @@ utils/            Helpers
 
 **Cron jobs (server/index.js startup):**
 - `reminderJob` — meeting reminders, transcription trigger
-- `attendanceJob` — daily attendance reset
 
 **Workflow engine:** DAG-based visual builder (XYFlow). Triggers on lead events, email events. Runs async via BullMQ. Run history stored in `workflow_runs` + `workflow_run_steps`.
 
@@ -207,9 +202,6 @@ utils/            Helpers
 | Document | documents | File/folder management |
 | Invoice | invoices | Billing docs |
 | Quotation | quotations | Pre-invoice docs |
-| AttendanceLog | attendance_logs | HR check-in/out |
-| LeaveRequest | leave_requests | HR leave workflow |
-| LeaveBalance | leave_balance | Balance per user/type |
 | Campaign | campaigns | Campaign + lead staging |
 
 ## Important Files
@@ -227,11 +219,3 @@ utils/            Helpers
 | `client/vite.config.js` | Vite + API proxy config |
 | `UI_CONVENTIONS.md` | Frontend component standards |
 | `TEAM_WORKSPACE_ROLLOUT.md` | Workspace access setup guide |
-
-## Current Git Status (as of May 2026)
-
-Modified files in active development:
-- `client/src/features/leave/` — Leave balance card, public holiday manager, weekly off days manager
-- `client/src/features/leave/leaveApi.js` — Leave API queries
-- `client/src/pages/LeaveConfigPage.jsx` — Leave config UI
-- `server/src/controllers/leaveController.js` — Leave backend logic

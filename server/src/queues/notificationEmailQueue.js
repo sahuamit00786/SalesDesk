@@ -69,8 +69,6 @@ function buildViewUrl(eventType, payload) {
       return `${base}/settings`
     case NOTIFICATION_EVENT_TYPES.CALL_REMINDER:
       return payload.leadId ? `${base}/leads/${payload.leadId}` : `${base}/calls`
-    case NOTIFICATION_EVENT_TYPES.LEAVE_DECIDED:
-      return `${base}/leave`
     default:
       return `${base}/dashboard`
   }
@@ -132,10 +130,6 @@ function inAppMessage(eventType, payload, actorName, workspaceName) {
       return `Your account email was changed. If this wasn't you, contact support.`
     case NOTIFICATION_EVENT_TYPES.CALL_REMINDER:
       return 'You have a call scheduled in 15 minutes'
-    case NOTIFICATION_EVENT_TYPES.LEAVE_DECIDED:
-      return payload.status === 'approved'
-        ? `Your leave from ${payload.fromDate} to ${payload.toDate} was approved.`
-        : `Your leave was rejected${payload.reason ? `: ${payload.reason}` : '.'}`
     default:
       return payload.message || 'You have a new notification'
   }
@@ -180,8 +174,6 @@ function inAppTitle(eventType, payload) {
       return 'Security alert'
     case NOTIFICATION_EVENT_TYPES.CALL_REMINDER:
       return 'Call reminder'
-    case NOTIFICATION_EVENT_TYPES.LEAVE_DECIDED:
-      return payload.status === 'approved' ? 'Leave approved' : 'Leave rejected'
     default:
       return 'Notification'
   }

@@ -8,7 +8,7 @@ import { isElevated } from '../services/recordVisibility.js'
 /**
  * Phase 6 — authenticated file serving. THE fix for the highest-severity item in
  * the review: `app.use('/uploads', express.static(...))` served every tenant's
- * documents, email attachments, and leave files to anyone with (or guessing) a
+ * documents and email attachments to anyone with (or guessing) a
  * URL. UUID filenames are obscurity, not authorization.
  *
  * This route requires auth, resolves the stored reference safely (no traversal —
@@ -29,7 +29,7 @@ import { isElevated } from '../services/recordVisibility.js'
  * admin | workspace_admin | manager) WITHOUT checking that `workspaceId` belongs
  * to that user's company. Because every company has its own admin, a company
  * admin of tenant B could read tenant A's documents, email attachments, webform
- * uploads, lead files and leave files simply by knowing the stored ref —
+ * uploads, and lead files simply by knowing the stored ref —
  * verified: a foreign admin received 200 + full file contents.
  *
  * The tenant boundary must be established BEFORE any role shortcut applies:
@@ -80,12 +80,6 @@ async function authorizeLeadFile(user, resolved) {
   return Boolean(lead)
 }
 
-async function authorizeLeave(user, resolved) {
-  // Leave attachments: owner or elevated/HR. Gate on workspace access + elevated.
-  // Tighten with a LeaveRequest lookup by stored path if your schema records it.
-  return userCanAccessWorkspace(user, resolved.workspaceId)
-}
-
 /**
  * WhatsApp media is company-wide (one Business number per company), not
  * workspace-scoped, so it doesn't go through userCanAccessWorkspace like the
@@ -108,7 +102,6 @@ export async function serveFile(req, res, next) {
     let allowed = false
     if (resolved.scope === 'documents') allowed = await authorizeDocuments(req.user, resolved)
     else if (resolved.scope === 'email' || resolved.scope === 'webforms' || resolved.scope === 'leads') allowed = await authorizeLeadFile(req.user, resolved)
-    else if (resolved.scope === 'leave') allowed = await authorizeLeave(req.user, resolved)
     else if (resolved.scope === 'whatsapp') allowed = await authorizeWhatsapp(req.user, resolved)
 
     if (!allowed) {

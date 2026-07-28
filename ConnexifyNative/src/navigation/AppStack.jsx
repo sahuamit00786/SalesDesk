@@ -21,8 +21,6 @@ import ProfileScreen from '../features/settings/screens/ProfileScreen';
 import EditProfileScreen from '../features/settings/screens/EditProfileScreen';
 import AppearanceScreen from '../features/settings/screens/AppearanceScreen';
 import SecurityScreen from '../features/settings/screens/SecurityScreen';
-import AttendanceScreen from '../features/attendance/screens/AttendanceScreen';
-import LeaveScreen from '../features/leave/screens/LeaveScreen';
 import NotificationsScreen from '../features/notifications/screens/NotificationsScreen';
 import DealsListScreen from '../features/deals/screens/DealsListScreen';
 import DealDetailScreen from '../features/deals/screens/DealDetailScreen';
@@ -58,8 +56,6 @@ export default function AppStack() {
 
       {/* Workspace */}
       <Stack.Screen name={ROUTES.DOCUMENTS} component={DocumentsBrowserScreen} />
-      <Stack.Screen name={ROUTES.ATTENDANCE} component={AttendanceScreen} />
-      <Stack.Screen name={ROUTES.LEAVE} component={LeaveScreen} />
       <Stack.Screen name={ROUTES.NOTIFICATIONS} component={NotificationsScreen} />
 
       {/* Admin */}
