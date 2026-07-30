@@ -8,7 +8,7 @@ export const LeadEmailLog = sequelize.define(
     companyId: { type: DataTypes.UUID, allowNull: false, field: 'company_id' },
     workspaceId: { type: DataTypes.UUID, allowNull: false, field: 'workspace_id' },
     leadId: { type: DataTypes.UUID, allowNull: false, field: 'lead_id' },
-    templateId: { type: DataTypes.UUID, allowNull: false, field: 'template_id' },
+    templateId: { type: DataTypes.UUID, allowNull: true, field: 'template_id' },
     templateVersion: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false, defaultValue: 1, field: 'template_version' },
     subject: { type: DataTypes.STRING(500), allowNull: true },
     bodyHtml: { type: DataTypes.TEXT('long'), allowNull: true, field: 'body_html' },
@@ -21,12 +21,12 @@ export const LeadEmailLog = sequelize.define(
     bounced: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     unsubscribed: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     status: {
-      type: DataTypes.ENUM('drafted', 'sent', 'opened', 'clicked', 'replied', 'bounced', 'unsubscribed'),
+      type: DataTypes.ENUM('drafted', 'sent', 'opened', 'clicked', 'replied', 'bounced', 'unsubscribed', 'failed'),
       allowNull: false,
       defaultValue: 'drafted',
     },
     source: {
-      type: DataTypes.ENUM('direct', 'bulk', 'workflow'),
+      type: DataTypes.ENUM('direct', 'bulk', 'workflow', 'sequence'),
       allowNull: false,
       defaultValue: 'bulk',
     },
@@ -37,7 +37,11 @@ export const LeadEmailLog = sequelize.define(
     tableName: 'lead_email_logs',
     timestamps: true,
     indexes: [
-      { unique: true, fields: ['lead_id', 'template_id', 'template_version'] },
+      // Not unique (§3.8 of the bug audit) — re-sending the same template to the same
+      // lead is a normal, legitimate action and must not collide with/overwrite the
+      // previous send's row. Kept as a plain (non-unique) index since lookups still
+      // filter by this triple often.
+      { fields: ['lead_id', 'template_id', 'template_version'] },
       { fields: ['template_id', 'sent_at'] },
       { fields: ['status'] },
     ],

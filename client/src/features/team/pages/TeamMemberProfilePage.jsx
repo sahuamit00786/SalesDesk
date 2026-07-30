@@ -39,6 +39,7 @@ import { useGetMeetingsQuery } from '@/features/meetings/meetingsApi'
 import { useGetRemindersQuery } from '@/features/reminders/remindersApi'
 import { cn } from '@/utils/cn'
 import { usePermission } from '@/hooks/usePermission'
+import { noteBodyToDisplayHtml } from '@/utils/noteHtml'
 
 const TABS = [
   { id: 'activity', label: 'Activity', icon: Sparkles },
@@ -294,7 +295,16 @@ function TimelineRow({ row, showDayMarker, styleKey }) {
             </Link>
           ) : null}
         </div>
-        {detail ? <p className="mt-1.5 text-xs leading-relaxed text-ink-muted">{detail}</p> : null}
+        {detail ? (
+          isNote ? (
+            <div
+              className="mt-1.5 text-xs leading-relaxed text-ink-muted [&_p]:m-0 [&_ul]:pl-4 [&_ol]:pl-4"
+              dangerouslySetInnerHTML={{ __html: noteBodyToDisplayHtml(detail) }}
+            />
+          ) : (
+            <p className="mt-1.5 text-xs leading-relaxed text-ink-muted">{detail}</p>
+          )
+        ) : null}
         <p className="mt-2 text-right text-[11px] font-medium text-ink-muted">by {row.user?.name || 'System user'}</p>
       </div>
     </article>
@@ -577,7 +587,11 @@ function NoteCard({ row }) {
       </div>
       <p className="mt-0.5 text-[11px] text-ink-muted">By {row.user?.name || 'System'}</p>
       <div className="note-card-preview prose prose-sm mt-3 max-h-[200px] w-full overflow-hidden rounded-xl border border-amber-100/80 bg-white/90 p-3 text-xs leading-relaxed text-ink prose-p:my-1 prose-headings:my-1">
-        {body ? <p>{body}</p> : <span className="italic text-ink-muted">Empty note</span>}
+        {body ? (
+          <div dangerouslySetInnerHTML={{ __html: noteBodyToDisplayHtml(body) }} />
+        ) : (
+          <span className="italic text-ink-muted">Empty note</span>
+        )}
       </div>
     </div>
   )

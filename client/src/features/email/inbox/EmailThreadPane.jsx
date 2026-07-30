@@ -7,7 +7,7 @@ import InlineReplyBox from '@/features/email/inbox/InlineReplyBox'
 export default function EmailThreadPane({
   thread, loading, onBack, viewLeadId,
   mailboxMode, onOpenAttachment, onSaveAttachmentToLead,
-  myEmail, leads, leadByEmail, onSent,
+  myEmail, leadByEmail, onSent,
 }) {
   if (loading && !thread) {
     return (
@@ -80,7 +80,6 @@ export default function EmailThreadPane({
             <InlineReplyBox
               thread={thread}
               myEmail={myEmail}
-              leads={leads}
               leadByEmail={leadByEmail}
               defaultLeadId={viewLeadId || ''}
               onSent={onSent}

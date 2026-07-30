@@ -1,10 +1,16 @@
 import { Queue, Worker } from 'bullmq'
 import { bullmqConnectionFromEnv } from './connection.js'
-import { getMailTransport } from '../services/mailService.js'
+import { getMailTransport, fromAddress } from '../services/mailService.js'
+import { injectTrackingPixel, injectUnsubscribeLink, wrapLinksWithTracking } from '../services/emailTemplateService.js'
+import { signUnsubscribeToken } from '../controllers/emailTrackingController.js'
 
 const QUEUE_NAME = 'emailSequence'
 let queue = null
 let worker = null
+
+function apiBaseUrl() {
+  return process.env.API_BASE_URL || `http://localhost:${process.env.PORT || 4000}/api/v1`
+}
 
 export function getEmailSequenceQueue() {
   if (queue) return queue
@@ -43,6 +49,8 @@ async function processSequenceStep(job) {
     EmailSequence,
     EmailSequenceStep,
     Lead,
+    EmailSuppression,
+    LeadEmailLog,
   } = await import('../models/index.js')
 
   const enrollment = await EmailSequenceEnrollment.findByPk(enrollmentId, {
@@ -91,6 +99,17 @@ async function processSequenceStep(job) {
     // Can't send without email — advance or mark failed
     console.warn(`[emailSequenceQueue] Lead ${lead.id} has no email — skipping step.`)
   } else {
+    // §3.5 — a lead who unsubscribed from ANY message must stop receiving every
+    // remaining step of every sequence, not just the template they clicked from.
+    const normalizedEmail = String(lead.email).trim().toLowerCase()
+    const suppressed = await EmailSuppression.findOne({
+      where: { companyId: enrollment.companyId, email: normalizedEmail },
+    })
+    if (suppressed) {
+      await enrollment.update({ status: 'exited', exitReason: 'unsubscribed', exitedAt: new Date(), nextSendAt: null })
+      return { ok: true, reason: 'suppressed' }
+    }
+
     // Resolve subject/body from step or referenced template
     let subject = step.subject
     let bodyHtml = step.bodyHtml
@@ -110,16 +129,43 @@ async function processSequenceStep(job) {
 
     const transport = getMailTransport()
     if (transport && subject && bodyHtml) {
+      // A real LeadEmailLog row (§3.5): makes the send visible in reporting/the lead
+      // timeline, and gives tracking + the unsubscribe link something to key off.
+      const log = await LeadEmailLog.create({
+        companyId: enrollment.companyId,
+        workspaceId: lead.workspaceId,
+        leadId: lead.id,
+        templateId: step.templateId || null,
+        subject,
+        bodyHtml,
+        toEmail: lead.email,
+        status: 'drafted',
+        source: 'sequence',
+      })
+
+      const base = apiBaseUrl()
+      let finalBody = wrapLinksWithTracking(bodyHtml, `${base}/track/click`, log.id)
+      finalBody = injectTrackingPixel(finalBody, `${base}/track/open?log_id=${encodeURIComponent(log.id)}`)
+      const sig = signUnsubscribeToken(log.id)
+      finalBody = injectUnsubscribeLink(
+        finalBody,
+        `${base}/unsubscribe?log_id=${encodeURIComponent(log.id)}&sig=${encodeURIComponent(sig)}`,
+      )
+
       try {
         await transport.sendMail({
-          from: process.env.SMTP_FROM || process.env.SMTP_USER,
+          from: fromAddress(),
           to: lead.email,
           subject: subject || `(No subject)`,
-          html: bodyHtml,
+          html: finalBody,
         })
+        await log.update({ status: 'sent', sentAt: new Date() })
       } catch (sendErr) {
         console.error(`[emailSequenceQueue] Send failed for enrollment ${enrollmentId}:`, sendErr.message)
-        // Continue advancing — don't block the sequence on a single send failure
+        await log.update({ status: 'failed', sendError: sendErr.message })
+        // Don't silently advance to the next step (that used to skip this one with no
+        // record anywhere) — throw so BullMQ retries this exact step.
+        throw sendErr
       }
     } else {
       console.warn(`[emailSequenceQueue] SMTP not configured or step has no content. Skipping send for step ${step.id}.`)
@@ -131,7 +177,7 @@ async function processSequenceStep(job) {
   const nextStep = steps[nextStepIndex]
 
   if (nextStep) {
-    const delayMs = (nextStep.delayDays * 86400000) + (nextStep.delayHours * 3600000)
+    const delayMs = (Number(nextStep.delayDays) || 0) * 86400000 + (Number(nextStep.delayHours) || 0) * 3600000
     const nextSendAt = new Date(Date.now() + delayMs)
     await enrollment.update({ currentStep: nextStepIndex, nextSendAt })
     // Schedule next step job

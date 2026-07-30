@@ -1,5 +1,6 @@
-import { Company } from '../../models/index.js'
-import { NOTIFICATION_EVENT_TYPES as FULL_EVENT_TYPES } from './notificationEventTypes.js'
+import { Company, RoleNotificationPreference, UserNotificationPreference } from '../../models/index.js'
+import { NOTIFICATION_EVENT_TYPES as FULL_EVENT_TYPES, LEGACY_EVENT_TYPES } from './notificationEventTypes.js'
+import { isMandatoryEvent } from './mandatoryEvents.js'
 
 /** Re-exported for backward compatibility — callers importing from this file keep working. */
 export const NOTIFICATION_EVENT_TYPES = FULL_EVENT_TYPES
@@ -104,6 +105,7 @@ export async function updateCompanyNotificationSettings(companyId, patch) {
   return next
 }
 
+/** Legacy 7-event path only — kept for backward compat with existing callers. */
 export function getEventChannels(settings, eventType) {
   const key = EVENT_TO_SETTING_KEY[eventType]
   const eventSettings = key ? settings[key] : null
@@ -111,6 +113,34 @@ export function getEventChannels(settings, eventType) {
   return {
     email: Boolean(eventSettings.email),
     inApp: Boolean(eventSettings.inApp),
+  }
+}
+
+/**
+ * Full channel resolution across all NOTIFICATION_EVENT_TYPES (not just the 7 legacy ones).
+ * - Mandatory events (auth/security) always fire, ignoring every preference.
+ * - The 7 legacy events keep flowing through Company.notificationEmailSettings, unchanged.
+ * - Every other event resolves via UserNotificationPreference (mute/override) falling back to
+ *   RoleNotificationPreference, and defaults to fully-on when neither row exists — a missing
+ *   preference must never silently mean "don't send" (that was the original bug).
+ */
+export async function resolveEventChannels({ eventType, settings, companyId, userId, roleKind }) {
+  if (isMandatoryEvent(eventType)) return { email: true, inApp: true }
+  if (LEGACY_EVENT_TYPES.has(eventType)) return getEventChannels(settings, eventType)
+
+  const [userPref, rolePref] = await Promise.all([
+    userId ? UserNotificationPreference.findOne({ where: { companyId, userId, eventType } }) : null,
+    roleKind ? RoleNotificationPreference.findOne({ where: { companyId, roleKind, eventType } }) : null,
+  ])
+
+  if (userPref?.muted) return { email: false, inApp: false }
+
+  const roleEmail = rolePref ? rolePref.enabled && Boolean(rolePref.email) : true
+  const roleInApp = rolePref ? rolePref.enabled && Boolean(rolePref.inApp) : true
+
+  return {
+    email: userPref?.email == null ? roleEmail : Boolean(userPref.email),
+    inApp: userPref?.inApp == null ? roleInApp : Boolean(userPref.inApp),
   }
 }
 

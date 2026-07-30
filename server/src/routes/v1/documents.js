@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import multer from 'multer'
+import { validateUpload } from '../../middleware/validateUpload.js'
 import * as documentsController from '../../controllers/documentsController.js'
 
 const router = Router()
@@ -27,6 +28,6 @@ router.post('/:id/links', documentsController.linkDocument)
 router.post('/:id/folders', documentsController.linkDocumentFolders)
 router.delete('/:id/folders/:folderId', documentsController.removeDocumentFolder)
 router.post('/:id/move-folder', documentsController.moveDocumentFolder)
-router.post('/', upload.single('file'), documentsController.createDocument)
+router.post('/', upload.single('file'), validateUpload, documentsController.createDocument)
 
 export default router

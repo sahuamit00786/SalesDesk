@@ -44,6 +44,21 @@ function flushPendingLeadAssigned(key) {
 }
 
 /**
+ * §1.8 of the bug audit: this debounce buffer lives in process memory, so a deploy or
+ * crash inside the 3s window used to drop the notification entirely. A full
+ * cross-instance/restart-durable rewrite (Redis-backed accumulator + delayed job) would
+ * need bumping an in-flight BullMQ job's delay on every coalesced call, which isn't a
+ * risk worth taking blind in an environment with no way to run it — but the "deploy
+ * drops it" half is straightforwardly fixable: flush every pending entry immediately
+ * during graceful shutdown (see index.js's SIGTERM handler) instead of just letting the
+ * process die mid-timer.
+ */
+export function flushAllPendingLeadAssigned() {
+  const keys = [...pendingLeadAssigned.keys()]
+  return Promise.all(keys.map((key) => flushPendingLeadAssigned(key)))
+}
+
+/**
  * Notify one user about leads assigned to them.
  * Bulk counts (or immediate=true) send right away; rapid singles coalesce within a short window.
  */

@@ -3,6 +3,7 @@ import { Op } from 'sequelize'
 import { User, Lead, LeadTask, UserWorkspace, NotificationDeliveryLog } from '../models/index.js'
 import { NOTIFICATION_EVENT_TYPES } from '../services/notification/notificationPreferencesService.js'
 import { enqueueTeamNotification } from '../queues/notificationEmailQueue.js'
+import { resolveDefaultWorkspaceIdForUser } from '../services/workspaceService.js'
 
 /**
  * Phase 2 — periodic manager/admin summaries.
@@ -87,10 +88,11 @@ async function runSummary(eventType, since) {
     const recipients = await elevatedRecipients(companyId)
     for (const u of recipients) {
       if (await alreadySent(companyId, u.id, eventType, todayStart)) continue
+      const workspaceId = await resolveDefaultWorkspaceIdForUser(u.id, companyId)
       await enqueueTeamNotification({
         eventType,
         companyId,
-        workspaceId: null,
+        workspaceId,
         recipientUserId: u.id,
         actorUserId: null,
         payload: {
@@ -112,9 +114,9 @@ export function startPeriodicDigestJob() {
       console.error('[weeklyDigest]', err.message)
     })
   })
-  // Monthly — 1st of month 09:00 (skip-to-weekday logic can be added if needed)
+  // Monthly — 1st of month 09:00
   cron.schedule('0 9 1 * *', () => {
-    runSummary(NOTIFICATION_EVENT_TYPES.DIGEST_WEEKLY /* monthly reuses weekly transport with period=month */, monthStart())
+    runSummary(NOTIFICATION_EVENT_TYPES.DIGEST_MONTHLY, monthStart())
       .catch((err) => {
         // eslint-disable-next-line no-console
         console.error('[monthlyDigest]', err.message)

@@ -60,6 +60,7 @@ import { ReportDetailPage } from '@/pages/ReportDetailPage'
 import { DealPaymentsPage } from '@/pages/DealPaymentsPage'
 import { KnowledgeBasePage } from '@/features/knowledge/pages/KnowledgeBasePage'
 import { SystemWorkflowPage } from '@/pages/SystemWorkflowPage'
+import { UnsubscribeConfirmPage } from '@/pages/UnsubscribeConfirmPage'
 
 export default function App() {
   return (
@@ -74,6 +75,7 @@ export default function App() {
       <Route path="/about" element={<AboutPage />} />
       <Route path="/contact" element={<ContactPage />} />
       <Route path="/systemworkflow" element={<SystemWorkflowPage />} />
+      <Route path="/unsubscribe" element={<UnsubscribeConfirmPage />} />
       <Route element={<RequireAuth />}>
         <Route element={<SessionSync />}>
         <Route path="/onboarding" element={<OnboardingPage />} />

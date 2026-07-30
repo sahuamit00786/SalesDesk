@@ -314,8 +314,6 @@ export async function createInvoice(req, res, next) {
       }
     }
 
-    const totals = aggregateInvoiceTotals(value.items, { roundOff: value.roundOff, shipping: value.shipping, adjustment: value.adjustment })
-
     const billingRow = await WorkspaceBillingProfile.findOne({ where: { workspaceId } })
     const paymentSnapshot = mergeBillingIntoPaymentSnapshot(billingRow)
 
@@ -323,6 +321,18 @@ export async function createInvoice(req, res, next) {
     if (dealRow?.name) {
       customerSnapshot = { ...customerSnapshot, dealName: String(dealRow.name).trim() }
     }
+
+    // §12.4 of the bug audit — GST invoices must split CGST/SGST vs IGST, which
+    // needs the seller's and buyer's state, so totals compute after both are known.
+    const totals = aggregateInvoiceTotals(value.items, {
+      roundOff: value.roundOff,
+      shipping: value.shipping,
+      adjustment: value.adjustment,
+      billingCountry: billingRow?.country,
+      billingState: billingRow?.state,
+      customerState: customerSnapshot?.billingAddress?.state,
+    })
+
     const layoutPreset =
       value.layoutPreset != null
         ? value.layoutPreset
@@ -353,7 +363,20 @@ export async function createInvoice(req, res, next) {
         )
       }
 
-      const invoiceNumber = await allocateInvoiceNumber({ billing, template, issueDate, transaction })
+      // BUG FIX (§12.1 of the bug audit) — the template-autoNumbering path used to
+      // read `template.nextNumber` from the row fetched before the transaction opened,
+      // with no lock. Two concurrent invoice creations against the same template both
+      // read the same `nextNumber` and emitted the same invoice number. Re-fetch with
+      // FOR UPDATE, same as `billing` above, so allocation serializes.
+      let lockedTemplate = template
+      if (template?.autoNumbering) {
+        lockedTemplate = await SalesDocTemplate.findOne({
+          where: { id: template.id },
+          transaction,
+          lock: Transaction.LOCK.UPDATE,
+        })
+      }
+      const invoiceNumber = await allocateInvoiceNumber({ billing, template: lockedTemplate, issueDate, transaction })
 
       let status = value.status
       if (status === 'draft') status = 'draft'
@@ -488,10 +511,17 @@ export async function patchInvoice(req, res, next) {
 
     let totals = null
     if (value.items) {
+      // Same GST context as createInvoice — keeps the CGST/SGST/IGST split live
+      // when items are edited, instead of silently falling back to a blended total.
+      const billingRow = await WorkspaceBillingProfile.findOne({ where: { workspaceId } })
+      const customerSnapshot = value.customerSnapshot || row.customerSnapshot
       totals = aggregateInvoiceTotals(value.items, {
         roundOff: value.roundOff ?? Number(row.roundOff),
         shipping: value.shipping ?? Number(row.shipping),
         adjustment: value.adjustment ?? Number(row.adjustment),
+        billingCountry: billingRow?.country,
+        billingState: billingRow?.state,
+        customerState: customerSnapshot?.billingAddress?.state,
       })
     }
 

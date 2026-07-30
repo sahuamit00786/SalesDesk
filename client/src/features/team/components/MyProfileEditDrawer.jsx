@@ -41,7 +41,7 @@ const EMPTY_DRAFT = {
   postalCode: '',
 }
 
-const EMPTY_PASSWORD = { currentPassword: '', password: '', confirmPassword: '' }
+const EMPTY_PASSWORD = { password: '', confirmPassword: '' }
 
 function apiErrorMessage(err) {
   return err?.data?.error?.message ?? err?.data?.message ?? err?.error ?? 'Something went wrong'
@@ -171,8 +171,8 @@ export function MyProfileEditDrawer({ open, user, onClose, onSaved }) {
   }
 
   async function savePassword() {
-    if (!pwd.currentPassword || !pwd.password || !pwd.confirmPassword) {
-      toast.error('Fill in your current and new password')
+    if (!pwd.password || !pwd.confirmPassword) {
+      toast.error('Fill in your new password')
       return
     }
     if (pwd.password !== pwd.confirmPassword) {
@@ -351,21 +351,6 @@ export function MyProfileEditDrawer({ open, user, onClose, onSaved }) {
           </button>
           {showPwd ? (
             <div className="mt-3 space-y-3">
-              <div>
-                <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
-                  Current password
-                </label>
-                <IconInput
-                  wrapperClassName="mt-1.5"
-                  icon={KeyRound}
-                  type="password"
-                  autoComplete="current-password"
-                  value={pwd.currentPassword}
-                  onChange={(e) => setPwd((s) => ({ ...s, currentPassword: e.target.value }))}
-                  placeholder="Current password"
-                  disabled={changingPassword}
-                />
-              </div>
               <div>
                 <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
                   New password

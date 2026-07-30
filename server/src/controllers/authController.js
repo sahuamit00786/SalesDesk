@@ -34,6 +34,7 @@ import {
 } from '../services/otpService.js'
 import { serializeUser } from '../serializers/userSerializer.js'
 import { notifySecurityChange } from '../services/notification/teamNotificationService.js'
+import { otpAttemptsExceeded, clearOtpAttempts } from '../services/otpAttemptGuard.js'
 
 const RESEND_COOLDOWN_MS = 60_000
 
@@ -56,6 +57,10 @@ function tokensForUser(user) {
     userRoleKind: user.companyRole?.userRoleKind ?? null,
     isCompanyAdmin: Boolean(user.isCompanyAdmin),
     companyId: user.companyId ?? null,
+    // Same counter the refresh token already carries — requireAuth compares this
+    // against the live DB value so deactivate/demote/password-change take effect
+    // immediately instead of waiting out the access token's 15m expiry.
+    rtv: Number(user.refreshTokenVersion) || 0,
   }
   return {
     accessToken: signAccessToken(payload),
@@ -251,6 +256,16 @@ export async function verifyEmail(req, res, next) {
       throw err
     }
 
+    // §6.6 — per-account limit, on top of the existing per-IP otpLimiter, so guessing
+    // against one account can't be spread across rotating IPs to dodge the IP limit.
+    if (await otpAttemptsExceeded('email_verification', user.email)) {
+      const err = new Error('Too many attempts')
+      err.status = 429
+      err.code = 'TOO_MANY_ATTEMPTS'
+      err.publicMessage = 'Too many incorrect attempts. Request a new code and try again shortly.'
+      throw err
+    }
+
     const ok = await verifyOtp(value.otp, user.emailVerificationOtpHash)
     if (!ok) {
       const err = new Error('Invalid OTP')
@@ -259,6 +274,7 @@ export async function verifyEmail(req, res, next) {
       err.publicMessage = 'Invalid verification code'
       throw err
     }
+    await clearOtpAttempts('email_verification', user.email)
 
     user.emailVerified = true
     user.emailVerificationOtpHash = null
@@ -546,6 +562,15 @@ export async function resetPassword(req, res, next) {
       throw err
     }
 
+    // §6.6 — per-account limit alongside the existing per-IP otpLimiter.
+    if (await otpAttemptsExceeded('password_reset', value.email)) {
+      const err = new Error('Too many attempts')
+      err.status = 429
+      err.code = 'TOO_MANY_ATTEMPTS'
+      err.publicMessage = 'Too many incorrect attempts. Request a new code and try again shortly.'
+      throw err
+    }
+
     const expired =
       !user.passwordResetOtpExpiresAt || new Date(user.passwordResetOtpExpiresAt).getTime() < Date.now()
     const otpOk = !expired && (await verifyOtp(value.otp, user.passwordResetOtpHash))
@@ -556,6 +581,7 @@ export async function resetPassword(req, res, next) {
       err.publicMessage = 'Invalid or expired reset code'
       throw err
     }
+    await clearOtpAttempts('password_reset', value.email)
 
     user.password = await bcrypt.hash(value.password, 10)
     user.passwordResetOtpHash = null
@@ -596,15 +622,6 @@ export async function changePassword(req, res, next) {
       err.status = 404
       err.code = 'NOT_FOUND'
       err.publicMessage = 'User not found'
-      throw err
-    }
-
-    const currentOk = await bcrypt.compare(value.currentPassword, user.password)
-    if (!currentOk) {
-      const err = new Error('Invalid current password')
-      err.status = 400
-      err.code = 'VALIDATION'
-      err.publicMessage = 'Current password is incorrect'
       throw err
     }
 

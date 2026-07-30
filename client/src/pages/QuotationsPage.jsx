@@ -18,7 +18,7 @@ import { QUOTATION_STATUS_META, formatDocMoney } from '@/features/sales-docs/com
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { DataGrid } from '@/components/shared/DataGrid'
 import { DealDetailPanel } from '@/features/deals/components/DealDetailPanel'
-import { useGetLeadFormMetaQuery, useGetLeadsQuery } from '@/features/leads/leadsApi'
+import { useGetLeadFormMetaQuery, useGetLeadQuery } from '@/features/leads/leadsApi'
 import { SalesDocFiltersModal } from '@/features/sales-docs/components/SalesDocFiltersModal'
 import { usePermission } from '@/hooks/usePermission'
 import { useEffectiveCurrency } from '@/hooks/useEffectiveCurrency'
@@ -39,13 +39,14 @@ export function QuotationsPage() {
   const dealStatuses = rawDealStatuses.length ? rawDealStatuses : pipelineStatuses
   const users = formMetaData?.data?.users || []
 
-  const { data: leadsRes } = useGetLeadsQuery({ page: 1, limit: 400, search: '' })
-  const leads = leadsRes?.data || []
-
   const [statusFilter, setStatusFilter] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [leadIdFilter, setLeadIdFilter] = useState(leadFilter || '')
+  // BUG FIX (§15.2 of the bug audit) — resolves only the currently-selected filter
+  // lead by id instead of fetching a `limit: 400` list that couldn't reach every lead.
+  const { data: leadFilterRes } = useGetLeadQuery(leadIdFilter, { skip: !leadIdFilter })
+  const selectedLeadFilter = leadFilterRes?.data || null
   const [createdByFilter, setCreatedByFilter] = useState('')
   const [minAmount, setMinAmount] = useState('')
   const [maxAmount, setMaxAmount] = useState('')
@@ -192,7 +193,7 @@ export function QuotationsPage() {
           open={filtersOpen}
           onClose={() => setFiltersOpen(false)}
           statusMeta={QUOTATION_STATUS_META}
-          leads={leads}
+          selectedLeadFilter={selectedLeadFilter}
           users={users}
           statusFilter={statusFilter}
           onStatusFilterChange={setStatusFilter}

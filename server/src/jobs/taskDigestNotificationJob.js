@@ -1,33 +1,22 @@
 import cron from 'node-cron'
 import { Op } from 'sequelize'
-import { LeadTask, User, UserWorkspace, NotificationDeliveryLog } from '../models/index.js'
+import { LeadTask, Company, UserWorkspace, NotificationDeliveryLog } from '../models/index.js'
 import {
-  getCompanyNotificationSettings,
+  normalizeNotificationSettings,
   NOTIFICATION_EVENT_TYPES,
 } from '../services/notification/notificationPreferencesService.js'
 import { enqueueTeamNotification } from '../queues/notificationEmailQueue.js'
 import { notifyTaskOverdue } from '../services/notification/teamNotificationService.js'
+import { isCurrentlyClockTime, zonedDayBounds } from '../utils/timezone.js'
 
 function isDigestMinute(settings, now) {
   const digest = settings.tasksDueToday
   if (!digest?.enabled) return false
-  return now.getHours() === digest.digestHour && now.getMinutes() === digest.digestMinute
+  // §1.6 of the bug audit — was server-local now.getHours()/getMinutes().
+  return isCurrentlyClockTime(now, digest.digestHour, digest.digestMinute, digest.timezone || 'UTC')
 }
 
-function startOfToday() {
-  const d = new Date()
-  d.setHours(0, 0, 0, 0)
-  return d
-}
-
-function endOfToday() {
-  const d = new Date()
-  d.setHours(23, 59, 59, 999)
-  return d
-}
-
-async function sendWorkspaceDigest({ companyId, workspaceId, userId, tasks }) {
-  const dayStart = startOfToday()
+async function sendWorkspaceDigest({ companyId, workspaceId, userId, tasks, dayStart }) {
   const alreadySent = await NotificationDeliveryLog.findOne({
     where: {
       companyId,
@@ -55,22 +44,17 @@ async function sendWorkspaceDigest({ companyId, workspaceId, userId, tasks }) {
 
 export async function runTaskDueTodayDigests() {
   const now = new Date()
-  const dayStart = startOfToday()
-  const dayEnd = endOfToday()
 
-  const companies = await User.findAll({
-    attributes: ['companyId'],
-    where: { isActive: true },
-    group: ['companyId'],
-    raw: true,
-  })
-  const companyIds = [...new Set(companies.map((r) => r.companyId).filter(Boolean))]
+  // One bulk query instead of a settings DB call per company every minute regardless
+  // of relevance (§7.3 of the bug audit).
+  const companyRows = await Company.findAll({ attributes: ['id', 'notificationEmailSettings'] })
+  const dueCompanies = companyRows
+    .map((c) => ({ id: c.id, settings: normalizeNotificationSettings(c.notificationEmailSettings) }))
+    .filter((c) => isDigestMinute(c.settings, now))
+  if (!dueCompanies.length) return
 
-  for (const companyId of companyIds) {
-    const settings = await getCompanyNotificationSettings(companyId)
-    if (!settings.tasksDueToday?.enabled) continue
-    if (!isDigestMinute(settings, now)) continue
-
+  for (const { id: companyId, settings } of dueCompanies) {
+    const { start: dayStart, end: dayEnd } = zonedDayBounds(now, settings.tasksDueToday?.timezone || 'UTC')
     const tasks = await LeadTask.findAll({
       where: {
         companyId,
@@ -100,6 +84,7 @@ export async function runTaskDueTodayDigests() {
         workspaceId,
         userId,
         tasks: userTasks,
+        dayStart,
       })
     }
   }
@@ -130,22 +115,35 @@ export async function runOverdueTaskAlerts() {
         leadId: task.leadId,
         dueAt: task.dueAt,
       })
-    } catch {
-      /* best-effort — still mark as notified so a bad row can't loop forever */
+      // Only stamp once delivery actually ran — marking it on failure was silently
+      // discarding the alert forever (overdueNotifiedAt stayed set, never retried).
+      await task.update({ overdueNotifiedAt: now })
+    } catch (e) {
+      console.error('[taskDigestNotificationJob][overdue] notify failed, will retry next tick:', e?.message)
     }
-    await task.update({ overdueNotifiedAt: now })
   }
 }
+
+let taskDigestTickInFlight = false
 
 export function startTaskDigestNotificationJob() {
   if (process.env.MEETING_CRON_ENABLED === 'false') return
   cron.schedule('* * * * *', () => {
-    runTaskDueTodayDigests().catch((err) => {
-      // eslint-disable-next-line no-console
-      console.error('[taskDigestNotificationJob]', err.message)
-    })
+    // §2.6 of the bug audit — overlap guard.
+    if (taskDigestTickInFlight) return
+    taskDigestTickInFlight = true
+    runTaskDueTodayDigests()
+      .catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error('[taskDigestNotificationJob]', err.message)
+      })
+      .finally(() => {
+        taskDigestTickInFlight = false
+      })
   })
 }
+
+let overdueAlertsTickInFlight = false
 
 /**
  * Independent of startTaskDigestNotificationJob (which Phase 2 stops scheduling
@@ -154,9 +152,17 @@ export function startTaskDigestNotificationJob() {
 export function startOverdueTaskAlertsJob() {
   if (process.env.MEETING_CRON_ENABLED === 'false') return
   cron.schedule('* * * * *', () => {
-    runOverdueTaskAlerts().catch((err) => {
-      // eslint-disable-next-line no-console
-      console.error('[taskDigestNotificationJob][overdue]', err.message)
-    })
+    // §2.6 of the bug audit — overlap guard: up to 500 tasks per tick, each doing a
+    // notify + DB update, could plausibly run past the next minute's tick.
+    if (overdueAlertsTickInFlight) return
+    overdueAlertsTickInFlight = true
+    runOverdueTaskAlerts()
+      .catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error('[taskDigestNotificationJob][overdue]', err.message)
+      })
+      .finally(() => {
+        overdueAlertsTickInFlight = false
+      })
   })
 }

@@ -9,6 +9,7 @@ import { PageFilterBar } from '@/components/layout/PageFilterBar'
 import { PageStack } from '@/components/layout/PageStack'
 import { RightDrawer } from '@/components/ui/RightDrawer'
 import { Modal } from '@/components/ui/Modal'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Button } from '@/components/ui/Button'
 import {
   useListWorkflowsQuery,
@@ -160,6 +161,8 @@ export function WorkflowsListPage() {
   const [deleteWorkflow] = useDeleteWorkflowMutation()
   const [menuOpen, setMenuOpen] = useState(null)
   const [testWf, setTestWf] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleting, setDeleting] = useState(false)
 
   const [statusFilter, setStatusFilter] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
@@ -232,20 +235,30 @@ export function WorkflowsListPage() {
     setMenuOpen(null)
   }
 
-  const remove = async (row) => {
+  const remove = (row) => {
     if (!canDelete) {
       toast.error("You don't have permission to delete workflows.")
       return
     }
-    if (!window.confirm(`Delete workflow “${row.name}”? This cannot be undone.`)) return
+    setDeleteTarget(row)
+    setMenuOpen(null)
+  }
+
+  // BUG FIX (§15.2 of the bug audit) — `window.confirm()` is unstyled, blocks the
+  // main thread, and is inconsistent with the app's own modal system used elsewhere.
+  const confirmDelete = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
     try {
-      await deleteWorkflow(row.id).unwrap()
+      await deleteWorkflow(deleteTarget.id).unwrap()
       toast.success('Workflow deleted')
       refetch()
+      setDeleteTarget(null)
     } catch (err) {
       toast.error(err?.data?.error?.message || 'Delete failed')
+    } finally {
+      setDeleting(false)
     }
-    setMenuOpen(null)
   }
 
   return (
@@ -448,6 +461,16 @@ export function WorkflowsListPage() {
           </label>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        onClose={() => (deleting ? null : setDeleteTarget(null))}
+        onConfirm={confirmDelete}
+        loading={deleting}
+        title="Delete workflow?"
+        description={deleteTarget ? `Delete workflow "${deleteTarget.name}"? This cannot be undone.` : ''}
+        confirmLabel="Delete"
+      />
     </PageShell>
   )
 }

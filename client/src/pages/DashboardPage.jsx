@@ -37,6 +37,7 @@ import {
 } from '@/features/dashboard/components/DashboardExpiringTasks'
 import { buildDashboardKpiCards } from '@/features/dashboard/dashboardKpiCards'
 import { ReportKpiCard } from '@/features/analytics/components/ReportKpiCard'
+import { noteBodyToPlainText } from '@/utils/noteHtml'
 
 const SK_BASE = '#F9F7FC'
 const SK_BLOCK = '#DDD5F0'
@@ -617,7 +618,7 @@ export function DashboardPage() {
               {recentActivities.map((act) => {
                 const cfg = ACTIVITY_ICON[act.type] || ACTIVITY_ICON.note
                 const { Icon, color, bg } = cfg
-                const label = act.metadata?.title || act.body || act.type
+                const label = act.metadata?.title || noteBodyToPlainText(act.body) || act.type
                 const leadName = act.lead?.title || act.lead?.company || null
                 return (
                   <div key={act.id} className="flex items-start gap-3 rounded-xl border border-surface-border bg-white px-3 py-2.5 shadow-sm">

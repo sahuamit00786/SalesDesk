@@ -230,13 +230,14 @@ export async function sendTemplate(req, res, next) {
       leadIds: summary.willSend,
       requestedBy: req.user.id,
       scheduleAt: template.scheduleAt,
+      throttlePerHour: template.throttlePerHour,
       source: 'bulk',
     }
 
     const q = getEmailTemplateQueue()
     if (q) {
       const job = await enqueueTemplateSendJob(payload)
-      return res.json({ data: { jobId: job.id, queued: true, ...summary } })
+      return res.json({ data: { jobId: job.batchId, queued: true, ...summary } })
     }
 
     // Dev / no-Redis: send immediately (same path as workflow automation fallback)

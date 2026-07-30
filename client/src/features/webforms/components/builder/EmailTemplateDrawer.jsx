@@ -1,9 +1,23 @@
 import { useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
+import DOMPurify from 'dompurify'
 import { Bold, Italic, Link2, List, ListOrdered, Trash2 } from '@/components/ui/icons'
 import { RightDrawer } from '@/components/ui/RightDrawer'
 
 const TEMPLATE_VARIABLES = ['{{name}}', '{{email}}', '{{form_name}}', '{{submission_date}}']
+
+// Same allowlist as EmailPreviewCard (the other email-body sanitizer in this codebase) —
+// permissive enough for real email HTML (tables, inline styles) while stripping
+// scripts/event-handlers. §6.4 of the bug audit: template body is server-stored content
+// another (possibly lower-privilege) user wrote, previewed here unsanitized.
+const EMAIL_HTML_SANITIZE = {
+  ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'b', 'i', 'u', 'ul', 'ol', 'li', 'a', 'img', 'div', 'span', 'blockquote', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
+  ALLOWED_ATTR: ['href', 'target', 'rel', 'src', 'style', 'class'],
+}
+
+function sanitizeEmailHtml(html) {
+  return DOMPurify.sanitize(html || '', EMAIL_HTML_SANITIZE)
+}
 
 function applyPreview(template, formName) {
   const sample = {
@@ -53,7 +67,7 @@ export function EmailTemplateDrawer({
   async function handleGenerate() {
     const generated = await onGenerate()
     setSubject(generated.subject || '')
-    setBody(generated.bodyHtml || '')
+    setBody(sanitizeEmailHtml(generated.bodyHtml || ''))
     if (!name) setName('Generated template')
   }
 
@@ -128,11 +142,12 @@ export function EmailTemplateDrawer({
               setSelectedId(nextId)
               const row = templates.find((item) => item.id === nextId)
               if (row) {
+                const safeBody = sanitizeEmailHtml(row.body || '')
                 setName(row.name || '')
                 setSubject(row.subject || '')
-                setBody(row.body || '')
+                setBody(safeBody)
                 setTimeout(() => {
-                  if (editorRef.current) editorRef.current.innerHTML = row.body || ''
+                  if (editorRef.current) editorRef.current.innerHTML = safeBody
                 }, 0)
               }
             }}
@@ -186,7 +201,7 @@ export function EmailTemplateDrawer({
           <p className="mt-2 text-xs text-ink-faint">Subject</p>
           <p className="text-sm text-ink">{previewSubject || '-'}</p>
           <p className="mt-3 text-xs text-ink-faint">Body</p>
-          <div className="max-h-56 overflow-auto rounded-lg bg-surface-muted p-2 text-sm text-ink" dangerouslySetInnerHTML={{ __html: previewBody || '<p>-</p>' }} />
+          <div className="max-h-56 overflow-auto rounded-lg bg-surface-muted p-2 text-sm text-ink" dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(previewBody) || '<p>-</p>' }} />
         </div>
       </div>
     </RightDrawer>

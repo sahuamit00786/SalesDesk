@@ -14,3 +14,12 @@ export function verifyMetaSignature(rawBody, signatureHeader, appSecret) {
   if (given.length !== expected.length) return false
   return crypto.timingSafeEqual(Buffer.from(given, 'utf8'), Buffer.from(expected, 'utf8'))
 }
+
+/** Constant-time string equality — same guard used for the HMAC check above. */
+export function timingSafeStringEqual(given, expected) {
+  if (!given || !expected) return false
+  const a = Buffer.from(String(given), 'utf8')
+  const b = Buffer.from(String(expected), 'utf8')
+  if (a.length !== b.length) return false
+  return crypto.timingSafeEqual(a, b)
+}

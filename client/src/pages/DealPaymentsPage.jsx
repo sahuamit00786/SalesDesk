@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import { BadgeDollarSign, CheckCircle2, Clock, Filter, Trash2, X, XCircle } from '@/components/ui/icons'
 import { PageShell } from '@/components/layout/PageShell'
 import { PageStack } from '@/components/layout/PageStack'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { DataGrid } from '@/components/shared/DataGrid'
 import { SkeletonTable } from '@/components/shared/SkeletonLoader'
 import { useListAllPaymentsQuery, useDeleteDealPaymentMutation } from '@/features/deals/dealPaymentsApi'
@@ -57,6 +58,8 @@ export function DealPaymentsPage() {
   const [createdByUserId, setCreatedByUserId] = useState('')
   const [filterOpen, setFilterOpen] = useState(false)
   const [selectedDeal, setSelectedDeal] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deletingPayment, setDeletingPayment] = useState(false)
 
   const query = useMemo(() => {
     const q = { page, limit }
@@ -101,15 +104,25 @@ export function DealPaymentsPage() {
     setPage(1)
   }
 
-  async function handleDeletePayment(row) {
+  // BUG FIX (§15.2 of the bug audit) — `window.confirm()` is unstyled, blocks the
+  // main thread, and is inconsistent with the app's own modal system used elsewhere.
+  function handleDeletePayment(row) {
     if (!row?.dealId) return
-    if (!window.confirm('Delete this payment? This cannot be undone.')) return
+    setDeleteTarget(row)
+  }
+
+  async function confirmDeletePayment() {
+    if (!deleteTarget) return
+    setDeletingPayment(true)
     try {
-      await deletePayment({ dealId: row.dealId, paymentId: row.id }).unwrap()
+      await deletePayment({ dealId: deleteTarget.dealId, paymentId: deleteTarget.id }).unwrap()
       toast.success('Payment deleted')
       refetch()
+      setDeleteTarget(null)
     } catch (err) {
       toast.error(err?.data?.error?.message || 'Could not delete payment')
+    } finally {
+      setDeletingPayment(false)
     }
   }
 
@@ -527,6 +540,16 @@ export function DealPaymentsPage() {
         opp={selectedDeal}
         pipelineStatuses={dealStatuses}
         defaultTab="payments"
+      />
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        onClose={() => (deletingPayment ? null : setDeleteTarget(null))}
+        onConfirm={confirmDeletePayment}
+        loading={deletingPayment}
+        title="Delete payment?"
+        description="Delete this payment? This cannot be undone."
+        confirmLabel="Delete"
       />
     </PageShell>
   )

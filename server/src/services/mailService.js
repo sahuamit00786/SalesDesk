@@ -33,15 +33,18 @@ export function appDisplayName() {
   return n || 'SalesDesk'
 }
 
-function fromAddress() {
+// Exported so every outbound-mail call site uses the same sender identity (§3.11 of the
+// bug audit — this used to be re-implemented 3 different ways, one of them missing the
+// display name entirely, so recipients saw an inconsistent "from" across email types).
+export function fromAddress() {
   return process.env.SMTP_FROM || `${appDisplayName()} <${process.env.SMTP_USER}>`
 }
 
 export function companyRegistrationNotifyEmail() {
-  return String(process.env.COMPANY_REGISTRATION_NOTIFY_EMAIL || 'sahuamit00786@gmail.com').trim()
+  return String(process.env.COMPANY_REGISTRATION_NOTIFY_EMAIL || '').trim()
 }
 
-function escapeHtml(s) {
+export function escapeHtml(s) {
   return String(s)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')

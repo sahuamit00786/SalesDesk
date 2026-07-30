@@ -41,6 +41,18 @@ export function WhatsAppThreadPane({ conversation, onBack, initialJumpMessageId,
   const pendingScrollAdjustRef = useRef(null)
   const prevTailIdRef = useRef(null)
   const timelineRef = useRef([])
+  const highlightTimeoutRef = useRef(null)
+  const searchDebounceRef = useRef(null)
+
+  // BUG FIX (§15.2 of the bug audit) — the highlight timeout and the search debounce
+  // timer both fired unconditionally after unmount (e.g. closing the pane mid-search),
+  // calling setState/jumpToMessage on a gone component. Clear both on unmount.
+  useEffect(() => {
+    return () => {
+      if (highlightTimeoutRef.current) window.clearTimeout(highlightTimeoutRef.current)
+      if (searchDebounceRef.current) window.clearTimeout(searchDebounceRef.current)
+    }
+  }, [])
 
   const [olderMessages, setOlderMessages] = useState([])
   const [hasMoreOlder, setHasMoreOlder] = useState(true)
@@ -175,7 +187,11 @@ export function WhatsAppThreadPane({ conversation, onBack, initialJumpMessageId,
     if (idx === -1) return
     virtualizer.scrollToIndex(idx, { align: 'center' })
     setHighlightId(messageId)
-    window.setTimeout(() => setHighlightId((cur) => (cur === messageId ? null : cur)), 1500)
+    if (highlightTimeoutRef.current) window.clearTimeout(highlightTimeoutRef.current)
+    highlightTimeoutRef.current = window.setTimeout(
+      () => setHighlightId((cur) => (cur === messageId ? null : cur)),
+      1500,
+    )
   }
 
   /** Finds a message already loaded, or walks backward through history to load it. */
@@ -242,7 +258,6 @@ export function WhatsAppThreadPane({ conversation, onBack, initialJumpMessageId,
       }
     }, 350)
   }
-  const searchDebounceRef = useRef(null)
 
   function goToSearchResult(nextIndex) {
     if (!searchResults.length) return

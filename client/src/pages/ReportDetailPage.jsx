@@ -105,18 +105,18 @@ export function ReportDetailPage() {
     return Object.entries(LEAD_SOURCE_LABELS).map(([value, label]) => ({ value, label }))
   }, [type])
 
-  const { data: leadsData, refetch: refetchLeads } = useGetLeadsReportQuery(filters.queryParams)
-  const { data: dealsData, refetch: refetchDeals } = useGetDealsReportQuery(filters.queryParams)
-  const { data: actData, refetch: refetchAct } = useGetActivitiesReportQuery(filters.queryParams)
-  const { data: meetingsData, refetch: refetchMeetings } = useGetMeetingsReportQuery(filters.queryParams)
-  const { data: tasksData, refetch: refetchTasks } = useGetTasksReportQuery(filters.queryParams)
-  const { data: teamReportData, refetch: refetchTeam } = useGetTeamReportQuery(filters.queryParams)
-  const { data: oppsData, refetch: refetchOpps } = useGetOpportunitiesReportQuery(filters.queryParams)
-  const { data: followupsData, refetch: refetchFollowups } = useGetFollowupsReportQuery(filters.queryParams)
-  const { data: salesDocsData, refetch: refetchSalesDocs } = useGetSalesDocsReportQuery(filters.queryParams)
-  const { data: paymentsData, refetch: refetchPayments } = useGetPaymentsReportQuery(filters.queryParams)
-  const { data: empMonthlyData, refetch: refetchEmpMonthly } = useGetEmployeeMonthlyReportQuery(filters.queryParams)
-  const { data: dataHealthData, refetch: refetchDataHealth } = useGetDataHealthReportQuery(filters.queryParams)
+  const { data: leadsData, isError: leadsIsError, error: leadsError, refetch: refetchLeads } = useGetLeadsReportQuery(filters.queryParams)
+  const { data: dealsData, isError: dealsIsError, error: dealsError, refetch: refetchDeals } = useGetDealsReportQuery(filters.queryParams)
+  const { data: actData, isError: actIsError, error: actError, refetch: refetchAct } = useGetActivitiesReportQuery(filters.queryParams)
+  const { data: meetingsData, isError: meetingsIsError, error: meetingsError, refetch: refetchMeetings } = useGetMeetingsReportQuery(filters.queryParams)
+  const { data: tasksData, isError: tasksIsError, error: tasksError, refetch: refetchTasks } = useGetTasksReportQuery(filters.queryParams)
+  const { data: teamReportData, isError: teamIsError, error: teamError, refetch: refetchTeam } = useGetTeamReportQuery(filters.queryParams)
+  const { data: oppsData, isError: oppsIsError, error: oppsError, refetch: refetchOpps } = useGetOpportunitiesReportQuery(filters.queryParams)
+  const { data: followupsData, isError: followupsIsError, error: followupsError, refetch: refetchFollowups } = useGetFollowupsReportQuery(filters.queryParams)
+  const { data: salesDocsData, isError: salesDocsIsError, error: salesDocsError, refetch: refetchSalesDocs } = useGetSalesDocsReportQuery(filters.queryParams)
+  const { data: paymentsData, isError: paymentsIsError, error: paymentsError, refetch: refetchPayments } = useGetPaymentsReportQuery(filters.queryParams)
+  const { data: empMonthlyData, isError: empMonthlyIsError, error: empMonthlyError, refetch: refetchEmpMonthly } = useGetEmployeeMonthlyReportQuery(filters.queryParams)
+  const { data: dataHealthData, isError: dataHealthIsError, error: dataHealthError, refetch: refetchDataHealth } = useGetDataHealthReportQuery(filters.queryParams)
 
   const TabComponent = TAB_MAP[type]
 
@@ -132,7 +132,21 @@ export function ReportDetailPage() {
     followups: refetchFollowups, 'sales-docs': refetchSalesDocs, payments: refetchPayments,
     'employee-monthly': refetchEmpMonthly, 'data-health': refetchDataHealth,
   }
+  const ERROR_BY_TYPE = {
+    overview: leadsIsError, leads: leadsIsError, deals: dealsIsError, activities: actIsError,
+    meetings: meetingsIsError, tasks: tasksIsError, team: teamIsError, opportunities: oppsIsError,
+    followups: followupsIsError, 'sales-docs': salesDocsIsError, payments: paymentsIsError,
+    'employee-monthly': empMonthlyIsError, 'data-health': dataHealthIsError,
+  }
+  const ERROR_DETAIL_BY_TYPE = {
+    overview: leadsError, leads: leadsError, deals: dealsError, activities: actError,
+    meetings: meetingsError, tasks: tasksError, team: teamError, opportunities: oppsError,
+    followups: followupsError, 'sales-docs': salesDocsError, payments: paymentsError,
+    'employee-monthly': empMonthlyError, 'data-health': dataHealthError,
+  }
   const hasData = Boolean(DATA_BY_TYPE[type]?.data)
+  const isReportError = Boolean(ERROR_BY_TYPE[type])
+  const reportError = ERROR_DETAIL_BY_TYPE[type]
   const handleRefresh = () => REFETCH_BY_TYPE[type]?.()
   const handlePrint = () => window.print()
 
@@ -216,7 +230,12 @@ export function ReportDetailPage() {
         />
 
         <PageContentPanel className="border-surface-border !p-2.5 sm:!p-3">
-          {TabComponent ? (
+          {isReportError ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-sm text-red-800">
+              Could not load {meta.label.toLowerCase()} report.{reportError?.data?.error?.message ? ` ${reportError.data.error.message}` : ''}{' '}
+              <button type="button" className="font-medium underline" onClick={handleRefresh}>Retry</button>
+            </div>
+          ) : TabComponent ? (
             <TabComponent queryParams={filters.queryParams} from={filters.from} to={filters.to} />
           ) : (
             <div className="py-16 text-center text-ink-muted">

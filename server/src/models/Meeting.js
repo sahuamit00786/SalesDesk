@@ -342,6 +342,11 @@ export const Meeting = sequelize.define(
       type: DataTypes.UUID,
       field: "created_by",
     },
+
+    reminderSentAt: {
+      type: DataTypes.DATE,
+      field: "reminder_sent_at",
+    },
   },
   {
     tableName: "meetings",

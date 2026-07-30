@@ -83,7 +83,7 @@ export function CampaignNewPage() {
     return params
   }, [leadFilters, page, oppFilter])
 
-  const { data, isLoading, isFetching } = useGetLeadsQuery(listParams)
+  const { data, isLoading, isFetching, isError, error, refetch } = useGetLeadsQuery(listParams)
   const { data: formMetaData } = useGetLeadFormMetaQuery()
   const { data: teamData } = useTeamUsersQuery()
   const [createCampaign, { isLoading: saving }] = useCreateCampaignMutation()
@@ -328,6 +328,11 @@ export function CampaignNewPage() {
           <div className="w-full min-w-0 px-4 py-4 sm:px-6">
             {isLoading ? (
               <p className="text-sm text-neutral-500">Loading leads…</p>
+            ) : isError ? (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-sm text-red-800">
+                Could not load leads.{error?.data?.error?.message ? ` ${error.data.error.message}` : ''}{' '}
+                <button type="button" className="font-medium underline" onClick={refetch}>Retry</button>
+              </div>
             ) : (
               <>
                 <DataGrid

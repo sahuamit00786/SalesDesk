@@ -7,7 +7,7 @@ import { SkeletonDetail } from '@/components/shared/SkeletonLoader'
 
 export function CampaignReportPage() {
   const { id } = useParams()
-  const { data: campRes, isLoading } = useGetCampaignQuery(id, { skip: !id })
+  const { data: campRes, isLoading, isError, error, refetch } = useGetCampaignQuery(id, { skip: !id })
   const campaign = campRes?.data
 
   return (
@@ -25,6 +25,11 @@ export function CampaignReportPage() {
 
         {isLoading ? (
           <div className="mt-4"><SkeletonDetail /></div>
+        ) : isError ? (
+          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-sm text-red-800">
+            Could not load campaign.{error?.data?.error?.message ? ` ${error.data.error.message}` : ''}{' '}
+            <button type="button" className="font-medium underline" onClick={refetch}>Retry</button>
+          </div>
         ) : (
           <>
             <div className="mt-4">

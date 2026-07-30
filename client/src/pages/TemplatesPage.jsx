@@ -108,7 +108,7 @@ export default function TemplatesPage() {
     anchor: { top: 0, left: 0 },
   })
 
-  const { data } = useGetTemplatesQuery({ search, category })
+  const { data, isError: templatesIsError, error: templatesError, refetch: refetchTemplates } = useGetTemplatesQuery({ search, category })
   const templates = useMemo(() => (Array.isArray(data?.data) ? data.data : []), [data])
   const activeTemplate = useMemo(() => templates.find((t) => t.id === activeId) || null, [templates, activeId])
   const isDrawerOpen = drawerMode === 'create' || drawerMode === 'edit'
@@ -453,22 +453,29 @@ export default function TemplatesPage() {
               ) : null}
             </div>
           </div>
-          <DataGrid
-            columns={templateColumns}
-            data={templateRows}
-            defaultPageSize={20}
-            emptyTitle="No templates found"
-            emptyDescription="Create your first template to start bulk outreach."
-            maxHeightClass="max-h-[min(72vh,760px)]"
-            searchable={false}
-            showColumnToggle={false}
-            showExportCsv={false}
-            className="rounded-none border-0 shadow-none"
-            onRowClick={({ row }) => {
-              setActiveId(row.id)
-              setPreviewOpen(true)
-            }}
-          />
+          {templatesIsError ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-sm text-red-800">
+              Could not load templates.{templatesError?.data?.error?.message ? ` ${templatesError.data.error.message}` : ''}{' '}
+              <button type="button" className="font-medium underline" onClick={refetchTemplates}>Retry</button>
+            </div>
+          ) : (
+            <DataGrid
+              columns={templateColumns}
+              data={templateRows}
+              defaultPageSize={20}
+              emptyTitle="No templates found"
+              emptyDescription="Create your first template to start bulk outreach."
+              maxHeightClass="max-h-[min(72vh,760px)]"
+              searchable={false}
+              showColumnToggle={false}
+              showExportCsv={false}
+              className="rounded-none border-0 shadow-none"
+              onRowClick={({ row }) => {
+                setActiveId(row.id)
+                setPreviewOpen(true)
+              }}
+            />
+          )}
         </section>
       </div>
 

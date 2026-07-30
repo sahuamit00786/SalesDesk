@@ -3,7 +3,7 @@ import { LeadEmail, LeadEmailLog, Lead, User, EmailTemplate } from '../models/in
 import { scopedWorkspaceIdsForRequest } from '../services/userWorkspaceService.js'
 
 const ALLOWED_SOURCE = new Set(['all', 'direct', 'bulk', 'workflow'])
-const ALLOWED_STATUS = new Set(['all', 'sent', 'opened', 'clicked', 'replied', 'bounced', 'unsubscribed'])
+const ALLOWED_STATUS = new Set(['all', 'sent', 'opened', 'clicked', 'replied', 'bounced', 'unsubscribed', 'failed'])
 
 function parseDate(str, fallback) {
   if (!str) return fallback
@@ -25,7 +25,8 @@ function directStatusWhere(status) {
 }
 
 function logStatusWhere(status) {
-  if (status === 'failed') return null
+  // LeadEmailLog now has a real 'failed' status too (§3.4 of the bug audit) — surface it
+  // instead of silently excluding template/bulk/workflow sends from a "failed" filter.
   if (status === 'all') return { status: { [Op.ne]: 'drafted' } }
   return { status }
 }

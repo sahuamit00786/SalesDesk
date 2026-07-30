@@ -79,6 +79,13 @@ const initialState = {
   activeWorkspaceId: readStoredPreferenceId(),
   /** False until the user picks a workspace for this session; gates the app behind the picker. */
   workspaceConfirmed: readStoredConfirmed(),
+  /**
+   * §5.6 of the bug audit — set when the confirmed workspace drops out of the user's
+   * access list (revoked by an admin) and a component needs to tell the user why their
+   * view just changed. Was previously a same-tick silent fallback to another workspace
+   * with no notice at all. A component (SessionSync) consumes and clears this.
+   */
+  accessRevokedNotice: null,
 }
 
 const workspaceSlice = createSlice({
@@ -91,6 +98,9 @@ const workspaceSlice = createSlice({
       persistPreference(id)
       state.workspaceConfirmed = Boolean(id)
       persistConfirmed(Boolean(id))
+    },
+    clearAccessRevokedNotice: (state) => {
+      state.accessRevokedNotice = null
     },
   },
   extraReducers: (builder) => {
@@ -128,13 +138,22 @@ const workspaceSlice = createSlice({
         }
         // Access to the confirmed workspace can be revoked server-side. Test the id the
         // user actually confirmed, before pickActiveId falls back to another workspace.
-        const stillValid = state.workspaceConfirmed && list.some((w) => w.id === state.activeWorkspaceId)
+        const previousId = state.activeWorkspaceId
+        const wasConfirmed = state.workspaceConfirmed
+        const stillValid = wasConfirmed && list.some((w) => w.id === previousId)
         const next = pickActiveId(list, state.activeWorkspaceId, readStoredPreferenceId())
         state.activeWorkspaceId = next
         persistPreference(next)
         const confirmed = stillValid || isAutoConfirmable(list)
         state.workspaceConfirmed = confirmed
         persistConfirmed(confirmed)
+        // §5.6 — only fire when a workspace THIS SESSION had actually confirmed just fell
+        // out of the list (a real mid-session revocation) — not on first hydration, where
+        // wasConfirmed is already false and there's nothing to be "silently" switched away
+        // from.
+        if (wasConfirmed && !stillValid) {
+          state.accessRevokedNotice = { previousId, nextId: next }
+        }
       })
       .addCase(logout, (state) => {
         state.activeWorkspaceId = null
@@ -145,7 +164,9 @@ const workspaceSlice = createSlice({
   },
 })
 
-export const { setActiveWorkspace } = workspaceSlice.actions
+export const { setActiveWorkspace, clearAccessRevokedNotice } = workspaceSlice.actions
+
+export const selectAccessRevokedNotice = (state) => state.workspace.accessRevokedNotice
 
 const selectRawWorkspaces = (state) => state.auth.user?.company?.workspaces
 

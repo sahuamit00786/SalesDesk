@@ -12,11 +12,12 @@ import {
   usePatchInvoiceMutation,
 } from '@/features/sales-docs/invoicesApi'
 import { useGetSalesDocTemplateQuery } from '@/features/sales-docs/salesDocTemplatesApi'
-import { useGetLeadsQuery, useGetLeadQuery } from '@/features/leads/leadsApi'
+import { useGetLeadQuery } from '@/features/leads/leadsApi'
 import { useGetDealQuery, useGetDealsQuery } from '@/features/deals/dealsApi'
 
 import { buildCustomerSnapshotFromLead, formatAddressLines } from '@/features/sales-docs/customerSnapshot'
 import { DealBalanceCard } from '@/features/sales-docs/components/DealBalanceCard'
+import { LeadBillToPicker } from '@/components/shared/LeadBillToPicker'
 import { aggregateInvoiceTotals } from '@/features/sales-docs/previewTotals'
 import { suggestedInvoiceNumber } from '@/features/sales-docs/suggestedDocNumber'
 import { cn } from '@/utils/cn'
@@ -151,31 +152,37 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
   const { data: dealParentLeadRes } = useGetLeadQuery(parentLeadIdForDeal, { skip: !parentLeadIdForDeal })
   const dealParentLead = dealParentLeadRes?.data
 
-  const { data: leadsRes } = useGetLeadsQuery({ page: 1, limit: 400, search: '' })
-  const leads = leadsRes?.data || []
-
   const { data: dealsRes } = useGetDealsQuery({ page: 1, limit: 400 })
   const allDeals = dealsRes?.data || []
 
+  // BUG FIX (§15.2 of the bug audit) — resolves the FULL selected lead by id
+  // regardless of source (deep link, deal auto-link, or the search picker below),
+  // instead of looking it up in a `limit: 400` list that silently couldn't reach
+  // every lead. Skipped when deal-linked since `dealParentLead` already covers it.
+  const { data: resolvedLeadRes } = useGetLeadQuery(clientLeadId, { skip: !clientLeadId || Boolean(activeDealId) })
+  const resolvedLead = resolvedLeadRes?.data || null
+
+  const selectedLead = useMemo(() => {
+    if (activeDealId && dealParentLead) return dealParentLead
+    return resolvedLead
+  }, [activeDealId, dealParentLead, resolvedLead])
+
   const filteredDealOptions = useMemo(() => {
     if (!clientLeadId) return allDeals
-    const client = leads.find((l) => l.id === clientLeadId)
-    if (!client?.company) return allDeals
+    const clientCompany = selectedLead?.company
+    if (!clientCompany) return allDeals
     return allDeals.filter(
       (d) =>
         d.parentOpportunityLeadId === clientLeadId ||
-        d.companyName === client.company,
+        d.companyName === clientCompany,
     )
-  }, [allDeals, clientLeadId, leads])
+  }, [allDeals, clientLeadId, selectedLead])
 
-  function applyClientSelection(id) {
-    setClientLeadId(id)
-    const lead = leads.find((l) => l.id === id)
-    if (lead) setAddressLine(formatAddressLines(buildCustomerSnapshotFromLead(lead)))
+  function applyClientSelection(lead) {
+    setClientLeadId(lead?.id || '')
     if (dealLeadId) {
       const deal = allDeals.find((d) => d.id === dealLeadId)
-      const newClient = leads.find((l) => l.id === id)
-      if (deal && newClient && deal.companyName !== newClient.company) {
+      if (deal && lead?.company && deal.companyName !== lead.company) {
         setDealLeadId('')
       }
     }
@@ -187,9 +194,12 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
     if (!deal) return
     const oppLeadId = deal.parentOpportunityLeadId || ''
     setClientLeadId(oppLeadId)
-    const lead = leads.find((l) => l.id === oppLeadId) ||
-      (deal ? { contactName: deal.fullName, company: deal.companyName, email: deal.email } : null)
-    if (lead) setAddressLine(formatAddressLines(buildCustomerSnapshotFromLead(lead)))
+    if (!oppLeadId && !addressLine) {
+      const fallbackAddr = formatAddressLines(
+        buildCustomerSnapshotFromLead({ contactName: deal.fullName, company: deal.companyName, email: deal.email }),
+      )
+      if (fallbackAddr) setAddressLine(fallbackAddr)
+    }
     if (deal.dealCurrency) setCurrency(normalizeCurrencyCode(deal.dealCurrency))
   }
 
@@ -284,27 +294,14 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
     }
   }, [existingInvoice, invoiceId])
 
+  // Fills the address line from whichever lead just resolved — deal-linked,
+  // deep-linked, or picked via the search box below — as long as nothing has
+  // been typed into it yet.
   useEffect(() => {
-    if (activeDealId) return
-    if (!initialLeadId || !leads.length) return
-    if (!clientLeadId) applyClientSelection(initialLeadId)
-  }, [activeDealId, initialLeadId, leads, clientLeadId])
-
-  useEffect(() => {
-    if (!activeDealId || !dealParentLead || addressLine) return
-    const addr = formatAddressLines(buildCustomerSnapshotFromLead(dealParentLead))
+    if (!selectedLead || addressLine) return
+    const addr = formatAddressLines(buildCustomerSnapshotFromLead(selectedLead))
     if (addr) setAddressLine(addr)
-  }, [activeDealId, dealParentLead])
-
-  const selectedLead = useMemo(() => {
-    if (activeDealId && dealParentLead) return dealParentLead
-    return leads.find((l) => l.id === clientLeadId)
-  }, [leads, clientLeadId, activeDealId, dealParentLead])
-
-  const billToOptions = useMemo(() => {
-    if (selectedLead && !leads.some((l) => l.id === selectedLead.id)) return [selectedLead, ...leads]
-    return leads
-  }, [leads, selectedLead])
+  }, [selectedLead, addressLine])
 
   const customerSnapshot = useMemo(() => {
     const base = buildCustomerSnapshotFromLead(selectedLead)
@@ -341,8 +338,15 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
       taxPct: l.taxPct === '' || l.taxPct == null ? null : Number(l.taxPct),
       discountPct: l.discountPct === '' || l.discountPct == null ? null : Number(l.discountPct),
     }))
-    return aggregateInvoiceTotals(raw, { roundOff: 0, shipping: Number(shipping) || 0, adjustment: Number(adjustment) || 0 })
-  }, [lines, shipping, adjustment])
+    return aggregateInvoiceTotals(raw, {
+      roundOff: 0,
+      shipping: Number(shipping) || 0,
+      adjustment: Number(adjustment) || 0,
+      billingCountry: billing?.country,
+      billingState: billing?.state,
+      customerState: customerSnapshot?.billingAddress?.state,
+    })
+  }, [lines, shipping, adjustment, billing?.country, billing?.state, customerSnapshot])
 
   const previewLines = totals.items.filter((l) => String(l.name || '').trim())
 
@@ -510,19 +514,12 @@ function NewInvoiceEditor({ templateId, invoiceId = '', initialLeadId = '', init
 
                 <label className="block text-xs font-medium text-neutral-600">
                   Bill to
-                  <select
-                    className="mt-1 w-full rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-xs"
-                    value={clientLeadId}
+                  <LeadBillToPicker
+                    selectedLead={selectedLead}
+                    onSelect={applyClientSelection}
                     disabled={Boolean(activeDealId)}
-                    onChange={(e) => applyClientSelection(e.target.value)}
-                  >
-                    <option value="">Select client…</option>
-                    {billToOptions.map((l) => (
-                      <option key={l.id} value={l.id}>
-                        {(l.contactName || l.title || 'Lead').trim()} · {(l.company || '').trim() || '—'}
-                      </option>
-                    ))}
-                  </select>
+                    inputClassName="mt-1 w-full rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-xs"
+                  />
                 </label>
 
                 <div className="sde-field-grid">

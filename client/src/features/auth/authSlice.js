@@ -2,10 +2,19 @@ import { createSlice } from '@reduxjs/toolkit'
 
 export const AUTH_STORAGE_KEY = 'leadflow.auth'
 
-/** Wipe all persisted client data (auth, workspace preference, UI prefs, etc.). */
+/**
+ * Clear the session on logout — not the whole origin.
+ *
+ * BUG FIX (§15.1 of the bug audit) — this used to call `localStorage.clear()`,
+ * which also wiped unrelated app state that has nothing to do with the auth
+ * session: onboarding wizard progress, the Team page's last-active-tab, etc.
+ * Logging out shouldn't reset those. Anything that IS session-scoped (e.g. the
+ * active workspace preference) already clears itself via its own `logout`
+ * reducer — see workspaceSlice.js's `extraReducers`.
+ */
 export function clearClientStorage() {
   try {
-    localStorage.clear()
+    localStorage.removeItem(AUTH_STORAGE_KEY)
   } catch {
     // ignore private mode / quota errors
   }

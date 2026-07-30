@@ -61,10 +61,39 @@ export function AnalyticsPage() {
   const params = filters.queryParams
   const [query, setQuery] = useState('')
 
-  const { data: leadsReportData } = useGetLeadsReportQuery(params)
-  const { data: dealsReportData } = useGetDealsReportQuery(params)
-  const { data: tasksReportData } = useGetTasksReportQuery(params)
-  const { data: followupsReportData } = useGetFollowupsReportQuery(params)
+  const {
+    data: leadsReportData,
+    isError: leadsReportIsError,
+    error: leadsReportError,
+    refetch: refetchLeadsReport,
+  } = useGetLeadsReportQuery(params)
+  const {
+    data: dealsReportData,
+    isError: dealsReportIsError,
+    error: dealsReportError,
+    refetch: refetchDealsReport,
+  } = useGetDealsReportQuery(params)
+  const {
+    data: tasksReportData,
+    isError: tasksReportIsError,
+    error: tasksReportError,
+    refetch: refetchTasksReport,
+  } = useGetTasksReportQuery(params)
+  const {
+    data: followupsReportData,
+    isError: followupsReportIsError,
+    error: followupsReportError,
+    refetch: refetchFollowupsReport,
+  } = useGetFollowupsReportQuery(params)
+
+  const summaryIsError = leadsReportIsError || dealsReportIsError || tasksReportIsError || followupsReportIsError
+  const summaryError = leadsReportError || dealsReportError || tasksReportError || followupsReportError
+  function retrySummary() {
+    if (leadsReportIsError) refetchLeadsReport()
+    if (dealsReportIsError) refetchDealsReport()
+    if (tasksReportIsError) refetchTasksReport()
+    if (followupsReportIsError) refetchFollowupsReport()
+  }
 
   const leads = leadsReportData?.data || {}
   const deals = dealsReportData?.data || {}
@@ -127,29 +156,38 @@ export function AnalyticsPage() {
           )}
         />
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <ReportKpiCard label="Total Leads" value={fmt(lk.total)} icon={Users} />
-          <ReportKpiCard label="Pipeline Value" value={fmtMoney(dk.pipelineValue)} icon={DollarSign} />
-          <ReportKpiCard label="Open Tasks" value={fmt(tk.openTotal)} icon={ListTodo} />
-          <ReportKpiCard label="Win Rate" value={fmt(dk.winRate, '%')} icon={Percent} />
-        </div>
-
-        <PageContentPanel className="border-surface-border !p-2.5 sm:!p-3">
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-ink-faint">Needs attention</p>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-            {alerts.map(({ label, value, icon, color, bg, onClick }) => (
-              <ReportKpiCard
-                key={label}
-                label={label}
-                value={value ?? 0}
-                icon={icon}
-                iconBg={bg}
-                iconColor={color}
-                onClick={onClick}
-              />
-            ))}
+        {summaryIsError ? (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-sm text-red-800">
+            Could not load report summary.{summaryError?.data?.error?.message ? ` ${summaryError.data.error.message}` : ''}{' '}
+            <button type="button" className="font-medium underline" onClick={retrySummary}>Retry</button>
           </div>
-        </PageContentPanel>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <ReportKpiCard label="Total Leads" value={fmt(lk.total)} icon={Users} />
+              <ReportKpiCard label="Pipeline Value" value={fmtMoney(dk.pipelineValue)} icon={DollarSign} />
+              <ReportKpiCard label="Open Tasks" value={fmt(tk.openTotal)} icon={ListTodo} />
+              <ReportKpiCard label="Win Rate" value={fmt(dk.winRate, '%')} icon={Percent} />
+            </div>
+
+            <PageContentPanel className="border-surface-border !p-2.5 sm:!p-3">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-ink-faint">Needs attention</p>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                {alerts.map(({ label, value, icon, color, bg, onClick }) => (
+                  <ReportKpiCard
+                    key={label}
+                    label={label}
+                    value={value ?? 0}
+                    icon={icon}
+                    iconBg={bg}
+                    iconColor={color}
+                    onClick={onClick}
+                  />
+                ))}
+              </div>
+            </PageContentPanel>
+          </>
+        )}
 
         {filteredCategories.length === 0 ? (
           <PageContentPanel className="border-surface-border !p-2.5 sm:!p-3">

@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/icons'
 import toast from 'react-hot-toast'
 import { PageShell } from '@/components/layout/PageShell'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { CalendarWorkspace } from '@/features/calendar/components/CalendarWorkspace'
 import { LeadTaskDrawer } from '@/features/leads/components/LeadTaskDrawer'
 import { usePatchLeadTaskMutation } from '@/features/leads/leadsApi'
@@ -162,10 +163,19 @@ export function TasksPage() {
   }, [patchLeadTask])
 
   const [markingAll, setMarkingAll] = useState(false)
-  const onMarkAllCompleted = useCallback(async (tasks) => {
+  const [markAllTarget, setMarkAllTarget] = useState(null)
+
+  // BUG FIX (§15.2 of the bug audit) — `window.confirm()` is unstyled, blocks the
+  // main thread, and is inconsistent with the app's own modal system used elsewhere.
+  const onMarkAllCompleted = useCallback((tasks) => {
     const open = tasks.filter((t) => t.status !== 'completed' && t.leadId && t.id)
     if (!open.length) return
-    if (!window.confirm(`Mark all ${open.length} ${open.length === 1 ? 'task' : 'tasks'} as completed?`)) return
+    setMarkAllTarget(open)
+  }, [])
+
+  const confirmMarkAllCompleted = useCallback(async () => {
+    const open = markAllTarget
+    if (!open) return
     setMarkingAll(true)
     let failed = 0
     try {
@@ -178,10 +188,11 @@ export function TasksPage() {
       }
     } finally {
       setMarkingAll(false)
+      setMarkAllTarget(null)
     }
     if (failed) toast.error(`${failed} of ${open.length} tasks could not be updated.`)
     else toast.success(`${open.length} ${open.length === 1 ? 'task' : 'tasks'} marked completed.`)
-  }, [patchLeadTask])
+  }, [patchLeadTask, markAllTarget])
 
   const onToggleSubtaskDone = useCallback(async (parentTask, sub) => {
     const leadId = parentTask.leadId
@@ -478,6 +489,21 @@ export function TasksPage() {
       <LeadTaskDrawer
         open={createOpen}
         onClose={() => setCreateOpen(false)}
+      />
+
+      <ConfirmDialog
+        open={Boolean(markAllTarget)}
+        onClose={() => (markingAll ? null : setMarkAllTarget(null))}
+        onConfirm={confirmMarkAllCompleted}
+        loading={markingAll}
+        title="Mark all as completed?"
+        description={
+          markAllTarget
+            ? `Mark all ${markAllTarget.length} ${markAllTarget.length === 1 ? 'task' : 'tasks'} as completed?`
+            : ''
+        }
+        confirmLabel="Mark completed"
+        variant="primary"
       />
     </PageShell>
   )

@@ -1,4 +1,4 @@
-import { Workspace } from '../models/index.js'
+import { Workspace, UserWorkspace } from '../models/index.js'
 import { ensureLibrarySalesDocTemplates } from './defaultSalesDocTemplates.js'
 import {
   DEFAULT_WORKSPACE_SIDEBAR_TEXT_COLOR,
@@ -64,4 +64,31 @@ export async function ensureCompanyWorkspace(company, opts = {}) {
     { transaction },
   )
   return created
+}
+
+/**
+ * Best-effort workspace to attach to a notification/reminder that has no natural workspace
+ * of its own (company-wide digests, "general" reminders, orphan-call activity). Mirrors the
+ * fallback the notifications.workspace_id NOT-NULL backfill migration used: the user's
+ * earliest workspace membership, else the company's earliest workspace. Returns null only if
+ * the company genuinely has no workspace yet (shouldn't happen post-onboarding).
+ */
+export async function resolveDefaultWorkspaceIdForUser(userId, companyId) {
+  if (userId) {
+    const membership = await UserWorkspace.findOne({
+      where: { userId },
+      order: [['createdAt', 'ASC']],
+      attributes: ['workspaceId'],
+    })
+    if (membership?.workspaceId) return membership.workspaceId
+  }
+  if (companyId) {
+    const workspace = await Workspace.findOne({
+      where: { companyId },
+      order: [['createdAt', 'ASC']],
+      attributes: ['id'],
+    })
+    if (workspace?.id) return workspace.id
+  }
+  return null
 }

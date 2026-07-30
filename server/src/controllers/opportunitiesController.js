@@ -7,7 +7,7 @@ import { serializeDealForClient } from './dealsController.js'
 import { allowedWorkspaceIdsForUser } from '../services/userWorkspaceService.js'
 import { leadAccessWhere } from '../services/leadVisibility.js'
 import { resolveListWorkspaceFilterId } from '../utils/resolveListWorkspaceFilter.js'
-import { findDuplicates, saveDuplicateRecord } from '../services/duplicateDetectionService.js'
+import { findDuplicates, saveDuplicateRecord, redactDupesForUser } from '../services/duplicateDetectionService.js'
 import { logLeadFieldChanges } from '../services/leadFieldChangeActivity.js'
 import { phoneDigitsKey } from '../utils/phoneDigits.js'
 import { notifyOpportunityStageChanged } from '../services/notification/teamNotificationService.js'
@@ -620,7 +620,7 @@ export async function create(req, res, next) {
         success: true,
         queued: true,
         message: 'Potential duplicate detected. Opportunity saved to duplicate review queue.',
-        duplicates: dupes,
+        duplicates: await redactDupesForUser(dupes, req.user, String(workspaceId)),
         meta: {},
       })
     }

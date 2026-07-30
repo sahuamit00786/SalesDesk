@@ -1,17 +1,18 @@
 import { Queue, Worker } from 'bullmq'
+import { randomUUID } from 'node:crypto'
 import { bullmqConnectionFromEnv } from './connection.js'
-import { getMailTransport, appDisplayName } from '../services/mailService.js'
+import { getMailTransport, appDisplayName, fromAddress } from '../services/mailService.js'
 import { createNotification } from '../services/notificationService.js'
 import {
   getCompanyNotificationSettings,
-  getEventChannels,
+  resolveEventChannels,
   NOTIFICATION_EVENT_TYPES,
 } from '../services/notification/notificationPreferencesService.js'
 import {
   buildHtmlForEvent,
   subjectForEvent,
 } from '../services/notification/notificationEmailTemplates.js'
-import { NotificationDeliveryLog, User, Workspace, Company } from '../models/index.js'
+import { NotificationDeliveryLog, User, Workspace, Company, CompanyRole } from '../models/index.js'
 import { primaryClientOrigin } from '../config/corsOrigins.js'
 
 const QUEUE_NAME = 'team-notification-email'
@@ -24,7 +25,10 @@ function clientOrigin() {
 
 async function loadContext(jobData) {
   const [recipient, actor, workspace, company] = await Promise.all([
-    User.findByPk(jobData.recipientUserId, { attributes: ['id', 'name', 'email', 'companyId'] }),
+    User.findByPk(jobData.recipientUserId, {
+      attributes: ['id', 'name', 'email', 'companyId'],
+      include: [{ model: CompanyRole, as: 'companyRole', attributes: ['userRoleKind'] }],
+    }),
     jobData.actorUserId ? User.findByPk(jobData.actorUserId, { attributes: ['id', 'name', 'email'] }) : null,
     jobData.workspaceId ? Workspace.findByPk(jobData.workspaceId, { attributes: ['id', 'name'] }) : null,
     Company.findByPk(jobData.companyId, { attributes: ['id', 'name'] }),
@@ -129,7 +133,7 @@ function inAppMessage(eventType, payload, actorName, workspaceName) {
     case NOTIFICATION_EVENT_TYPES.SECURITY_EMAIL_CHANGED:
       return `Your account email was changed. If this wasn't you, contact support.`
     case NOTIFICATION_EVENT_TYPES.CALL_REMINDER:
-      return 'You have a call scheduled in 15 minutes'
+      return 'Your call reminder is due now'
     default:
       return payload.message || 'You have a new notification'
   }
@@ -183,15 +187,32 @@ async function recordLog(patch) {
   return NotificationDeliveryLog.create(patch)
 }
 
+/** BullMQ keeps job.id stable across retry attempts of the same job — use it to detect
+ *  "this channel already succeeded on a prior attempt" and skip re-sending. */
+async function alreadyDelivered(jobKey, channel) {
+  if (!jobKey) return null
+  return NotificationDeliveryLog.findOne({ where: { jobId: jobKey, channel, status: 'sent' } })
+}
+
 async function processNotificationJob(job) {
+  const jobKey = job.id ? String(job.id) : null
   const { eventType, companyId, workspaceId, recipientUserId, actorUserId, payload = {} } = job.data
-  const settings = await getCompanyNotificationSettings(companyId)
-  const channels = getEventChannels(settings, eventType)
-  const { recipient, actor, workspace, company } = await loadContext(job.data)
+  const [settings, { recipient, actor, workspace, company }] = await Promise.all([
+    getCompanyNotificationSettings(companyId),
+    loadContext(job.data),
+  ])
 
   if (!recipient || String(recipient.companyId) !== String(companyId)) {
     return { ok: false, reason: 'invalid_recipient' }
   }
+
+  const channels = await resolveEventChannels({
+    eventType,
+    settings,
+    companyId,
+    userId: recipientUserId,
+    roleKind: recipient.companyRole?.userRoleKind || null,
+  })
 
   const actorName = actor?.name || actor?.email || 'A teammate'
   const workspaceName = workspace?.name || 'your workspace'
@@ -210,7 +231,9 @@ async function processNotificationJob(job) {
 
   const results = { inApp: null, email: null }
 
-  if (channels.inApp) {
+  if (channels.inApp && (await alreadyDelivered(jobKey, 'in_app'))) {
+    results.inApp = { alreadySent: true }
+  } else if (channels.inApp) {
     try {
       const notification = await createNotification({
         userId: recipientUserId,
@@ -221,21 +244,28 @@ async function processNotificationJob(job) {
         type: eventType,
         link,
       })
-      await recordLog({
-        companyId,
-        workspaceId: workspaceId || null,
-        recipientUserId,
-        actorUserId: actorUserId || null,
-        eventType,
-        channel: 'in_app',
-        status: 'sent',
-        subject: inAppTitle(eventType, payload),
-        recipientEmail: recipient.email,
-        payload: emailPayload,
-        jobId: job.id ? String(job.id) : null,
-        sentAt: new Date(),
-      })
       results.inApp = { id: notification.id }
+      // Notification is already created — a log-write failure here must not fail the job
+      // (that would trigger a BullMQ retry that re-creates the notification a 2nd time).
+      try {
+        await recordLog({
+          companyId,
+          workspaceId: workspaceId || null,
+          recipientUserId,
+          actorUserId: actorUserId || null,
+          eventType,
+          channel: 'in_app',
+          status: 'sent',
+          subject: inAppTitle(eventType, payload),
+          recipientEmail: recipient.email,
+          payload: emailPayload,
+          jobId: jobKey,
+          sentAt: new Date(),
+        })
+      } catch (logErr) {
+        // eslint-disable-next-line no-console
+        console.error('[notification] created in-app notification but failed to record delivery log', logErr)
+      }
     } catch (err) {
       await recordLog({
         companyId,
@@ -247,8 +277,8 @@ async function processNotificationJob(job) {
         status: 'failed',
         payload: emailPayload,
         errorMessage: err.message,
-        jobId: job.id ? String(job.id) : null,
-      })
+        jobId: jobKey,
+      }).catch(() => {})
       results.inApp = { error: err.message }
     }
   } else {
@@ -261,7 +291,7 @@ async function processNotificationJob(job) {
       channel: 'in_app',
       status: 'skipped',
       payload: emailPayload,
-      jobId: job.id ? String(job.id) : null,
+      jobId: jobKey,
     })
   }
 
@@ -277,8 +307,13 @@ async function processNotificationJob(job) {
       subject,
       recipientEmail: recipient.email,
       payload: emailPayload,
-      jobId: job.id ? String(job.id) : null,
+      jobId: jobKey,
     })
+    return { ok: true, results }
+  }
+
+  if (await alreadyDelivered(jobKey, 'email')) {
+    results.email = { sent: true, alreadySent: true }
     return { ok: true, results }
   }
 
@@ -294,7 +329,7 @@ async function processNotificationJob(job) {
       subject,
       errorMessage: 'Recipient has no email address',
       payload: emailPayload,
-      jobId: job.id ? String(job.id) : null,
+      jobId: jobKey,
     })
     return { ok: false, reason: 'no_email' }
   }
@@ -316,7 +351,7 @@ async function processNotificationJob(job) {
         recipientEmail: recipient.email,
         payload: emailPayload,
         errorMessage: 'SMTP not configured',
-        jobId: job.id ? String(job.id) : null,
+        jobId: jobKey,
       })
       return { ok: true, results, devSkipped: true }
     }
@@ -332,32 +367,17 @@ async function processNotificationJob(job) {
       recipientEmail: recipient.email,
       payload: emailPayload,
       errorMessage: 'SMTP not configured',
-      jobId: job.id ? String(job.id) : null,
+      jobId: jobKey,
     })
     return { ok: false, reason: 'smtp_unavailable' }
   }
 
   const html = buildHtmlForEvent(eventType, emailPayload)
-  const from = process.env.SMTP_FROM || `${appDisplayName()} <${process.env.SMTP_USER}>`
+  const from = fromAddress()
 
   try {
     await transport.sendMail({ from, to: recipient.email, subject, html })
-    await recordLog({
-      companyId,
-      workspaceId: workspaceId || null,
-      recipientUserId,
-      actorUserId: actorUserId || null,
-      eventType,
-      channel: 'email',
-      status: 'sent',
-      subject,
-      recipientEmail: recipient.email,
-      payload: emailPayload,
-      jobId: job.id ? String(job.id) : null,
-      sentAt: new Date(),
-    })
-    results.email = { sent: true }
-  } catch (err) {
+  } catch (sendErr) {
     await recordLog({
       companyId,
       workspaceId: workspaceId || null,
@@ -369,18 +389,43 @@ async function processNotificationJob(job) {
       subject,
       recipientEmail: recipient.email,
       payload: emailPayload,
-      errorMessage: err.message,
-      jobId: job.id ? String(job.id) : null,
+      errorMessage: sendErr.message,
+      jobId: jobKey,
+    }).catch(() => {})
+    results.email = { error: sendErr.message }
+    throw sendErr
+  }
+
+  results.email = { sent: true }
+  // Mail is already away — a log-write failure here must not fail the job (that would
+  // trigger a BullMQ retry that re-sends the email a 2nd/3rd time).
+  try {
+    await recordLog({
+      companyId,
+      workspaceId: workspaceId || null,
+      recipientUserId,
+      actorUserId: actorUserId || null,
+      eventType,
+      channel: 'email',
+      status: 'sent',
+      subject,
+      recipientEmail: recipient.email,
+      payload: emailPayload,
+      jobId: jobKey,
+      sentAt: new Date(),
     })
-    results.email = { error: err.message }
-    throw err
+  } catch (logErr) {
+    // eslint-disable-next-line no-console
+    console.error('[notification] sent email but failed to record delivery log', logErr)
   }
 
   return { ok: true, results }
 }
 
 export async function runNotificationJobInline(jobData) {
-  return processNotificationJob({ data: jobData, id: 'inline' })
+  // Unique per call — a shared literal id would make alreadyDelivered() treat every
+  // inline send as a duplicate of the first one ever sent.
+  return processNotificationJob({ data: jobData, id: `inline-${randomUUID()}` })
 }
 
 export function getNotificationEmailQueue() {
@@ -438,6 +483,7 @@ export function startNotificationEmailWorker() {
   const connection = bullmqConnectionFromEnv()
   if (!connection) return null
   worker = new Worker(QUEUE_NAME, processNotificationJob, { connection, concurrency: 3 })
-  worker.on('error', () => {})
+  // eslint-disable-next-line no-console
+  worker.on('error', (err) => console.error('[notification worker] error', err))
   return worker
 }

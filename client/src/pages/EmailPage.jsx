@@ -3,8 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { Search, X } from '@/components/ui/icons'
 import { PageShell } from '@/components/layout/PageShell'
-import { Select } from '@/components/ui/Select'
 import { IconInput } from '@/components/ui/IconInput'
+import { LeadBillToPicker } from '@/components/shared/LeadBillToPicker'
 import EmailSidebar from '@/features/email/inbox/EmailSidebar'
 import EmailListToolbar from '@/features/email/inbox/EmailListToolbar'
 import EmailRowList from '@/features/email/inbox/EmailRowList'
@@ -22,7 +22,7 @@ import {
 } from '@/features/email/emailApi'
 import { EmailComposerDrawer } from '@/features/email/EmailComposerDrawer'
 import { EmailStatusView } from '@/features/email/status/EmailStatusView'
-import { useGetGoogleEmailStatusQuery, useGetLeadsQuery, useSyncLeadEmailsMutation } from '@/features/leads/leadsApi'
+import { useGetGoogleEmailStatusQuery, useGetLeadQuery, useGetLeadsQuery, useSyncLeadEmailsMutation } from '@/features/leads/leadsApi'
 import { readAuthFromStorage } from '@/features/auth/authSlice'
 import { useAppSelector } from '@/app/hooks'
 import { selectResolvedActiveWorkspaceId } from '@/features/workspace/workspaceSlice'
@@ -53,6 +53,7 @@ export function EmailPage() {
   const [composeInitial, setComposeInitial] = useState(null)
   const [saveTarget, setSaveTarget] = useState(null)
   const [saveLeadId, setSaveLeadId] = useState('')
+  const [saveLeadObj, setSaveLeadObj] = useState(null)
 
   const setUrlState = useCallback(
     (patch) => {
@@ -137,12 +138,13 @@ export function EmailPage() {
   const [saveAttachment, { isLoading: savingAtt }] = useSaveMailboxAttachmentToLeadMutation()
   const canCompose = usePermission('main.leads', 'create')
   const canSync = usePermission('engage.email', 'update')
-  const { data: leadsData } = useGetLeadsQuery({ page: 1, limit: 400, search: '' }, { skip: !googleEmailConnected })
-  const leads = useMemo(() => (Array.isArray(leadsData?.data) ? leadsData.data : []), [leadsData?.data])
+  // BUG FIX (§15.2 of the bug audit) — this used to also fetch a `limit: 400` list of
+  // all leads to build the address→lead map below. That's gone: matching is done
+  // exactly against the sender emails currently on screen (never capped), and the
+  // "filter by lead" picker below resolves its one selected lead directly by id.
+  const { data: filterLeadRes } = useGetLeadQuery(leadId, { skip: !leadId })
+  const selectedLeadFilter = filterLeadRes?.data || null
 
-  // The broad `leads` fetch above is capped server-side (most-recently-created first), so an
-  // older lead's email can silently miss it. Look up exactly the sender emails currently on
-  // screen so matching (list chips, inline-reply lead prefill) doesn't depend on recency.
   const matchEmails = useMemo(() => {
     const set = new Set()
     for (const t of rawMailboxThreads) {
@@ -162,16 +164,12 @@ export function EmailPage() {
 
   const leadByEmail = useMemo(() => {
     const m = new Map()
-    for (const l of leads) {
-      const e = String(l.email || '').toLowerCase().trim()
-      if (e) m.set(e, l)
-    }
     for (const l of matchedLeads) {
       const e = String(l.email || '').toLowerCase().trim()
       if (e) m.set(e, l)
     }
     return m
-  }, [leads, matchedLeads])
+  }, [matchedLeads])
 
   const rows = useMemo(() => {
     const source = crmMode ? rawCrmThreads : rawMailboxThreads
@@ -324,6 +322,7 @@ export function EmailPage() {
   const openSaveModal = useCallback((messageId, att) => {
     setSaveTarget({ messageId, attachment: att })
     setSaveLeadId('')
+    setSaveLeadObj(null)
   }, [])
   const submitSaveToLead = useCallback(async () => {
     if (!saveTarget?.messageId || !saveTarget?.attachment?.id || !saveLeadId) {
@@ -345,10 +344,12 @@ export function EmailPage() {
   }, [saveAttachment, saveLeadId, saveTarget])
 
   const openNewCompose = useCallback(() => {
-    const selected = leadId ? leads.find((l) => String(l.id) === String(leadId)) : null
-    setComposeInitial(selected ? { leadId: selected.id, to: selected.email || '' } : null)
+    // The composer resolves the full lead (and its email) itself once opened —
+    // no need to have it in hand here (§15.2 of the bug audit: this used to depend
+    // on the capped `leads` list and silently dropped the prefill past the cap).
+    setComposeInitial(leadId ? { leadId } : null)
     setComposeOpen(true)
-  }, [leadId, leads])
+  }, [leadId])
 
   const mailboxErrorMessage = (() => {
     if (!mailboxError) return ''
@@ -387,9 +388,8 @@ export function EmailPage() {
     onFilterModeChange: (m) => { setFilterMode(m); selectThread(null); setSidebarOpen(false) },
     hasAttachments,
     onHasAttachmentsChange: setHasAttachments,
-    leadId,
     onLeadIdChange: (id) => { setLeadId(id); selectThread(null) },
-    leads,
+    selectedLeadFilter,
     onCompose: openNewCompose,
     composeDisabled: !googleEmailConnected || !canCompose,
   }
@@ -442,7 +442,6 @@ export function EmailPage() {
                         onOpenAttachment={isMailboxThread ? openAttachmentPreview : undefined}
                         onSaveAttachmentToLead={isMailboxThread ? openSaveModal : undefined}
                         myEmail={myEmail}
-                        leads={leads}
                         leadByEmail={leadByEmail}
                         onSent={() => {}}
                       />
@@ -510,14 +509,12 @@ export function EmailPage() {
               </button>
             </div>
             <label className="mt-4 block text-xs font-medium text-ink-muted">Lead</label>
-            <Select className="mt-1 h-10 rounded-lg text-sm" value={saveLeadId} onChange={(e) => setSaveLeadId(e.target.value)}>
-              <option value="">Select lead…</option>
-              {leads.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.title || l.contactName || l.email || l.id}
-                </option>
-              ))}
-            </Select>
+            <LeadBillToPicker
+              selectedLead={saveLeadObj}
+              onSelect={(l) => { setSaveLeadObj(l); setSaveLeadId(l?.id || '') }}
+              placeholder="Select lead…"
+              inputClassName="mt-1 h-10 w-full rounded-lg border border-surface-border bg-white px-3 text-sm"
+            />
             <div className="mt-4 flex justify-end gap-2">
               <button type="button" className="h-9 rounded-lg border border-surface-border px-3 text-sm" onClick={() => setSaveTarget(null)}>
                 Cancel

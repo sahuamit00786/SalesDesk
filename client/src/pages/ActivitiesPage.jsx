@@ -340,7 +340,13 @@ export function ActivitiesPage() {
     return p
   }, [page, leadId, typeFilter, fromDate, toDate, userId])
 
-  const { data: feedData, isFetching: loadingFeed } = useGetActivitiesFeedQuery(feedParams, { pollingInterval: 60000 })
+  const {
+    data: feedData,
+    isFetching: loadingFeed,
+    isError: feedIsError,
+    error: feedError,
+    refetch: refetchFeed,
+  } = useGetActivitiesFeedQuery(feedParams, { pollingInterval: 60000 })
 
   useEffect(() => {
     const t = setInterval(() => setNowMs(Date.now()), 30000)
@@ -507,12 +513,18 @@ export function ActivitiesPage() {
 
             <div className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
               {loadingFeed ? <ActivitySkeleton /> : null}
-              {!loadingFeed && activities.length === 0 ? (
+              {!loadingFeed && feedIsError ? (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-sm text-red-800">
+                  Could not load activities.{feedError?.data?.error?.message ? ` ${feedError.data.error.message}` : ''}{' '}
+                  <button type="button" className="font-medium underline" onClick={refetchFeed}>Retry</button>
+                </div>
+              ) : null}
+              {!loadingFeed && !feedIsError && activities.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-surface-border p-8 text-center">
                   <p className="text-sm font-medium text-ink">No activity</p>
                 </div>
               ) : null}
-              {!loadingFeed && activities.map((row) => (
+              {!loadingFeed && !feedIsError && activities.map((row) => (
                 <ActivityTimelineItem
                   key={row.id}
                   activity={row}

@@ -461,8 +461,11 @@ export async function createInvitation(req, res, next) {
         workspaceNames: workspaceIds.map((id) => workspaceNameMap.get(id)).filter(Boolean),
       })
     } catch (mailErr) {
-      await inv.destroy()
-      return next(mailErr)
+      // Invitation row still valid even if the email bounced/failed to send —
+      // hand the link back so the inviter can share it manually instead of losing the invite.
+      // eslint-disable-next-line no-console
+      console.error('[team-invite] email send failed, invitation kept:', mailErr.message)
+      mail = { sent: false }
     }
 
     return res.status(201).json({
@@ -474,7 +477,7 @@ export async function createInvitation(req, res, next) {
         workspaceIds,
         expiresAt: inv.expiresAt?.toISOString() ?? null,
         emailDispatched: mail.sent,
-        inviteUrl: process.env.NODE_ENV !== 'production' && !mail.sent ? inviteUrl : undefined,
+        inviteUrl: !mail.sent ? inviteUrl : undefined,
       },
       meta: {},
     })
@@ -729,6 +732,7 @@ export async function acceptInvitation(req, res, next) {
         companyRoleId: user.companyRoleId ?? null,
         isCompanyAdmin: Boolean(user.isCompanyAdmin),
         companyId: user.companyId ?? null,
+        rtv: Number(user.refreshTokenVersion) || 0,
       }),
       refreshToken: signRefreshToken(refreshTokenPayloadForUser(user)),
     }

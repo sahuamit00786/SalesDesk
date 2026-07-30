@@ -1328,7 +1328,7 @@ export function LeadDetailPage() {
           }`}
         >
           <div className="flex flex-col gap-3 border-b border-surface-border pb-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
-            <div className="-mx-1 flex min-w-0 flex-1 items-center gap-1 overflow-x-auto px-1">
+            <div className="lead-tabs-scroll -mx-1 flex min-w-0 flex-1 items-center gap-1 overflow-x-auto px-1">
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
@@ -2010,14 +2010,14 @@ export function LeadDetailPage() {
                             return (
                               <div
                                 key={note.id}
-                                className="flex flex-col overflow-hidden rounded-2xl border border-amber-200/70 bg-gradient-to-b from-amber-50/90 to-white p-4 shadow-sm ring-1 ring-amber-100/40 transition hover:shadow-md"
+                                className="flex flex-col overflow-hidden rounded-2xl border border-amber-200/70 bg-gradient-to-b from-amber-50/90 to-white px-3 py-2.5 shadow-sm ring-1 ring-amber-100/40 transition hover:shadow-md"
                               >
                                 <div className="flex items-start justify-between gap-2">
                                   <p className="min-w-0 text-sm font-semibold text-ink line-clamp-1">{note.metadata?.title || 'Note'}</p>
                                   <p className="shrink-0 text-[11px] text-ink-muted">{new Date(note.createdAt).toLocaleDateString()}</p>
                                 </div>
                                 <p className="mt-0.5 text-[11px] text-ink-muted">By {note.user?.name || 'System'}</p>
-                                <div className="note-card-preview prose prose-sm mt-3 max-h-[200px] w-full overflow-hidden rounded-xl border border-amber-100/80 bg-white/90 p-3 text-xs leading-relaxed text-ink prose-p:my-1 prose-headings:my-1">
+                                <div className="note-card-preview prose prose-sm mt-3 max-h-[200px] w-full overflow-y-auto rounded-xl border border-amber-100/80 bg-white/90 px-2 py-1.5 text-xs leading-relaxed text-ink prose-p:my-1 prose-headings:my-1">
                                   {hasRenderableBody ? (
                                     <div dangerouslySetInnerHTML={{ __html: noteHtml }} />
                                   ) : (

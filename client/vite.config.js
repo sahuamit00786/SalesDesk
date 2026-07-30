@@ -18,10 +18,17 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, 'src'),
+        '@shared': path.resolve(repoRoot, 'shared'),
       },
     },
     server: {
       port: 5173,
+      // §12.3 of the bug audit — `@shared` resolves outside client/, so Vite's dev
+      // server needs it explicitly allow-listed (it otherwise denies serving files
+      // above the project root).
+      fs: {
+        allow: [repoRoot],
+      },
       proxy: {
         '/api': {
           target: apiProxyTarget,

@@ -19,7 +19,7 @@ const INTEGRATION_TABS = [
 ]
 
 function GoogleEmailTab({ justConnected }) {
-  const { data: statusData, isLoading } = useGetGoogleEmailStatusQuery()
+  const { data: statusData, isLoading, isError, error, refetch } = useGetGoogleEmailStatusQuery()
   const [getConnectUrl, { isLoading: connecting }] = useGetGoogleEmailConnectUrlMutation()
   const canConnect = usePermission('settings.integrations', 'update')
 
@@ -64,6 +64,11 @@ function GoogleEmailTab({ justConnected }) {
           </div>
           {isLoading ? (
             <SkeletonForm rows={3} />
+          ) : isError ? (
+            <div className="w-full rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+              Could not load Google Email connection status.{error?.data?.error?.message ? ` ${error.data.error.message}` : ''}{' '}
+              <button type="button" className="font-medium underline" onClick={refetch}>Retry</button>
+            </div>
           ) : (
             <div className="w-full rounded-lg border border-surface-border bg-white p-2.5 sm:p-3">
               <div className="flex items-center justify-between gap-2">

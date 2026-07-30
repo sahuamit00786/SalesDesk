@@ -1,6 +1,6 @@
 import { Activity, Inbox, Paperclip, Pencil, Send, X } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
-import { Select } from '@/components/ui/Select'
+import { LeadBillToPicker } from '@/components/shared/LeadBillToPicker'
 
 function NavItem({ icon: Icon, label, active, onClick, badge = null }) {
   return (
@@ -28,7 +28,7 @@ function SidebarBody({
   unreadCount, unreadApproximate,
   filterMode, onFilterModeChange,
   hasAttachments, onHasAttachmentsChange,
-  leadId, onLeadIdChange, leads,
+  onLeadIdChange, selectedLeadFilter,
   onCompose, composeDisabled,
 }) {
   const unreadBadge = unreadCount > 0 ? `${unreadCount}${unreadApproximate ? '+' : ''}` : null
@@ -70,20 +70,13 @@ function SidebarBody({
         />
       </label>
       <div className="px-3 pt-1">
-        <Select
-          className="h-9 w-full rounded-lg text-xs"
-          value={leadId}
-          onChange={(e) => onLeadIdChange(e.target.value)}
-          aria-label="Filter by lead"
-        >
-          <option value="">All leads</option>
-          {leads.filter((l) => l.email).map((lead) => (
-            <option key={lead.id} value={lead.id}>
-              {lead.title || lead.contactName || lead.email}
-              {lead.isOpportunity ? ' (Opportunity)' : ''}
-            </option>
-          ))}
-        </Select>
+        <LeadBillToPicker
+          selectedLead={selectedLeadFilter}
+          onSelect={(lead) => onLeadIdChange(lead?.id || '')}
+          placeholder="All leads"
+          filterResults={(l) => Boolean(l.email)}
+          inputClassName="h-9 w-full rounded-lg border border-surface-border bg-white px-3 text-xs"
+        />
       </div>
     </div>
   )

@@ -253,15 +253,22 @@ export async function createQuotation(req, res, next) {
       }
     }
 
-    const totals = aggregateQuotationTotals(value.items, {
-      shipping: value.shipping,
-      adjustment: value.adjustment,
-    })
-
     let customerSnapshot = value.customerSnapshot || buildCustomerSnapshotFromLead(lead)
     if (dealRow?.name) {
       customerSnapshot = { ...customerSnapshot, dealName: String(dealRow.name).trim() }
     }
+
+    // §12.4 of the bug audit — GST invoices/quotations must split CGST/SGST vs
+    // IGST, which needs the seller's and buyer's state.
+    const billingRowForTax = await WorkspaceBillingProfile.findOne({ where: { workspaceId } })
+    const totals = aggregateQuotationTotals(value.items, {
+      shipping: value.shipping,
+      adjustment: value.adjustment,
+      billingCountry: billingRowForTax?.country,
+      billingState: billingRowForTax?.state,
+      customerState: customerSnapshot?.billingAddress?.state,
+    })
+
     const layoutPreset =
       value.layoutPreset != null
         ? value.layoutPreset
@@ -410,9 +417,14 @@ export async function patchQuotation(req, res, next) {
 
     let totals = null
     if (value.items) {
+      const billingRowForTax = await WorkspaceBillingProfile.findOne({ where: { workspaceId } })
+      const customerSnapshot = value.customerSnapshot || row.customerSnapshot
       totals = aggregateQuotationTotals(value.items, {
         shipping: value.shipping ?? Number(row.shipping),
         adjustment: value.adjustment ?? Number(row.adjustment),
+        billingCountry: billingRowForTax?.country,
+        billingState: billingRowForTax?.state,
+        customerState: customerSnapshot?.billingAddress?.state,
       })
     }
 
@@ -586,9 +598,19 @@ export async function convertQuotationToInvoice(req, res, next) {
         )
       }
 
+      // BUG FIX (§12.1 of the bug audit) — same unlocked-template race as
+      // invoicesController.createInvoice; lock before reading nextNumber.
+      let lockedInvTemplate = invTemplate
+      if (invTemplate?.autoNumbering) {
+        lockedInvTemplate = await SalesDocTemplate.findOne({
+          where: { id: invTemplate.id },
+          transaction,
+          lock: Transaction.LOCK.UPDATE,
+        })
+      }
       const invoiceNumber = await allocateInvoiceNumber({
         billing,
-        template: invTemplate,
+        template: lockedInvTemplate,
         issueDate,
         transaction,
       })
@@ -606,7 +628,13 @@ export async function convertQuotationToInvoice(req, res, next) {
           taxPct: it.taxPct,
           taxType: it.taxType,
         })),
-        { shipping: Number(quotation.shipping) || 0, adjustment: Number(quotation.adjustment) || 0 },
+        {
+          shipping: Number(quotation.shipping) || 0,
+          adjustment: Number(quotation.adjustment) || 0,
+          billingCountry: billingForPay?.country,
+          billingState: billingForPay?.state,
+          customerState: quotation.customerSnapshot?.billingAddress?.state,
+        },
       )
 
       const inv = await Invoice.create(

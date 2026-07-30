@@ -5,7 +5,7 @@ import {
   Paperclip, Reply, ReplyAll, Underline, X,
 } from '@/components/ui/icons'
 import { cn } from '@/utils/cn'
-import { Select } from '@/components/ui/Select'
+import { LeadBillToPicker } from '@/components/shared/LeadBillToPicker'
 import { useSendEmailForLeadMutation, useUploadEmailAttachmentsMutation } from '@/features/email/emailApi'
 import { buildReplyQuoteHtml } from '@/features/email/buildReplyQuoteHtml'
 
@@ -44,10 +44,14 @@ function replyAllCc(thread, myEmail, counterpartEmail) {
   return cc.join(', ')
 }
 
-export default function InlineReplyBox({ thread, myEmail, leads, leadByEmail, defaultLeadId, onSent }) {
+export default function InlineReplyBox({ thread, myEmail, leadByEmail, defaultLeadId, onSent }) {
   const editorRef = useRef(null)
   const [mode, setMode] = useState(null) // null | 'reply' | 'replyAll' | 'forward'
   const [leadId, setLeadId] = useState('')
+  // Set directly from the search picker below when there's no auto-match — avoids
+  // an extra fetch just to re-resolve the lead the user just picked (§15.2 of the
+  // bug audit: the old `<select>` here was also populated from a capped list).
+  const [manualLead, setManualLead] = useState(null)
   const [toInput, setToInput] = useState('')
   const [ccInput, setCcInput] = useState('')
   const [showCc, setShowCc] = useState(false)
@@ -83,6 +87,7 @@ export default function InlineReplyBox({ thread, myEmail, leads, leadByEmail, de
       setSubject(`Re: ${baseSubject}`)
     }
     setLeadId(matchedLead?.id || defaultLeadId || '')
+    setManualLead(null)
     setQuotedHtml(buildReplyQuoteHtml(last))
     setShowQuote(false)
     setUploadedAttachments([])
@@ -197,12 +202,15 @@ export default function InlineReplyBox({ thread, myEmail, leads, leadByEmail, de
             Lead: {matchedLead.title || matchedLead.contactName || matchedLead.email}
           </span>
         ) : (
-          <Select className="h-7 max-w-[240px] rounded-lg text-[11px]" value={leadId} onChange={(e) => setLeadId(e.target.value)} aria-label="Send as lead email">
-            <option value="">Pick lead to send…</option>
-            {leads.filter((l) => l.email).map((l) => (
-              <option key={l.id} value={l.id}>{l.title || l.contactName || l.email}</option>
-            ))}
-          </Select>
+          <div className="w-[240px]">
+            <LeadBillToPicker
+              selectedLead={manualLead}
+              onSelect={(l) => { setManualLead(l); setLeadId(l?.id || '') }}
+              placeholder="Pick lead to send…"
+              filterResults={(l) => Boolean(l.email)}
+              inputClassName="h-7 w-full rounded-lg border border-surface-border bg-white px-2 text-[11px]"
+            />
+          </div>
         )}
         <button type="button" onClick={() => setMode(null)} className="ml-auto rounded-lg p-1 text-ink-muted hover:bg-surface-muted" aria-label="Discard draft">
           <X size={15} />

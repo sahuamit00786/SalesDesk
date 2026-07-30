@@ -104,7 +104,7 @@ export function EmailTrackingReportsPage({ embedded = false }) {
     [dateFrom, dateTo, source, groupBy],
   )
 
-  const { data, isFetching, refetch } = useGetEmailTrackingReportQuery(params)
+  const { data, isFetching, isError, error, refetch } = useGetEmailTrackingReportQuery(params)
   const summary = data?.data?.summary || {}
   const rows = data?.data?.rows || []
 
@@ -181,64 +181,73 @@ export function EmailTrackingReportsPage({ embedded = false }) {
         </Button>
       </div>
 
-      {/* Stats strip */}
-      <div className="mb-3 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-        <StatCard icon={Mail} label="Sent" value={summary.sent?.toLocaleString() ?? '—'} />
-        <StatCard
-          icon={MailOpen}
-          label="Opened"
-          value={summary.opened?.toLocaleString() ?? '—'}
-          sub={`${pct(summary.opened, summary.sent)} open rate · ${summary.totalOpens?.toLocaleString() ?? 0} total opens`}
-        />
-        <StatCard
-          icon={MousePointerClick}
-          label="Clicked"
-          value={summary.clicked?.toLocaleString() ?? '—'}
-          sub={`${pct(summary.clicked, summary.sent)} click rate · ${summary.totalClicks?.toLocaleString() ?? 0} total clicks`}
-        />
-        <StatCard
-          icon={Reply}
-          label="Replied"
-          value={summary.replied?.toLocaleString() ?? '—'}
-          sub={`${pct(summary.replied, summary.sent)} reply rate`}
-        />
-      </div>
-
-      {/* Chart */}
-      {chartData.length > 0 && groupBy !== 'none' && groupBy !== 'source' ? (
-        <div className="mb-3 rounded-xl border border-surface-border bg-white p-3">
-          <h3 className="mb-2 text-sm font-semibold text-ink">Email activity over time</h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={chartData} barGap={2}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-              <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#6b7280' }} />
-              <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} />
-              <Tooltip
-                contentStyle={{ borderRadius: 10, border: '1px solid #e5e7eb', fontSize: 12 }}
-              />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Bar dataKey="sent" name="Sent" fill="#e5e7eb" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="opened" name="Opened" fill={CHART_COLORS.primary} radius={[4, 4, 0, 0]} />
-              <Bar dataKey="clicked" name="Clicked" fill={CHART_COLORS.secondary} radius={[4, 4, 0, 0]} />
-              <Bar dataKey="replied" name="Replied" fill={CHART_COLORS.success} radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+      {isError ? (
+        <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-sm text-red-800">
+          Could not load email tracking report.{error?.data?.error?.message ? ` ${error.data.error.message}` : ''}{' '}
+          <button type="button" className="font-medium underline" onClick={refetch}>Retry</button>
         </div>
-      ) : null}
+      ) : (
+        <>
+          {/* Stats strip */}
+          <div className="mb-3 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+            <StatCard icon={Mail} label="Sent" value={summary.sent?.toLocaleString() ?? '—'} />
+            <StatCard
+              icon={MailOpen}
+              label="Opened"
+              value={summary.opened?.toLocaleString() ?? '—'}
+              sub={`${pct(summary.opened, summary.sent)} open rate · ${summary.totalOpens?.toLocaleString() ?? 0} total opens`}
+            />
+            <StatCard
+              icon={MousePointerClick}
+              label="Clicked"
+              value={summary.clicked?.toLocaleString() ?? '—'}
+              sub={`${pct(summary.clicked, summary.sent)} click rate · ${summary.totalClicks?.toLocaleString() ?? 0} total clicks`}
+            />
+            <StatCard
+              icon={Reply}
+              label="Replied"
+              value={summary.replied?.toLocaleString() ?? '—'}
+              sub={`${pct(summary.replied, summary.sent)} reply rate`}
+            />
+          </div>
 
-      {/* Data table */}
-      <DataGrid
-        columns={EMAIL_COLS}
-        data={rows}
-        loading={isFetching}
-        showColumnToggle={false}
-        showExportCsv={false}
-        autoHeight={false}
-        maxHeightClass="max-h-[420px]"
-        className="border-surface-border"
-        emptyTitle="No email data"
-        emptyDescription="No email data for the selected range and source."
-      />
+          {/* Chart */}
+          {chartData.length > 0 && groupBy !== 'none' && groupBy !== 'source' ? (
+            <div className="mb-3 rounded-xl border border-surface-border bg-white p-3">
+              <h3 className="mb-2 text-sm font-semibold text-ink">Email activity over time</h3>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={chartData} barGap={2}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                  <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#6b7280' }} />
+                  <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} />
+                  <Tooltip
+                    contentStyle={{ borderRadius: 10, border: '1px solid #e5e7eb', fontSize: 12 }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Bar dataKey="sent" name="Sent" fill="#e5e7eb" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="opened" name="Opened" fill={CHART_COLORS.primary} radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="clicked" name="Clicked" fill={CHART_COLORS.secondary} radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="replied" name="Replied" fill={CHART_COLORS.success} radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : null}
+
+          {/* Data table */}
+          <DataGrid
+            columns={EMAIL_COLS}
+            data={rows}
+            loading={isFetching}
+            showColumnToggle={false}
+            showExportCsv={false}
+            autoHeight={false}
+            maxHeightClass="max-h-[420px]"
+            className="border-surface-border"
+            emptyTitle="No email data"
+            emptyDescription="No email data for the selected range and source."
+          />
+        </>
+      )}
     </div>
   )
 

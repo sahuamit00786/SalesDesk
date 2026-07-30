@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/Button'
 import { Select } from '@/components/ui/Select'
 import { DataGrid } from '@/components/shared/DataGrid'
 import { useGetEmailStatusListQuery } from '@/features/email/emailApi'
-import { useGetLeadsQuery } from '@/features/leads/leadsApi'
+import { useGetLeadQuery } from '@/features/leads/leadsApi'
+import { LeadBillToPicker } from '@/components/shared/LeadBillToPicker'
 import { getEmailTrackingBadge } from '@/features/gmail/emailTrackingBadge'
 import { cn } from '@/utils/cn'
 
@@ -97,8 +98,10 @@ export function EmailStatusView() {
   const [status, setStatus] = useState('all')
   const [leadId, setLeadId] = useState('')
 
-  const { data: leadsData } = useGetLeadsQuery({ page: 1, limit: 400, search: '' })
-  const leads = useMemo(() => (Array.isArray(leadsData?.data) ? leadsData.data : []), [leadsData?.data])
+  // BUG FIX (§15.2 of the bug audit) — resolves only the currently-selected filter
+  // lead by id instead of fetching a `limit: 400` list that couldn't reach every lead.
+  const { data: leadFilterRes } = useGetLeadQuery(leadId, { skip: !leadId })
+  const selectedLeadFilter = leadFilterRes?.data || null
 
   const params = useMemo(
     () => ({ dateFrom, dateTo, source, status, leadId: leadId || undefined, page: 1, limit: 200 }),
@@ -171,14 +174,13 @@ export function EmailStatusView() {
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-ink-muted">Lead</label>
-          <Select value={leadId} onChange={(e) => setLeadId(e.target.value)} className="h-9 w-48">
-            <option value="">All leads</option>
-            {leads.filter((l) => l.email).map((lead) => (
-              <option key={lead.id} value={lead.id}>
-                {lead.title || lead.contactName || lead.email}
-              </option>
-            ))}
-          </Select>
+          <LeadBillToPicker
+            selectedLead={selectedLeadFilter}
+            onSelect={(l) => setLeadId(l?.id || '')}
+            placeholder="All leads"
+            filterResults={(l) => Boolean(l.email)}
+            inputClassName="h-9 w-48 rounded-lg border border-surface-border bg-white px-2 text-sm"
+          />
         </div>
         <Button variant="icon" onClick={refetch} disabled={isFetching} className="mt-auto border border-surface-border" aria-label="Refresh">
           <RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} />

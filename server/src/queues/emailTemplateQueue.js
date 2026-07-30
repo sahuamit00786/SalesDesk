@@ -1,5 +1,6 @@
 import { Queue, Worker } from 'bullmq'
-import { getMailTransport } from '../services/mailService.js'
+import { randomUUID } from 'node:crypto'
+import { getMailTransport, fromAddress } from '../services/mailService.js'
 import { sequelize, EmailSuppression, EmailTemplate, Lead, LeadEmailLog, User, Workspace } from '../models/index.js'
 import {
   injectTrackingPixel,
@@ -7,6 +8,7 @@ import {
   resolveMergeTags,
   wrapLinksWithTracking,
 } from '../services/emailTemplateService.js'
+import { signUnsubscribeToken } from '../controllers/emailTrackingController.js'
 
 const QUEUE_NAME = 'email-template-send'
 let queue = null
@@ -18,20 +20,16 @@ function apiBaseUrl() {
   return process.env.API_BASE_URL || `http://localhost:${process.env.PORT || 4000}/api/v1`
 }
 
-async function pauseForThrottle(template) {
-  const throttlePerHour = Number(template.throttlePerHour || 0)
-  if (!throttlePerHour || throttlePerHour <= 0) return
-  const delayMs = Math.ceil(3600000 / throttlePerHour)
-  await new Promise((resolve) => setTimeout(resolve, delayMs))
-}
-
 async function sendToLead({ template, lead, senderName, source = 'bulk' }) {
   const t = await sequelize.transaction()
+  let log
   try {
+    // Case-insensitive: "John.Smith@Corp.com" unsubscribing must also stop sends to
+    // "john.smith@corp.com" (§3.6 of the bug audit).
     const suppressed = await EmailSuppression.findOne({
       where: {
         companyId: template.companyId,
-        email: lead.email || '',
+        email: String(lead.email || '').trim().toLowerCase(),
       },
       transaction: t,
       lock: t.LOCK.UPDATE,
@@ -41,50 +39,51 @@ async function sendToLead({ template, lead, senderName, source = 'bulk' }) {
       return { skipped: true, reason: 'unsubscribed' }
     }
 
-    const existing = await LeadEmailLog.findOne({
-      where: {
-        leadId: lead.id,
-        templateId: template.id,
-        templateVersion: template.version,
-      },
-      transaction: t,
-      lock: t.LOCK.UPDATE,
-    })
-    if (template.skipIfAlreadySent && existing) {
-      await t.commit()
-      return { skipped: true, reason: 'already_sent' }
+    // §3.8 of the bug audit: "already sent" must mean a prior row with status 'sent',
+    // not "any row exists" — and re-sending must never overwrite that row (this used to
+    // find-or-create on (lead,template,version) and UPDATE the existing row on resend,
+    // destroying sentAt/openCount/clickCount from the first send). Every send attempt
+    // now always creates its own row, so history survives repeated/re-sends.
+    if (template.skipIfAlreadySent) {
+      const alreadySent = await LeadEmailLog.findOne({
+        where: { leadId: lead.id, templateId: template.id, templateVersion: template.version, status: 'sent' },
+        transaction: t,
+      })
+      if (alreadySent) {
+        await t.commit()
+        return { skipped: true, reason: 'already_sent' }
+      }
     }
 
     const { subject, bodyHtml } = resolveMergeTags(template.subject, template.bodyHtml, lead, {
       senderName,
     })
-    const log = existing
-      ? await existing.update(
-          { subject, bodyHtml, toEmail: lead.email || null, status: 'drafted' },
-          { transaction: t },
-        )
-      : await LeadEmailLog.create(
-          {
-            companyId: template.companyId,
-            workspaceId: template.workspaceId,
-            leadId: lead.id,
-            templateId: template.id,
-            templateVersion: template.version,
-            subject,
-            bodyHtml,
-            toEmail: lead.email || null,
-            status: 'drafted',
-            source,
-          },
-          { transaction: t },
-        )
+    log = await LeadEmailLog.create(
+      {
+        companyId: template.companyId,
+        workspaceId: template.workspaceId,
+        leadId: lead.id,
+        templateId: template.id,
+        templateVersion: template.version,
+        subject,
+        bodyHtml,
+        toEmail: lead.email || null,
+        status: 'drafted',
+        source,
+      },
+      { transaction: t },
+    )
     await t.commit()
 
     const base = apiBaseUrl()
     let finalBody = wrapLinksWithTracking(bodyHtml, `${base}/track/click`, log.id)
     finalBody = injectTrackingPixel(finalBody, `${base}/track/open?log_id=${encodeURIComponent(log.id)}`)
     if (template.autoUnsubscribeLink) {
-      finalBody = injectUnsubscribeLink(finalBody, `${base}/unsubscribe?log_id=${encodeURIComponent(log.id)}`)
+      const sig = signUnsubscribeToken(log.id)
+      finalBody = injectUnsubscribeLink(
+        finalBody,
+        `${base}/unsubscribe?log_id=${encodeURIComponent(log.id)}&sig=${encodeURIComponent(sig)}`,
+      )
     }
 
     const transport = getMailTransport()
@@ -92,7 +91,7 @@ async function sendToLead({ template, lead, senderName, source = 'bulk' }) {
       throw new Error('SMTP is not configured')
     }
     await transport.sendMail({
-      from: process.env.SMTP_FROM || process.env.SMTP_USER,
+      from: fromAddress(),
       to: lead.email,
       subject,
       html: finalBody,
@@ -111,18 +110,40 @@ async function sendToLead({ template, lead, senderName, source = 'bulk' }) {
     return { sent: true, logId: log.id }
   } catch (error) {
     await t.rollback().catch(() => {})
-    await LeadEmailLog.upsert({
-      companyId: template.companyId,
-      workspaceId: template.workspaceId,
-      leadId: lead.id,
-      templateId: template.id,
-      templateVersion: template.version,
-      status: 'bounced',
-      bounced: true,
-      sendError: error.message || 'Email delivery failed',
-    })
+    const bounce = isRealBounce(error)
+    const patch = { status: bounce ? 'bounced' : 'failed', bounced: bounce, sendError: error.message || 'Email delivery failed' }
+    if (log?.id) {
+      // The drafted row already exists (failure happened after commit, e.g. the actual
+      // send) — update that same row rather than upserting a second one for this attempt.
+      await LeadEmailLog.update(patch, { where: { id: log.id } })
+    } else {
+      // Failed before the row was ever created (e.g. the suppression/already-sent
+      // lookup itself threw) — nothing to update, so record the attempt as a new row.
+      await LeadEmailLog.create({
+        companyId: template.companyId,
+        workspaceId: template.workspaceId,
+        leadId: lead.id,
+        templateId: template.id,
+        templateVersion: template.version,
+        ...patch,
+      })
+    }
     return { sent: false, error: error.message || 'Email delivery failed' }
   }
+}
+
+/**
+ * Only a genuine SMTP rejection of the recipient address is a bounce. An SMTP timeout,
+ * a missing/misconfigured transport, a network blip, or a template render error is an
+ * infra failure, not a bounce — stamping those as 'bounced' corrupted deliverability
+ * reporting and risked feeding valid addresses into suppression (§3.4 of the bug audit).
+ */
+function isRealBounce(error) {
+  // Permanent SMTP rejection codes (mailbox unknown, relay refused, etc).
+  if (typeof error?.responseCode === 'number' && error.responseCode >= 500 && error.responseCode < 600) return true
+  // Nodemailer's own bounce-shaped error codes.
+  if (error?.code === 'EENVELOPE' || error?.code === 'EMESSAGE') return true
+  return false
 }
 
 async function processTemplateJob(job) {
@@ -157,8 +178,6 @@ async function processTemplateJob(job) {
     else if (sendResult?.skipped && sendResult.reason === 'unsubscribed') result.skippedUnsubscribed.push(lead.id)
     else if (sendResult?.sent) result.sent.push(lead.id)
     else result.failed.push({ leadId: lead.id, reason: sendResult?.error || 'send_failed' })
-
-    await pauseForThrottle(template)
   }
 
   return result
@@ -177,18 +196,40 @@ export function getEmailTemplateQueue() {
   return queue
 }
 
+/**
+ * One BullMQ job per lead (not one job for the whole batch):
+ * - throttlePerHour is honored via each job's own `delay`, not an in-handler sleep — a
+ *   throttled campaign no longer holds the worker's only concurrency slot for hours.
+ * - attempts: 1 — a retry used to restart the *entire* batch from lead #1; per-lead jobs
+ *   mean a transient failure only affects that one lead (sendToLead already records the
+ *   outcome, so nothing is silently lost — it just isn't auto-retried).
+ * Returns a batchId (not a single BullMQ job id) since the "batch" is now many jobs;
+ * nothing reads this id back to poll a specific job, it's informational only.
+ */
 export async function enqueueTemplateSendJob(payload) {
   const q = getEmailTemplateQueue()
   if (!q) throw new Error('Queue unavailable: REDIS_URL is not configured')
-  const delay = payload.scheduleAt ? Math.max(new Date(payload.scheduleAt).getTime() - Date.now(), 0) : 0
-  const job = await q.add('send-template-batch', payload, {
-    attempts: 3,
-    backoff: { type: 'exponential', delay: 3000 },
-    removeOnComplete: 100,
-    removeOnFail: 200,
-    delay,
-  })
-  return job
+  const { leadIds = [], scheduleAt, throttlePerHour, ...rest } = payload
+  const baseDelay = scheduleAt ? Math.max(new Date(scheduleAt).getTime() - Date.now(), 0) : 0
+  const perHour = Number(throttlePerHour || 0)
+  const intervalMs = perHour > 0 ? Math.ceil(3600000 / perHour) : 0
+  const batchId = randomUUID()
+
+  if (!leadIds.length) return { batchId, count: 0 }
+
+  await q.addBulk(
+    leadIds.map((leadId, i) => ({
+      name: 'send-template-batch',
+      data: { ...rest, leadIds: [leadId], batchId },
+      opts: {
+        attempts: 1,
+        removeOnComplete: 100,
+        removeOnFail: 200,
+        delay: baseDelay + intervalMs * i,
+      },
+    })),
+  )
+  return { batchId, count: leadIds.length }
 }
 
 export function startEmailTemplateWorker() {

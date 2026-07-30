@@ -91,9 +91,14 @@ export function Sidebar({ className, collapsed = false, onToggleCollapse, isMobi
   const user = useAppSelector((s) => s.auth.user)
   const { data: googleEmailStatus, isSuccess: googleEmailStatusOk } = useGetGoogleEmailStatusQuery(undefined, { skip: !accessToken })
   const skipMailboxBadge = !accessToken || !googleEmailStatusOk || googleEmailStatus?.data?.readMailbox === false
+  // BUG FIX (§15.1 of the bug audit) — these three badges used to poll every
+  // 45-60s as their ONLY refresh path, duplicating what the notification socket
+  // already knows (see useNotificationsSocket.jsx, which now invalidates these
+  // same tags on `notification:badge`). Polling stays, just as a slow fallback
+  // for the rare case the socket is down or reconnecting.
   const { data: mailboxBadgeRes } = useGetMailboxInboxBadgeQuery(undefined, {
     skip: skipMailboxBadge,
-    pollingInterval: 45000,
+    pollingInterval: 300000,
   })
   const emailUnread = Number(mailboxBadgeRes?.data?.unread || 0)
   const emailUnreadApprox = Boolean(mailboxBadgeRes?.data?.unreadApproximate)
@@ -104,14 +109,14 @@ export function Sidebar({ className, collapsed = false, onToggleCollapse, isMobi
   const whatsappConnected = whatsappSettingsRes?.data?.status === 'verified'
   const { data: whatsappBadgeRes } = useGetWhatsAppUnreadBadgeQuery(undefined, {
     skip: !accessToken || !whatsappConnected,
-    pollingInterval: 45000,
+    pollingInterval: 300000,
   })
   const whatsappUnread = Number(whatsappBadgeRes?.data?.unread || 0)
   const whatsappNavBadge = whatsappUnread > 0 ? String(whatsappUnread) : null
 
   const { data: navBadgesRes } = useGetNavBadgesQuery(undefined, {
     skip: !accessToken,
-    pollingInterval: 60000,
+    pollingInterval: 300000,
   })
   const nb = navBadgesRes?.data || {}
   function fmtBadge(n) { return n > 0 ? String(n) : null }

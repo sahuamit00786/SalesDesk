@@ -2,10 +2,14 @@ import { Router } from 'express'
 import multer from 'multer'
 import path from 'node:path'
 import { mkdirSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import { rateLimit } from '../../middleware/rateLimit.js'
 import { requireAuth } from '../../middleware/auth.js'
 import { requireCompany } from '../../middleware/requireCompany.js'
 import { workspaceContext } from '../../middleware/workspaceContext.js'
+import { validateUpload } from '../../middleware/validateUpload.js'
+import { requireCompanyAdmin } from '../../middleware/requireCompanyAdmin.js'
+import { auditLog } from '../../middleware/auditLog.js'
 import * as authController from '../../controllers/authController.js'
 import * as analyticsController from '../../controllers/analyticsController.js'
 import * as analyticsReportsExtended from '../../controllers/analyticsReportsExtended.js'
@@ -77,8 +81,10 @@ const leadFileUpload = multer({
       cb(null, dir)
     },
     filename: (_req, file, cb) => {
+      // UUID-prefixed, not just a millisecond timestamp — the old
+      // `${Date.now()}_${safe}` scheme was enumerable (§6.1 of the bug audit).
       const safe = String(file.originalname || 'attachment').replace(/[^\w.\-]+/g, '_')
-      cb(null, `${Date.now()}_${safe}`)
+      cb(null, `${randomUUID()}_${safe}`)
     },
   }),
   limits: { fileSize: 15 * 1024 * 1024, files: 10 },
@@ -280,6 +286,8 @@ router.patch(
   requireAuth,
   apiLimiter,
   requireCompany, workspaceContext,
+  requireCompanyAdmin,
+  auditLog,
   billingProfileController.patchBillingProfile,
 )
 
@@ -295,6 +303,7 @@ router.post(
   requireAuth,
   apiLimiter,
   requireCompany, workspaceContext,
+  requireCompanyAdmin,
   salesDocTemplatesController.createSalesDocTemplate,
 )
 router.get(
@@ -309,6 +318,7 @@ router.patch(
   requireAuth,
   apiLimiter,
   requireCompany, workspaceContext,
+  requireCompanyAdmin,
   salesDocTemplatesController.patchSalesDocTemplate,
 )
 router.delete(
@@ -316,6 +326,7 @@ router.delete(
   requireAuth,
   apiLimiter,
   requireCompany, workspaceContext,
+  requireCompanyAdmin,
   salesDocTemplatesController.deleteSalesDocTemplate,
 )
 
@@ -621,7 +632,7 @@ router.post('/leads/:id/followups', requireAuth, apiLimiter, requireCompany, wor
 router.patch('/leads/:id/followups/:followupId', requireAuth, apiLimiter, requireCompany, workspaceContext, leadsController.patchFollowup)
 router.delete('/leads/:id/followups/:followupId', requireAuth, apiLimiter, requireCompany, workspaceContext, leadsController.deleteFollowup)
 router.get('/leads/:id/files', requireAuth, apiLimiter, requireCompany, workspaceContext, leadsController.listFiles)
-router.post('/leads/:id/files', requireAuth, apiLimiter, requireCompany, workspaceContext, leadFileUpload.array('files', 10), leadsController.createFile)
+router.post('/leads/:id/files', requireAuth, apiLimiter, requireCompany, workspaceContext, leadFileUpload.array('files', 10), validateUpload, leadsController.createFile)
 router.use(
   '/documents',
   requireAuth,
@@ -1031,6 +1042,7 @@ router.post(
   requireAuth,
   apiLimiter,
   requireCompany, workspaceContext,
+  requireCompanyAdmin,
   workflowsController.create,
 )
 router.get(
@@ -1045,6 +1057,7 @@ router.patch(
   requireAuth,
   apiLimiter,
   requireCompany, workspaceContext,
+  requireCompanyAdmin,
   workflowsController.patch,
 )
 router.delete(
@@ -1052,6 +1065,7 @@ router.delete(
   requireAuth,
   apiLimiter,
   requireCompany, workspaceContext,
+  requireCompanyAdmin,
   workflowsController.remove,
 )
 router.post(
@@ -1059,6 +1073,7 @@ router.post(
   requireAuth,
   apiLimiter,
   requireCompany, workspaceContext,
+  requireCompanyAdmin,
   workflowsController.publish,
 )
 router.post(
@@ -1066,6 +1081,7 @@ router.post(
   requireAuth,
   apiLimiter,
   requireCompany, workspaceContext,
+  requireCompanyAdmin,
   workflowsController.testRun,
 )
 router.get(
@@ -1165,7 +1181,8 @@ router.post('/notifications/:id/read', requireAuth, apiLimiter, requireCompany, 
 
 router.get('/track/open', emailTrackingController.trackOpen)
 router.get('/track/click', emailTrackingController.trackClick)
-router.get('/unsubscribe', emailTrackingController.unsubscribe)
+router.get('/unsubscribe', apiLimiter, emailTrackingController.unsubscribe)
+router.post('/unsubscribe/confirm', apiLimiter, emailTrackingController.confirmUnsubscribe)
 router.get('/email/tracking/reports', requireAuth, apiLimiter, requireCompany, workspaceContext, emailReportsController.getEmailTrackingReport)
 router.get('/email/status', requireAuth, apiLimiter, requireCompany, workspaceContext, emailStatusController.listEmailStatus)
 
@@ -1184,12 +1201,12 @@ router.get('/email-sequences/:id/enrollments', requireAuth, apiLimiter, requireC
 
 // —— Lead Scoring Engine —— (config sub-page of Leads, same tier as assignment-rules/custom-fields)
 // Static sub-paths must come before /:id param routes
-router.post('/scoring-rules/reorder', requireAuth, apiLimiter, requireCompany, workspaceContext, scoringRulesController.reorderScoringRules)
-router.post('/scoring-rules/recalculate', requireAuth, apiLimiter, requireCompany, workspaceContext, scoringRulesController.recalculateAllLeadScores)
+router.post('/scoring-rules/reorder', requireAuth, apiLimiter, requireCompany, workspaceContext, requireCompanyAdmin, scoringRulesController.reorderScoringRules)
+router.post('/scoring-rules/recalculate', requireAuth, apiLimiter, requireCompany, workspaceContext, requireCompanyAdmin, scoringRulesController.recalculateAllLeadScores)
 router.get('/scoring-rules', requireAuth, apiLimiter, requireCompany, workspaceContext, scoringRulesController.getScoringRules)
-router.post('/scoring-rules', requireAuth, apiLimiter, requireCompany, workspaceContext, scoringRulesController.createScoringRule)
-router.put('/scoring-rules/:id', requireAuth, apiLimiter, requireCompany, workspaceContext, scoringRulesController.updateScoringRule)
-router.delete('/scoring-rules/:id', requireAuth, apiLimiter, requireCompany, workspaceContext, scoringRulesController.deleteScoringRule)
+router.post('/scoring-rules', requireAuth, apiLimiter, requireCompany, workspaceContext, requireCompanyAdmin, scoringRulesController.createScoringRule)
+router.put('/scoring-rules/:id', requireAuth, apiLimiter, requireCompany, workspaceContext, requireCompanyAdmin, scoringRulesController.updateScoringRule)
+router.delete('/scoring-rules/:id', requireAuth, apiLimiter, requireCompany, workspaceContext, requireCompanyAdmin, scoringRulesController.deleteScoringRule)
 
 router.use((_req, res) => {
   res.status(404).json({

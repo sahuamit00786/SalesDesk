@@ -40,10 +40,13 @@ export function rateLimit({ routeKey, windowSec = 60, max = 120 } = {}) {
     if (redis) {
       const key = `rl:${ip}:${keySuffix}`
       try {
-        const count = await redis.incr(key)
-        if (count === 1) {
-          await redis.expire(key, windowSec)
-        }
+        // SET...NX...EX is one atomic command — the key can never exist without a TTL
+        // attached (§6.5 of the bug audit: INCR then a separate EXPIRE has a gap where a
+        // crash/network blip between them leaves a permanent, un-expiring key, locking
+        // that IP out forever). Only the follow-up INCR (on a key that already has a
+        // TTL, set atomically by whoever created it) needs a second round trip.
+        const created = await redis.set(key, 1, 'EX', windowSec, 'NX')
+        const count = created === 'OK' ? 1 : await redis.incr(key)
         if (count > max) {
           const ttl = await redis.ttl(key)
           const retryAfter = ttl > 0 ? ttl : windowSec

@@ -305,6 +305,8 @@ export function TeamPage() {
   })
   const [deactivateDialog, setDeactivateDialog] = useState({ open: false, user: null })
   const [cancelInviteDialog, setCancelInviteDialog] = useState({ open: false, invite: null })
+  const [inviteLinkDialog, setInviteLinkDialog] = useState({ open: false, url: '', email: '' })
+  const [inviteLinkCopied, setInviteLinkCopied] = useState(false)
 
   const otherWorkspaces = useMemo(
     () => workspaces.filter((w) => w.id !== inviteWorkspace?.id),
@@ -716,7 +718,7 @@ export function TeamPage() {
     if (!wsIds.length) return toast.error('Select a workspace in the sidebar first')
     try {
       const prof = normalizeProfileDraft(inviteForm)
-      await createInvitation({
+      const res = await createInvitation({
         name: inviteForm.name.trim() || undefined,
         email: inviteForm.email.trim(),
         companyRoleId: inviteForm.companyRoleId,
@@ -731,9 +733,15 @@ export function TeamPage() {
         country: prof.country ?? undefined,
         postalCode: prof.postalCode ?? undefined,
       }).unwrap()
-      toast.success('Invitation sent')
       closeInviteDrawer()
       refetchInvites()
+      if (!res?.data?.emailDispatched && res?.data?.inviteUrl) {
+        setInviteLinkCopied(false)
+        setInviteLinkDialog({ open: true, url: res.data.inviteUrl, email: res.data.email })
+        toast.error('Invitation created, but the email failed to send. Share the link manually.')
+      } else {
+        toast.success('Invitation sent')
+      }
     } catch (err) {
       toast.error(apiErrorMessage(err))
     }
@@ -1640,6 +1648,47 @@ export function TeamPage() {
         <p className="text-sm text-ink-muted">
           Cancel pending invitation for <span className="font-medium text-ink">{cancelInviteDialog.invite?.email}</span>?
         </p>
+      </Modal>
+
+      <Modal
+        open={inviteLinkDialog.open}
+        onClose={() => setInviteLinkDialog({ open: false, url: '', email: '' })}
+        title="Invitation email failed to send"
+        footer={
+          <button
+            type="button"
+            onClick={() => setInviteLinkDialog({ open: false, url: '', email: '' })}
+            className="h-10 rounded-xl border border-surface-border bg-white px-4 text-sm font-medium text-ink-muted hover:bg-white"
+          >
+            Done
+          </button>
+        }
+      >
+        <p className="text-sm text-ink-muted mb-3">
+          The invitation for <span className="font-medium text-ink">{inviteLinkDialog.email}</span> was created, but
+          we could not deliver the email. Copy this link and send it to them directly — it expires in 48 hours.
+        </p>
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            readOnly
+            value={inviteLinkDialog.url}
+            onFocus={(e) => e.target.select()}
+            className="flex-1 h-10 rounded-xl border border-surface-border bg-surface-subtle px-3 text-sm text-ink"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              navigator.clipboard.writeText(inviteLinkDialog.url).then(() => {
+                setInviteLinkCopied(true)
+                setTimeout(() => setInviteLinkCopied(false), 2000)
+              })
+            }}
+            className="h-10 rounded-xl bg-ink px-4 text-sm font-medium text-white hover:opacity-90"
+          >
+            {inviteLinkCopied ? 'Copied' : 'Copy'}
+          </button>
+        </div>
       </Modal>
 
       <Modal

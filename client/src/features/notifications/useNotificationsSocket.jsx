@@ -24,6 +24,12 @@ import { notificationsApi } from '@/features/notifications/notificationsApi'
  *    invalidates the RTK Query Notification LIST + UNREAD_COUNT tags so the bell
  *    badge + notification center refresh instantly (same tags mark-read uses).
  *  - Fresh token on every (re)connect; polling stays as the fallback.
+ *
+ * BUG FIX (§15.1 of the bug audit) — the sidebar's mailbox/WhatsApp/nav badges used
+ * to ONLY poll (every 45-60s) despite this exact socket already firing on every
+ * event that could change them (new mail, new WhatsApp message, etc.). `notification:
+ * badge` now also invalidates those RTK Query tags, so badges update in real time;
+ * the sidebar's own polling interval was lengthened to a fallback safety net.
  */
 
 function resolveAccessToken(reduxToken) {
@@ -58,6 +64,21 @@ export function useNotificationsSocket() {
         ]),
       )
 
+    // Any notification event can mean new mail, a new WhatsApp message, or a nav
+    // count changing — cheap to over-invalidate here since RTK Query dedupes
+    // in-flight refetches, and it's what replaces the sidebar's old fixed-interval
+    // polling as the primary refresh path. `emailApi`/`whatsappApi`/`analyticsApi`
+    // are all `baseApi.injectEndpoints(...)`, so this `.util` is the same one they
+    // use — no need to import each slice separately just to invalidate its tags.
+    const invalidateSidebarBadges = () =>
+      dispatch(
+        notificationsApi.util.invalidateTags([
+          { type: 'Email', id: 'MAILBOX_BADGE' },
+          { type: 'Whatsapp', id: 'BADGE' },
+          { type: 'Analytics', id: 'NAV_BADGES' },
+        ]),
+      )
+
     const onNew = (n) => {
       invalidate()
       const title = n?.title || 'Notification'
@@ -80,12 +101,17 @@ export function useNotificationsSocket() {
       )
     }
 
+    const onBadge = () => {
+      invalidate()
+      invalidateSidebarBadges()
+    }
+
     socket.on('notification:new', onNew)
-    socket.on('notification:badge', invalidate)
+    socket.on('notification:badge', onBadge)
 
     return () => {
       socket.off('notification:new', onNew)
-      socket.off('notification:badge', invalidate)
+      socket.off('notification:badge', onBadge)
       socket.disconnect()
       socketRef.current = null
     }

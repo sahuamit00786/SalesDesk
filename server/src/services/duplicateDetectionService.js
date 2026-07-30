@@ -1,5 +1,6 @@
 import { Op, fn, col, where as sqlWhere } from 'sequelize'
 import { Lead, DuplicateLead } from '../models/index.js'
+import { leadAccessWhere } from './leadVisibility.js'
 
 export async function findDuplicates(workspaceId, { email, phone }, excludeLeadId = null) {
   const conditions = []
@@ -19,6 +20,28 @@ export async function findDuplicates(workspaceId, { email, phone }, excludeLeadI
     attributes: ['id', 'title', 'contactName', 'email', 'phone', 'status', 'score', 'company'],
     limit: 5,
     order: [['updatedAt', 'DESC']],
+  })
+}
+
+/**
+ * §5.4 of the bug audit: the create-duplicate 202 response echoed the FULL matched
+ * lead(s) back to the requester with no visibility check — a low-privilege rep could
+ * probe for the existence and contact details of leads owned by someone else just by
+ * attempting a create. findDuplicates() itself stays unfiltered (the admin duplicate
+ * review queue needs full cross-owner detection to work); this only redacts what goes
+ * back in the HTTP response to the acting user.
+ */
+export async function redactDupesForUser(dupes, user, workspaceId) {
+  if (!dupes?.length || !user) return dupes
+  const ids = dupes.map((d) => d.id)
+  const visible = await Lead.findAll({
+    where: { ...(await leadAccessWhere(user, { workspaceId })), id: ids },
+    attributes: ['id'],
+  })
+  const visibleIds = new Set(visible.map((r) => String(r.id)))
+  return dupes.map((d) => {
+    const plain = typeof d.get === 'function' ? d.get({ plain: true }) : d
+    return visibleIds.has(String(plain.id)) ? plain : { id: plain.id, restricted: true }
   })
 }
 

@@ -4,6 +4,7 @@ import {
   Workflow,
   WorkflowRun,
   WorkflowRunStep,
+  WorkflowRunWait,
   Lead,
   LeadTask,
   LeadTaskSubtask,
@@ -140,9 +141,16 @@ function getLeadField(lead, field) {
   return v === undefined || v === null ? '' : String(v)
 }
 
+/**
+ * §4.7 of the bug audit — a value like "1,50,000" (thousands separators, common in this
+ * app's India-focused currency formatting) made Number(cur) come back NaN, so every
+ * numeric condition against that field silently evaluated to false with no error. Strip
+ * grouping separators and currency symbols before parsing.
+ */
 function compareNumeric(cur, rhs, cmp) {
-  const a = Number(cur)
-  const b = Number(rhs)
+  const clean = (v) => String(v).replace(/[,\s]/g, '').replace(/^[^\d.-]+/, '')
+  const a = Number(clean(cur))
+  const b = Number(clean(rhs))
   if (!Number.isFinite(a) || !Number.isFinite(b)) return false
   return cmp(a, b)
 }
@@ -160,13 +168,15 @@ function evalCondition(lead, before, data) {
   if (op === 'ends_with') return cur.toLowerCase().endsWith(rhs.toLowerCase())
   if (op === 'contains') return cur.toLowerCase().includes(rhs.toLowerCase())
   if (op === 'not_contains') return !cur.toLowerCase().includes(rhs.toLowerCase())
-  if (op === 'not_equals') return String(cur) !== String(rhs)
+  // equals/not_equals case-insensitive, matching every other string operator here —
+  // was case-sensitive only for these two, e.g. a stored "True" vs a configured "true".
+  if (op === 'not_equals') return cur.toLowerCase() !== rhs.toLowerCase()
   if (op === 'changed') return String(cur) !== String(prev)
   if (op === 'greater_than') return compareNumeric(cur, rhs, (a, b) => a > b)
   if (op === 'greater_or_equal') return compareNumeric(cur, rhs, (a, b) => a >= b)
   if (op === 'less_than') return compareNumeric(cur, rhs, (a, b) => a < b)
   if (op === 'less_or_equal') return compareNumeric(cur, rhs, (a, b) => a <= b)
-  return String(cur) === String(rhs)
+  return cur.toLowerCase() === rhs.toLowerCase()
 }
 
 const FOLLOWUP_PRESET_MINUTES = {
@@ -440,21 +450,47 @@ async function executeNode(run, workflow, node, context) {
         where: { id: templateId, companyId: workflow.companyId, isArchived: false },
       })
       if (!template) throw new Error('Template not found')
-      const payload = { templateId: template.id, leadIds: [lead.id], companyId: workflow.companyId, source: 'workflow' }
+      // workspaceId is required by processTemplateJob's workspace lookup — omitting it made
+      // every workflow-triggered email silently no-op with reason 'workspace_archived'.
+      const payload = {
+        templateId: template.id,
+        leadIds: [lead.id],
+        companyId: workflow.companyId,
+        workspaceId: lead.workspaceId,
+        source: 'workflow',
+      }
       const q = getEmailTemplateQueue()
       if (q) {
         await enqueueTemplateSendJob(payload)
         await finishStep(step, 'completed', { queued: true }, null)
+        // Queued: the actual send happens later on a worker — say "queued", not "sent",
+        // since we can't confirm delivery from here.
+        await createLeadSystemActivity({
+          leadId: lead.id,
+          userId: actorUserId || workflow.createdBy || null,
+          body: `"${workflow.name || 'Automation'}" queued an email: "${template.name || 'Email template'}"`,
+          metadata: { action: 'workflow_send_email', templateId: template.id, workflowId: workflow.id, queued: true },
+        })
       } else {
         const res = await runTemplateSendJobInline(payload)
+        const confirmedSent = Array.isArray(res?.sent) && res.sent.includes(lead.id)
+        const confirmedSkipped =
+          (res?.skippedAlreadySent || []).includes(lead.id) || (res?.skippedUnsubscribed || []).includes(lead.id)
+        if (!confirmedSent && !confirmedSkipped) {
+          const reason = res?.failed?.find((f) => f.leadId === lead.id)?.reason || 'unknown_error'
+          throw new Error(`Send email failed: ${reason}`)
+        }
         await finishStep(step, 'completed', { inline: true, result: res }, null)
+        const body = confirmedSent
+          ? `"${workflow.name || 'Automation'}" sent an email: "${template.name || 'Email template'}"`
+          : `"${workflow.name || 'Automation'}" skipped sending "${template.name || 'Email template'}" (already sent or unsubscribed)`
+        await createLeadSystemActivity({
+          leadId: lead.id,
+          userId: actorUserId || workflow.createdBy || null,
+          body,
+          metadata: { action: 'workflow_send_email', templateId: template.id, workflowId: workflow.id, confirmedSent },
+        })
       }
-      await createLeadSystemActivity({
-        leadId: lead.id,
-        userId: actorUserId || workflow.createdBy || null,
-        body: `"${workflow.name || 'Automation'}" sent an email: "${template.name || 'Email template'}"`,
-        metadata: { action: 'workflow_send_email', templateId: template.id, workflowId: workflow.id },
-      })
       return { nextNodeIds: pickNextNodeIds(def, node, true) }
     }
 
@@ -469,14 +505,32 @@ async function executeNode(run, workflow, node, context) {
 }
 
 /** Persisted wait state: only what the resume path needs (no full lead snapshot). */
-function buildWaitContextJson(ctx, def, pendingNodeIds) {
+function buildWaitContextJson(ctx, def) {
   return {
     leadId: ctx.lead.id,
     actorUserId: ctx.actorUserId || null,
     before: ctx.before ?? null,
     definition: def,
-    pendingNodeIds,
   }
+}
+
+/**
+ * A run is only 'completed' once nothing is left to do anywhere — including branches
+ * this particular runWorkflowGraph pass never touched (a sibling branch's still-pending
+ * wait, parked by an earlier pass). Checking WorkflowRunWait here, instead of assuming
+ * "this pass produced no waits" means "the whole run is done", is what makes parallel
+ * branches with independent delays actually independent (§4.2 of the bug audit).
+ */
+async function finalizeRunIfDone(run) {
+  const nextWait = await WorkflowRunWait.findOne({
+    where: { runId: run.id, status: 'pending' },
+    order: [['waitUntil', 'ASC']],
+  })
+  if (nextWait) {
+    await run.update({ status: 'waiting', waitUntil: nextWait.waitUntil, resumeNodeId: null })
+    return
+  }
+  await run.update({ status: 'completed', finishedAt: new Date(), waitUntil: null, resumeNodeId: null })
 }
 
 export async function runWorkflowGraph({ run, workflow, startNodeIds, context }) {
@@ -484,12 +538,16 @@ export async function runWorkflowGraph({ run, workflow, startNodeIds, context })
   const ctx = { ...context, definition: def }
   const queue = (Array.isArray(startNodeIds) ? startNodeIds : [startNodeIds]).filter(Boolean)
   if (!queue.length) {
-    await run.update({ status: 'completed', finishedAt: new Date(), waitUntil: null, resumeNodeId: null })
+    await finalizeRunIfDone(run)
     return
   }
   // Count across resumes so cycles routed through delayWait cannot run forever.
   let steps = await WorkflowRunStep.count({ where: { runId: run.id } })
   const visited = new Set()
+  // Waits hit during THIS pass — collected rather than stopping immediately, so sibling
+  // branches with no delay (or a shorter one) still run to completion in the same pass
+  // instead of being stuck queued behind an unrelated branch's multi-day wait (§4.2).
+  const newWaits = []
   while (queue.length) {
     const currentId = queue.shift()
     // Converging branches execute a node once; repeat visits (cycles) just stop.
@@ -512,19 +570,56 @@ export async function runWorkflowGraph({ run, workflow, startNodeIds, context })
     steps += 1
     if (out.halt) return
     if (out.waiting) {
-      const resumeIds = out.resumeNodeIds || []
-      const pending = [...resumeIds.slice(1), ...queue]
-      await run.update({
-        status: 'waiting',
-        waitUntil: out.waitUntil,
-        resumeNodeId: resumeIds[0] || null,
-        contextJson: buildWaitContextJson(ctx, def, pending),
-      })
-      return
+      newWaits.push({ nodeId: currentId, resumeNodeIds: out.resumeNodeIds || [], waitUntil: out.waitUntil })
+      continue
     }
     for (const id of out.nextNodeIds || []) queue.push(id)
   }
-  await run.update({ status: 'completed', finishedAt: new Date(), waitUntil: null, resumeNodeId: null })
+  if (newWaits.length) {
+    await WorkflowRunWait.bulkCreate(
+      newWaits.map((w) => ({
+        runId: run.id,
+        nodeId: w.nodeId,
+        resumeNodeIds: w.resumeNodeIds,
+        waitUntil: w.waitUntil,
+        status: 'pending',
+      })),
+    )
+    await run.update({ contextJson: buildWaitContextJson(ctx, def) })
+  }
+  await finalizeRunIfDone(run)
+}
+
+/**
+ * Resume a run that failed on a previous attempt of the SAME source job, instead of
+ * startWorkflowRun creating a brand-new run and re-executing the trigger node onward
+ * (§4.1 — that used to duplicate every task/followup/email from nodes before the one
+ * that failed, once per retry, up to 3x). Only the failed node is re-attempted; nodes
+ * before it already have 'completed' WorkflowRunStep rows and are not touched again.
+ */
+async function resumeFailedWorkflowRun({ run, workflow }) {
+  const def = getDefinition(workflow)
+  const failedStep = await WorkflowRunStep.findOne({
+    where: { runId: run.id, status: 'failed' },
+    order: [['createdAt', 'DESC']],
+  })
+  if (!failedStep) return // no record of what failed — leave the run as failed rather than guess
+
+  const ctxSource = run.contextJson || {}
+  const leadRow = await Lead.findByPk(ctxSource.leadId)
+  if (!leadRow) {
+    await run.update({ status: 'failed', errorMessage: 'Lead no longer exists', finishedAt: new Date() })
+    return
+  }
+
+  const context = {
+    lead: leadRow.get({ plain: true }),
+    before: ctxSource.before || null,
+    actorUserId: ctxSource.actorUserId || null,
+    definition: def,
+  }
+  await run.update({ status: 'running', errorMessage: null, finishedAt: null })
+  await runWorkflowGraph({ run, workflow, startNodeIds: [failedStep.nodeId], context })
 }
 
 export async function startWorkflowRun({
@@ -534,7 +629,20 @@ export async function startWorkflowRun({
   lead,
   before,
   actorUserId,
+  sourceJobId = null,
 }) {
+  if (sourceJobId) {
+    const existing = await WorkflowRun.findOne({
+      where: { workflowId: workflow.id, sourceJobId },
+      order: [['createdAt', 'DESC']],
+    })
+    if (existing) {
+      // Already completed, or another concurrent attempt has it — do not start a duplicate.
+      if (existing.status === 'completed' || existing.status === 'running' || existing.status === 'waiting') return
+      if (existing.status === 'failed') return resumeFailedWorkflowRun({ run: existing, workflow })
+    }
+  }
+
   const def = getDefinition(workflow)
   const triggerType = TRIGGER_TYPES[triggerNode.type] || eventType
   const run = await WorkflowRun.create({
@@ -542,11 +650,13 @@ export async function startWorkflowRun({
     version: workflow.publishedVersion || 1,
     triggerType,
     triggerPayloadJson: { leadId: lead.id, eventType },
+    sourceJobId,
     status: 'running',
     startedAt: new Date(),
     contextJson: {
       leadId: lead.id,
       actorUserId: actorUserId || null,
+      before: before || null,
       definition: def,
     },
   })
@@ -586,6 +696,7 @@ export async function runLeadWorkflowTriggersForLead({
   skipWorkflowIds = null,
   onWorkflowProcessed = null,
   workflows = null,
+  sourceJobId = null,
 }) {
   const leadPlain = toPlainLead(lead)
   const beforePlain = before ? toPlainLead(before) : null
@@ -618,6 +729,10 @@ export async function runLeadWorkflowTriggersForLead({
           lead: { ...leadPlain },
           before: beforePlain ? { ...beforePlain } : null,
           actorUserId,
+          // Include the trigger node id: a workflow can have >1 trigger matching the same
+          // event (e.g. multiple watchFields triggers), and each needs its own dedup key —
+          // otherwise the 2nd trigger's run would look like a duplicate of the 1st's.
+          sourceJobId: sourceJobId ? `${sourceJobId}:${trigger.id}` : null,
         })
         summary.started += 1
       } catch (e) {
@@ -643,7 +758,7 @@ export async function runLeadWorkflowTriggersForLead({
 /** Queue workflow triggers when REDIS_URL is set; otherwise run immediately on the API process. */
 export async function emitLeadWorkflowTriggers({ eventType, lead, before, companyId, workspaceId, actorUserId }) {
   const { tryEnqueueLeadWorkflowTrigger } = await import('../queues/workflowTriggerQueue.js')
-  const enqueued = await tryEnqueueLeadWorkflowTrigger({
+  const result = await tryEnqueueLeadWorkflowTrigger({
     eventType,
     lead,
     before,
@@ -651,7 +766,11 @@ export async function emitLeadWorkflowTriggers({ eventType, lead, before, compan
     workspaceId,
     actorUserId,
   })
-  if (enqueued) return
+  if (result.enqueued) return
+  // Already definitively counted zero matching triggers above — re-running the inline
+  // path would only re-derive the same "nothing matched" answer via a second full
+  // workflow-table scan (§4.10 of the bug audit).
+  if (result.checked && result.matchCount === 0) return
   const summary = await runLeadWorkflowTriggersForLead({
     eventType,
     lead,
@@ -722,32 +841,44 @@ export async function emitLeadWorkflowTriggersBulkImport({ leadIds, companyId, w
 
 let wakeupsInFlight = false
 
+/**
+ * Resumes individual per-branch waits (§4.2/§4.5 of the bug audit), not whole runs. Two
+ * different branches of the same run can each have their own due wait resolved
+ * independently — waking one no longer marks every other branch's parked step as
+ * completed, and a branch with a shorter delay no longer waits on a sibling's longer one.
+ */
 export async function processWorkflowWakeups() {
   // Re-entrancy guard: a slow batch must not overlap the next interval tick.
   if (wakeupsInFlight) return
   wakeupsInFlight = true
   try {
     const now = new Date()
-    const waiting = await WorkflowRun.findAll({
-      where: { status: 'waiting', waitUntil: { [Op.lte]: now } },
+    const dueWaits = await WorkflowRunWait.findAll({
+      where: { status: 'pending', waitUntil: { [Op.lte]: now } },
       limit: 50,
-      include: [{ model: Workflow, as: 'workflow' }],
+      include: [{ model: WorkflowRun, as: 'run', include: [{ model: Workflow, as: 'workflow' }] }],
     })
-    for (const run of waiting) {
-      // Atomic claim: only the process that flips waiting → running executes the
-      // resume. Protects against overlapping ticks and multiple server instances.
-      const [claimed] = await WorkflowRun.update(
-        { status: 'running', waitUntil: null },
-        { where: { id: run.id, status: 'waiting' } },
+    for (const wait of dueWaits) {
+      // Atomic claim on the WAIT: only the process that flips pending → resumed acts on
+      // it. Protects against overlapping ticks and multiple server instances.
+      const [claimed] = await WorkflowRunWait.update(
+        { status: 'resumed' },
+        { where: { id: wait.id, status: 'pending' } },
       )
       if (!claimed) continue
-      run.set({ status: 'running', waitUntil: null })
 
+      const run = wait.run
+      if (!run) continue
       const wf = run.workflow
       if (!wf) {
         await run.update({ status: 'failed', errorMessage: 'Workflow deleted before resume', finishedAt: new Date() })
         continue
       }
+      // Bring the run out of 'waiting' so a concurrent tick doesn't also try to finalize
+      // it; harmless no-op if another due wait for this same run already did this.
+      await WorkflowRun.update({ status: 'running' }, { where: { id: run.id, status: 'waiting' } })
+      run.set({ status: 'running' })
+
       const ctxJson = run.contextJson || {}
       const def = ctxJson.definition || getDefinition(wf)
       const lead = await Lead.findByPk(ctxJson.leadId || run.triggerPayloadJson?.leadId)
@@ -755,19 +886,19 @@ export async function processWorkflowWakeups() {
         await run.update({ status: 'failed', errorMessage: 'Lead missing on resume', finishedAt: new Date() })
         continue
       }
-      const leadPlain = lead.get({ plain: true })
-      // Close out the delay step(s) that were parked as "waiting"
+      // Close out only THIS branch's delay step — a sibling branch's still-pending wait
+      // keeps its own 'waiting' WorkflowRunStep row untouched.
       await WorkflowRunStep.update(
         { status: 'completed', finishedAt: new Date() },
-        { where: { runId: run.id, status: 'waiting' } },
+        { where: { runId: run.id, nodeId: wait.nodeId, status: 'waiting' } },
       )
-      const startNodeIds = [run.resumeNodeId, ...(Array.isArray(ctxJson.pendingNodeIds) ? ctxJson.pendingNodeIds : [])].filter(Boolean)
+      const startNodeIds = Array.isArray(wait.resumeNodeIds) ? wait.resumeNodeIds.filter(Boolean) : []
       if (!startNodeIds.length) {
-        await run.update({ status: 'completed', finishedAt: new Date() })
+        await finalizeRunIfDone(run)
         continue
       }
       const context = {
-        lead: leadPlain,
+        lead: lead.get({ plain: true }),
         before: ctxJson.before ?? null,
         actorUserId: ctxJson.actorUserId || null,
         definition: def,

@@ -36,7 +36,7 @@ import {
 import { getRedis } from '../config/redis.js'
 import { autoAssignLead } from '../services/assignmentRulesService.js'
 import { linkOrphanCallsToLead } from '../services/callService.js'
-import { findDuplicates, saveDuplicateRecord } from '../services/duplicateDetectionService.js'
+import { findDuplicates, saveDuplicateRecord, redactDupesForUser } from '../services/duplicateDetectionService.js'
 import { exportLeads, importLeads } from '../services/importExportService.js'
 import { recalculateScore, recalculateLeadScore } from '../services/leadScoringService.js'
 import { leadAccessWhere } from '../services/leadVisibility.js'
@@ -931,7 +931,7 @@ export async function create(req, res, next) {
       const message = error.details?.[0]?.context?.message || error.message
       return res.status(400).json({ success: false, error: { code: 'VALIDATION', message } })
     }
-    const workspaceId = req.headers['x-workspace-id'] || req.body.workspaceId
+    const workspaceId = req.workspaceId
     if (!workspaceId) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'workspaceId is required' } })
 
     const dupes = await findDuplicates(workspaceId, { email: value.email, phone: value.phone })
@@ -948,7 +948,7 @@ export async function create(req, res, next) {
         success: true,
         queued: true,
         message: 'Potential duplicate detected. Lead saved to duplicate review queue.',
-        duplicates: dupes,
+        duplicates: await redactDupesForUser(dupes, req.user, workspaceId),
         meta: {},
       })
     }
@@ -974,36 +974,59 @@ export async function create(req, res, next) {
     delete payload.tags
     delete payload.assignedUserIds
     delete payload.force
-    const lead = await Lead.create(payload)
-    if (value.assignedUserIds?.length && (await hasLeadAssignmentsTable())) {
-      await LeadAssignment.bulkCreate(
-        value.assignedUserIds.map((userId) => ({ leadId: lead.id, userId })),
-        { ignoreDuplicates: true },
-      )
-    }
 
-    if (value.tags?.length) {
-      const tags = await Promise.all(
-        value.tags.map(async (name) => {
-          const existing = await Tag.findOne({ where: { companyId: req.user.companyId, name } })
-          if (existing) return existing
-          return Tag.create({ name, companyId: req.user.companyId, workspaceId })
-        }),
-      )
-      await lead.setTags(tags)
-    }
+    // Steps that must all land or none: a partial write here used to leave a "ghost lead"
+    // with no tags/custom fields while the client saw a 500 as if nothing was created.
+    const lead = await sequelize.transaction(async (transaction) => {
+      const created = await Lead.create(payload, { transaction })
+      if (value.assignedUserIds?.length && (await hasLeadAssignmentsTable())) {
+        await LeadAssignment.bulkCreate(
+          value.assignedUserIds.map((userId) => ({ leadId: created.id, userId })),
+          { ignoreDuplicates: true, transaction },
+        )
+      }
 
-    await upsertLeadCustomFields({
-      leadId: lead.id,
-      workspaceId,
-      companyId: req.user.companyId,
-      customFields: customFieldsPayload,
+      if (value.tags?.length) {
+        // Sequential (not Promise.all) so two tags of the same new name in one request
+        // can't both find-nothing and both insert. Tags are company-shared by design
+        // (see the make-tags-company-shared migration), so the lookup stays company-wide.
+        const tags = []
+        for (const name of value.tags) {
+          const [tag] = await Tag.findOrCreate({
+            where: { companyId: req.user.companyId, name },
+            defaults: { name, companyId: req.user.companyId, workspaceId },
+            transaction,
+          })
+          tags.push(tag)
+        }
+        await created.setTags(tags, { transaction })
+      }
+
+      await upsertLeadCustomFields({
+        leadId: created.id,
+        workspaceId,
+        companyId: req.user.companyId,
+        customFields: customFieldsPayload,
+        transaction,
+      })
+
+      return created
     })
 
-    await autoAssignLead(lead, { suppressNotification: true })
+    // Everything below is best-effort: the lead row is already durably committed, so a
+    // failure here must not turn into a 500 that makes the client think creation failed.
+    try {
+      await autoAssignLead(lead, { suppressNotification: true })
+    } catch (e) {
+      console.error('[leads.create] autoAssignLead failed:', e?.message || e)
+    }
     // Attach any previously synced orphan calls that match this lead's number.
     await linkOrphanCallsToLead(lead).catch(() => {})
-    await lead.reload()
+    try {
+      await lead.reload()
+    } catch (e) {
+      console.error('[leads.create] post-create reload failed:', e?.message || e)
+    }
     if (lead.assignedTo && String(lead.assignedTo) !== String(req.user.id)) {
       notifyLeadAssigned({
         companyId: req.user.companyId,
@@ -1027,15 +1050,32 @@ export async function create(req, res, next) {
         }).catch(() => {})
       }
     }
-    await createSystemActivity({
-      leadId: lead.id,
-      userId: req.user.id,
-      body: `Lead created (source: ${lead.source})`,
-      metadata: { action: 'lead_created' },
-    })
-    await recalculateScore(lead.id)
-    recalculateLeadScore(lead, req.user.companyId).catch(console.error)
-    await clearLeadListCache(workspaceId)
+    try {
+      await createSystemActivity({
+        leadId: lead.id,
+        userId: req.user.id,
+        body: `Lead created (source: ${lead.source})`,
+        metadata: { action: 'lead_created' },
+      })
+    } catch (e) {
+      console.error('[leads.create] createSystemActivity failed:', e?.message || e)
+    }
+    try {
+      // Sequential, not raced (§5.3 of the bug audit — these used to run one awaited and
+      // one fire-and-forget, both writing lead.score, so the final stored/returned value
+      // was whichever happened to finish last). Fixed-weight first as the baseline, then
+      // the rule-based engine overwrites it when the company has active scoring rules
+      // (recalculateLeadScore no-ops and leaves the fixed-weight score alone otherwise).
+      await recalculateScore(lead.id)
+      await recalculateLeadScore(lead, req.user.companyId)
+    } catch (e) {
+      console.error('[leads.create] score recalculation failed:', e?.message || e)
+    }
+    try {
+      await clearLeadListCache(workspaceId)
+    } catch (e) {
+      console.error('[leads.create] clearLeadListCache failed:', e?.message || e)
+    }
     // Fire-and-forget: workflow execution must not block the create response
     emitLeadWorkflowTriggers({
       eventType: 'lead_created',
@@ -1045,16 +1085,20 @@ export async function create(req, res, next) {
       workspaceId: String(workspaceId),
       actorUserId: req.user.id,
     }).catch((e) => console.error('[workflow] lead_created trigger emit failed:', e?.message || e))
-    await lead.reload({
-      include: [
-        {
-          model: CustomFieldValue,
-          as: 'customFieldValues',
-          include: [{ model: CustomField, as: 'customField', attributes: ['id', 'label', 'key', 'type', 'options'] }],
-          required: false,
-        },
-      ],
-    })
+    try {
+      await lead.reload({
+        include: [
+          {
+            model: CustomFieldValue,
+            as: 'customFieldValues',
+            include: [{ model: CustomField, as: 'customField', attributes: ['id', 'label', 'key', 'type', 'options'] }],
+            required: false,
+          },
+        ],
+      })
+    } catch (e) {
+      console.error('[leads.create] final reload failed:', e?.message || e)
+    }
     const createdPlain = enrichLeadPlainWithCustomFields(lead.get({ plain: true }))
     return res.status(201).json({ success: true, data: createdPlain, meta: {} })
   } catch (e) {
@@ -1112,7 +1156,7 @@ export async function update(req, res, next) {
       return res.status(409).json({
         success: false,
         error: { code: 'DUPLICATE_LEAD', message: 'A lead with this phone or email already exists. You cannot create a duplicate.' },
-        duplicates: dupes,
+        duplicates: await redactDupesForUser(dupes, req.user, lead.workspaceId),
         meta: {},
       })
     }
@@ -1250,8 +1294,9 @@ export async function update(req, res, next) {
         }
       }
     }
+    // Sequential, not raced — see the matching comment in create() (§5.3 of the bug audit).
     await recalculateScore(lead.id)
-    recalculateLeadScore(lead, req.user.companyId).catch(console.error)
+    await recalculateLeadScore(lead, req.user.companyId)
     await clearLeadListCache(lead.workspaceId)
     // Fire-and-forget: workflow execution must not block the update response
     emitLeadWorkflowTriggers({

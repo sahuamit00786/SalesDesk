@@ -38,6 +38,9 @@ async function processWorkflowTriggerJob(job) {
         companyId,
         workspaceId,
         actorUserId,
+        // Scoped per lead: a crash mid-batch (before doneLeadIds is updated) redelivers
+        // this lead too, so its workflow runs need the same resume-not-restart protection.
+        sourceJobId: job.id ? `${job.id}:${leadId}` : null,
       })
       if (summary.matched > 0) {
         await createLeadSystemActivity({
@@ -70,6 +73,9 @@ async function processWorkflowTriggerJob(job) {
       doneWorkflowIds.add(workflowId)
       await job.updateProgress({ doneWorkflowIds: [...doneWorkflowIds] }).catch(() => {})
     },
+    // Stable across retry attempts of this job — lets startWorkflowRun resume a run that
+    // failed on a prior attempt instead of re-running it from the trigger node (§4.1).
+    sourceJobId: job.id ? String(job.id) : null,
   })
   const leadId = leadPlain?.id
   if (leadId && summary.matched > 0) {
@@ -88,14 +94,18 @@ async function processWorkflowTriggerJob(job) {
 
 /**
  * Enqueue one lead's workflow triggers. Writes a "queued" activity on the lead.
- * @returns {Promise<boolean>} true if job was enqueued
+ * @returns {Promise<{enqueued: boolean, checked: boolean, matchCount?: number}>}
+ *   `checked: true` means countActiveWorkflowTriggersForEvent already ran here — the
+ *   caller can trust matchCount and skip re-querying the same thing (§4.10 of the bug
+ *   audit: this used to scan the workflow table here, then the inline fallback path
+ *   scanned it again from scratch for the exact same answer).
  */
 export async function tryEnqueueLeadWorkflowTrigger({ eventType, lead, before, companyId, workspaceId, actorUserId }) {
   const q = getWorkflowTriggerQueue()
-  if (!q) return false
+  if (!q) return { enqueued: false, checked: false }
   const leadPlain = typeof lead?.get === 'function' ? lead.get({ plain: true }) : { ...lead }
   const beforePlain = before ? (typeof before.get === 'function' ? before.get({ plain: true }) : { ...before }) : null
-  if (!leadPlain?.id) return false
+  if (!leadPlain?.id) return { enqueued: false, checked: false }
   // Pass lead/before so watchFields-only triggers don't enqueue no-op jobs
   const matchCount = await countActiveWorkflowTriggersForEvent({
     eventType,
@@ -104,7 +114,7 @@ export async function tryEnqueueLeadWorkflowTrigger({ eventType, lead, before, c
     lead: leadPlain,
     before: beforePlain,
   })
-  if (matchCount < 1) return false
+  if (matchCount < 1) return { enqueued: false, checked: true, matchCount: 0 }
   await q.add(
     'single',
     { eventType, companyId, workspaceId, actorUserId, leadPlain, beforePlain },
@@ -121,10 +131,16 @@ export async function tryEnqueueLeadWorkflowTrigger({ eventType, lead, before, c
     body: 'Automation: workflow triggers queued for background processing.',
     metadata: { action: 'workflow_triggers_queued', eventType, viaQueue: true },
   })
-  return true
+  return { enqueued: true, checked: true, matchCount }
 }
 
 /** One job processes many new lead IDs (e.g. CSV import). */
+// §4.9 of the bug audit: one job for the whole import meant its progress array grew by
+// one UUID per lead — a 10,000-lead import wrote a ~360MB cumulative progress payload to
+// Redis and held one worker slot for the entire import. Splitting into chunk-sized jobs
+// bounds each job's progress array and lets chunks process concurrently.
+const BULK_TRIGGER_CHUNK_SIZE = 200
+
 export async function tryEnqueueBulkLeadWorkflowTriggers({ leadIds, companyId, workspaceId, actorUserId }) {
   const q = getWorkflowTriggerQueue()
   if (!q || !Array.isArray(leadIds) || !leadIds.length) return false
@@ -134,12 +150,38 @@ export async function tryEnqueueBulkLeadWorkflowTriggers({ leadIds, companyId, w
     workspaceId,
   })
   if (matchCount < 1) return false
-  await q.add(
-    'bulk',
-    { leadIds, companyId, workspaceId, actorUserId },
-    { attempts: 2, removeOnComplete: 100, removeOnFail: 150 },
+  const chunks = []
+  for (let i = 0; i < leadIds.length; i += BULK_TRIGGER_CHUNK_SIZE) {
+    chunks.push(leadIds.slice(i, i + BULK_TRIGGER_CHUNK_SIZE))
+  }
+  await q.addBulk(
+    chunks.map((chunk) => ({
+      name: 'bulk',
+      data: { leadIds: chunk, companyId, workspaceId, actorUserId },
+      opts: { attempts: 2, removeOnComplete: 100, removeOnFail: 150 },
+    })),
   )
   return true
+}
+
+/**
+ * §4.8 of the bug audit: tryEnqueueLeadWorkflowTrigger writes "queued for background
+ * processing" on the lead's timeline, but if the job then exhausted every retry attempt,
+ * nothing further was ever written — the timeline read as though automation was
+ * permanently pending. Only fires once attempts are truly exhausted, not on each
+ * intermediate retry.
+ */
+async function recordWorkflowTriggerFailure(job) {
+  const data = job?.data || {}
+  const leadIds = data.leadPlain?.id ? [data.leadPlain.id] : Array.isArray(data.leadIds) ? data.leadIds : []
+  for (const leadId of leadIds) {
+    await createLeadSystemActivity({
+      leadId,
+      userId: data.actorUserId || null,
+      body: 'Automation: workflow triggers failed to run after repeated retries.',
+      metadata: { action: 'workflow_triggers_failed', eventType: data.eventType || null },
+    }).catch(() => {})
+  }
 }
 
 export function startWorkflowTriggerWorker() {
@@ -155,6 +197,8 @@ export function startWorkflowTriggerWorker() {
   worker.on('failed', (job, err) => {
     // eslint-disable-next-line no-console
     console.error(`[workflow] trigger job ${job?.id || '?'} failed:`, err?.message || err)
+    const exhausted = job && (job.attemptsMade || 0) >= (job.opts?.attempts || 1)
+    if (exhausted) recordWorkflowTriggerFailure(job).catch(() => {})
   })
   return worker
 }

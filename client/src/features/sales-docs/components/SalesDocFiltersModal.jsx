@@ -1,6 +1,7 @@
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { FilterField } from '@/components/shared/FilterField'
+import { LeadBillToPicker } from '@/components/shared/LeadBillToPicker'
 import { cn } from '@/utils/cn'
 
 const fieldInput =
@@ -10,7 +11,10 @@ export function SalesDocFiltersModal({
   open,
   onClose,
   statusMeta,
-  leads = [],
+  // BUG FIX (§15.2 of the bug audit) — `leads` used to be a `limit: 400` list; a
+  // lead outside the cap couldn't be filtered on at all. Now the parent resolves
+  // only the currently-selected filter lead by id, and this searches on demand.
+  selectedLeadFilter = null,
   users = [],
   statusFilter,
   onStatusFilterChange,
@@ -22,7 +26,6 @@ export function SalesDocFiltersModal({
   onMinAmountChange,
   maxAmount,
   onMaxAmountChange,
-  leadIdFilter,
   onLeadIdFilterChange,
   createdByFilter,
   onCreatedByFilterChange,
@@ -62,18 +65,12 @@ export function SalesDocFiltersModal({
         </FilterField>
 
         <FilterField label="Lead">
-          <select
-            value={leadIdFilter}
-            onChange={(e) => onLeadIdFilterChange(e.target.value)}
-            className={fieldInput}
-          >
-            <option value="">All leads</option>
-            {leads.map((l) => (
-              <option key={l.id} value={l.id}>
-                {(l.contactName || l.title || 'Lead').trim()} · {(l.company || '').trim() || '—'}
-              </option>
-            ))}
-          </select>
+          <LeadBillToPicker
+            selectedLead={selectedLeadFilter}
+            onSelect={(l) => onLeadIdFilterChange(l?.id || '')}
+            placeholder="All leads"
+            inputClassName={fieldInput}
+          />
         </FilterField>
 
         <FilterField label="Issued from">

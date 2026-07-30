@@ -52,6 +52,7 @@ export const NOTIFICATION_EVENT_TYPES = {
   // Digests
   DIGEST_DAILY: 'digest_daily',
   DIGEST_WEEKLY: 'digest_weekly',
+  DIGEST_MONTHLY: 'digest_monthly',
 
   // Existing (legacy)
   CAMPAIGN_LEADS_ADDED: 'campaign_leads_added',
@@ -78,6 +79,6 @@ export const EVENT_MODULE_GROUPS = [
   { module: 'Approvals', events: ['approval_requested', 'approval_decided'] },
   { module: 'Finance', events: ['invoice_created', 'invoice_payment_received'] },
   { module: 'Documents', events: ['document_shared'] },
-  { module: 'Digests', events: ['digest_daily', 'digest_weekly'] },
+  { module: 'Digests', events: ['digest_daily', 'digest_weekly', 'digest_monthly'] },
   { module: 'Campaigns & Email', events: ['campaign_leads_added', 'lead_email_reply'] },
 ]

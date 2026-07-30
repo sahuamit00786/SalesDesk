@@ -1,6 +1,6 @@
 import Joi from 'joi'
 import { Op } from 'sequelize'
-import { Workflow, WorkflowVersion, WorkflowRun, WorkflowRunStep, Lead } from '../models/index.js'
+import { Workflow, WorkflowVersion, WorkflowRun, WorkflowRunStep, WorkflowRunWait, Lead } from '../models/index.js'
 import { startWorkflowRun } from '../services/workflowRunner.js'
 
 const defaultDefinition = () => ({
@@ -320,13 +320,18 @@ export async function getRun(req, res, next) {
       include: [{ model: Workflow, as: 'workflow', where: { companyId: req.user.companyId, workspaceId }, required: true }],
     })
     if (!run) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Run not found' } })
-    const steps = await WorkflowRunStep.findAll({
-      where: { runId: run.id },
-      order: [['createdAt', 'ASC']],
-    })
+    const [steps, waits] = await Promise.all([
+      WorkflowRunStep.findAll({ where: { runId: run.id }, order: [['createdAt', 'ASC']] }),
+      // Per-branch waits (§4.2/§4.5) — a run can have more than one parked branch at once.
+      WorkflowRunWait.findAll({ where: { runId: run.id }, order: [['createdAt', 'ASC']] }),
+    ])
     return res.json({
       success: true,
-      data: { ...run.get({ plain: true }), steps: steps.map((s) => s.get({ plain: true })) },
+      data: {
+        ...run.get({ plain: true }),
+        steps: steps.map((s) => s.get({ plain: true })),
+        waits: waits.map((w) => w.get({ plain: true })),
+      },
       meta: {},
     })
   } catch (e) {

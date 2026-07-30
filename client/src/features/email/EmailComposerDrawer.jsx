@@ -7,7 +7,9 @@ import {
 } from '@/components/ui/icons'
 import { Select } from '@/components/ui/Select'
 import { IconInput } from '@/components/ui/IconInput'
-import { useGetLeadFilesQuery, useGetLeadsQuery } from '@/features/leads/leadsApi'
+import { LeadBillToPicker } from '@/components/shared/LeadBillToPicker'
+import { controlClassName } from '@/components/ui/fieldTokens'
+import { useGetLeadFilesQuery, useGetLeadQuery } from '@/features/leads/leadsApi'
 import { useSendEmailForLeadMutation, useUploadEmailAttachmentsMutation } from '@/features/email/emailApi'
 import {
   FALLBACK_MERGE_KEYS,
@@ -192,19 +194,18 @@ export function EmailComposerDrawer({ open, onClose, initial = null, onSent }) {
   const user = useSelector((s) => s.auth.user)
   const senderName = user?.name || user?.email || 'Sales team'
 
-  const { data: leadsData } = useGetLeadsQuery({ page: 1, limit: 300, search: '' }, { skip: !open })
+  // BUG FIX (§15.2 of the bug audit) — resolves the FULL selected lead by id instead
+  // of looking it up in a `limit: 300` list that silently couldn't reach every lead
+  // (both for the deep-linked `initial.leadId` case and for the picker below).
+  const { data: resolvedLeadRes } = useGetLeadQuery(leadId, { skip: !open || !leadId })
   const { data: leadFilesData } = useGetLeadFilesQuery(leadId, { skip: !open || !leadId })
   const { data: templatesRes, isLoading: templatesLoading } = useGetTemplatesQuery(undefined, { skip: !open })
   const [uploadAttachments, { isLoading: uploading }] = useUploadEmailAttachmentsMutation()
   const [sendEmail, { isLoading: sending }] = useSendEmailForLeadMutation()
 
-  const leads = useMemo(() => {
-    const rows = Array.isArray(leadsData?.data) ? leadsData.data : []
-    return rows.filter((l) => String(l.email || '').trim())
-  }, [leadsData])
   const templates = Array.isArray(templatesRes?.data) ? templatesRes.data : []
   const selectedTemplate = templates.find((t) => String(t.id) === String(templateId)) || null
-  const selectedLead = leads.find((l) => String(l.id) === String(leadId)) || null
+  const selectedLead = resolvedLeadRes?.data || null
 
   // Blanks still empty in the body (data-merge-blank spans) — recomputed on every keystroke.
   const unfilledBodyKeys = useMemo(() => {
@@ -342,10 +343,9 @@ export function EmailComposerDrawer({ open, onClose, initial = null, onSent }) {
     applyTemplate(tpl, selectedLead)
   }
 
-  function handleLeadChange(nextLeadId) {
-    setLeadId(nextLeadId)
+  function handleLeadChange(nextLead) {
+    setLeadId(nextLead?.id || '')
     setLeadDocsSearch('')
-    const nextLead = leads.find((l) => String(l.id) === String(nextLeadId)) || null
     const nextEmail = String(nextLead?.email || '').trim() || null
     setToRecipients((prev) => {
       // Lead email owns the single To slot; keep a manual entry only when no lead is picked.
@@ -429,14 +429,13 @@ export function EmailComposerDrawer({ open, onClose, initial = null, onSent }) {
               <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-muted">Lead</label>
               <div className="relative">
                 <Users className="pointer-events-none absolute left-3 top-1/2 z-[1] h-3.5 w-3.5 -translate-y-1/2 text-ink-muted" strokeWidth={1.75} />
-                <Select className="pl-9 h-9" value={leadId} onChange={(e) => handleLeadChange(e.target.value)}>
-                  <option value="">Select lead</option>
-                  {leads.map((lead) => (
-                    <option key={lead.id} value={lead.id}>
-                      {lead.title || lead.contactName || 'Lead'} ({lead.email})
-                    </option>
-                  ))}
-                </Select>
+                <LeadBillToPicker
+                  selectedLead={selectedLead}
+                  onSelect={handleLeadChange}
+                  placeholder="Select lead"
+                  filterResults={(l) => Boolean(String(l.email || '').trim())}
+                  inputClassName={cn(controlClassName, 'pl-9 h-9')}
+                />
               </div>
             </div>
 

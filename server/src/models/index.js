@@ -70,6 +70,7 @@ import { Workflow } from './Workflow.js'
 import { WorkflowVersion } from './WorkflowVersion.js'
 import { WorkflowRun } from './WorkflowRun.js'
 import { WorkflowRunStep } from './WorkflowRunStep.js'
+import { WorkflowRunWait } from './WorkflowRunWait.js'
 import { DuplicateLead } from './DuplicateLead.js'
 import { Notification } from './Notification.js'
 import { NotificationDeliveryLog } from './NotificationDeliveryLog.js'
@@ -419,6 +420,9 @@ Workflow.hasMany(WorkflowRun, { foreignKey: 'workflowId', as: 'runs' })
 WorkflowRunStep.belongsTo(WorkflowRun, { foreignKey: 'runId', as: 'run' })
 WorkflowRun.hasMany(WorkflowRunStep, { foreignKey: 'runId', as: 'steps' })
 
+WorkflowRunWait.belongsTo(WorkflowRun, { foreignKey: 'runId', as: 'run' })
+WorkflowRun.hasMany(WorkflowRunWait, { foreignKey: 'runId', as: 'waits' })
+
 Company.hasMany(Notification, { foreignKey: 'companyId', as: 'notifications' })
 
 User.hasMany(Notification, { foreignKey: 'userId', as: 'notifications' })
@@ -575,6 +579,7 @@ export {
   WorkflowVersion,
   WorkflowRun,
   WorkflowRunStep,
+  WorkflowRunWait,
   Notification,
   NotificationDeliveryLog,
   DuplicateLead,

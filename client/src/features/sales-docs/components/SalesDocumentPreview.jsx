@@ -96,6 +96,25 @@ export function SalesDocumentPreview({
 
   const shell = cn('sales-doc', surface.shell)
 
+  // §12.4 of the bug audit — a GST invoice must show CGST/SGST/IGST split by rate
+  // slab, not a single blended "Tax" line. `taxBreakdown.type === 'gst'` only shows
+  // up when the shared totals math could resolve both the seller's and buyer's
+  // state (see shared/salesTotals.js); anything else keeps the old blended row.
+  const taxRows = (() => {
+    if (!taxBreakdown || typeof taxBreakdown !== 'object') return []
+    if (taxBreakdown.type !== 'gst' || !Array.isArray(taxBreakdown.slabs)) {
+      const amt = taxBreakdown.tax ?? taxBreakdown.total
+      return amt ? [{ label: 'Tax', amount: amt }] : []
+    }
+    const rows = []
+    for (const slab of taxBreakdown.slabs) {
+      if (slab.cgst > 0) rows.push({ label: `CGST @${slab.cgstRatePct}%`, amount: slab.cgst })
+      if (slab.sgst > 0) rows.push({ label: `SGST @${slab.sgstRatePct}%`, amount: slab.sgst })
+      if (slab.igst > 0) rows.push({ label: `IGST @${slab.igstRatePct}%`, amount: slab.igst })
+    }
+    return rows
+  })()
+
   let headBg = surface.headBg
 
   let headerStyle = {}
@@ -518,12 +537,12 @@ export function SalesDocumentPreview({
               <dd className="tabular-nums">{fmtMoney(adjustment, currency)}</dd>
             </div>
           ) : null}
-          {taxBreakdown && typeof taxBreakdown === 'object' ? (
-            <div className="flex justify-between gap-4">
-              <dt className="text-neutral-500">Tax</dt>
-              <dd className="tabular-nums">{fmtMoney(taxBreakdown.tax ?? taxBreakdown.total, currency)}</dd>
+          {taxRows.map((row) => (
+            <div key={row.label} className="flex justify-between gap-4">
+              <dt className="text-neutral-500">{row.label}</dt>
+              <dd className="tabular-nums">{fmtMoney(row.amount, currency)}</dd>
             </div>
-          ) : null}
+          ))}
           <div className="flex justify-between gap-4 border-t border-neutral-200 pt-2 text-base font-semibold">
             <dt>Total</dt>
             <dd className="tabular-nums">{fmtMoney(grandTotal, currency)}</dd>

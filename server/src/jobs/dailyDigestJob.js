@@ -5,17 +5,18 @@ import {
   LeadFollowup,
   Meeting,
   MeetingParticipant,
-  User,
+  Company,
   UserWorkspace,
   NotificationDeliveryLog,
   Lead,
   Workspace,
 } from '../models/index.js'
 import {
-  getCompanyNotificationSettings,
+  normalizeNotificationSettings,
   NOTIFICATION_EVENT_TYPES,
 } from '../services/notification/notificationPreferencesService.js'
 import { enqueueTeamNotification } from '../queues/notificationEmailQueue.js'
+import { isCurrentlyClockTime, zonedDayBounds } from '../utils/timezone.js'
 
 /**
  * Phase 2 — ONE combined daily digest per user, sent at the company's digest
@@ -34,24 +35,17 @@ import { enqueueTeamNotification } from '../queues/notificationEmailQueue.js'
  * sees tasks/followups/meetings that are assigned to or involve them.
  */
 
-function dayBounds() {
-  const start = new Date()
-  start.setHours(0, 0, 0, 0)
-  const end = new Date()
-  end.setHours(23, 59, 59, 999)
-  return { start, end }
-}
-
 function isDigestMinute(settings, now) {
   const d = settings.tasksDueToday // reuse the same hour/minute the admin already configured
   const hour = d?.digestHour ?? 8
   const minute = d?.digestMinute ?? 0
-  return now.getHours() === hour && now.getMinutes() === minute
+  const timezone = d?.timezone || 'UTC'
+  // §1.6 of the bug audit: this used to be now.getHours()/getMinutes() — server-local
+  // time regardless of what timezone the company configured.
+  return isCurrentlyClockTime(now, hour, minute, timezone)
 }
 
-async function alreadySentToday(companyId, workspaceId, userId) {
-  const start = new Date()
-  start.setHours(0, 0, 0, 0)
+async function alreadySentToday(companyId, workspaceId, userId, dayStartUtc) {
   return NotificationDeliveryLog.findOne({
     where: {
       companyId,
@@ -59,27 +53,28 @@ async function alreadySentToday(companyId, workspaceId, userId) {
       workspaceId,
       eventType: NOTIFICATION_EVENT_TYPES.DIGEST_DAILY,
       status: { [Op.in]: ['sent', 'queued'] },
-      createdAt: { [Op.gte]: start },
+      createdAt: { [Op.gte]: dayStartUtc },
     },
   })
 }
 
 export async function runDailyDigests() {
   const now = new Date()
-  const { start, end } = dayBounds()
 
-  const companyRows = await User.findAll({
-    attributes: ['companyId'],
-    where: { isActive: true },
-    group: ['companyId'],
-    raw: true,
-  })
-  const companyIds = [...new Set(companyRows.map((r) => r.companyId).filter(Boolean))]
+  // One bulk query instead of a getCompanyNotificationSettings() DB call per company on
+  // every single minute tick regardless of relevance (§7.3 of the bug audit — at 500
+  // companies that was 500 queries/minute just to decide "not this minute" for almost all
+  // of them). Settings only change when an admin edits them, so an in-process pass over
+  // one bulk-fetched batch is exactly as correct and vastly cheaper.
+  const companyRows = await Company.findAll({ attributes: ['id', 'notificationEmailSettings'] })
+  const dueCompanies = companyRows
+    .map((c) => ({ id: c.id, settings: normalizeNotificationSettings(c.notificationEmailSettings) }))
+    .filter((c) => isDigestMinute(c.settings, now))
+  if (!dueCompanies.length) return
 
-  for (const companyId of companyIds) {
-    const settings = await getCompanyNotificationSettings(companyId)
-    if (!isDigestMinute(settings, now)) continue
-
+  for (const { id: companyId, settings } of dueCompanies) {
+    // "Today" as observed in the company's configured timezone, not the server's.
+    const { start, end } = zonedDayBounds(now, settings.tasksDueToday?.timezone || 'UTC')
     // Meeting has no companyId column — scope it via the company's workspace ids instead.
     const companyWorkspaceIds = (
       await Workspace.findAll({ where: { companyId }, attributes: ['id'] })
@@ -138,7 +133,7 @@ export async function runDailyDigests() {
 
       const membership = await UserWorkspace.findOne({ where: { userId, workspaceId } })
       if (!membership) continue
-      if (await alreadySentToday(companyId, workspaceId, userId)) continue
+      if (await alreadySentToday(companyId, workspaceId, userId, start)) continue
 
       await enqueueTeamNotification({
         eventType: NOTIFICATION_EVENT_TYPES.DIGEST_DAILY,
@@ -159,13 +154,24 @@ export async function runDailyDigests() {
   }
 }
 
+let dailyDigestTickInFlight = false
+
 export function startDailyDigestJob() {
   if (process.env.MEETING_CRON_ENABLED === 'false') return
   cron.schedule('* * * * *', () => {
-    runDailyDigests().catch((err) => {
-      // eslint-disable-next-line no-console
-      console.error('[dailyDigestJob]', err.message)
-    })
+    // §2.6 of the bug audit — overlap guard, same reasoning as reminderJob: if the minute
+    // where many companies share a digest hour takes over 60s, the next tick must not
+    // start processing the same companies again.
+    if (dailyDigestTickInFlight) return
+    dailyDigestTickInFlight = true
+    runDailyDigests()
+      .catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error('[dailyDigestJob]', err.message)
+      })
+      .finally(() => {
+        dailyDigestTickInFlight = false
+      })
   })
   // eslint-disable-next-line no-console
   console.log('[cron] Daily digest job scheduled (fires at company digest hour)')

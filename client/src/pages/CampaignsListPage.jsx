@@ -135,7 +135,7 @@ export function CampaignsListPage() {
   const canCreate = usePermission('automate.campaigns', 'create')
   const canUpdate = usePermission('automate.campaigns', 'update')
   const [statusTab, setStatusTab] = useState('')
-  const { data, isLoading, isFetching, refetch } = useListCampaignsQuery(statusTab ? { status: statusTab } : {}, { skip: !canView })
+  const { data, isLoading, isFetching, isError, error, refetch } = useListCampaignsQuery(statusTab ? { status: statusTab } : {}, { skip: !canView })
   const [patchCampaign, { isLoading: savingCampaign }] = usePatchCampaignMutation()
   const [editingCampaign, setEditingCampaign] = useState(null)
   const [editName, setEditName] = useState('')
@@ -272,6 +272,11 @@ export function CampaignsListPage() {
 
         {isLoading ? (
           <SkeletonCards count={4} cols="grid-cols-1" cardHeight="h-36" />
+        ) : isError ? (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-sm text-red-800">
+            Could not load campaigns.{error?.data?.error?.message ? ` ${error.data.error.message}` : ''}{' '}
+            <button type="button" className="font-medium underline" onClick={refetch}>Retry</button>
+          </div>
         ) : rows.length === 0 ? (
           <EmptyState
             icon={Megaphone}

@@ -27,6 +27,7 @@ import { startPeriodicDigestJob } from './src/jobs/periodicDigestJob.js'
 import { startNotificationEmailWorker } from './src/queues/notificationEmailQueue.js'
 import { startEmailSequenceWorker } from './src/queues/emailSequenceQueue.js'
 import { startWhatsAppMediaWorker } from './src/queues/whatsappMediaQueue.js'
+import { flushAllPendingLeadAssigned } from './src/services/notification/teamNotificationService.js'
 import { getRedis } from './src/config/redis.js'
 import { bullmqConnectionFromEnv } from './src/queues/connection.js'
 
@@ -107,13 +108,16 @@ async function start() {
     console.warn('Redis: REDIS_URL not set — email/workflow queues run inline only')
   }
 
+  let workers = []
   if (ROLE === 'worker' || ROLE === 'all') {
-    startBackgroundJobs()
+    workers = startBackgroundJobs()
   }
 
+  let server = null
+  let io = null
   if (ROLE === 'api' || ROLE === 'all') {
-    const server = http.createServer(app)
-    const io = new SocketIOServer(server, {
+    server = http.createServer(app)
+    io = new SocketIOServer(server, {
       cors: {
         origin: (origin, callback) => {
           if (!origin) return callback(null, true)
@@ -140,6 +144,55 @@ async function start() {
       }
     })
   }
+
+  registerGracefulShutdown({ server, io, workers })
+}
+
+/**
+ * §7.1 of the bug audit: no SIGTERM handler anywhere — a deploy would kill in-flight
+ * BullMQ jobs mid-send and cut cron ticks off mid-loop. Stop accepting new HTTP/socket
+ * connections, let BullMQ workers finish whatever job they're actively processing (worker
+ * .close() waits for that), then close DB/Redis. Bounded by a hard timeout so a stuck
+ * connection can't hang the deploy forever.
+ */
+function registerGracefulShutdown({ server, io, workers }) {
+  let shuttingDown = false
+  async function shutdown(signal) {
+    if (shuttingDown) return
+    shuttingDown = true
+    // eslint-disable-next-line no-console
+    console.log(`[shutdown] ${signal} received — closing server, draining workers...`)
+
+    const forceExitTimer = setTimeout(() => {
+      // eslint-disable-next-line no-console
+      console.error('[shutdown] graceful shutdown timed out after 20s — forcing exit')
+      process.exit(1)
+    }, 20000)
+    forceExitTimer.unref()
+
+    try {
+      if (io) io.close()
+      if (server) await new Promise((resolve) => server.close(() => resolve()))
+      // §1.8 — send whatever's sitting in the in-memory lead-assign debounce buffer
+      // right now instead of letting it die silently with the process.
+      await flushAllPendingLeadAssigned().catch(() => {})
+      await Promise.all(workers.map((w) => w.close().catch(() => {})))
+      await sequelize.close().catch(() => {})
+      const redis = getRedis()
+      if (redis) await redis.quit().catch(() => {})
+      // eslint-disable-next-line no-console
+      console.log('[shutdown] done')
+      clearTimeout(forceExitTimer)
+      process.exit(0)
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[shutdown] error during shutdown:', err?.message || err)
+      clearTimeout(forceExitTimer)
+      process.exit(1)
+    }
+  }
+  process.on('SIGTERM', () => shutdown('SIGTERM'))
+  process.on('SIGINT', () => shutdown('SIGINT'))
 }
 
 function startBackgroundJobs() {
@@ -160,11 +213,13 @@ function startBackgroundJobs() {
   }
 
   const bullConn = bullmqConnectionFromEnv()
-  startEmailTemplateWorker()
-  startNotificationEmailWorker()
-  startWorkflowTriggerWorker()
-  startEmailSequenceWorker()
-  startWhatsAppMediaWorker()
+  const workers = [
+    startEmailTemplateWorker(),
+    startNotificationEmailWorker(),
+    startWorkflowTriggerWorker(),
+    startEmailSequenceWorker(),
+    startWhatsAppMediaWorker(),
+  ].filter(Boolean)
   if (bullConn) {
     // eslint-disable-next-line no-console
     console.log('BullMQ workers: email templates, workflows')
@@ -185,6 +240,7 @@ function startBackgroundJobs() {
   startOverdueTaskAlertsJob()
   startDailyDigestJob()
   startPeriodicDigestJob()
+  return workers
 }
 
 start().catch((err) => {

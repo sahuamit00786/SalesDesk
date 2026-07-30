@@ -6,7 +6,7 @@ import { SalesDocumentPreview } from '@/features/sales-docs/components/SalesDocu
 
 export default function InvoicePrintPage() {
   const { id } = useParams()
-  const { data: invRes, isLoading } = useGetInvoiceQuery(id)
+  const { data: invRes, isLoading, isError, error, refetch } = useGetInvoiceQuery(id)
   const { data: billRes, isLoading: billLoading } = useGetBillingProfileQuery()
   const [downloadPdf, { isFetching: downloading }] = useLazyDownloadInvoicePdfQuery()
 
@@ -27,6 +27,17 @@ export default function InvoicePrintPage() {
     } catch {
       toast.error('Could not generate PDF')
     }
+  }
+
+  if (isError) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center bg-neutral-100 px-4">
+        <div className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-sm text-red-800">
+          Could not load invoice.{error?.data?.error?.message ? ` ${error.data.error.message}` : ''}{' '}
+          <button type="button" className="font-medium underline" onClick={refetch}>Retry</button>
+        </div>
+      </div>
+    )
   }
 
   if (isLoading || billLoading || !inv) {
